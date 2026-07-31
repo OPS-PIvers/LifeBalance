@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import type { Habit, HabitSubmission, HouseholdMember, WeeklyRecap } from '@/types/schema';
 import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 import { calculateHouseholdPointsForDateRange, calculateMemberPointsForDateRange } from '@/utils/habitAttribution';
@@ -87,7 +87,10 @@ describe('ScoreboardWidget', () => {
 
     expect(screen.getByText('Scoreboard')).toBeInTheDocument();
     expect(screen.getByTestId('scoreboard-total')).toHaveTextContent('0');
-    expect(screen.getByText('household total')).toBeInTheDocument();
+    // The hero is a row now: household badge + "Household" + the total. The
+    // old "household total" label is gone (the owner struck "total").
+    expect(within(screen.getByTestId('scoreboard-hero-row')).getByText('Household')).toBeInTheDocument();
+    expect(screen.queryByText('household total')).not.toBeInTheDocument();
     expect(screen.getByText('Paul')).toBeInTheDocument();
     expect(screen.getByText('Jen')).toBeInTheDocument();
     // No crown when nobody has led — queried via the sr-only "Leading" marker.
@@ -284,7 +287,58 @@ describe('ScoreboardWidget', () => {
     });
   });
 
-  describe('Household row (household-points-visibility)', () => {
+  describe('hero row (household hero restructure)', () => {
+    it('renders the household badge, the "Household" label and the total on one row', () => {
+      mockMembers.mockReturnValue([
+        makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 45, weekly: 285, total: 900 } }),
+        makeMember({ uid: 'jen', displayName: 'Jen', points: { daily: 60, weekly: 325, total: 950 } }),
+      ]);
+      mockWeeklyPoints.mockReturnValue(610);
+
+      render(<ScoreboardWidget />);
+
+      const heroRow = within(screen.getByTestId('scoreboard-hero-row'));
+      expect(heroRow.getByTestId('scoreboard-hero-badge')).toBeInTheDocument();
+      expect(heroRow.getByText('Household')).toBeInTheDocument();
+      expect(heroRow.getByTestId('scoreboard-total')).toHaveTextContent('610');
+    });
+
+    it('keeps the trend chip and the best-week note on the hero subtitle line, not on the points edge', () => {
+      mockMembers.mockReturnValue([
+        makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 10, weekly: 285, total: 900 } }),
+        makeMember({ uid: 'jen', displayName: 'Jen', points: { daily: 10, weekly: 325, total: 950 } }),
+      ]);
+      mockWeeklyPoints.mockReturnValue(610);
+      mockRecaps.mockReturnValue([
+        {
+          id: '2026-W30',
+          isoWeek: '2026-W30',
+          generatedAt: '2026-07-27T12:00:00.000Z',
+          totalSpend: 0,
+          priorWeekSpend: 0,
+          topCategoryDeltas: [],
+          habitCompletions: 0,
+          streaksAtRisk: [],
+          pointsByMember: [
+            { memberId: 'paul', name: 'Paul', points: 245 },
+            { memberId: 'jen', name: 'Jen', points: 300 },
+          ],
+          upcomingBills: [],
+          narrative: '',
+          narrativeSource: 'template',
+          premium: true,
+        },
+      ]);
+
+      render(<ScoreboardWidget />);
+
+      const heroRow = within(screen.getByTestId('scoreboard-hero-row'));
+      expect(heroRow.getByText('12% vs last week')).toBeInTheDocument();
+      expect(heroRow.getByText('Best week this month')).toBeInTheDocument();
+    });
+  });
+
+  describe('Shared habits row (household-points-visibility)', () => {
     // Current week is Jul 27 - Aug 2 (mockToday = Thu Jul 30). The current-week
     // Household row is now sourced from an async `submissionTotals` fetch (see
     // ScoreboardWidget.tsx), so every test in this block awaits it settling —
@@ -315,7 +369,10 @@ describe('ScoreboardWidget', () => {
 
       expect(screen.getByTestId('scoreboard-total')).toHaveTextContent(String(total));
       const householdRow = await screen.findByTestId('scoreboard-household-row');
-      expect(householdRow).toHaveTextContent('Household');
+      // Labelled "Shared habits", not "Household" — the hero row above is the
+      // household now, and two identically-badged "Household" rows would be
+      // indistinguishable.
+      expect(householdRow).toHaveTextContent('Shared habits');
       expect(householdRow).toHaveTextContent(String(expectedHouseholdShare));
       // Paul (44) and Jen (17) each still render their own weekly value.
       expect(screen.getByText('44')).toBeInTheDocument();
@@ -329,7 +386,7 @@ describe('ScoreboardWidget', () => {
       expect(44 + 17 + expectedHouseholdShare).toBe(total);
     });
 
-    it('omits the Household row when there is no unattributed remainder', async () => {
+    it('omits the Shared habits row when there is no unattributed remainder', async () => {
       // Fully attributed — nothing left for the household pool alone.
       const habits = [
         makeHabit({ id: 'h-attributed', completedDates: ['2026-07-28'], completedBy: { '2026-07-28': { paul: 1 } } }),
@@ -347,8 +404,12 @@ describe('ScoreboardWidget', () => {
       // still loading.
       await act(async () => {});
 
+      // Asserts the SHARE ROW is gone — queried by testid, not by the bare
+      // string "Household", which the hero row now always renders.
       expect(screen.queryByTestId('scoreboard-household-row')).not.toBeInTheDocument();
-      expect(screen.queryByText('Household')).not.toBeInTheDocument();
+      expect(screen.queryByText('Shared habits')).not.toBeInTheDocument();
+      // …while the hero, which is a different thing, still stands.
+      expect(within(screen.getByTestId('scoreboard-hero-row')).getByText('Household')).toBeInTheDocument();
     });
 
     it('includes a stored submission that OUTLIVES its completion date in the CURRENT week — a reverted toggle must not silently zero out the Household row (finding 1)', async () => {

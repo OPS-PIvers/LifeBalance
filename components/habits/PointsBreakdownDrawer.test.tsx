@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import PointsBreakdownDrawer from './PointsBreakdownDrawer';
 import type { Habit, HabitSubmission, HouseholdMember, WeeklyRecap } from '@/types/schema';
@@ -125,6 +125,16 @@ const setup = (config: {
 const renderDrawer = (open = true) =>
   render(<PointsBreakdownDrawer open={open} onClose={vi.fn()} />);
 
+/**
+ * Scope a query to the household hero row. Every figure in this drawer is a
+ * bare number, and `getByText` THROWS on multiple matches — scoping to the row
+ * that owns the figure is what keeps these assertions about the hero (or a
+ * member) rather than about "some number, somewhere".
+ */
+const hero = () => within(screen.getByTestId('points-drawer-hero-row'));
+/** The standings row that renders `name` — the Row div wrapping the name span. */
+const memberRow = (name: string) => within(screen.getByText(name).closest('div')!);
+
 describe('PointsBreakdownDrawer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -141,12 +151,39 @@ describe('PointsBreakdownDrawer', () => {
     renderDrawer();
 
     expect(screen.getByRole('radio', { name: 'Week' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByText('610')).toBeInTheDocument();
+    expect(hero().getByText('610')).toBeInTheDocument();
 
-    const jenRow = screen.getByText('Jen').closest('div')!;
-    expect(jenRow).toHaveTextContent('325');
+    expect(memberRow('Jen').getByText('325')).toBeInTheDocument();
     expect(screen.getByText('Jen is leading')).toBeInTheDocument();
     expect(screen.queryByText('Paul is leading')).not.toBeInTheDocument();
+  });
+
+  it('renders the hero on the same [avatar] · Household · ——— · points silhouette as a member row', () => {
+    setup({});
+    renderDrawer();
+
+    const heroRow = screen.getByTestId('points-drawer-hero-row');
+    // Household badge, in the same leading slot a member avatar occupies.
+    expect(within(heroRow).getByTestId('points-drawer-hero-badge')).toBeInTheDocument();
+    // The label is just "Household" — the owner struck the word "total".
+    expect(within(heroRow).getByText('Household')).toBeInTheDocument();
+    expect(screen.queryByText('household total')).not.toBeInTheDocument();
+    // The total, and the period as the subtitle line beneath the label.
+    // `dateLabel` is built from a real `new Date()` (not the mocked
+    // `getLocalDateString`), so match its SHAPE — pinning "Jul 27 – Aug 2"
+    // would make this test fail on a different wall-clock week.
+    expect(within(heroRow).getByText('610')).toBeInTheDocument();
+    expect(within(heroRow).getByText(/^This week · \w{3} \d{1,2} – \w{3} \d{1,2}$/)).toBeInTheDocument();
+  });
+
+  it('switches the hero subtitle to the day label in Day view', () => {
+    setup({});
+    renderDrawer();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Day' }));
+
+    expect(hero().getByText(/^Today · \w{3} \d{1,2}$/)).toBeInTheDocument();
+    expect(hero().queryByText(/This week/)).not.toBeInTheDocument();
   });
 
   it('switches to per-day figures when Day is selected', () => {
@@ -157,11 +194,11 @@ describe('PointsBreakdownDrawer', () => {
 
     expect(screen.getByRole('radio', { name: 'Day' })).toHaveAttribute('aria-checked', 'true');
     // Household total switches from weeklyPoints (610) to dailyPoints (60).
-    expect(screen.getByText('60')).toBeInTheDocument();
-    expect(screen.queryByText('610')).not.toBeInTheDocument();
+    expect(hero().getByText('60')).toBeInTheDocument();
+    expect(hero().queryByText('610')).not.toBeInTheDocument();
     // Jen's daily figure (40) replaces her weekly one (325).
-    expect(screen.getByText('40')).toBeInTheDocument();
-    expect(screen.queryByText('325')).not.toBeInTheDocument();
+    expect(memberRow('Jen').getByText('40')).toBeInTheDocument();
+    expect(memberRow('Jen').queryByText('325')).not.toBeInTheDocument();
   });
 
   it('excludes managed kids from standings (adults-only)', () => {
@@ -209,8 +246,8 @@ describe('PointsBreakdownDrawer', () => {
     renderDrawer();
     expect(screen.queryByText('Leo')).not.toBeInTheDocument();
     expect(screen.queryByText(/is leading/)).not.toBeInTheDocument();
-    // The household total and reward pool panels still render.
-    expect(screen.getByText('610')).toBeInTheDocument();
+    // The household hero and reward pool panels still render.
+    expect(hero().getByText('610')).toBeInTheDocument();
     expect(screen.getByText(/Reward pool/)).toBeInTheDocument();
   });
 
@@ -254,31 +291,40 @@ describe('PointsBreakdownDrawer', () => {
     expect(screen.queryByText(/pending/)).not.toBeInTheDocument();
   });
 
-  describe('Household row (household-points-visibility)', () => {
+  describe('Shared habits row (household-points-visibility)', () => {
     // The Household row's figure is now sourced from an async
     // `submissionTotals` fetch (see PointsBreakdownDrawer.tsx), so every test
     // here awaits it settling — `findByTestId` polls until the row appears;
     // `act(async () => {})` flushes the fetch before asserting an ABSENCE, so
     // that assertion can't pass vacuously just because the fetch hasn't
     // resolved yet.
-    it('shows a Household row for a legacy (pre-attribution) completion this week', async () => {
+    it('shows a Shared habits row for a legacy (pre-attribution) completion this week', async () => {
       const habits = [makeHabit({ completedDates: ['2026-07-28'], completedBy: undefined })];
       setup({ habits });
       renderDrawer();
 
       const householdRow = await screen.findByTestId('points-drawer-household-row');
-      expect(householdRow).toHaveTextContent('Household');
+      // Labelled "Shared habits", not "Household" — the hero row above is the
+      // household now, and two identically-badged "Household" rows would be
+      // indistinguishable.
+      expect(householdRow).toHaveTextContent('Shared habits');
       // Threshold habit, basePoints 10, no streak — 10 points, attributed to nobody.
       expect(householdRow).toHaveTextContent('10');
     });
 
-    it('omits the Household row when there is no unattributed remainder', async () => {
+    it('omits the Shared habits row when there is no unattributed remainder', async () => {
       setup({ habits: [] });
       renderDrawer();
       // Let the submission fetch settle before asserting an absence.
       await act(async () => {});
+      // Asserts the SHARE ROW is gone — queried by testid, not by the bare
+      // string "Household", which the hero row now always renders (this
+      // assertion used to read `queryByText('Household')` back when the share
+      // row was the only thing on screen carrying that word).
       expect(screen.queryByTestId('points-drawer-household-row')).not.toBeInTheDocument();
-      expect(screen.queryByText('Household')).not.toBeInTheDocument();
+      expect(screen.queryByText('Shared habits')).not.toBeInTheDocument();
+      // …while the hero, which is a different thing, still stands.
+      expect(hero().getByText('Household')).toBeInTheDocument();
     });
 
     it('switches the Household value between Day and Week the same as the standings do', async () => {
