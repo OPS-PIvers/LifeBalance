@@ -245,15 +245,48 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
       haptic('light');
       // The picker's checkmark is derived from `completedBy[selectedDate]`, so
       // the member provably holds a unit on THIS date. Prefer taking back the
-      // submission doc that recorded it: deleting it strips one attributed unit
-      // (bounded by `resolveReversalSources`), reverses exactly the points it
+      // submission doc that recorded it: deleting it strips the doc's WHOLE
+      // `submission.count` worth of attributed units — not one — (bounded by
+      // `resolveReversalSources`), reverses exactly the points it
       // earned, drops the date from `completedDates` when it was the last one,
       // AND keeps `submissionTotals` in step with `completedBy` — un-crediting
       // without deleting the doc would leave the row badge reading 2 for 1
       // attributed unit.
       const subs = await getHabitSubmissions(habit.id, selectedDate, selectedDate);
+      // 🛡️ THIS PREDICATE AND THE HOUSEHOLD ONE BELOW MUST STAY SEMANTICALLY
+      // IDENTICAL TO `HabitCard`'s two `uncreditViaSubmissionOrFallback`
+      // predicates — the two surfaces undo the SAME credit, so a divergence
+      // means one of them deletes a doc the other would not. Change together.
+      //
+      // 🛡️ `attributedTo` ONLY — NEVER an `?? s.createdBy` fallback.
+      //
+      // `addHabitSubmission` writes
+      // `actor !== null ? { attributedTo: actor } : { creditsHousehold: true }`,
+      // so EVERY member-credited doc carries `attributedTo`. The fallback can
+      // therefore never reach a doc this member is genuinely credited for — it
+      // can only reach a doc carrying NEITHER field, which is written by the
+      // automation paths (`transactionMutations`' keyword fire, `noSpendFire`,
+      // the backfill script) and by pre-attribution history. Those credited
+      // NOBODY, and `createdBy` on them is the OPERATOR — for the keyword fire
+      // that is whoever VERIFIED the triggering transaction, i.e. a real member
+      // uid, routinely the same admin who logs habits by hand.
+      //
+      // Matching one is not a harmless no-op: `deleteHabitSubmission` resolves
+      // `creditedUid = attributedTo ?? createdBy` and runs `reversalMoves`, so
+      // un-crediting "Me" would delete an unrelated automation doc AND debit
+      // this member's REAL `completedBy` attribution for the day (probe: a
+      // neither-field doc with `createdBy: user1` on a date where user1 holds
+      // one genuine unit writes `completedBy.<date>.user1: -1` and `-10` to
+      // user1's points). Dropping the fallback costs nothing and falls through
+      // to `uncreditHabitCompletion`, the pre-existing correct reversal.
+      //
+      // `creditsHousehold !== true` is deliberately NOT kept: the two fields are
+      // mutually exclusive by construction above, so a household doc has no
+      // `attributedTo` and can never satisfy `=== memberId`. Keeping it would
+      // imply the two can coexist, which is precisely the confusion that
+      // produced the `?? createdBy` fallback.
       const mine = subs
-        .filter(s => (s.attributedTo ?? s.createdBy) === memberId && s.count > 0)
+        .filter(s => s.attributedTo === memberId && s.count > 0)
         .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
       const newest = mine[0];
       if (newest) await deleteHabitSubmission(habit.id, newest.id);
@@ -292,12 +325,94 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
       // Same preference as the member path: take back the SUBMISSION doc that
       // recorded the credit when there is one, so the day's submission totals
       // stay in step with the row counter and the reversal undoes exactly what
-      // was credited. `creditsHousehold` is what distinguishes such a doc from a
-      // pre-attribution one, which credited a member-less completion for an
-      // entirely different (grandfathered) reason and must not be swept up here.
+      // was credited.
+      //
+      // NOT `s.creditsHousehold === true` alone — that misses a GRANDFATHERED
+      // doc (written before either attribution or household-credit existed:
+      // no `attributedTo`, no `creditsHousehold`), which orphans identically
+      // to the bug this guard exists to close.
+      //
+      // But `attributedTo == null` alone is TOO WIDE, and this is the whole
+      // subtlety: a grandfathered doc is FIELD-IDENTICAL to an automation doc
+      // (`transactionMutations`' keyword fire, `noSpendFire`, the backfill
+      // script all write neither field). There is no marker that separates
+      // them, and enumerating `sourceTransactionId`/`sourceNoSpendDate` would
+      // just be whack-a-mole against the next writer.
+      //
+      // 🛡️ So guard the INVARIANT instead of the marker. The harm is entirely
+      // downstream: `deleteHabitSubmission` resolves
+      // `creditedUid = attributedTo ?? createdBy` for any doc without
+      // `creditsHousehold`, so an automation doc whose `createdBy` is a real
+      // member uid makes `reversalMoves` debit that member's genuine
+      // `completedBy` — and when they hold nothing, its holder fallback debits
+      // whoever else does. Probed on the real mutation:
+      //   • neither-field doc, `createdBy: user1`, user1 holds a unit that day
+      //     → `completedBy.<date>.user1: -1`, user1 points -10   ← corruption
+      //   • same doc, jen-uid holds the unit instead
+      //     → `completedBy.<date>.jen-uid: -1`, jen points -10   ← corruption
+      //   • same doc, NO attribution anywhere on the date
+      //     → no `completedBy` write, no member write, pool -10  ← correct
+      // Only a MIXED date can corrupt, and it falls through to
+      // `uncreditHouseholdCompletion`, i.e. exactly the pre-fix behaviour.
+      // Under-reversing beats debiting the wrong ledger.
+      //
+      // 🛡️ WHAT `dateHasNoAttribution` DOES AND DOES NOT BUY. It is
+      // DATE-scoped; a reversal's member blast radius is PERIOD-scoped. All it
+      // guarantees is that `reversalMoves` → `resolveReversalSources` returns
+      // `[]`, so `deleteHabitSubmission` takes nothing off the doc's own
+      // `createdBy` (nor off a holder-fallback member) — the three rows above.
+      // It does NOT mean no member is debited: `queueHabitPointsMove` writes
+      // `move.perMember` UNCONDITIONALLY (`attributionMoved` gates only the
+      // POOL term), and `periodPointsMove` scopes members to
+      // `periodScoredDates` — the whole week for a weekly habit. Executed
+      // against the real mutation (weekly threshold habit, `targetCount: 2`,
+      // Monday unattributed + Wednesday attributed to Jen, neither-field doc
+      // dated Monday):
+      //     jen-uid `points.{total,daily,weekly}: -10`, pool -10
+      // Jen is debited although MONDAY carries no attribution. That is not a
+      // defect and not new: the pre-fix `uncreditHouseholdCompletion` fallback
+      // writes the identical member deltas on the identical input. Losing a
+      // threshold period's award strips it from every holder in that period,
+      // which is the intended reversal — just don't read this branch as "no
+      // member can be debited".
+      //
+      // 🛡️ THIS BRANCH ROUTINELY SWEEPS AUTOMATION DOCS, and that is the
+      // point — automation is NOT the case `dateHasNoAttribution` excludes.
+      // `transactionMutations` writes NO attribution at all on a keyword fire
+      // (just count/totalCount/completedDates/streakDays/hasSubmissionTracking
+      // plus the submission), so a habit fired only by a keyword transaction
+      // has `attributedUnitsOnDate === 0` on that date AND
+      // `count - attributedUnits > 0` — which is exactly what makes the
+      // Household chip read as credited in the first place. Deleting that doc
+      // IS the correct undo: the two unit kinds are indistinguishable to this
+      // UI, and leaving the doc behind is the orphan re-credit this guard
+      // exists to close.
+      //
+      // ⚠️ One bad sub-case, knowingly accepted: a date carrying BOTH an
+      // automation doc and a manual `creditsHousehold` doc. Both match, and the
+      // sort picks by newest `createdAt`, so the automation doc may be the one
+      // deleted — permanently destroying its `sourceTransactionId` audit
+      // record, and `firedHabitIds` (`transactionMutations`, `arrayUnion`,
+      // cleared only by un-verifying the transaction) then means that habit can
+      // never re-fire from it. A `creditsHousehold`-first tie-break would fix
+      // it, but it is NOT points-neutral — the two classes reverse the pool by
+      // different arithmetic (`isHouseholdSubmission` takes the derived
+      // decomposition, a neither-field doc takes its stored `pointsEarned`) —
+      // so it is deliberately left out of this fix rather than smuggled in
+      // unprobed.
+      //
+      // ⚠️ Path change, pre-existing behaviour: routing a
+      // grandfathered/automation household undo through `deleteHabitSubmission`
+      // puts it on that function's ABSOLUTE `count`/`totalCount` writes
+      // (computed from the client cache) where the
+      // `uncreditHouseholdCompletion` fallback used `increment()` deltas — the
+      // same absolute-write shape behind the 2026-07-15 habit-history clobber.
+      // That is `deleteHabitSubmission`'s own long-standing behaviour on every
+      // submission delete, not something introduced here.
       const subs = await getHabitSubmissions(habit.id, selectedDate, selectedDate);
+      const dateHasNoAttribution = attributedUnitsOnDate(habit, selectedDate) === 0;
       const householdDocs = subs
-        .filter(s => s.creditsHousehold === true && s.count > 0)
+        .filter(s => (s.creditsHousehold === true || (s.attributedTo == null && dateHasNoAttribution)) && s.count > 0)
         .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
       const newest = householdDocs[0];
       if (newest) await deleteHabitSubmission(habit.id, newest.id);
