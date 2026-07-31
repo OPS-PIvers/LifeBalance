@@ -570,11 +570,17 @@ Per-member habit points follow-ups (from the 2026-07-30 six-stage ship, PRs #115
   `components/ui/HouseholdBadge.tsx` because the parallel Household-credit-mode PR owned
   `MemberAvatar.tsx`. Two components now draw the same circle/size/ring. Unify onto the shared
   primitive so the ring and sizing cannot drift. **XS.**
-- **Recap chart hides non-positive unattributed days** — `buildRecapChart` filters segments to
+- ~~**Recap chart hides non-positive unattributed days** — `buildRecapChart` filters segments to
   `> 0`, so a week whose household share is net NEGATIVE draws no Household bar while the legend
   (added in #1164) reports the signed total. Pre-existing chart behavior, surfaced by adding the
   number next to it. Decide whether the chart should represent negative days or the legend should
-  match the chart's positive-only scope. **XS.**
+  match the chart's positive-only scope. **XS.**~~ ✅ Resolved — the chart stays positive-only
+  (product decision); the household card's "earned together" line now checks `hasUnattributed`
+  and, for the one case with no visible chart cause (an all-negative week — provably always the
+  branch, since a positive sum requires a positive day), says so explicitly instead of asserting
+  an unexplained figure. Also fixed a latent `buildRecapChart` NaN: a legacy day missing the
+  `unattributed` field entirely zeroed out every segment's `pct` on that day, including real
+  member segments.
 
 From the 2026-07-09 product-scope audit — grounded findings, not yet greenlit:
 

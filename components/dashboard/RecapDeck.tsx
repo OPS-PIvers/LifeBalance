@@ -259,11 +259,26 @@ const WeekCard: React.FC<{ deck: RecapDeckModel }> = ({ deck }) => {
             Placed here, on the household card, rather than on the chart
             legend above: nothing here draws a bar for it, so a negative
             figure can't contradict anything the way it would next to the
-            chart's positive-only segments. */}
+            chart's positive-only segments.
+
+            One more contradiction survives that placement, though: when
+            EVERY day's unattributed value is <= 0 (an all-negative week),
+            `buildRecapChart` never draws a household segment on ANY day, so
+            `hasUnattributed` is false and the "Household" legend entry above
+            doesn't even appear. A reader would then see this figure with no
+            household presence anywhere else on the card — a figure with no
+            visible cause. (The sign here is guaranteed negative: a positive
+            sum requires at least one positive day, which would make
+            `hasUnattributed` true, so this branch only ever fires for a
+            net loss.) Say so explicitly rather than asserting a number nothing
+            else on the card backs up — the chart itself keeps drawing nothing,
+            per the positive-only product decision. */}
         {deck.householdSharePoints !== 0 && (
           <p className="mt-1.5 text-[11.5px] text-brand-450 dark:text-brand-400" data-testid="recap-household-share">
             <b className="font-semibold text-brand-600 dark:text-brand-200">{deck.householdSharePoints}</b>{' '}
-            earned together, credited to no one member
+            {hasUnattributed
+              ? 'earned together, credited to no one member'
+              : 'points, credited to no one member — the chart above only shows positive days, so it does not appear in it'}
           </p>
         )}
       </div>

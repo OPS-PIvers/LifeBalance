@@ -230,6 +230,34 @@ describe('WeeklyRecapDrawer', () => {
     expect(householdShare).toHaveTextContent('earned together');
   });
 
+  it('acknowledges the chart when an ALL-NEGATIVE unattributed week leaves NO Household segment anywhere (recap-chart-negative-days)', async () => {
+    // Every day negative — `buildRecapChart` clamps every segment to its
+    // positive share, so unlike the mixed-sign case above, there is no day
+    // left to draw a Household bar on at all. Without an acknowledgment, the
+    // household card would assert a figure ("-35 earned together") that
+    // nothing else on the card shows any cause for.
+    const allNegativeRecap = ceremonyRecap({
+      dailyPoints: DAYS.map(date => {
+        const byMember = { jen: 50, paul: 45 };
+        const unattributed = -5;
+        return { date, byMember, unattributed, total: byMember.jen + byMember.paul + unattributed };
+      }),
+    });
+    render(<WeeklyRecapDrawer recap={allNegativeRecap} isOpen onClose={() => {}} />);
+
+    await advance([WEEK_CARD]);
+
+    // No "Household" legend entry — the chart never draws a segment for it.
+    expect(screen.queryByText('Household')).not.toBeInTheDocument();
+
+    // The card still surfaces the signed total, but now says so plainly
+    // instead of claiming it was "earned together" with nothing to show for it.
+    const householdShare = screen.getByTestId('recap-household-share');
+    expect(householdShare).toHaveTextContent('-35');
+    expect(householdShare).not.toHaveTextContent('earned together');
+    expect(householdShare).toHaveTextContent('the chart above only shows positive days');
+  });
+
   it('leads the week card with the head-to-head under the podium tone', async () => {
     mockCore.householdSettings = { name: 'The Ivers Household', ceremonyTone: 'podium' };
     render(<WeeklyRecapDrawer recap={ceremonyRecap()} isOpen onClose={() => {}} />);

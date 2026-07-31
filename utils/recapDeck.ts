@@ -286,7 +286,15 @@ export function buildRecapChart(
     const positive = positives[i] ?? 0;
     const segmentSource: Array<[string, number]> = [
       ...Object.entries(day.byMember),
-      [UNATTRIBUTED_SERIES, day.unattributed],
+      // `?? 0` mirrors the guard in `buildRecapDeck`'s `householdSharePoints`
+      // sum below: a legacy day written before `unattributed` joined
+      // `RecapDayPoints` has the field missing entirely (not 0) once spread
+      // through `weeklyRecapConverter`'s `as WeeklyRecap` cast. Without the
+      // guard, `Math.max(0, undefined)` is NaN, which poisons `segmentTotal`
+      // below and zeroes out every segment's `pct` for that day — including
+      // the real member segments — rendering a day with genuine points as an
+      // empty column.
+      [UNATTRIBUTED_SERIES, day.unattributed ?? 0],
     ];
     const segmentTotal = segmentSource.reduce((sum, [, v]) => sum + Math.max(0, v), 0);
 
