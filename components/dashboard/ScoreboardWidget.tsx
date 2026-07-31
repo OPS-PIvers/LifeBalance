@@ -10,21 +10,26 @@ import {
   listScoreboardWeekOptions,
   weekHasMemberAttribution,
   buildWeekStandings,
+  calculateHouseholdShareForDateRange,
   type ScoreboardWeekOption,
   type ScoreboardWeekStanding,
 } from '@/utils/scoreboardWidget';
 import { calculateHouseholdPointsForDateRange, calculateMemberPointsForDateRange } from '@/utils/habitAttribution';
-import { fetchSubmissionTotals } from '@/utils/habitSubmissionTotals';
+import { fetchSubmissionTotals, submissionCacheKey } from '@/utils/habitSubmissionTotals';
+import type { SubmissionTotalsByHabitDate } from '@/utils/habitLogic';
 import { cn } from '@/utils/cn';
 import { Section, SurfaceList } from '@/components/ui/Section';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import MemberAvatar from '@/components/ui/MemberAvatar';
+import HouseholdAvatar from '@/components/ui/HouseholdAvatar';
 
 /** Result of the async past-week recompute, keyed to whichever week it was fetched for. */
 interface PastWeekData {
   total: number;
   standings: ScoreboardWeekStanding[];
   hasAttribution: boolean;
+  /** The household's own share of `total` — see `calculateHouseholdShareForDateRange`. */
+  householdShare: number;
 }
 
 /**
@@ -81,6 +86,86 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
   );
   const currentWeek = weekOptions[0] ?? null;
 
+  // The household's own share of the CURRENT week's total — the unattributed
+  // remainder (pre-attribution legacy history today, OR a stored submission
+  // that OUTLIVES its completion date: a reverted toggle removes the date
+  // from `completedDates` but never deletes the submission doc, so its
+  // points still stand on their own — see `pointsForHabitOnDate`'s doc
+  // comment in utils/habitLogic.ts). Without threading `submissionTotals`
+  // through, `decomposeDayPoints` collapses such a day to 0, while the
+  // canonical `weeklyPoints` figure (written by `usePointsSync`'s corrective
+  // recompute, which DOES fold submissions in) still counts it — so the
+  // Household row would silently disagree with the total it's supposed to
+  // help explain. Fetched the same way the past-week path below already
+  // does, via the same `fetchSubmissionTotals` helper `usePointsSync` uses.
+  //
+  // `undefined` means "not fetched yet for this week" — the Household row
+  // stays hidden (see the `!!householdShare` render guard) rather than
+  // flashing a submission-less, possibly-wrong figure while the fetch is in
+  // flight; render nothing, never a wrong number.
+  const [currentWeekSubmissionTotals, setCurrentWeekSubmissionTotals] =
+    useState<SubmissionTotalsByHabitDate | undefined>(undefined);
+
+  // Last-fetched fingerprint + totals for the current-week window, read via a
+  // ref rather than folded into the effect's own dependency array — a ref
+  // write doesn't retrigger the effect, so a failed fetch retries only on the
+  // next real habits snapshot/week change instead of looping tightly (see
+  // `submissionCacheKey`'s doc comment in utils/habitSubmissionTotals.ts for
+  // why an unchanged fingerprint means the previously fetched totals are
+  // still current — `usePointsSync` uses the exact same cache shape).
+  const currentWeekSubmissionCacheRef =
+    useRef<{ key: string; totals: SubmissionTotalsByHabitDate } | null>(null);
+
+  useEffect(() => {
+    if (!currentWeek) {
+      setCurrentWeekSubmissionTotals(undefined);
+      return;
+    }
+    const cacheKey = submissionCacheKey(habits, `${currentWeek.weekStart}..${getLocalDateString()}`);
+    // The always-mounted Dashboard re-renders this effect on every habits
+    // snapshot (a fresh array identity on every habit toggle). Bail out
+    // before issuing a query when no tracked habit's `lastUpdated` — and
+    // hence no submission — could have changed since the last fetch.
+    if (currentWeekSubmissionCacheRef.current?.key === cacheKey) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const totals = await fetchSubmissionTotals(
+          habits,
+          currentWeek.weekStart,
+          getLocalDateString(),
+          getHabitSubmissions,
+        );
+        if (!cancelled) {
+          currentWeekSubmissionCacheRef.current = { key: cacheKey, totals };
+          setCurrentWeekSubmissionTotals(totals);
+        }
+      } catch {
+        // A transient failure leaves the row hidden (per the doc comment
+        // above) rather than showing a stale/incomplete figure; the cache
+        // isn't updated on failure, so the next habits snapshot or week
+        // change re-fires this effect and retries.
+        if (!cancelled) setCurrentWeekSubmissionTotals(undefined);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [habits, currentWeek, getHabitSubmissions]);
+
+  const currentWeekHouseholdShare = useMemo(
+    () =>
+      currentWeekSubmissionTotals === undefined
+        ? undefined
+        : calculateHouseholdShareForDateRange(
+            habits,
+            currentWeek?.weekStart ?? getLocalDateString(),
+            getLocalDateString(),
+            getLocalDateString(),
+            currentWeekSubmissionTotals,
+          ),
+    [habits, currentWeek, currentWeekSubmissionTotals]
+  );
+
   // null = current week. Component state only, never written to storage.
   const [selectedWeekStart, setSelectedWeekStart] = useState<string | null>(null);
   const [isWeekMenuOpen, setIsWeekMenuOpen] = useState(false);
@@ -122,10 +207,18 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
         const pointsByMemberId = new Map(
           adults.map(m => [m.uid, calculateMemberPointsForDateRange(habits, m.uid, weekStart, weekEnd, today)])
         );
+        const householdShare = calculateHouseholdShareForDateRange(
+          habits,
+          weekStart,
+          weekEnd,
+          today,
+          submissionTotals
+        );
         setPastWeekData({
           total,
           standings: hasAttribution ? buildWeekStandings(adults, pointsByMemberId) : [],
           hasAttribution,
+          householdShare,
         });
       } catch {
         // A transient Firestore failure in fetchSubmissionTotals must not leave
@@ -173,6 +266,9 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
   const trendPositive = (trend.trendPct ?? 0) >= 0;
 
   const displayTotal = isPastWeek ? pastWeekData?.total : weeklyPoints;
+  // The Household row's value — see `currentWeekHouseholdShare`'s doc comment
+  // for why this is a derived figure, not `displayTotal - Σ rows.value`.
+  const householdShare = isPastWeek ? pastWeekData?.householdShare : currentWeekHouseholdShare;
   const rows = isPastWeek
     ? (pastWeekData?.standings ?? []).map(s => ({
         memberId: s.memberId,
@@ -326,6 +422,28 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
                 </div>
               </div>
             ))}
+            {/* Household row — the unattributed remainder: pre-attribution
+                legacy history today, and (once shipped) Household-credit
+                habits. Shown only when nonzero so an ordinary household with
+                neither sees exactly what it saw before this row existed. */}
+            {householdShare !== undefined && householdShare !== 0 && (
+              <div className="flex items-center gap-[11px] py-[5px]" data-testid="scoreboard-household-row">
+                <HouseholdAvatar size={30} data-testid="scoreboard-household-badge" />
+                <div className="flex-1 min-w-0">
+                  <span className="text-[13.5px] font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate">
+                    Household
+                  </span>
+                </div>
+                <div className="flex-none w-14 text-right">
+                  <div className="font-mono font-bold text-[17px] leading-tight text-brand-900 dark:text-brand-50 tabular-nums">
+                    {householdShare}
+                  </div>
+                  <div className="text-[9px] font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">
+                    Week
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </SurfaceList>

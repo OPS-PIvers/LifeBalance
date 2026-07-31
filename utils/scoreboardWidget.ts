@@ -13,10 +13,13 @@
  * per the locked UI decision — Kid Mode is dormant and kids don't get a
  * competitive standings row.
  */
-import { format, parseISO, subWeeks } from 'date-fns';
+import { addDays, format, parseISO, subWeeks } from 'date-fns';
 import type { Habit, HouseholdMember, WeeklyRecap } from '@/types/schema';
 import { findLeaderId } from '@/utils/pointsLeader';
 import { getWeekRange } from '@/utils/listenerWindows';
+import { decomposeDayPoints } from '@/utils/habitAttribution';
+import type { SubmissionTotalsByHabitDate } from '@/utils/habitLogic';
+import { getLocalDateString } from '@/utils/dateHelpers';
 
 export interface ScoreboardStanding {
   memberId: string;
@@ -214,6 +217,41 @@ export function weekHasMemberAttribution(
       ([date, byMember]) => date >= start && date <= end && Object.values(byMember).some(count => count > 0)
     );
   });
+}
+
+/**
+ * The household's OWN share of points across an inclusive date range — the
+ * points that belong to no individual member: pre-attribution legacy history
+ * today, and (once Household-credit habits ship) a deliberate team-effort
+ * completion. This is `unattributed` in the locked household model
+ * (`household(date) = Σ members + unattributed`, utils/habitAttribution.ts).
+ *
+ * Computed by calling `decomposeDayPoints` (the SAME decomposition that
+ * produces the household total) once per day in the range and summing its
+ * `.unattributed` field — never by subtracting the (already
+ * rounded/displayed) member figures from the displayed household total. That
+ * subtraction would make this figure silently ABSORB any drift or scoping
+ * bug the two other figures already carry, instead of surfacing it as a
+ * visible mismatch on the Scoreboard's Household row. `memberIds` is passed
+ * as `[]` because `.unattributed` doesn't depend on it (it only shapes
+ * `decomposeDayPoints`'s `byMember` output, which this discards).
+ */
+export function calculateHouseholdShareForDateRange(
+  habits: Habit[],
+  startDate: string,
+  endDate: string,
+  today: string = getLocalDateString(),
+  submissionTotals?: SubmissionTotalsByHabitDate,
+): number {
+  let total = 0;
+  let cursor = parseISO(startDate);
+  const end = parseISO(endDate);
+  while (cursor <= end) {
+    const date = format(cursor, 'yyyy-MM-dd');
+    total += decomposeDayPoints(habits, [], date, submissionTotals, today).unattributed;
+    cursor = addDays(cursor, 1);
+  }
+  return total;
 }
 
 export interface ScoreboardWeekStanding {

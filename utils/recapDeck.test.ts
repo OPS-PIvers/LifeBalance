@@ -342,6 +342,89 @@ describe('buildRecapDeck', () => {
     expect(deck.bestDay?.date).toBe('2026-07-05');
     expect(deck.totalPoints).toBe(795);
   });
+
+  it('sums householdSharePoints from dailyPoints[].unattributed, not from totalPoints (household-points-visibility)', () => {
+    // The base fixture's week has zero unattributed history.
+    expect(buildRecapDeck({ ...base, recap: recap(), viewerId: 'jen' }).householdSharePoints).toBe(0);
+
+    const withHousehold = recap({
+      dailyPoints: DAYS.map((date, i) => ({
+        date,
+        byMember: { jen: 50, paul: 45 },
+        unattributed: i === 0 ? 15 : i === 3 ? 5 : 0,
+        total: i === 0 ? 110 : i === 3 ? 100 : 95,
+      })),
+    });
+    const deck = buildRecapDeck({ ...base, recap: withHousehold, viewerId: 'jen' });
+    expect(deck.householdSharePoints).toBe(20); // 15 + 5, summed across the week
+  });
+
+  it('treats a LEGACY day with no `unattributed` field as 0, never NaN (household-points-visibility)', () => {
+    // `weeklyRecapConverter` spreads raw Firestore data with `as WeeklyRecap`,
+    // so a recap written before `unattributed` joined `RecapDayPoints` carries
+    // days without it. Un-guarded, `sum + undefined` is NaN — and NaN !== 0
+    // passes the render guard, printing "NaN pts" on the household card.
+    const legacy = recap({
+      dailyPoints: DAYS.map((date, i) => {
+        const day = { date, byMember: { jen: 50, paul: 45 }, unattributed: i === 0 ? 15 : 0, total: 95 };
+        if (i !== 0) delete (day as Partial<typeof day>).unattributed;
+        return day as (typeof day) & { unattributed: number };
+      }),
+    });
+    const deck = buildRecapDeck({ ...base, recap: legacy, viewerId: 'jen' });
+    expect(Number.isNaN(deck.householdSharePoints)).toBe(false);
+    expect(deck.householdSharePoints).toBe(15);
+  });
+
+  it('nets a MIXED-SIGN week — a positive unattributed day and a negative one — to the correct signed total (household-points-visibility, finding 2)', () => {
+    // Monday +15 (legacy history), Wednesday -20 (e.g. a legacy penalty habit
+    // whose completion reverted but whose submission still stands — see
+    // ScoreboardWidget.test.tsx's "submission outlives completion" case for
+    // the underlying scenario). `buildRecapChart` clamps segments to their
+    // POSITIVE share (see the `buildRecapChart` describe block above), so the
+    // chart draws only Monday's +15 segment and drops Wednesday's negative
+    // one entirely — `householdSharePoints` must NOT mirror that clamp: it's
+    // the signed sum, deliberately allowed to go negative.
+    const mixedSign = recap({
+      dailyPoints: DAYS.map((date, i) => ({
+        date,
+        byMember: { jen: 50, paul: 45 },
+        unattributed: i === 0 ? 15 : i === 2 ? -20 : 0,
+        total: i === 0 ? 110 : i === 2 ? 75 : 95,
+      })),
+    });
+    const deck = buildRecapDeck({ ...base, recap: mixedSign, viewerId: 'jen' });
+    expect(deck.householdSharePoints).toBe(-5); // 15 + (-20)
+
+    // Grounding the contradiction this guards against: `buildRecapChart`
+    // (unchanged by this fix — see the "never produces a negative height"
+    // test above) drops Wednesday's -20 segment entirely — only members'
+    // segments survive that day — while Monday's +15 DOES draw a household
+    // segment. So the chart visually reads as "some positive household
+    // amount", never as -5: a legend printing the signed -5 next to that
+    // chart would contradict what's actually drawn, which is exactly what
+    // RecapDeck.tsx's legend must no longer do (see the component-level test
+    // in WeeklyRecapDrawer.test.tsx).
+    const monday = deck.chart[0];
+    const wednesday = deck.chart[2];
+    expect(monday?.segments.some(s => s.key === UNATTRIBUTED_SERIES)).toBe(true);
+    expect(wednesday?.segments.some(s => s.key === UNATTRIBUTED_SERIES)).toBe(false);
+  });
+
+  it('still builds a full deck for a recap with ceremony data after the household relabel/figure work (hasCeremonyData regression guard)', () => {
+    const withHousehold = recap({
+      dailyPoints: DAYS.map((date, i) => ({
+        date,
+        byMember: { jen: 50, paul: 45 },
+        unattributed: i === 0 ? 15 : 0,
+        total: i === 0 ? 110 : 95,
+      })),
+    });
+    expect(hasCeremonyData(withHousehold)).toBe(true);
+    const deck = buildRecapDeck({ ...base, recap: withHousehold, viewerId: 'jen' });
+    expect(deck.cards.map(c => c.kind)).toEqual(['cover', 'week', 'personal', 'finish']);
+    expect(deck.householdSharePoints).toBe(15);
+  });
 });
 
 describe('week label helpers', () => {
