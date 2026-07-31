@@ -1,6 +1,6 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Habit } from '@/types/schema';
+import { Habit, HabitSubmission } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { X, Edit2, Trash2, Target, Calendar, Snowflake, Pause, Play, Archive, ArchiveRestore, Users } from 'lucide-react';
 import { cn } from '@/utils/cn';
@@ -255,7 +255,111 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     void creditHabitCompletion(habit.id, memberIds).catch(() => {});
   };
 
+  const handleCreditHousehold = () => {
+    haptic('success');
+    void creditHouseholdCompletion(habit.id).catch(() => {});
+  };
+
+  // Re-entrancy guard shared by BOTH uncredit handlers below. Unlike the
+  // credit handlers above (one synchronous mutation call, fire-and-forget),
+  // an uncredit now does an `await getHabitSubmissions(...)` BEFORE deciding
+  // which primitive to call — and a double-tap landing inside that window
+  // (a stuck finger, a fast double-click before the picker's onClose has
+  // actually unmounted its button) would start a SECOND overlapping flow
+  // that reads the SAME still-undeleted submission doc and reverses it
+  // twice: once via `deleteHabitSubmission`, once more via the fallback
+  // primitive, or twice via `deleteHabitSubmission` racing itself. One habit
+  // renders as one row, so a single ref — not a Set keyed by id, unlike
+  // DayHabitEditor's multi-row `inFlightIdsRef` — is enough to gate every
+  // uncredit action on this row. Scoped to the two uncredit handlers only:
+  // the credit handlers make one direct, non-branching mutation call each,
+  // so they carry none of the new race this ref exists to close.
+  const uncreditInFlightRef = useRef(false);
+
+  /**
+   * Shared dual-path guard for the member- and household-uncredit handlers:
+   * a credited day can be logged either by THIS row's own tap
+   * (`creditHabitCompletion`/`creditHouseholdCompletion`, which write no
+   * submission doc) or by the past-day editor / reflection drawer
+   * (`addHabitSubmission`, which DOES write a `HabitSubmission`). The
+   * attribution-only primitives (`uncreditHabitCompletion`/
+   * `uncreditHouseholdCompletion`) only reverse the habit doc's
+   * count/completedDates/streak + the pool's points — they have no idea a
+   * submission doc exists, so a submission-backed credit would survive
+   * un-deleted. Once `targetDate` leaves `completedDates`,
+   * `pointsForHabitOnDate`'s own contract — "a record that outlives its
+   * completion date... is reported as-is rather than silently dropped" —
+   * means the NEXT corrective recompute (midnight rollover / login sync)
+   * re-reads that surviving doc's stored points and silently re-credits
+   * whoever it named with the exact amount an undo here just reversed: an
+   * invisible orphan re-credit. Ported from `DayHabitEditor`'s own guard
+   * (`handleUncredit`/`handleUncreditHousehold`), the existing, shipped
+   * template — but the per-call MATCH PREDICATES below are deliberately
+   * stricter than DayHabitEditor's: its household predicate
+   * (`s.creditsHousehold === true`) misses a GRANDFATHERED doc (written
+   * before either attribution or household-credit existed — no
+   * `attributedTo`, no `creditsHousehold`), which orphans identically to the
+   * bug this function exists to close; its member predicate
+   * (`attributedTo ?? createdBy`) has no `creditsHousehold` exclusion, so a
+   * member un-crediting themselves could delete a household-credit doc THEY
+   * happen to have logged (`createdBy` is always the tapping member,
+   * regardless of who/what is credited) instead of their own unit. Both
+   * gaps are closed here; DayHabitEditor carries the same two gaps and is
+   * flagged separately rather than changed in this PR.
+   *
+   * `getHabitSubmissions` is called INSIDE this click handler, never in
+   * render/props: this component is a `React.memo`-ed list row (see the
+   * comparator below), so wiring an async read into render would re-render
+   * every habit row on the page on every fetch. Scoping it to the handler
+   * costs nothing on the common case (a toggle-path credit has zero
+   * matching docs) and never touches the render path at all — unlike
+   * DayHabitEditor (a small, transient day-editor list), a habit-row read
+   * here would run at full list-page scale, so "derive it from props" and
+   * "hoist one read to the list parent" were both rejected: there is no
+   * prop that encodes per-date submission existence, and the parent
+   * (HabitCategoryList) has no reason to fetch submissions for every habit
+   * up front.
+   *
+   * Error semantics: `getHabitSubmissions` never rejects — it catches its
+   * own Firestore errors (offline, permission-denied) and resolves `[]`
+   * (see `hooks/useHabitActions.tsx`), a contract this function inherits
+   * rather than re-guessing. A read failure is therefore indistinguishable
+   * from "no doc exists" and takes the SAME defined branch either way: the
+   * attribution-only fallback, which is exactly what this row did before
+   * this fix existed. That fallback's own mutation (`deleteHabitSubmission`/
+   * `uncreditHabitCompletion`/`uncreditHouseholdCompletion`) still performs
+   * a real Firestore write and surfaces its own error toast on failure — so
+   * a genuinely offline device does not silently do nothing, it fails
+   * visibly on the write it actually attempts, per the project's
+   * degrade-visibly convention. What it does NOT do is silently take a
+   * DIFFERENT branch than an equivalent successful read would have taken:
+   * both "read failed" and "read succeeded, found nothing" resolve to the
+   * one pre-existing, correct-for-that-case primitive.
+   */
+  const uncreditViaSubmissionOrFallback = useCallback(async (
+    targetDate: string,
+    matchesTargetSubmission: (submission: HabitSubmission) => boolean,
+    attributionOnlyFallback: () => Promise<void>,
+  ) => {
+    const subs = await getHabitSubmissions(habit.id, targetDate, targetDate);
+    const matches = subs
+      .filter(s => matchesTargetSubmission(s) && s.count > 0)
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    const newest = matches[0];
+    // deleteHabitSubmission commits the submission delete, the habit-doc
+    // reversal, and the points delta in ONE writeBatch (see
+    // hooks/useHabitActions.tsx) — so finding a doc never leaves the habit
+    // and the pool momentarily out of step with each other.
+    if (newest) await deleteHabitSubmission(habit.id, newest.id);
+    // No doc behind the credit (this row's own tap, or a grandfathered
+    // completion): the attribution-only primitive is the right reversal —
+    // it too commits its habit + points writes in one batch.
+    else await attributionOnlyFallback();
+  }, [deleteHabitSubmission, getHabitSubmissions, habit.id]);
+
   const handleUncreditMember = (memberId: string) => {
+    if (uncreditInFlightRef.current) return;
+    uncreditInFlightRef.current = true;
     haptic('light');
     // Reverse the member's MOST RECENT attributed unit in the current period
     // (see memberMostRecentUnitDateInPeriod) — for a daily habit that is always
@@ -264,58 +368,50 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     // for a member holding nothing this period, which canPickAttribution/the
     // picker's own `credited` derivation never allows.
     const targetDate = memberMostRecentUnitDateInPeriod(habit, memberId, today) ?? today;
-    void uncreditHabitCompletion(habit.id, memberId, targetDate).catch(() => {});
-  };
-
-  const handleCreditHousehold = () => {
-    haptic('success');
-    void creditHouseholdCompletion(habit.id).catch(() => {});
+    void uncreditViaSubmissionOrFallback(
+      targetDate,
+      // Matches DayHabitEditor.handleUncredit's `attributedTo ?? createdBy`
+      // fallback, PLUS an explicit `creditsHousehold` exclusion DayHabitEditor
+      // does not have. Without it, a household credit that this SAME member
+      // happened to log (`createdBy` is always the tapping member, regardless
+      // of who/what gets credited) falls back to matching THEM via `createdBy`
+      // — so un-crediting yourself could delete the household's doc instead of
+      // your own if the household one happened to sort newest. `creditsHousehold`
+      // docs are never a member's own unit no matter who created them, so they
+      // must never be eligible here.
+      (s) => s.creditsHousehold !== true && (s.attributedTo ?? s.createdBy) === memberId,
+      () => uncreditHabitCompletion(habit.id, memberId, targetDate),
+    )
+      .catch(() => {})
+      .finally(() => { uncreditInFlightRef.current = false; });
   };
 
   const handleUncreditHousehold = () => {
+    if (uncreditInFlightRef.current) return;
+    uncreditInFlightRef.current = true;
     haptic('light');
     // Period-scoped checkmark, date-scoped mutation — see
     // householdUndoDateInPeriod. Daily habits resolve straight to today.
     const targetDate = householdUndoDateInPeriod(habit, today);
-    // 🛡️ Dual-path guard, mirroring DayHabitEditor's handleUncreditHousehold —
-    // REQUIRED here specifically because a household-credited day can be
-    // logged two ways: this row's own tap (`creditHouseholdCompletion`, which
-    // writes no submission doc) or the past-day editor / reflection drawer
-    // (`addHabitSubmission`, which DOES write a `HabitSubmission` with
-    // `creditsHousehold: true`). `uncreditHouseholdCompletion` only reverses
-    // the habit doc's count/completedDates/streak + the pool's points; it has
-    // no idea a submission doc exists, so a submission-backed credit would
-    // survive un-deleted. Once `targetDate` leaves `completedDates`,
-    // `pointsForHabitOnDate`'s own contract — "a record that outlives its
-    // completion date... is reported as-is rather than silently dropped" —
-    // means the NEXT corrective recompute (midnight rollover / login sync)
-    // re-reads that surviving doc's stored points and silently re-credits the
-    // pool with the exact amount just reversed here: an invisible orphan
-    // re-credit with no attribution trail (household credit names nobody).
-    //
-    // The `getHabitSubmissions` read happens INSIDE this click handler, never
-    // in render/props: this component is a `React.memo`-ed list row (see the
-    // comparator below), so wiring an async read into render would re-render
-    // every habit row on the page on every fetch. Scoping it to the handler
-    // costs nothing on the common case (a toggle-path credit has zero matching
-    // docs) and never touches the render path at all — unlike DayHabitEditor
-    // (a small, transient day-editor list), a habit-row read here would run at
-    // full list-page scale, so "derive it from props" and "hoist one read to
-    // the list parent" were both rejected: there is no prop that encodes
-    // per-date submission existence, and the parent (HabitCategoryList) has no
-    // reason to fetch submissions for every habit up front.
-    void (async () => {
-      const subs = await getHabitSubmissions(habit.id, targetDate, targetDate);
-      const householdDocs = subs
-        .filter(s => s.creditsHousehold === true && s.count > 0)
-        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-      const newest = householdDocs[0];
-      if (newest) await deleteHabitSubmission(habit.id, newest.id);
-      // No doc behind the credit (a Habits-page household credit, a toggle-path
-      // or grandfathered completion): the attribution-only primitive is the
-      // right reversal.
-      else await uncreditHouseholdCompletion(habit.id, targetDate);
-    })().catch(() => {});
+    void uncreditViaSubmissionOrFallback(
+      targetDate,
+      // NOT `s.creditsHousehold === true` alone — that misses a GRANDFATHERED
+      // doc (written before either attribution or household-credit existed:
+      // no `attributedTo`, no `creditsHousehold`). `householdCredited` above
+      // is checked for exactly this unit regardless of which of the two
+      // member-less shapes produced it (`count - attributedUnits > 0` reads
+      // `completedBy`, never the submission doc), so the undo must reverse
+      // whichever shape is actually behind it. `attributedTo == null` is the
+      // correct generalization: it matches BOTH member-less shapes and NEVER
+      // a doc some other member is actually credited for (which always has
+      // `attributedTo` set — see `addHabitSubmission`'s
+      // `actor !== null ? { attributedTo: actor } : { creditsHousehold: true }`,
+      // so the two fields are mutually exclusive by construction).
+      (s) => s.attributedTo == null,
+      () => uncreditHouseholdCompletion(habit.id, targetDate),
+    )
+      .catch(() => {})
+      .finally(() => { uncreditInFlightRef.current = false; });
   };
 
   // Grouped-flat ROW: borderless and hairline-separated by the parent
