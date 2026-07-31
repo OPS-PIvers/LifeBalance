@@ -130,7 +130,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
           {contributions.length === 0 ? (
             <EmptyState
                 icon={<Award className="w-8 h-8" />}
-                title="No points recorded for this period."
+                title="No lifetime points recorded yet."
             />
           ) : (
             <SurfaceList>

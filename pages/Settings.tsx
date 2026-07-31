@@ -970,7 +970,7 @@ const Settings: React.FC = () => {
               <DisclosureRow
                 icon={<Star className="w-5 h-5" />}
                 title="Points breakdown"
-                subtitle="Daily, weekly, and total household points"
+                subtitle="Lifetime points by habit"
                 onClick={() => setIsPointsBreakdownOpen(true)}
               />
               {sortedMembers.map((member) => (
