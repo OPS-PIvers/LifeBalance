@@ -296,7 +296,6 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
         color={memberColorFor(colors, assignee.uid)}
         alt={assignee.displayName ?? 'Assigned member'}
         size={16}
-        className="border border-white dark:border-brand-700"
       />
     );
   };
@@ -623,8 +622,13 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                  // Solid alert-yellow fill + white glyph (owner paper cut): the
                  // old warm-200/30%-tint read as smaller/quieter than the
                  // member badge beside it purely from color weight, not size.
+                 // Ring, not border: MemberAvatar's white ring paints OUTSIDE
+                 // its 16px box (~20px on screen) while a border paints inside
+                 // and shrinks the fill — a bordered twin always looks smaller.
+                 // Darker-amber ring (not white) so the badge reads as a status
+                 // mark, not another member avatar (owner request).
                  <span
-                   className="w-4 h-4 rounded-full bg-warm-500 border border-white dark:border-brand-700 flex items-center justify-center ml-1 text-white shrink-0"
+                   className="w-4 h-4 rounded-full bg-warm-500 ring-2 ring-warm-700 flex items-center justify-center ml-2 text-white shrink-0"
                    title="Overdue"
                  >
                    <AlertCircle size={10} />
