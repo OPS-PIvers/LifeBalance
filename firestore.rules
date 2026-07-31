@@ -799,10 +799,20 @@ service cloud.firestore {
       match /meals/{mealId} {
         allow read: if isMemberOf(householdId);
         allow create, update: if isMemberOf(householdId) &&
-                              // Allow only expected fields to prevent storage abuse
+                              // Allow only expected fields to prevent storage abuse.
+                              // NOTE: this is a hasOnly() over the MERGED post-write
+                              // document, so a schema field that never joins this list
+                              // denies EVERY write to the collection — and there is no
+                              // admin bypass here (isMemberOf, not isAdminOf), so it
+                              // fails for the household owner too. `estimatedCost` was
+                              // added to `Meal` without joining the list and broke meal
+                              // create/update outright; it fired even when the cost box
+                              // was left blank, because sanitizeFirestoreData maps
+                              // undefined -> null rather than dropping the key.
                               request.resource.data.keys().hasOnly([
                                 'name', 'description', 'recipeUrl', 'rating', 'lastCooked',
                                 'ingredients', 'instructions', 'tags',
+                                'estimatedCost', 'servings',
                                 'createdBy', 'createdAt', 'updatedAt'
                               ]) &&
                               isValidString(request.resource.data.name, 100) &&
@@ -811,6 +821,13 @@ service cloud.firestore {
                               isValidOptionalString(request.resource.data.get('recipeUrl', null), 500) &&
                               isValidOptionalNumber(request.resource.data.get('rating', null)) &&
                               isValidOptionalString(request.resource.data.get('lastCooked', null), 10) &&
+                              // estimatedCost (F-MEALS-01): optional decimal dollars.
+                              isValidOptionalNumber(request.resource.data.get('estimatedCost', null)) &&
+                              // servings: optional base-servings count the recipe's
+                              // ingredient quantities are written for (RecipeModal scales
+                              // off it). No client writes it yet — allowlisted up front so
+                              // the first one that does isn't denied.
+                              isValidOptionalNumber(request.resource.data.get('servings', null)) &&
                               // Arrays
                               // ingredients and tags are required lists per schema
                               request.resource.data.ingredients is list &&
@@ -1052,7 +1069,8 @@ service cloud.firestore {
           let data = request.resource.data;
           return data.keys().hasOnly([
                    'title', 'cost', 'icon', 'createdBy',
-                   'type', 'allowanceCents', 'targetMemberId', 'active'
+                   'type', 'allowanceCents', 'targetMemberId', 'active',
+                   'unlockRequirement'
                  ]) &&
                  isValidString(data.title, 100) &&
                  isValidNumber(data.cost) &&
@@ -1065,7 +1083,18 @@ service cloud.firestore {
                  // targetMemberId: optional kid uid.
                  isValidOptionalString(data.get('targetMemberId', null), 128) &&
                  // active: optional bool (treated as true when absent).
-                 data.get('active', true) is bool;
+                 data.get('active', true) is bool &&
+                 // unlockRequirement (F-HABITS-02): optional streak-milestone gate,
+                 // {streakDays, habitId?}. Written by buildRewardPayload on create and
+                 // by updateReward on edit (which sends deleteField() when there is no
+                 // gate, so the key is absent from the merged doc and this passes).
+                 // Absent from the allowlist above until now, which denied every
+                 // create/edit of a reward that HAD a gate set.
+                 (data.get('unlockRequirement', null) == null ||
+                   (data.unlockRequirement is map &&
+                    data.unlockRequirement.keys().hasOnly(['streakDays', 'habitId']) &&
+                    isValidNumber(data.unlockRequirement.streakDays) &&
+                    isValidOptionalString(data.unlockRequirement.get('habitId', null), 128)));
         }
 
         allow create: if isMemberOf(householdId) &&

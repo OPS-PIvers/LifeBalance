@@ -1136,6 +1136,96 @@ describe('rewards (Plan 080d — additive Kid-Mode reward fields)', () => {
       }),
     );
   });
+
+  // Regression (F-HABITS-02): `unlockRequirement` — the streak-milestone gate
+  // buildRewardPayload writes — was absent from isValidReward()'s hasOnly(), so
+  // creating or editing a reward WITH a gate set failed outright. A reward
+  // without a gate was unaffected (the field is omitted / deleteField()-ed),
+  // which is why it went unnoticed.
+  it('a member can create a reward gated on any habit’s streak', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-gate-any'), {
+        title: 'Steak Dinner',
+        cost: 200,
+        icon: 'beef',
+        createdBy: BOB,
+        type: 'realWorld',
+        active: true,
+        unlockRequirement: { streakDays: 30 },
+      }),
+    );
+  });
+
+  it('a member can create a reward gated on a specific habit’s streak', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-gate-habit'), {
+        title: 'New Book',
+        cost: 120,
+        icon: 'book',
+        createdBy: BOB,
+        unlockRequirement: { streakDays: 7, habitId: 'habit-1' },
+      }),
+    );
+  });
+
+  it('a member can add a streak gate to an existing reward', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-gate-add'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-gate-add'), {
+        unlockRequirement: { streakDays: 14 },
+      }),
+    );
+  });
+
+  it('a member can clear a streak gate with deleteField()', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-gate-clear'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+        unlockRequirement: { streakDays: 14 },
+      }),
+    );
+    // updateReward sends deleteField() when the gate is removed, so the key is
+    // absent from the merged doc and the optional-field check passes.
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-gate-clear'), {
+        unlockRequirement: deleteField(),
+      }),
+    );
+  });
+
+  it('a reward whose unlockRequirement has a non-numeric streakDays is rejected', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-gate-bad-days'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+        unlockRequirement: { streakDays: 'thirty' },
+      }),
+    );
+  });
+
+  it('a reward whose unlockRequirement carries a stray inner key is rejected', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-gate-stray'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+        unlockRequirement: { streakDays: 30, junkField: 'nope' },
+      }),
+    );
+  });
 });
 
 describe('managed kid profiles (Plan 080 — login-less child member docs)', () => {
@@ -1621,6 +1711,143 @@ describe('transaction comments (Plan 23 — author-only, nested under a transact
       getDocs(
         collection(dbFor(CAROL), 'households', H1, 'transactions', TXN, 'comments'),
       ),
+    );
+  });
+});
+
+describe('meals (recipe library — additive optional fields)', () => {
+  const MEAL = 'meal-seed';
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = asFirestore(ctx.firestore());
+      await setDoc(doc(db, 'households', H1, 'meals', MEAL), {
+        name: 'Sheet Pan Chicken',
+        description: 'Weeknight staple',
+        ingredients: ['chicken thighs', 'potatoes'],
+        instructions: ['Roast at 425 for 35 min'],
+        tags: ['quick'],
+        rating: 4,
+        createdBy: BOB,
+      });
+    });
+  });
+
+  // Regression (F-MEALS-01): `estimatedCost` was added to the Meal schema and
+  // written by MealPlanTab's saveMeal, but never joined the meals hasOnly()
+  // allowlist — and because that allowlist covers the MERGED post-write
+  // document, EVERY meal create and update was denied. There is no admin
+  // bypass in this block (isMemberOf, not isAdminOf), so it failed for the
+  // household owner too.
+  it('a member can create a meal with an estimatedCost', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'meals', 'meal-cost'), {
+        name: 'Taco Night',
+        description: 'Cheap and fast',
+        ingredients: ['tortillas', 'ground beef'],
+        instructions: [],
+        recipeUrl: '',
+        tags: ['cheap'],
+        rating: 0,
+        estimatedCost: 18.5,
+        createdBy: BOB,
+      }),
+    );
+  });
+
+  // THE ACTUAL PRODUCTION PATH: leaving the cost box blank does NOT drop the
+  // key. sanitizeFirestoreData maps undefined -> null, so `estimatedCost: null`
+  // is still a present key in request.resource.data.keys() and the write failed
+  // even for a user who never typed a cost.
+  it('a member can create a meal with a null estimatedCost (the sanitizer path)', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'meals', 'meal-null-cost'), {
+        name: 'Leftovers',
+        description: null,
+        ingredients: [],
+        instructions: [],
+        recipeUrl: null,
+        tags: [],
+        rating: 0,
+        estimatedCost: null,
+        createdBy: BOB,
+      }),
+    );
+  });
+
+  it('a member can set an estimatedCost on an existing meal', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'meals', MEAL), {
+        estimatedCost: 24,
+        updatedAt: '2026-06-22T00:00:00.000Z',
+      }),
+    );
+  });
+
+  it('a member can clear an estimatedCost back to null', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'meals', MEAL), {
+        estimatedCost: null,
+      }),
+    );
+  });
+
+  it('rejects a non-numeric estimatedCost', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'meals', MEAL), {
+        estimatedCost: 'twenty bucks',
+      }),
+    );
+  });
+
+  // `servings` exists on the Meal schema (RecipeModal scales quantities off it)
+  // but no client writes it yet — allowlisted up front so the first one that
+  // does isn't denied the same way estimatedCost was.
+  it('a member can set a servings count', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'meals', MEAL), {
+        servings: 4,
+      }),
+    );
+  });
+
+  it('rejects a non-numeric servings', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'meals', MEAL), {
+        servings: 'four',
+      }),
+    );
+  });
+
+  // The allowlist still has to do its job: an unexpected field is storage abuse.
+  it('rejects a meal carrying a genuinely unexpected field', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'meals', 'meal-stray'), {
+        name: 'Taco Night',
+        ingredients: [],
+        tags: [],
+        junkField: 'nope',
+        createdBy: BOB,
+      }),
+    );
+  });
+
+  it('rejects a meal update carrying a genuinely unexpected field', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'meals', MEAL), {
+        junkField: 'nope',
+      }),
+    );
+  });
+
+  it('a non-member cannot write to another household’s meals', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(CAROL), 'households', H1, 'meals', 'meal-intruder'), {
+        name: 'Not mine',
+        ingredients: [],
+        tags: [],
+        createdBy: CAROL,
+      }),
     );
   });
 });
