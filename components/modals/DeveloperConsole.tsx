@@ -5,8 +5,17 @@ import { Switch } from '@/components/ui/Switch';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { db } from '@/firebase.config';
-import { collection, query, getDocs, getDoc, addDoc, updateDoc, doc, deleteDoc, orderBy, limit, arrayUnion, serverTimestamp } from 'firebase/firestore';
+import { collection, query, getDocs, getDoc, addDoc, updateDoc, doc, deleteDoc, orderBy, limit, arrayUnion, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { computeHabitHistoryRepair } from '@/utils/migrations/habitHistoryRepair';
+import {
+  computePointsDriftReport,
+  planPointsDriftApply,
+  type DriftRow,
+  type PointsDriftReport,
+  type PointsDriftWrite,
+} from '@/utils/pointsDriftRepair';
+import { appendActivityLog } from '@/utils/activityLog';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   readAppConfigFlags,
   setAppFlag,
@@ -19,7 +28,7 @@ import {
   removeFlagTargetHousehold,
 } from '@/services/appConfig';
 import { getLimits, LEGACY_AI_DAILY_QUOTA } from '@/utils/entitlements';
-import { BetaTester, FeedbackReport, Household, Habit, HabitSubmission } from '@/types/schema';
+import { BetaTester, FeedbackReport, Household, HouseholdMember, Habit, HabitSubmission } from '@/types/schema';
 import { Loader2, Plus, Trash2, Copy, X, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -129,6 +138,18 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
   const [repairConfirmOpen, setRepairConfirmOpen] = useState(false);
   const [repairRunning, setRepairRunning] = useState(false);
   const [repairLog, setRepairLog] = useState<string[]>([]);
+
+  // Points-drift repair (this file's Phase 1/Phase 2 tool — see
+  // utils/pointsDriftRepair.ts). Phase 1 ("Scan") is READ-ONLY and always
+  // safe to run; Phase 2 ("Apply") is gated behind a literal type-to-confirm
+  // phrase, never a single click adjacent to the report.
+  const { user } = useAuth();
+  const [driftReports, setDriftReports] = useState<PointsDriftReport[]>([]);
+  const [driftScanned, setDriftScanned] = useState(false);
+  const [driftScanning, setDriftScanning] = useState(false);
+  const [driftConfirmText, setDriftConfirmText] = useState('');
+  const [driftApplying, setDriftApplying] = useState(false);
+  const [driftApplyLog, setDriftApplyLog] = useState<string[]>([]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -376,6 +397,135 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
     } finally {
       setRepairLog(log);
       setRepairRunning(false);
+    }
+  };
+
+  /** The literal phrase an operator must type before Phase 2 can commit anything. */
+  const DRIFT_CONFIRM_PHRASE = 'REPAIR POINTS';
+
+  /** Human-readable verdict line for one report row. */
+  const describeDriftVerdict = (row: DriftRow): string => {
+    const { verdict } = row;
+    switch (verdict.kind) {
+      case 'looks_correct':
+        return 'looks correct';
+      case 'under_credited':
+        return `under-credited by ${verdict.amount}`;
+      case 'over_debited':
+        return `over-debited by ${verdict.amount}`;
+      case 'cannot_determine':
+        return `cannot determine — ${verdict.reason}`;
+    }
+  };
+
+  /**
+   * Points-drift Phase 1 — REPORT ONLY. Never writes anything. Recomputes
+   * what each member's and the household's `points.total` SHOULD be from
+   * habit data (see utils/pointsDriftRepair.ts for the full design and the
+   * hard constraint around pre-attribution history), across the same
+   * 50-household ops cap the other sweeps here use.
+   */
+  const runPointsDriftScan = async () => {
+    setDriftScanning(true);
+    setDriftApplyLog([]);
+    setDriftConfirmText('');
+    try {
+      const householdsSnap = await getDocs(query(collection(db, 'households'), limit(50)));
+      const reports: PointsDriftReport[] = [];
+      for (const hh of householdsSnap.docs) {
+        try {
+          const household = { ...(hh.data() as Household), id: hh.id };
+          const [membersSnap, habitsSnap] = await Promise.all([
+            getDocs(collection(db, `households/${hh.id}/members`)),
+            getDocs(collection(db, `households/${hh.id}/habits`)),
+          ]);
+          const members = membersSnap.docs.map(
+            d => ({ ...(d.data() as HouseholdMember), uid: d.id })
+          );
+          const habits = habitsSnap.docs.map(d => ({ ...(d.data() as Habit), id: d.id }));
+          reports.push(computePointsDriftReport(household, members, habits));
+        } catch (error) {
+          console.error(`[runPointsDriftScan] Household ${hh.id} failed:`, error);
+        }
+      }
+      setDriftReports(reports);
+      setDriftScanned(true);
+      const proposed = planPointsDriftApply(reports).length;
+      toast.success(
+        proposed > 0
+          ? `Scan complete — ${proposed} determinable fix(es) found`
+          : 'Scan complete — no determinable drift found'
+      );
+    } catch (error) {
+      console.error('[runPointsDriftScan] Failed:', error);
+      toast.error('Scan failed — see console');
+    } finally {
+      setDriftScanning(false);
+    }
+  };
+
+  /**
+   * Points-drift Phase 2 — APPLY. Only reachable once the operator has typed
+   * `DRIFT_CONFIRM_PHRASE` verbatim (checked again here, not just via the
+   * disabled-button affordance). Writes ONLY the deltas Phase 1 classified as
+   * determinable (`planPointsDriftApply` — never a `cannot_determine` row),
+   * one `writeBatch` per household, and logs an ActivityLogEntry per
+   * household so the change is auditable from the existing activity feed.
+   */
+  const applyPointsDriftFixes = async () => {
+    if (driftConfirmText.trim() !== DRIFT_CONFIRM_PHRASE) return;
+    setDriftApplying(true);
+    const log: string[] = [];
+    try {
+      const writes = planPointsDriftApply(driftReports);
+      if (writes.length === 0) {
+        log.push('Nothing to apply — the last scan found no determinable drift.');
+      } else {
+        const byHousehold = new Map<string, PointsDriftWrite[]>();
+        for (const w of writes) {
+          const list = byHousehold.get(w.householdId) ?? [];
+          list.push(w);
+          byHousehold.set(w.householdId, list);
+        }
+        for (const [householdId, householdWrites] of byHousehold) {
+          const batch = writeBatch(db);
+          for (const w of householdWrites) {
+            const ref =
+              w.scope === 'household'
+                ? doc(db, 'households', householdId)
+                : doc(db, `households/${householdId}/members`, w.memberUid as string);
+            // Absolute write of the already-floored (never-negative) total —
+            // planPointsDriftApply computed this from the scan's own snapshot,
+            // so the batch just commits exactly what the operator reviewed.
+            batch.update(ref, { 'points.total': w.newTotal });
+            log.push(`${householdId} · ${w.label}: ${w.previousTotal} → ${w.newTotal} (+${w.delta})`);
+          }
+          appendActivityLog(
+            batch,
+            db,
+            householdId,
+            { uid: user?.uid ?? 'admin', name: user?.displayName ?? 'Admin' },
+            {
+              domain: 'member',
+              action: 'points_drift_repaired',
+              summary: `Points drift repair: ${householdWrites.map(w => `${w.label} +${w.delta}`).join(', ')}`,
+            }
+          );
+          await batch.commit();
+        }
+      }
+      setDriftApplyLog(log);
+      // Force a fresh scan before another apply — the stored totals just
+      // changed, so the previous report is stale.
+      setDriftReports([]);
+      setDriftScanned(false);
+      setDriftConfirmText('');
+      toast.success('Points drift repair applied');
+    } catch (error) {
+      console.error('[applyPointsDriftFixes] Failed:', error);
+      toast.error('Apply failed — see console');
+    } finally {
+      setDriftApplying(false);
     }
   };
 
@@ -760,6 +910,109 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                     {repairLog.length > 0 && (
                       <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto rounded-lg bg-white p-2.5 text-xs font-mono text-brand-700 dark:bg-brand-800 dark:text-brand-200">
                         {repairLog.map((line, i) => (
+                          <li key={i}>{line}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  {/* Points-drift repair: Phase 1 (Scan) is a read-only dry
+                      run; Phase 2 (Apply) is gated behind a literal
+                      type-to-confirm phrase — never a single click. See
+                      utils/pointsDriftRepair.ts for the full design. */}
+                  <div className="rounded-xl border border-warm-300/70 bg-warm-50/60 p-4 dark:border-warm-800/60 dark:bg-warm-900/20">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-brand-800 dark:text-brand-100">Points drift repair</h3>
+                        <p className="mt-1.5 text-xs leading-relaxed text-brand-500 dark:text-brand-400">
+                          Recomputes each member&apos;s and household&apos;s <span className="font-mono">points.total</span> from
+                          habit data and reports where it disagrees with what&apos;s stored (all households). Read-only — this
+                          never writes anything by itself. Pre-attribution history and any other unmodeled point source
+                          (redemptions, chores, to-do credits, submission-tracked habits) is reported as &ldquo;cannot
+                          determine&rdquo; rather than guessed at.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={driftScanning}
+                        onClick={() => void runPointsDriftScan()}
+                        className="shrink-0 rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                      >
+                        {driftScanning ? (
+                          <span className="inline-flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" aria-hidden="true" /> Scanning…</span>
+                        ) : (
+                          'Scan for drift'
+                        )}
+                      </button>
+                    </div>
+
+                    {driftScanned && (
+                      <div className="mt-3 space-y-3">
+                        {driftReports.length === 0 ? (
+                          <p className="text-xs text-brand-500 dark:text-brand-400">No households found.</p>
+                        ) : (
+                          <ul className="max-h-60 space-y-1 overflow-y-auto rounded-lg bg-white p-2.5 text-xs font-mono text-brand-700 dark:bg-brand-800 dark:text-brand-200">
+                            {driftReports.flatMap(report =>
+                              report.rows.map(row => (
+                                <li key={`${report.householdId}-${row.scope}-${row.id}`}>
+                                  <span className="text-brand-400 dark:text-brand-450">{report.householdName}</span>
+                                  {' · '}
+                                  <span className="font-semibold">{row.label}</span>
+                                  {`: ${describeDriftVerdict(row)} (stored ${row.storedTotal}${row.recomputedTotal !== null ? `, recomputed ${row.recomputedTotal}` : ''})`}
+                                </li>
+                              ))
+                            )}
+                          </ul>
+                        )}
+
+                        {(() => {
+                          const proposedWrites = planPointsDriftApply(driftReports);
+                          if (proposedWrites.length === 0) return null;
+                          return (
+                            <div className="rounded-lg border border-warm-300/70 bg-white p-3 dark:border-warm-800/60 dark:bg-brand-800">
+                              <p className="text-xs font-semibold text-brand-800 dark:text-brand-100">
+                                {proposedWrites.length} determinable fix(es) ready to apply:
+                              </p>
+                              <ul className="mt-1.5 space-y-0.5 text-xs font-mono text-brand-600 dark:text-brand-300">
+                                {proposedWrites.map((w, i) => (
+                                  <li key={i}>{`${w.householdId} · ${w.label}: ${w.previousTotal} → ${w.newTotal} (+${w.delta})`}</li>
+                                ))}
+                              </ul>
+                              <p className="mt-3 text-xs text-brand-500 dark:text-brand-400">
+                                Type <span className="font-mono font-bold">{DRIFT_CONFIRM_PHRASE}</span> to enable Apply. This
+                                writes in a batch per household and is NOT reversible from this console.
+                              </p>
+                              <div className="mt-2 flex gap-2">
+                                <input
+                                  type="text"
+                                  value={driftConfirmText}
+                                  onChange={(e) => setDriftConfirmText(e.target.value)}
+                                  placeholder={DRIFT_CONFIRM_PHRASE}
+                                  aria-label={`Type ${DRIFT_CONFIRM_PHRASE} to confirm applying points drift fixes`}
+                                  className="flex-1 min-w-0 rounded-lg border border-brand-300 dark:border-brand-600 bg-white dark:bg-brand-800 px-2.5 py-1.5 text-xs font-mono text-brand-800 dark:text-brand-100 outline-hidden focus:ring-2 focus:ring-accent-500"
+                                />
+                                <button
+                                  type="button"
+                                  disabled={driftApplying || driftConfirmText.trim() !== DRIFT_CONFIRM_PHRASE}
+                                  onClick={() => void applyPointsDriftFixes()}
+                                  className="shrink-0 rounded-lg bg-money-neg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                                >
+                                  {driftApplying ? (
+                                    <span className="inline-flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" aria-hidden="true" /> Applying…</span>
+                                  ) : (
+                                    'Apply fixes'
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+
+                    {driftApplyLog.length > 0 && (
+                      <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto rounded-lg bg-white p-2.5 text-xs font-mono text-brand-700 dark:bg-brand-800 dark:text-brand-200">
+                        {driftApplyLog.map((line, i) => (
                           <li key={i}>{line}</li>
                         ))}
                       </ul>
