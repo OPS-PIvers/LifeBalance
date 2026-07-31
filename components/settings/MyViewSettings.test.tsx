@@ -54,7 +54,7 @@ describe('MyViewSettings — Home + landing screen (2F.2)', () => {
   it('picking a landing screen calls onSave with that destination as homeScreen', async () => {
     const onSave = vi.fn();
     render(<MyViewSettings member={baseMember()} settings={settings} onSave={onSave} />);
-    await userEvent.click(screen.getByRole('radio', { name: 'Money' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Budget' }));
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ homeScreen: 'money' }));
   });
 
@@ -69,9 +69,9 @@ describe('MyViewSettings — Home + landing screen (2F.2)', () => {
         onSave={vi.fn()}
       />
     );
-    // Money itself dropped out of the page list entirely (no visible leaf) —
+    // Budget itself dropped out of the page list entirely (no visible leaf) —
     // the picker never offers a page that would silently do nothing.
-    expect(screen.queryByRole('radio', { name: 'Money' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: 'Budget' })).not.toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Home' })).toBeChecked();
   });
 

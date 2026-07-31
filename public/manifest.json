@@ -28,7 +28,7 @@
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
     { "name": "Log a habit", "short_name": "Habits", "url": "/#/habits",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
-    { "name": "Money", "short_name": "Money", "url": "/#/budget",
+    { "name": "Budget", "short_name": "Budget", "url": "/#/budget",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] }
   ]
 }

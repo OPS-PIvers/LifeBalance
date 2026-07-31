@@ -38,7 +38,7 @@ export const MODULE_PRESETS: ModulePreset[] = [
   {
     id: 'finance-only',
     label: 'Finance only',
-    description: 'Just Money — habits, to-dos, meals, and shopping stay hidden.',
+    description: 'Just Budget — habits, to-dos, meals, and shopping stay hidden.',
     visibility: {
       habits: false,
       money: true,
@@ -51,7 +51,7 @@ export const MODULE_PRESETS: ModulePreset[] = [
   {
     id: 'habits-lifestyle',
     label: 'Habits & Lifestyle',
-    description: 'Habits only — no Money, To-Dos, Meals, or Shopping.',
+    description: 'Habits only — no Budget, To-Dos, Meals, or Shopping.',
     visibility: {
       habits: true,
       money: false,
@@ -64,7 +64,7 @@ export const MODULE_PRESETS: ModulePreset[] = [
   {
     id: 'meals-lists',
     label: 'Meals & Lists',
-    description: 'Meals and Shopping under Lists — no Money, Habits, or To-Dos.',
+    description: 'Meals and Shopping under Lists — no Budget, Habits, or To-Dos.',
     visibility: {
       habits: false,
       money: false,
@@ -77,7 +77,7 @@ export const MODULE_PRESETS: ModulePreset[] = [
   {
     id: 'productivity',
     label: 'Productivity',
-    description: 'To-Dos under Lists — no Money, Habits, Meals, or Shopping.',
+    description: 'To-Dos under Lists — no Budget, Habits, Meals, or Shopping.',
     visibility: {
       habits: false,
       money: false,

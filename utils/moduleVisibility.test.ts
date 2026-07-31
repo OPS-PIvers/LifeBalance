@@ -42,14 +42,15 @@ const settings = (
 const ALL_KEYS: ModuleKey[] = ['habits', 'money', 'lists', 'todos', 'meals', 'shopping'];
 const PLAN_TABS: PlanTab[] = ['todos', 'meals', 'shopping'];
 
+/** Money's seven leaves in canonical registry order (Overview / Budget / Activity). */
 const ALL_MONEY_LEAVES = [
   'overview',
+  'calendar',
+  'accounts',
+  'buckets',
+  'subscriptions',
   'transactions',
   'trends',
-  'calendar',
-  'subscriptions',
-  'buckets',
-  'accounts',
 ];
 
 /**
@@ -299,13 +300,13 @@ describe('getPageNavigation — household + member composed', () => {
   it('is fully visible for a legacy household and an un-customized member', () => {
     const nav = getPageNavigation('money', settings(undefined), resolveHiddenKeySet(undefined));
     expect(nav.isVisible).toBe(true);
-    expect(nav.groups.map(g => g.key)).toEqual(['overview', 'activity', 'planned', 'balances']);
+    expect(nav.groups.map(g => g.key)).toEqual(['overview', 'budget', 'activity']);
     expect(nav.soleLeaf).toBeNull();
   });
 
   it('drops a group once the member hides all of its leaves', () => {
     const nav = getPageNavigation('money', null, ['transactions', 'trends']);
-    expect(nav.groups.map(g => g.key)).toEqual(['overview', 'planned', 'balances']);
+    expect(nav.groups.map(g => g.key)).toEqual(['overview', 'budget']);
   });
 
   it('a group with one remaining leaf becomes single-view (no sub-view menu)', () => {
@@ -484,19 +485,19 @@ describe('resolveActiveLocation', () => {
   });
 
   it("entering by group key lands on the group's first visible leaf", () => {
-    expect(resolveActiveLocation(full(), 'balances')).toEqual({
-      group: 'balances',
-      leaf: 'buckets',
+    expect(resolveActiveLocation(full(), 'budget')).toEqual({
+      group: 'budget',
+      leaf: 'calendar',
     });
   });
 
   it('a hidden leaf falls back rather than rendering an empty view', () => {
-    const nav = getPageNavigation('money', null, ['buckets']);
-    // A stale `state: { tab: 'buckets' }` deep link…
-    expect(resolveActiveLocation(nav, 'buckets')).toEqual({ group: 'overview', leaf: 'overview' });
+    const nav = getPageNavigation('money', null, ['calendar']);
+    // A stale `state: { tab: 'calendar' }` deep link…
+    expect(resolveActiveLocation(nav, 'calendar')).toEqual({ group: 'overview', leaf: 'overview' });
     // …and entering the group lands on what's left of it.
-    expect(resolveActiveLocation(nav, 'balances')).toEqual({
-      group: 'balances',
+    expect(resolveActiveLocation(nav, 'budget')).toEqual({
+      group: 'budget',
       leaf: 'accounts',
     });
   });
@@ -710,7 +711,7 @@ describe('resolveLandingOptions (shared by MyViewSettings and the admin matrix)'
     expect(resolveLandingOptions(settings(undefined), [])).toEqual([
       { key: 'home', label: 'Home' },
       { key: 'habits', label: 'Habits' },
-      { key: 'money', label: 'Money' },
+      { key: 'money', label: 'Budget' },
       { key: 'lists', label: 'Lists' },
     ]);
   });
@@ -718,7 +719,7 @@ describe('resolveLandingOptions (shared by MyViewSettings and the admin matrix)'
   it('drops Home once the member has hidden it', () => {
     expect(resolveLandingOptions(settings(undefined), ['home'])).toEqual([
       { key: 'habits', label: 'Habits' },
-      { key: 'money', label: 'Money' },
+      { key: 'money', label: 'Budget' },
       { key: 'lists', label: 'Lists' },
     ]);
   });

@@ -537,7 +537,7 @@ describe('CaptureTransactionManual', () => {
     fireEvent.click(screen.getByRole('button', { name: /add details/i }));
 
     // Helper copy tells the user where the entry lands.
-    expect(screen.getByText('Creates a monthly entry on your Subscriptions tab.')).toBeInTheDocument();
+    expect(screen.getByText('Creates a monthly entry under Subscriptions.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('checkbox', { name: /recurring transaction/i }));
     fireEvent.click(screen.getByText('Save Transaction'));
 

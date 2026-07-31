@@ -37,7 +37,7 @@ const SubscriptionsView: React.FC = () => {
         variant="surface"
         icon={<RefreshCw className="w-full h-full" />}
         title="No subscriptions yet"
-        description="Recurring expense bills you add to the Calendar tab (Netflix, gym, rent, etc.) will show up here as a monthly total."
+        description="Recurring expense bills you add to the Calendar (Netflix, gym, rent, etc.) will show up here as a monthly total."
       />
     );
   }

@@ -26,31 +26,27 @@ import { preloadOnIdle } from '@/utils/preloadOnIdle';
 const loadBudgetTrends = () => import('@/components/budget/BudgetTrends');
 const BudgetTrends = React.lazy(loadBudgetTrends);
 
-// Money's IA is 4 top-level tabs (the old 7 overflowed the phone viewport —
-// 2026-07 critique P2), three of which pair two views chosen from a popover
+// Budget's IA is 3 top-level tabs (the old 7 overflowed the phone viewport —
+// 2026-07 critique P2), two of which gather several views chosen from a popover
 // menu anchored under the tab itself (TabSubViewMenu): tapping a multi-view
 // tab opens its menu, picking an item navigates. ONE state value holds the
-// full location: the six legacy view keys stay valid and select their group's
+// full location: the seven leaf view keys stay valid and select their group's
 // tab WITH the right segment, so every existing
 // `navigate('/budget', { state: { tab: 'trends' } })` deep-link keeps working
 // unchanged (deep-links never open the menu — it opens only from user taps).
 const MONEY_TABS = [
   'overview',
-  // Activity group ('activity' = its default segment)
+  // Budget group ('budget' = its default segment)
+  'budget', 'calendar', 'accounts', 'buckets', 'subscriptions',
+  // Activity group
   'activity', 'transactions', 'trends',
-  // Planned group
-  'planned', 'calendar', 'subscriptions',
-  // Balances group
-  'balances', 'buckets', 'accounts',
 ] as const;
 
-// 2F.1: the group/leaf tree, the per-group menu options, the group labels
-// (incl. "Budget" for the load-bearing legacy 'balances' key) and each group's
-// default segment (= its FIRST leaf) all now come from the shared registry in
-// utils/moduleVisibility.ts, filtered to what this household + member can see.
-// Nothing about the IA changed — the constants simply stopped being duplicated
-// here, so hiding a leaf removes it from the tab, the menu, and the panel in
-// one place.
+// 2F.1: the group/leaf tree, the per-group menu options, the group labels and
+// each group's default segment (= its FIRST leaf) all come from the shared
+// registry in utils/moduleVisibility.ts, filtered to what this household +
+// member can see — the constants are not duplicated here, so hiding a leaf
+// removes it from the tab, the menu, and the panel in one place.
 
 const BudgetSkeleton: React.FC = () => (
   <div className="bg-brand-50 dark:bg-brand-900 pb-nav-safe" aria-busy="true" aria-live="polite">
@@ -241,11 +237,11 @@ const Budget: React.FC = () => {
 
   // COLLAPSE RULE (2F.1) at the page level: exactly one reachable view means
   // there is nothing to switch between, so the tab strip and the coach hint
-  // both go and the footer's Money item simply IS this view.
+  // both go and the footer's Budget item simply IS this view.
   if (nav.soleLeaf) {
     return (
       <div className="bg-brand-50 dark:bg-brand-900 pb-nav-safe">
-        <PageHeader title="Money" subtitle="Your accounts, bills, and spending." />
+        <PageHeader title="Budget" subtitle="Your accounts, bills, and spending." />
         <div className="px-4 pt-4">{renderLeaf(nav.soleLeaf.key)}</div>
       </div>
     );
@@ -253,20 +249,18 @@ const Budget: React.FC = () => {
 
   return (
     <div className="bg-brand-50 dark:bg-brand-900 pb-nav-safe">
-      <PageHeader title="Money" subtitle="Your accounts, bills, and spending." />
+      <PageHeader title="Budget" subtitle="Your accounts, bills, and spending." />
 
       <Tabs value={activeTab} onValueChange={selectTab}>
         {/* Sub-navigation — STICKY strip (unified page-scroll model): pins at
             the top of MainLayout's single page scroller while content passes
             beneath, with the page background + bottom hairline matching
-            ListsPage's tab strip exactly. 4 top-level groups so every
-            destination is on screen at 375px (was 7 tabs with two off-screen).
-            text-[13px] + px-1.5 (vs the base text-sm/px-3) buy the room the
-            widest sub-view label ("Transactions ▾") + carets need at that
-            width — px is only each trigger's MINIMUM (they `grow` to fill the
-            trough), so the resting look is unchanged. The relative wrapper is
-            the anchor container for TabSubViewMenu; the capture handler
-            intercepts multi-view taps before Tabs sees them. */}
+            ListsPage's tab strip exactly. 3 top-level groups so every
+            destination is on screen at 375px (was 7 tabs with two off-screen),
+            which leaves room for the base text-sm/px-3 trigger sizing even
+            with the widest sub-view label ("Transactions ▾") + carets. The
+            relative wrapper is the anchor container for TabSubViewMenu; the
+            capture handler intercepts multi-view taps before Tabs sees them. */}
         <div className="px-4 pt-3 pb-2 sticky top-0 z-30 bg-brand-50 dark:bg-brand-900 border-b border-brand-200 dark:border-brand-800">
           <div ref={tabBarRef} className="relative" onClickCapture={handleTabBarClickCapture}>
             <TabsList equalWidth>
@@ -276,7 +270,6 @@ const Budget: React.FC = () => {
                   <TabsTrigger
                     key={group.key}
                     value={group.key}
-                    className="text-[13px] px-1.5"
                     {...(multi
                       ? { 'aria-haspopup': 'menu' as const, 'aria-expanded': openMenu === group.key }
                       : {})}
