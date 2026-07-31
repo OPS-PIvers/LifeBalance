@@ -1495,9 +1495,17 @@ export const attributionReversalForDates = (
   // `today = Thu`, whichever date the loop reached first absorbed the WHOLE
   // gated delta — even though the award itself sits on Monday, the member's
   // FIRST attributed day in the period (`memberPointsForHabitOnDate`). `total`
-  // telescoped correctly either way (it is never gated), so the bug was bucket
-  // PLACEMENT, not drift — but it displayed wrong daily/weekly figures until
-  // the next corrective sync silently fixed them.
+  // telescoped either way (it is never gated) — but ONLY for a SINGLE-period
+  // call, which is all any current caller makes; there the damage was bucket
+  // PLACEMENT, wrong daily/weekly figures until the next corrective sync
+  // silently fixed them. Across MULTIPLE periods the old fold produced a real
+  // `total` error, not a display one: probed against the pre-fix code
+  // (`git show 8e034d9`), three distinct periods returned `total` anywhere from
+  // -20 to -40 by argument order against a ground truth of -40, and two periods
+  // straddling a week boundary swung -10 vs -40. `computeHouseholdPointsSync`
+  // only ever RAISES `total`, so that error never self-heals — this fix is
+  // therefore strictly stronger than "bucket placement", and a future
+  // multi-period caller must not assume `total` is self-correcting.
   //
   // `periodPointsMove` is the general fix used everywhere else in this module:
   // it decomposes a before/after diff PER DATE (`periodScoredDates`) and gates
