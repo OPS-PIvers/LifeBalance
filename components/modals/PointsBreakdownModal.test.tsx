@@ -293,4 +293,62 @@ describe('PointsBreakdownModal — toggleDate uses the date-anchored historical 
     const habitUpdate = capturedUpdates.find(u => u.ref.__path === `${householdPath}/habits/h1`);
     expect(habitUpdate).toBeDefined();
   });
+
+  it('REMOVE: an ATTRIBUTED weekly threshold day debits the AWARD date, not the cleared date', async () => {
+    // 🔒 Regression (PR #1167 / TODO.md §3 fix). The test above proves the
+    // "unattributed threshold never adjusts points" fallback still holds — but
+    // that fallback (`pointsChange = 0`) is bypassed entirely once the date
+    // carries attribution: `toggleDate` at PointsBreakdownModal.tsx:239-240
+    // uses `reversal.household` instead whenever `clearPaths.length > 0`. This
+    // test exercises exactly THAT branch, with a weekly threshold habit whose
+    // award sits on an EARLIER day (Monday) than the day being cleared (Sunday
+    // = today, clicked via the weekly edit panel). `attributionReversalForDates`
+    // is called with a single date here — this is the single-date shape of the
+    // gating bug, not the order-independence one (covered separately in
+    // habitAttribution.test.ts and useHabitActions.test.tsx): the pre-fix
+    // implementation gated the whole period's reversal by the CLEARED date
+    // regardless, so clearing today's completion would have wrongly debited
+    // today's `points.daily` even though today never held the award.
+    const habit = baseHabit({
+      period: 'weekly',
+      scoringType: 'threshold',
+      targetCount: 2,
+      count: 2,
+      completedDates: [TODAY], // only the day the target was crossed (Sunday)
+      completedBy: {
+        [MON]: { [PAUL]: 1 }, // Monday — PAUL's FIRST attributed day = the award
+        [TODAY]: { [PAUL]: 1 }, // Sunday (today) — the day being cleared
+      },
+    });
+
+    (useGamification as unknown as Mock).mockReturnValue({
+      toggleHabit: mockToggleHabit,
+      updateHabit: mockUpdateHabit,
+    });
+
+    render(<PointsBreakdownModal isOpen onClose={() => {}} view="weekly" habits={[habit]} />);
+    await clickDayAndFlush(openEditAndGetDayButton('Sun'));
+
+    expect(commitCount).toBe(1);
+
+    // The whole period's attribution clears, progress day included.
+    const hu = capturedUpdates.find(u => u.ref.__path === `${householdPath}/habits/h1`)!;
+    expect(hu.data[`completedBy.${MON}`]).toBeDefined();
+    expect(hu.data[`completedBy.${TODAY}`]).toBeDefined();
+
+    const memberUpdate = capturedUpdates.find(
+      u => u.ref.__path === `${householdPath}/members/${PAUL}`,
+    );
+    expect(memberUpdate).toBeDefined();
+    // Gated by the AWARD date (Monday: inside the current week, but NOT
+    // today) — daily must stay untouched.
+    expect(memberUpdate!.data['points.daily']).toBeUndefined();
+    expect(memberUpdate!.data['points.weekly']).toEqual({ __increment: -10 });
+    expect(memberUpdate!.data['points.total']).toEqual({ __increment: -10 });
+
+    expect(householdUpdate()).toBeDefined();
+    expect(householdUpdate()!.data['points.daily']).toBeUndefined();
+    expect(householdUpdate()!.data['points.weekly']).toEqual({ __increment: -10 });
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -10 });
+  });
 });

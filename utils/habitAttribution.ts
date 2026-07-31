@@ -1519,6 +1519,13 @@ export const attributionReversalForDates = (
     }
   }
 
+  // NOTE: `countAfter` (the live counter the caller is about to WRITE) is a
+  // single scalar applied to `after` regardless of how many periods are
+  // touched — correct only because every real caller confines `dates` to ONE
+  // period (`resetHabit`'s current-week clear, `resetHabitDay`'s single date,
+  // a stale deselect's single prior period). A multi-period call would need a
+  // per-period `countAfter`, same latent precondition the incremental branch
+  // above already carries — not a new one this rewrite introduces.
   const removedCompletionDates = new Set(uniqueDates);
   const after: Habit = {
     ...withDatesUnattributed(habit, [...scopeByPeriod.values()].flat()),
