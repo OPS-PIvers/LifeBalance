@@ -399,10 +399,14 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   };
 
   const handleDelete = () => {
+    // `showDeleteConfirmation` defaults its noun to "task", so this dialog read
+    // "Delete this task?" over a transaction. Harmless while Delete was an
+    // unlabelled glyph most people never pressed; not harmless now that it
+    // carries its own word and invites the press.
     showDeleteConfirmation(async () => {
       await deleteTransaction(transaction.id);
       (onDeleted ?? onDone)();
-    });
+    }, 'transaction');
   };
 
   const handleMergeDuplicate = async () => {

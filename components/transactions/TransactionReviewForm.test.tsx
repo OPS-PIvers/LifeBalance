@@ -16,6 +16,7 @@ const {
   mockLinkBankTransactionToBill,
   mockOnDone,
   mockToast,
+  mockRequestDeleteConfirmation,
 } = vi.hoisted(() => ({
   mockUpdateTransactionCategory: vi.fn((..._args: unknown[]) => Promise.resolve()),
   mockDeleteTransaction: vi.fn((..._args: unknown[]) => Promise.resolve()),
@@ -25,6 +26,13 @@ const {
   mockLinkBankTransactionToBill: vi.fn((..._args: unknown[]) => Promise.resolve()),
   mockOnDone: vi.fn(),
   mockToast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
+  mockRequestDeleteConfirmation: vi.fn(),
+}));
+
+// Only `utils/toastHelpers` imports this store, so stubbing it here intercepts
+// the confirmation without disturbing anything else the form does.
+vi.mock('@/components/ui/confirmDialogStore', () => ({
+  requestDeleteConfirmation: mockRequestDeleteConfirmation,
 }));
 
 // Transactions the form's `useFinance().transactions` should resolve
@@ -620,6 +628,21 @@ describe('TransactionReviewForm', () => {
       const del = within(container).getByRole('button', { name: /delete/i });
       expect(del).toHaveTextContent('Delete');
       expect(del).not.toHaveAttribute('aria-label');
+    });
+
+    it('names a transaction, not a "task", in the delete confirmation', async () => {
+      // `showDeleteConfirmation`'s itemName defaults to "task", so this dialog
+      // used to read "Delete this task?" over a transaction. It mattered little
+      // while Delete was an unlabelled glyph; it matters now that the button
+      // carries its own word and invites the press.
+      const user = userEvent.setup();
+      const { container } = render(<TransactionReviewForm transaction={baseTx} onDone={mockOnDone} />);
+
+      await user.click(within(container).getByRole('button', { name: /delete/i }));
+
+      expect(mockRequestDeleteConfirmation).toHaveBeenCalledWith(
+        expect.objectContaining({ itemName: 'transaction' }),
+      );
     });
 
     it('renders the actions into the host node instead, with approve still fully wired', async () => {
