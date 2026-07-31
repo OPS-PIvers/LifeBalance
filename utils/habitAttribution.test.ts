@@ -852,9 +852,63 @@ describe('habitAttribution — un-credit reversal math', () => {
     expect(clearPaths).toEqual([d(0), d(2), d(4)].map(completedByDatePath));
     expect(attributedMemberIds(withDatesUnattributed(h, clearedDates))).toEqual([]);
 
-    expect(perMember.get(PAUL)).toEqual({ daily: -10, weekly: -10, total: -10 });
-    // Gated by the COMPLETION day (Friday), which is where the credit landed.
-    expect(household).toEqual({ daily: -10, weekly: -10, total: -10 });
+    // 🛡️ GATED BY THE AWARD DATE (Monday), never the completion day (Friday).
+    // `applyGatedDelta` and `periodPointsMove` document exactly one rule — gate
+    // by the date the points actually moved on — and that IS the authority:
+    // `memberPointsForHabitOnDate` attributes a threshold period's award to the
+    // member's FIRST attributed day in the period, so Monday is where the
+    // credit landed, not Friday (the day the target happened to be crossed).
+    // Monday sits inside the current Monday-anchored week (`weekStart` ===
+    // Monday) but is not `today` (Friday), so the reversal moves `weekly` but
+    // leaves `daily` untouched: undoing a credit nobody logged today must not
+    // move today's own points. (An earlier version of this test asserted the
+    // opposite — "gated by the completion day" — which was a pinned bug: two
+    // documented rules can't both be right, and `applyGatedDelta`/
+    // `periodPointsMove` are the ones every other points-writing path in this
+    // module already obeys.)
+    expect(perMember.get(PAUL)).toEqual({ daily: 0, weekly: -10, total: -10 });
+    expect(household).toEqual({ daily: 0, weekly: -10, total: -10 });
+  });
+
+  it('is order-independent when two same-period completion dates are reversed together', () => {
+    // 🔒 Regression (TODO.md §3, "Threshold reversal's daily/weekly bucket
+    // gating is order-sensitive"). The old implementation folded one date at a
+    // time against a progressively-stripped habit and gated the WHOLE period's
+    // delta by whichever date the loop reached first — so `dates: [Mon, Thu]`
+    // and `dates: [Thu, Mon]` produced DIFFERENT daily/weekly placement for the
+    // exact same reversal, even though the award itself always sits on Monday.
+    // `total` telescoped correctly in both orders (it's never gated), so the
+    // bug was bucket PLACEMENT, not drift — it self-healed on the next
+    // corrective sync but showed the wrong figures until then.
+    // `resetHabit` unions every completion day in the current week into
+    // `datesToRemove` (see its own comment: "every completion day entered
+    // completedDates"), so `completedDates` legitimately holds BOTH days here —
+    // this is the realistic shape of the caller that hits this code path.
+    const h = habit({
+      period: 'weekly',
+      scoringType: 'threshold',
+      targetCount: 2,
+      count: 2,
+      completedDates: [d(0), d(3)],
+      completedBy: { [d(0)]: { [PAUL]: 1 }, [d(3)]: { [PAUL]: 1 } },
+    });
+    const today = d(3); // Thursday: NOT the award date (Monday, d(0)).
+
+    const monThenThu = attributionReversalForDates(h, [d(0), d(3)], today, 0);
+    const thuThenMon = attributionReversalForDates(h, [d(3), d(0)], today, 0);
+
+    // Same result regardless of array order.
+    expect(thuThenMon.household).toEqual(monThenThu.household);
+    expect(thuThenMon.perMember.get(PAUL)).toEqual(monThenThu.perMember.get(PAUL));
+    expect(thuThenMon.clearedDates.slice().sort()).toEqual(monThenThu.clearedDates.slice().sort());
+
+    // And that shared result is gated by the AWARD date (Monday), not by
+    // `today` (Thursday) and not by whichever date the caller listed first:
+    // `daily` stays untouched because Monday isn't today.
+    expect(monThenThu.perMember.get(PAUL)!.daily).toBe(0);
+    expect(monThenThu.perMember.get(PAUL)!.weekly).toBe(monThenThu.perMember.get(PAUL)!.total);
+    expect(monThenThu.household.daily).toBe(0);
+    expect(monThenThu.household).toEqual(monThenThu.perMember.get(PAUL));
   });
 
   it('reverses each member’s own weekly threshold award', () => {

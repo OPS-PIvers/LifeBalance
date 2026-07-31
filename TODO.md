@@ -557,15 +557,6 @@ Per-member habit points follow-ups (from the 2026-07-30 six-stage ship, PRs #115
   code one. Needs: does the owner want a one-off reconciliation script, and against which source
   of truth (recompute every member's lifetime total from `completedBy`, which is only complete
   back to when attribution shipped)? **S / product decision first.**
-- **Threshold reversal's daily/weekly bucket gating is order-sensitive** (its `total` telescopes,
-  so this is bucket PLACEMENT, not drift). With `completedDates` `[Mon, Thu]` and today = Thu,
-  whichever date is processed first absorbs the whole gated delta, while the award actually sits
-  on Mon. `periodPointsMove` would fix it, but doing so flips a deliberately pinned, documented
-  behaviour: `habitAttribution.test.ts` asserts "gated by the COMPLETION day, which is where the
-  credit landed", which directly contradicts `applyGatedDelta`'s and `periodPointsMove`'s own
-  "gate by the AWARD date" rule. That is a genuine conflict between two documented rules — pick
-  the winning rule first, then implement. Self-heals for daily/weekly on the next sync.
-  **S / decide the rule before coding.**
 - **`HouseholdBadge` duplicates `MemberAvatar`'s glyph variant** — PR #1164 shipped a standalone
   `components/ui/HouseholdBadge.tsx` because the parallel Household-credit-mode PR owned
   `MemberAvatar.tsx`. Two components now draw the same circle/size/ring. Unify onto the shared

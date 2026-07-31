@@ -1341,11 +1341,13 @@ export const wholePeriodClearDates = (
 
 /**
  * Reverse the attribution a clear of `dates` takes with it: what each credited
- * member loses and what the pool loses, bucket-gated by the DATE being cleared
- * (total always, weekly only inside the current Monday-anchored week, daily only
- * for today) — the same gating `deleteHabitSubmission` / `resetHabitDay` already
- * use. The gating date is the completion day, which is where the credit actually
- * landed: a threshold period pays out the moment its target is crossed.
+ * member loses and what the pool loses, bucket-gated by the date the points
+ * actually MOVED ON — the same `applyGatedDelta` rule every points-writing path
+ * uses (total always, weekly only inside the current Monday-anchored week,
+ * daily only for today). That is the AWARD date, never the date being cleared:
+ * a threshold period's award lands on the member's FIRST attributed day in the
+ * period (`memberPointsForHabitOnDate`), which for a multi-day period is
+ * usually an EARLIER day than the one that actually crossed the target.
  *
  * 🛡️ BOTH SCORING TYPES REVERSE AS A BEFORE/AFTER DIFF, NEVER AS AN ABSOLUTE
  * PER-DATE FIGURE — they just scope it differently (threshold strips the whole
@@ -1402,10 +1404,6 @@ export const attributionReversalForDates = (
   const uniqueDates = [...new Set(dates)];
   if (uniqueDates.length === 0) return { perMember, household, clearedDates, clearPaths };
 
-  const weekStart = weekStartOf(today);
-  /** Apply a signed delta to one bucket triple, gated by the cleared date. */
-  const applyGated = (bucket: PointsBuckets, date: string, delta: number): void =>
-    applyGatedDelta(bucket, date, delta, weekStart, today);
   const memberBucket = (memberId: string): PointsBuckets => bucketFor(perMember, memberId);
 
   if (habit.scoringType !== 'threshold') {
@@ -1484,46 +1482,66 @@ export const attributionReversalForDates = (
     return { perMember, household, clearedDates, clearPaths };
   }
 
-  // Clear one date at a time and score the delta each removal actually causes,
-  // so every reversal is bucket-gated by ITS OWN date. (Scoring all dates at
-  // once would have to pick a single date to gate the whole reversal by, which
-  // is wrong the moment a cleared range straddles today or a week boundary.)
-  // `current` carries each step's result forward, so two dates in one period
-  // telescope into that period's single delta instead of double-counting it.
-  let current = habit;
+  // ── THRESHOLD: ONE before/after diff PER PERIOD, decomposed by the AWARD
+  // date — mirrors the incremental branch above, for the same reason.
+  //
+  // 🛡️ THIS USED TO FOLD ONE DATE AT A TIME (clear `date`, re-score against the
+  // progressively-stripped `current`, gate the whole delta by `date` — the date
+  // being CLEARED, not the date the award actually landed on). That made the
+  // daily/weekly PLACEMENT order-sensitive whenever two dates in the SAME
+  // period were reversed together (`resetHabit`'s weekly clear, and a stale
+  // deselect's prior-period clear, both legitimately hand multiple same-period
+  // dates to this function): with `completedDates` of `[Mon, Thu]` and
+  // `today = Thu`, whichever date the loop reached first absorbed the WHOLE
+  // gated delta — even though the award itself sits on Monday, the member's
+  // FIRST attributed day in the period (`memberPointsForHabitOnDate`). `total`
+  // telescoped correctly either way (it is never gated), so the bug was bucket
+  // PLACEMENT, not drift — but it displayed wrong daily/weekly figures until
+  // the next corrective sync silently fixed them.
+  //
+  // `periodPointsMove` is the general fix used everywhere else in this module:
+  // it decomposes a before/after diff PER DATE (`periodScoredDates`) and gates
+  // each date's own delta with `applyGatedDelta` by the date the points
+  // actually moved on. Build ONE "after" habit with every touched period's
+  // attribution stripped (`attributedDatesInPeriod` — the same scope the old
+  // per-date loop cleared) and its completion dates removed, then call
+  // `periodPointsMove` once per PERIOD touched. Periods are disjoint, so
+  // summing per-period moves is safe and nothing is double-counted or order-
+  // dependent — reusing the SAME `habit`/`after` pair for every period, exactly
+  // as the incremental branch above already does.
+  const scopeByPeriod = new Map<string, string[]>();
+  const anchorByPeriod = new Map<string, string>();
   for (const date of uniqueDates) {
-    const scope = attributedDatesInPeriod(current, date);
-    const stripped = withDatesUnattributed(current, scope);
-    const next: Habit = {
-      ...stripped,
-      completedDates: stripped.completedDates.filter(d => d !== date),
-      count: countAfter,
-    };
-
-    applyGated(
-      household,
-      date,
-      householdPeriodPoints(next, date, today) - householdPeriodPoints(current, date, today),
-    );
-
-    const holders = new Set<string>();
-    for (const scoped of scope) {
-      for (const memberId of memberIdsOnDate(current, scoped)) holders.add(memberId);
+    const periodStart = habitPeriodStart(habit.period, date);
+    if (!anchorByPeriod.has(periodStart)) {
+      anchorByPeriod.set(periodStart, date);
+      scopeByPeriod.set(periodStart, attributedDatesInPeriod(habit, date));
     }
-    for (const memberId of holders) {
-      applyGated(
-        memberBucket(memberId),
-        date,
-        memberPeriodPoints(next, memberId, date, today) -
-          memberPeriodPoints(current, memberId, date, today),
-      );
+  }
+
+  const removedCompletionDates = new Set(uniqueDates);
+  const after: Habit = {
+    ...withDatesUnattributed(habit, [...scopeByPeriod.values()].flat()),
+    completedDates: habit.completedDates.filter(d => !removedCompletionDates.has(d)),
+    count: countAfter,
+  };
+
+  for (const [periodStart, anchor] of anchorByPeriod) {
+    const move = periodPointsMove(habit, after, anchor, today);
+    household.daily += move.household.daily;
+    household.weekly += move.household.weekly;
+    household.total += move.household.total;
+    for (const [memberId, buckets] of move.perMember) {
+      const target = memberBucket(memberId);
+      target.daily += buckets.daily;
+      target.weekly += buckets.weekly;
+      target.total += buckets.total;
     }
 
-    for (const scoped of scope) {
+    for (const scoped of scopeByPeriod.get(periodStart) ?? []) {
       clearedDates.push(scoped);
       clearPaths.push(completedByDatePath(scoped));
     }
-    current = next;
   }
 
   // A member whose deltas all cancelled has nothing to write; dropping them here
