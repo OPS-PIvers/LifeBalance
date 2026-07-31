@@ -128,7 +128,7 @@ describe('usePageNavigation — the collapse rule', () => {
   it('reports no sole leaf while several views remain', () => {
     setup(undefined, {});
     const { result } = renderHook(() => usePageNavigation('money'));
-    expect(result.current.groups).toHaveLength(4);
+    expect(result.current.groups).toHaveLength(3);
     expect(result.current.soleLeaf).toBeNull();
   });
 

@@ -59,7 +59,7 @@ const BottomNav: React.FC = () => {
       items.push({ key: 'habits', to: '/habits', label: 'Habits', icon: Activity });
     }
     if (isModuleEnabled('money')) {
-      items.push({ key: 'money', to: '/budget', label: 'Money', icon: Wallet, badgeCount: pendingReviewCount });
+      items.push({ key: 'money', to: '/budget', label: 'Budget', icon: Wallet, badgeCount: pendingReviewCount });
     }
     if (isPlanVisible) {
       items.push({ key: 'lists', to: '/lists', label: 'Lists', icon: List });

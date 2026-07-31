@@ -108,7 +108,7 @@ describe('BottomNav', () => {
   it('drops a page from the nav when it has no reachable view', () => {
     setEnabledModules(['money']);
     renderNav();
-    expect(screen.getByText('Money')).toBeInTheDocument();
+    expect(screen.getByText('Budget')).toBeInTheDocument();
     expect(screen.queryByText('Lists')).not.toBeInTheDocument();
     expect(screen.queryByText('Habits')).not.toBeInTheDocument();
   });
@@ -119,7 +119,7 @@ describe('BottomNav', () => {
     renderNav();
     expect(screen.queryByText('Home')).not.toBeInTheDocument();
     expect(screen.getByText('Habits')).toBeInTheDocument();
-    expect(screen.getByText('Money')).toBeInTheDocument();
+    expect(screen.getByText('Budget')).toBeInTheDocument();
     expect(screen.getByText('Lists')).toBeInTheDocument();
   });
 
@@ -131,7 +131,7 @@ describe('BottomNav', () => {
     renderNav();
     expect(screen.queryByText('Home')).not.toBeInTheDocument();
     expect(screen.queryByText('Habits')).not.toBeInTheDocument();
-    expect(screen.queryByText('Money')).not.toBeInTheDocument();
+    expect(screen.queryByText('Budget')).not.toBeInTheDocument();
     expect(screen.queryByText('Lists')).not.toBeInTheDocument();
     const settingsLink = screen.getByText('Settings').closest('a');
     expect(settingsLink).toHaveAttribute('href', '/settings');

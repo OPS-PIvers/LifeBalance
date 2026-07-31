@@ -282,7 +282,7 @@ describe('MemberVisibilityMatrix', () => {
       );
 
       expect(screen.getAllByRole('checkbox', { name: 'Toggle Habits for the household' })).toHaveLength(1);
-      expect(screen.getAllByRole('checkbox', { name: 'Toggle Money for the household' })).toHaveLength(1);
+      expect(screen.getAllByRole('checkbox', { name: 'Toggle Budget for the household' })).toHaveLength(1);
       expect(screen.getAllByRole('checkbox', { name: 'Toggle Lists for the household' })).toHaveLength(1);
       // Lists' three sub-tabs keep their OWN household toggles — each is
       // independently gated, unlike Habits'/Money's leaves.
@@ -328,7 +328,7 @@ describe('MemberVisibilityMatrix', () => {
       expect(screen.queryByRole('checkbox', { name: 'Show Overview for Alice' })).not.toBeInTheDocument();
       expect(screen.queryByRole('combobox', { name: 'Landing screen for Alice' })).not.toBeInTheDocument();
 
-      const householdMoney = screen.getByRole('checkbox', { name: 'Toggle Money for the household' });
+      const householdMoney = screen.getByRole('checkbox', { name: 'Toggle Budget for the household' });
       expect(householdMoney).not.toBeDisabled();
       householdMoney.click();
       expect(onToggleModule).toHaveBeenCalledWith('money', false);
@@ -397,7 +397,7 @@ describe('MemberVisibilityMatrix', () => {
       expect(memberHeading.className).toContain('font-display');
       expect(memberHeading.className).not.toContain('uppercase');
 
-      const groupHeading = screen.getByRole('heading', { name: 'Money' });
+      const groupHeading = screen.getByRole('heading', { name: 'Budget' });
       expect(groupHeading.className).toContain('font-display');
       expect(groupHeading.className).not.toContain('uppercase');
     });

@@ -155,7 +155,7 @@ export const NAV_PAGES: readonly NavPageDef[] = [
   },
   {
     key: 'money',
-    label: 'Money',
+    label: 'Budget',
     path: '/budget',
     module: 'money',
     groups: [
@@ -165,27 +165,21 @@ export const NAV_PAGES: readonly NavPageDef[] = [
         leaves: [{ key: 'overview', label: 'Overview', module: 'money' }],
       },
       {
+        key: 'budget',
+        label: 'Budget',
+        leaves: [
+          { key: 'calendar', label: 'Calendar', module: 'money' },
+          { key: 'accounts', label: 'Accounts', module: 'money' },
+          { key: 'buckets', label: 'Buckets', module: 'money' },
+          { key: 'subscriptions', label: 'Subscriptions', module: 'money' },
+        ],
+      },
+      {
         key: 'activity',
         label: 'Activity',
         leaves: [
           { key: 'transactions', label: 'Transactions', module: 'money' },
           { key: 'trends', label: 'Trends', module: 'money' },
-        ],
-      },
-      {
-        key: 'planned',
-        label: 'Planned',
-        leaves: [
-          { key: 'calendar', label: 'Calendar', module: 'money' },
-          { key: 'subscriptions', label: 'Subscriptions', module: 'money' },
-        ],
-      },
-      {
-        key: 'balances',
-        label: 'Budget',
-        leaves: [
-          { key: 'buckets', label: 'Buckets', module: 'money' },
-          { key: 'accounts', label: 'Accounts', module: 'money' },
         ],
       },
     ],

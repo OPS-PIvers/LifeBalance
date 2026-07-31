@@ -271,7 +271,7 @@ describe('Settings index + sub-screens', () => {
     // …and so is the duplicate per-member list.
     expect(screen.queryByText('What I see')).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('checkbox', { name: 'Show Transactions in Money' })
+      screen.queryByRole('checkbox', { name: 'Show Transactions in Budget' })
     ).not.toBeInTheDocument();
     // Per-member leaves are the matrix's columns instead.
     expect(screen.getByRole('checkbox', { name: 'Show Overview for Test User' })).toBeChecked();
