@@ -575,12 +575,16 @@ Per-member habit points follow-ups (from the 2026-07-30 six-stage ship, PRs #115
   (added in #1164) reports the signed total. Pre-existing chart behavior, surfaced by adding the
   number next to it. Decide whether the chart should represent negative days or the legend should
   match the chart's positive-only scope. **XS.**~~ ✅ Resolved — the chart stays positive-only
-  (product decision); the household card's "earned together" line now checks `hasUnattributed`
-  and, for the one case with no visible chart cause (an all-negative week — provably always the
-  branch, since a positive sum requires a positive day), says so explicitly instead of asserting
-  an unexplained figure. Also fixed a latent `buildRecapChart` NaN: a legacy day missing the
-  `unattributed` field entirely zeroed out every segment's `pct` on that day, including real
-  member segments.
+  (product decision); every fix is on the LABELLING side. The household card's line now gates on
+  whether the chart actually DRAWS a Household bar — a positive segment sitting on a column that
+  has height, since segment existence (`day.unattributed`) and column height (`day.total`) are
+  independent figures — and its wording keys off the figure's SIGN, so a loss is never phrased as
+  something "earned" and the stated reason for an absent bar is true both when all seven columns
+  are drawn (the omitted unit is the negative segment, not the day) and when none are.
+  `householdSharePoints` is also rounded to 2dp, which keeps a real `.5` from a 1.5x multiplier
+  while stopping a float-epsilon sum from rendering as `5.55e-17` and slipping past the card's
+  `!== 0` gate. The `?? 0` guards on `unattributed` are defensive only — the field is required and
+  its only writer has always written it.
 
 From the 2026-07-09 product-scope audit — grounded findings, not yet greenlit:
 

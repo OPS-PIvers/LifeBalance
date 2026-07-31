@@ -433,10 +433,9 @@ describe('buildRecapDeck', () => {
  * nets negative draws no Household bar. The product decision is that the
  * chart STAYS positive-only (a stacked bar can't honestly show a negative
  * slice) — the fix is on the household card's LABEL, which must never assert
- * a figure the rest of the card gives no visible cause for. These six cases
- * are the full state space of `dailyPoints[].unattributed` signs across a
- * week; `hasUnattributed` below mirrors the exact expression `RecapDeck.tsx`
- * uses to gate the chart legend and the card's wording.
+ * a figure the rest of the card gives no visible cause for. These cases walk
+ * the state space of `dailyPoints[].unattributed` signs across a week, plus
+ * the case where a segment's EXISTENCE and its column's HEIGHT disagree.
  */
 describe('household share vs. chart consistency (recap-chart-negative-days)', () => {
   const base = {
@@ -445,8 +444,15 @@ describe('household share vs. chart consistency (recap-chart-negative-days)', ()
     unattributedColor: '#a19b8c',
   };
 
-  const hasUnattributed = (deck: ReturnType<typeof buildRecapDeck>): boolean =>
-    deck.chart.some(d => d.segments.some(s => s.key === UNATTRIBUTED_SERIES));
+  /**
+   * Mirrors the exact expression `RecapDeck.tsx`'s `WeekCard` uses to gate the
+   * chart legend and the household-share wording. A Household bar is DRAWN
+   * only when a positive `unattributed` segment sits on a column that has
+   * height: segment existence follows from `day.unattributed`, height from
+   * `day.total`, and those are independent figures — see case (g).
+   */
+  const hasHouseholdBar = (deck: ReturnType<typeof buildRecapDeck>): boolean =>
+    deck.chart.some(d => d.heightPct > 0 && d.segments.some(s => s.key === UNATTRIBUTED_SERIES));
 
   it('(a) all-positive unattributed week: every day draws a Household segment, matching a positive card figure', () => {
     const allPositive = recap({
@@ -454,7 +460,7 @@ describe('household share vs. chart consistency (recap-chart-negative-days)', ()
     });
     const deck = buildRecapDeck({ ...base, recap: allPositive, viewerId: 'jen' });
     expect(deck.householdSharePoints).toBe(35); // 5 * 7 days
-    expect(hasUnattributed(deck)).toBe(true);
+    expect(hasHouseholdBar(deck)).toBe(true);
   });
 
   it('(b) all-negative unattributed week: NO day ever draws a Household segment, while the card figure is still nonzero — the exact contradiction this fix closes', () => {
@@ -463,12 +469,13 @@ describe('household share vs. chart consistency (recap-chart-negative-days)', ()
     });
     const deck = buildRecapDeck({ ...base, recap: allNegative, viewerId: 'jen' });
     expect(deck.householdSharePoints).toBe(-35);
-    expect(hasUnattributed(deck)).toBe(false);
-    // Proves the invariant `RecapDeck.tsx` leans on: reaching the "no visible
-    // cause" branch (`!hasUnattributed`) with a nonzero figure is only ever
-    // possible for a LOSS — a positive sum requires at least one positive
-    // day, which would make `hasUnattributed` true.
-    expect(deck.householdSharePoints).toBeLessThan(0);
+    expect(hasHouseholdBar(deck)).toBe(false);
+    // ...and the reason is emphatically NOT "the chart only shows positive
+    // days". Every one of the seven days IS drawn, at FULL height (50+45-5=90,
+    // identical all week, so each column is the week's best). What the chart
+    // omits is the negative SEGMENT, not the day — which is why the card's
+    // wording has to speak about points gained, never about days shown.
+    expect(deck.chart.every(d => d.heightPct === 100)).toBe(true);
   });
 
   it('(c) mixed-sign week netting POSITIVE: the positive day draws a segment, matching the positive card figure', () => {
@@ -482,7 +489,7 @@ describe('household share vs. chart consistency (recap-chart-negative-days)', ()
     });
     const deck = buildRecapDeck({ ...base, recap: mixedPositive, viewerId: 'jen' });
     expect(deck.householdSharePoints).toBe(15); // 20 + (-5)
-    expect(hasUnattributed(deck)).toBe(true);
+    expect(hasHouseholdBar(deck)).toBe(true);
     expect(deck.chart[0]?.segments.some(s => s.key === UNATTRIBUTED_SERIES)).toBe(true);
     expect(deck.chart[2]?.segments.some(s => s.key === UNATTRIBUTED_SERIES)).toBe(false);
   });
@@ -500,7 +507,7 @@ describe('household share vs. chart consistency (recap-chart-negative-days)', ()
     expect(deck.householdSharePoints).toBe(-5); // 15 + (-20)
     // Monday's segment is the visible cause — this is the (already-shipped,
     // #1164) "mixed-sign netting negative" case and stays unchanged here.
-    expect(hasUnattributed(deck)).toBe(true);
+    expect(hasHouseholdBar(deck)).toBe(true);
   });
 
   it('(e) mixed-sign week netting to EXACTLY ZERO: a segment is still drawn, but the card figure is suppressed (0) so nothing is asserted', () => {
@@ -516,7 +523,7 @@ describe('household share vs. chart consistency (recap-chart-negative-days)', ()
     expect(deck.householdSharePoints).toBe(0);
     // The chart doesn't lie about Monday, but `householdSharePoints !== 0`
     // gates the card line off entirely, so there is nothing left to disagree.
-    expect(hasUnattributed(deck)).toBe(true);
+    expect(hasHouseholdBar(deck)).toBe(true);
   });
 
   it('(f) no unattributed activity at all — explicit zeros: no segment anywhere, and the card figure is suppressed', () => {
@@ -525,16 +532,18 @@ describe('household share vs. chart consistency (recap-chart-negative-days)', ()
     });
     const deck = buildRecapDeck({ ...base, recap: noActivity, viewerId: 'jen' });
     expect(deck.householdSharePoints).toBe(0);
-    expect(hasUnattributed(deck)).toBe(false);
+    expect(hasHouseholdBar(deck)).toBe(false);
   });
 
-  it('(f) no unattributed activity at all — a LEGACY week missing the field on every day scores identically to explicit zeros, and never poisons a real member segment with NaN', () => {
+  it('(f) no unattributed activity at all — a LEGACY week missing the field on every day scores identically to explicit zeros, and never zeroes out a real member segment', () => {
     // Mirrors the "treats a LEGACY day..." test above (buildRecapDeck), but
     // asserts on `buildRecapChart`'s own segment math, which has its own
-    // un-guarded `day.unattributed` read (`Math.max(0, undefined)` is NaN,
-    // which poisons `segmentTotal` and zeroes out EVERY segment's `pct` for
-    // that day — jen's and paul's real points included, not just the
-    // missing unattributed series).
+    // un-guarded `day.unattributed` read. Drop the `?? 0` and
+    // `Math.max(0, undefined)` is NaN, which poisons `segmentTotal`; the
+    // observable damage is NOT a NaN `pct` (`segmentTotal > 0` is false for
+    // NaN, so `pct` falls to the literal 0) but a SILENT 0 on every segment of
+    // that day — jen's and paul's real points included. Assert the real share,
+    // which is the only thing that tells those two apart.
     const legacyDays = DAYS.map(date => {
       const day = { date, byMember: { jen: 50, paul: 45 }, unattributed: 0, total: 95 };
       delete (day as Partial<typeof day>).unattributed;
@@ -544,15 +553,67 @@ describe('household share vs. chart consistency (recap-chart-negative-days)', ()
 
     const deck = buildRecapDeck({ ...base, recap: legacyWeek, viewerId: 'jen' });
     expect(deck.householdSharePoints).toBe(0);
-    expect(hasUnattributed(deck)).toBe(false);
+    expect(hasHouseholdBar(deck)).toBe(false);
 
     for (const day of deck.chart) {
-      for (const segment of day.segments) {
-        expect(Number.isNaN(segment.pct)).toBe(false);
-      }
       const jenSegment = day.segments.find(s => s.key === 'jen');
       expect(jenSegment?.pct).toBeCloseTo((50 / 95) * 100);
     }
+  });
+
+  it('(g) a POSITIVE household day the members net into the red: the segment EXISTS but its column has zero height, so nothing is drawn (fix 1)', () => {
+    // Segment existence derives from `day.unattributed`; column height derives
+    // from `day.total`. They are independent, and negative/penalty habits make
+    // the disagreement reachable: the members bleed points on a day a
+    // Household-credit habit scores. Gating the legend and the card's wording
+    // on existence alone paints a "Household" swatch and claims points "earned
+    // together" over a column of zero pixels.
+    const householdOnlyGain = recap({
+      dailyPoints: DAYS.map((date, i) => ({
+        date,
+        byMember: i === 0 ? { jen: -60, paul: -55 } : { jen: 0, paul: 0 },
+        unattributed: i === 0 ? 10 : 0,
+        total: i === 0 ? -105 : 0,
+      })),
+    });
+    const deck = buildRecapDeck({ ...base, recap: householdOnlyGain, viewerId: 'jen' });
+
+    // The figure is POSITIVE here — so the "no visible cause" branch is NOT
+    // reachable only for a loss, and its copy may not assume one.
+    expect(deck.householdSharePoints).toBe(10);
+
+    const monday = deck.chart[0];
+    expect(monday?.segments.some(s => s.key === UNATTRIBUTED_SERIES)).toBe(true);
+    expect(monday?.heightPct).toBe(0);
+    expect(hasHouseholdBar(deck)).toBe(false);
+  });
+
+  it('normalizes float-summation epsilon out of householdSharePoints without flattening a real half-point (fix 5)', () => {
+    // 0.1 + 0.2 - 0.3 is 5.551115123125783e-17 in binary floats — a value that
+    // renders verbatim on the card AND slips past its `!== 0` gate, so a week
+    // that truly nets zero would announce a household share in scientific
+    // notation.
+    const epsilon = recap({
+      dailyPoints: DAYS.map((date, i) => ({
+        date,
+        byMember: { jen: 50, paul: 45 },
+        unattributed: i === 0 ? 0.1 : i === 1 ? 0.2 : i === 2 ? -0.3 : 0,
+        total: 95,
+      })),
+    });
+    expect(buildRecapDeck({ ...base, recap: epsilon, viewerId: 'jen' }).householdSharePoints).toBe(0);
+
+    // ...but streak multipliers are 1.5x, so a genuine half-point is real data
+    // and must survive untouched — this is not integer rounding.
+    const fractional = recap({
+      dailyPoints: DAYS.map((date, i) => ({
+        date,
+        byMember: { jen: 50, paul: 45 },
+        unattributed: i === 0 ? 7.5 : 0,
+        total: 95,
+      })),
+    });
+    expect(buildRecapDeck({ ...base, recap: fractional, viewerId: 'jen' }).householdSharePoints).toBe(7.5);
   });
 });
 
