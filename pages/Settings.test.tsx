@@ -342,14 +342,14 @@ describe('Settings index + sub-screens', () => {
 
     fireEvent.change(presets, { target: { value: 'finance-only' } });
     expect(
-      screen.getByText('Just Money — habits, to-dos, meals, and shopping stay hidden.')
+      screen.getByText('Just Budget — habits, to-dos, meals, and shopping stay hidden.')
     ).toBeInTheDocument();
 
     // Cancel returns the Select to the placeholder without writing anything.
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(presets).toHaveValue('');
     expect(
-      screen.queryByText('Just Money — habits, to-dos, meals, and shopping stay hidden.')
+      screen.queryByText('Just Budget — habits, to-dos, meals, and shopping stay hidden.')
     ).not.toBeInTheDocument();
   });
 

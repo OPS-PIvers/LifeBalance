@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { enterTestMode, usd, localDateString, safeToSpendButton, addManualExpense, reviewDrawer, bottomNav, moneyNavWithPending } from './helpers';
+import { enterTestMode, usd, localDateString, safeToSpendButton, addManualExpense, reviewDrawer, bottomNav, budgetNavWithPending } from './helpers';
 
 /**
  * Safe-to-Spend money path (advisor plan 07, spec 1).
@@ -40,11 +40,11 @@ test.describe('Safe to Spend (Test Mode)', () => {
     // Headline dropped by exactly the pending amount.
     await expect(safeToSpendButton(page)).toContainText(usd(SEED_CHECKING - EXPENSE));
 
-    // The Money → Overview tab no longer hosts a Safe-to-Spend breakdown card
+    // The Budget → Overview tab no longer hosts a Safe-to-Spend breakdown card
     // (UX audit Batch 3 — deleted as redundant with the toolbar figure above);
     // confirm the pending expense is still visible from the Overview tab via
     // the Money Pulse / bills widgets instead.
-    await moneyNavWithPending(page, 1).click();
+    await budgetNavWithPending(page, 1).click();
     await expect(page.getByText('E2E Cafe').first()).toBeVisible();
   });
 
@@ -68,10 +68,10 @@ test.describe('Safe to Spend (Test Mode)', () => {
 
     // Verified-only balance model: the headline stays at seed − expense (the
     // debit simply moved from the pending term to the checking balance). The
-    // Money → Overview breakdown card was removed (UX audit Batch 3); the
+    // Budget → Overview breakdown card was removed (UX audit Batch 3); the
     // moved balance is only surfaced via the toolbar figure now, and the
-    // pending-review badge is gone from the Money nav link.
+    // pending-review badge is gone from the Budget nav link.
     await expect(safeToSpendButton(page)).toContainText(usd(SEED_CHECKING - EXPENSE));
-    await expect(bottomNav(page).getByRole('link', { name: 'Money', exact: true })).toBeVisible();
+    await expect(bottomNav(page).getByRole('link', { name: 'Budget', exact: true })).toBeVisible();
   });
 });

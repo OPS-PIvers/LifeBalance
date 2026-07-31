@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { enterTestMode, usd, bottomNav, moneyNavWithPending, safeToSpendButton } from './helpers';
+import { enterTestMode, usd, bottomNav, budgetNavWithPending, safeToSpendButton } from './helpers';
 
 /**
  * Unified transaction review (advisor plan 07, spec 2) — the post-#792 review
@@ -21,8 +21,8 @@ test.describe('Transaction review drawer (Test Mode, stub seed)', () => {
   test('fills a $0 stub inline and verifies it into a bucket', async ({ page }) => {
     await enterTestMode(page, 'stub');
 
-    // The stub puts a count badge on the Money nav link's accessible name.
-    await expect(moneyNavWithPending(page, 1)).toBeVisible();
+    // The stub puts a count badge on the Budget nav link's accessible name.
+    await expect(budgetNavWithPending(page, 1)).toBeVisible();
 
     // Drawer auto-opens on the stub: blank autofocused amount, disabled CTA.
     const drawer = page.getByRole('dialog', { name: 'Review (1 of 1)' });
@@ -37,11 +37,11 @@ test.describe('Transaction review drawer (Test Mode, stub seed)', () => {
     await drawer.getByRole('button', { name: /Approve Transaction|Add amount & approve/ }).click();
     await expect(drawer).not.toBeVisible();
 
-    // It left the review queue: the Money link's name is back to exactly "Money".
-    await expect(bottomNav(page).getByRole('link', { name: 'Money', exact: true })).toBeVisible();
+    // It left the review queue: the Budget link's name is back to exactly "Budget".
+    await expect(bottomNav(page).getByRole('link', { name: 'Budget', exact: true })).toBeVisible();
 
     // Bucket progress: Entertainment now shows the verified spend.
-    await bottomNav(page).getByRole('link', { name: 'Money', exact: true }).click();
+    await bottomNav(page).getByRole('link', { name: 'Budget', exact: true }).click();
     // Tapping the multi-view Budget tab opens its sub-view menu
     // (TabSubViewMenu); picking Buckets navigates to the buckets view.
     await page.getByRole('tab', { name: 'Budget' }).click();
@@ -58,7 +58,7 @@ test.describe('Transaction review drawer (Test Mode, stub seed)', () => {
 
     // Single-debit rule: the checking balance moved by exactly the ENTERED
     // amount (not the stub's $0). The Safe-to-Spend breakdown card was removed
-    // from Money → Overview (UX audit Batch 3) — the toolbar figure is now the
+    // from Budget → Overview (UX audit Batch 3) — the toolbar figure is now the
     // single place this number is surfaced, so assert there instead.
     await expect(safeToSpendButton(page)).toContainText(usd(SEED_CHECKING - STUB_AMOUNT));
   });

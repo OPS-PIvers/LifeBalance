@@ -154,12 +154,12 @@ describe('CaptureModal', () => {
 
   it('renders tab switcher labelled with the destination pages', () => {
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
-    expect(screen.getByText('Money')).toBeInTheDocument();
+    expect(screen.getByText('Budget')).toBeInTheDocument();
     expect(screen.getByText('To-Dos')).toBeInTheDocument();
     expect(screen.getByText('Shopping')).toBeInTheDocument();
   });
 
-  it('opens the Money tab straight onto the manual form, with a scan button above it', () => {
+  it('opens the Budget tab straight onto the manual form, with a scan button above it', () => {
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
 
     // No two-card chooser any more: the form IS the landing state.
@@ -170,7 +170,7 @@ describe('CaptureModal', () => {
   it('switches to To-Do tab', () => {
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
 
-    // Initial state: Money tab (manual form)
+    // Initial state: Budget tab (manual form)
     expect(screen.getByTestId('capture-transaction-manual')).toBeInTheDocument();
     expect(screen.queryByTestId('capture-todo-tab')).not.toBeInTheDocument();
 
@@ -198,15 +198,15 @@ describe('CaptureModal', () => {
     expect(screen.getByTestId('capture-shopping-tab')).toBeInTheDocument();
   });
 
-  it('switches back to the Money tab', () => {
+  it('switches back to the Budget tab', () => {
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
 
     // Go to Shopping first
     fireEvent.click(screen.getByText('Shopping'));
     expect(screen.getByTestId('capture-shopping-tab')).toBeInTheDocument();
 
-    // Go back to Money
-    fireEvent.click(screen.getByText('Money'));
+    // Go back to Budget
+    fireEvent.click(screen.getByText('Budget'));
     expect(screen.getByTestId('capture-transaction-manual')).toBeInTheDocument();
     expect(screen.getByText('Capture')).toBeInTheDocument();
   });
@@ -342,24 +342,24 @@ describe('CaptureModal', () => {
     setEnabledModules(['lists', 'todos', 'shopping']);
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
 
-    expect(screen.queryByText('Money')).not.toBeInTheDocument();
+    expect(screen.queryByText('Budget')).not.toBeInTheDocument();
     expect(screen.getByText('To-Dos')).toBeInTheDocument();
     expect(screen.getByText('Shopping')).toBeInTheDocument();
   });
 
-  it('gates To-Do/Shopping tabs behind the Plan master (only Money when Plan is off)', () => {
+  it('gates To-Do/Shopping tabs behind the Plan master (only Budget when Plan is off)', () => {
     // todos + shopping flags on, but Plan off → their destinations are hidden,
-    // so only the Money capture tab remains.
+    // so only the Budget capture tab remains.
     setEnabledModules(['money', 'todos', 'shopping']);
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
 
-    expect(screen.getByText('Add Transaction')).toBeInTheDocument(); // Money active
+    expect(screen.getByText('Add Transaction')).toBeInTheDocument(); // Budget active
     expect(screen.queryByText('To-Dos')).not.toBeInTheDocument();
     expect(screen.queryByText('Shopping')).not.toBeInTheDocument();
   });
 
   it('defaults the active tab to the first enabled tab when the default (money) is off', () => {
-    // Money disabled, so the transaction default is unavailable.
+    // Budget disabled, so the transaction default is unavailable.
     setEnabledModules(['lists', 'todos', 'shopping']);
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
 
@@ -377,7 +377,7 @@ describe('CaptureModal', () => {
     // Single enabled tab renders its content with no switchable strip.
     expect(screen.getByTestId('capture-shopping-tab')).toBeInTheDocument();
     expect(screen.getByText('Add Item')).toBeInTheDocument();
-    expect(screen.queryByText('Money')).not.toBeInTheDocument();
+    expect(screen.queryByText('Budget')).not.toBeInTheDocument();
     expect(screen.queryByText('To-Dos')).not.toBeInTheDocument();
     // Sole tab's own label is not rendered as a switcher option.
     expect(screen.queryByText('Shopping')).not.toBeInTheDocument();

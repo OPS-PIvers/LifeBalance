@@ -58,20 +58,23 @@ test.describe('LifeBalance smoke (Test Mode)', () => {
     ).toBeVisible();
   });
 
-  test('navigates to Money and Habits via the bottom nav', async ({ page }) => {
+  test('navigates to Budget and Habits via the bottom nav', async ({ page }) => {
     await enterTestMode(page);
 
     // Scope nav clicks to the bottom-nav landmark: the dashboard also renders
     // links to the same routes, so a page-wide `getByRole('link')` is ambiguous.
-    // The nav links have the exact accessible names "Money" and "Habits".
+    // The nav links have the exact accessible names "Budget" and "Habits".
     const nav = page.getByRole('navigation', { name: /main navigation/i });
 
-    // --- Money (label renamed from "Budget"; the route is still /#/budget) ---
-    await nav.getByRole('link', { name: 'Money', exact: true }).click();
+    // --- Budget ("Budget" is now the nav label AND the route, /#/budget; the
+    // page was called "Money" until the nav reorg) ---
+    await nav.getByRole('link', { name: 'Budget', exact: true }).click();
     await expect(page).toHaveURL(/#\/budget$/);
-    // Money opens on the Overview tab; "Groceries" is a seeded bucket
+    // Budget opens on the Overview tab; "Groceries" is a seeded bucket
     // (SEED_BUCKETS in MockHouseholdContext). Tapping the multi-view Budget
     // tab opens its sub-view menu (TabSubViewMenu); picking Buckets navigates.
+    // Role-scoped on purpose: "Budget" is now also the page's h1 (role
+    // `heading`) and the nav link (role `link`), so only `tab` is unambiguous.
     await page.getByRole('tab', { name: 'Budget' }).click();
     await page.getByRole('menuitemradio', { name: 'Buckets' }).click();
     await expect(page.getByText('Groceries').first()).toBeVisible();

@@ -35,12 +35,15 @@ export async function enterTestMode(page: Page, seed?: 'fresh' | 'stub'): Promis
 }
 
 /**
- * Locator for the Money bottom-nav link while N transactions await review.
+ * Locator for the Budget bottom-nav link while N transactions await review.
  * The badge's sr-only suffix is a separate text node, so the computed
- * accessible name joins with a space: "Money , 1 pending review".
+ * accessible name joins with a space: "Budget , 1 pending review".
+ *
+ * Scoped to the nav landmark because "Budget" is also the page's h1 and its
+ * tab-strip group label — the role + landmark pair is what disambiguates.
  */
-export function moneyNavWithPending(page: Page, count: number) {
-  return bottomNav(page).getByRole('link', { name: new RegExp(`Money\\s*, ${count} pending review`) });
+export function budgetNavWithPending(page: Page, count: number) {
+  return bottomNav(page).getByRole('link', { name: new RegExp(`Budget\\s*, ${count} pending review`) });
 }
 
 /**
@@ -72,7 +75,7 @@ export function safeToSpendButton(page: Page) {
 /**
  * Add a manual expense through the capture FAB.
  *
- * The Money tab opens STRAIGHT onto the manual form — there is no longer a
+ * The Budget tab opens STRAIGHT onto the manual form — there is no longer a
  * "Manual Entry vs Add from Image" menu card to click through first, and the
  * drawer keeps its generic "Capture" title while the type selector is visible.
  * Save lives in the drawer's fixed footer (still inside the dialog), so one

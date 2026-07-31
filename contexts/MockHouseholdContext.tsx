@@ -229,8 +229,8 @@ const SEED_TRANSACTIONS: Transaction[] = [
   },
   // NOTE: intentionally no seeded Apple Pay $0 "awaiting amount" stub in the
   // DEFAULT seeds. A pending_review transaction adds a "pending review" badge
-  // to the Money nav link (changing its accessible name) and the e2e smoke
-  // test matches the nav link by exact name "Money"; a stub here breaks that.
+  // to the Budget nav link (changing its accessible name) and the e2e smoke
+  // test matches the nav link by exact name "Budget"; a stub here breaks that.
   // The e2e stub spec opts in via the 'stub' seed variant below; the unit-level
   // flow is covered by ReviewPendingDrawer.test.tsx + the quickAdd tests.
 ];

@@ -706,15 +706,16 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
   // Tab definitions keyed by value; the visible list is filtered to enabled
   // modules below, preserving the canonical order.
   //
-  // The labels are the NAV labels of the destination page ("Money", "To-Dos",
+  // The labels are the NAV labels of the destination page ("Budget", "To-Dos",
   // "Shopping") — the old "Expense"/"To-Do"/"Shop" set named three things that
   // exist nowhere else in the app, so the tabs read as a separate product.
-  // "Expense" survives as the heading/context inside the Money tab.
+  // "Expense" survives as the heading/context inside the Budget tab. Keep this
+  // in step with `NAV_PAGES` in utils/moduleVisibility.ts if a page is renamed.
   const TAB_LABELS: Record<ModalTab, React.ReactNode> = {
     transaction: (
       <div className="flex items-center justify-center gap-2">
         <Wallet size={16} />
-        <span>Money</span>
+        <span>Budget</span>
       </div>
     ),
     todo: (

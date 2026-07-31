@@ -21,7 +21,7 @@ test.describe('Bucket reallocation (Test Mode)', () => {
       category: 'Gas',
     });
 
-    await bottomNav(page).getByRole('link', { name: 'Money', exact: true }).click();
+    await bottomNav(page).getByRole('link', { name: 'Budget', exact: true }).click();
     // Tapping the multi-view Budget tab opens its sub-view menu
     // (TabSubViewMenu); picking Buckets navigates to the buckets view.
     await page.getByRole('tab', { name: 'Budget' }).click();
