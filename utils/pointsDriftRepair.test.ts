@@ -96,6 +96,39 @@ describe('computePointsDriftReport — the hard constraint (pre-attribution hist
     // this test is that NOTHING gets proposed for writing.
     expect(planPointsDriftApply([report])).toEqual([]);
   });
+
+  // 🛡️ MUTATION-KILLING FIXTURE — the test above passes for the WRONG reason
+  // if `memberConfound`'s `attributionStartDate === null` branch is ever
+  // deleted: with no completedBy anywhere, `calculateMemberPointsForDateRange`
+  // always recomputes 0, so `delta = 0 - storedTotal` is <= 0 for any
+  // non-negative stored total, and `verdictForDelta`'s SEPARATE "never lower"
+  // guard independently produces cannot_determine — the pre-attribution branch
+  // is never actually exercised. To make the pre-attribution guard the ONLY
+  // thing standing between a confident wrong answer and cannot_determine, the
+  // stored total must be NEGATIVE (a plausible real state — see
+  // planPointsDriftApply's own negative-floor test below), so the recompute
+  // (0) comes out ABOVE it and the "never lower" guard does NOT fire on its
+  // own. Confirmed by manually deleting the `attributionStartDate === null`
+  // check in memberConfound and re-running this suite: this test FAILS (PAUL
+  // comes back `under_credited` amount 5) while every other test in this file
+  // still passes — restoring the check makes it pass again.
+  it('MUTATION-PROOF: a negative stored total with no attribution data still comes back cannot_determine, not "under_credited"', () => {
+    const h = habit({ completedDates: [TODAY], count: 1, scoringType: 'threshold' });
+    const hh = household({ points: { daily: 0, weekly: 0, total: 10 } });
+    // A corrupted/negative legacy total — some other bug's damage, predating
+    // this tool. The recompute (0, since there's no attribution data at all)
+    // is ABOVE this, so without the pre-attribution guard the "never lower"
+    // guard would NOT catch it, and the row would come back `under_credited`
+    // by 5 — silently "fixing" a figure this tool has no basis to touch.
+    const members = [member(PAUL, { points: { daily: 0, weekly: 0, total: -5 } })];
+
+    const report = computePointsDriftReport(hh, members, [h], TODAY);
+
+    expect(report.attributionStartDate).toBeNull();
+    const row = rowFor(report, PAUL);
+    expect(row.verdict.kind).toBe('cannot_determine');
+    expect(planPointsDriftApply([report])).toEqual([]);
+  });
 });
 
 describe('computePointsDriftReport — determinable drift', () => {
@@ -331,6 +364,96 @@ describe('computePointsDriftReport — confounds are cannot_determine, never gue
     expect(row.verdict.kind).toBe('cannot_determine');
     expect(row.recomputedTotal).toBe(10); // still surfaced for transparency
     expect(planPointsDriftApply([report])).toEqual([]);
+  });
+});
+
+describe('computePointsDriftReport — threshold-habit exclusion (KNOWN GAP mitigation)', () => {
+  // PointsBreakdownModal can restore a past date on a THRESHOLD habit without
+  // a matching points.total credit, and writes no audit trail — so this is
+  // the exact bug-1 SHAPE (a shared threshold habit, one member attributed,
+  // household paid, member total never written) reproduced deliberately to
+  // prove it now comes back cannot_determine instead of a confident wrong
+  // "under_credited" fix. Before this exclusion existed, this fixture DID
+  // produce a real, Apply-ready write (verdict under_credited: 10,
+  // writes.length === 1) — confirmed by review probe.
+  it('a shared THRESHOLD habit makes both the household and member rows cannot_determine, even though the shape matches genuine drift', () => {
+    const thresholdHabit = habit({
+      scoringType: 'threshold',
+      completedDates: [TODAY],
+      count: 1,
+      completedBy: { [TODAY]: { [PAUL]: 1 } },
+    });
+    const hh = household({ points: { daily: 0, weekly: 0, total: 0 } }); // "should" be 10 per the recompute
+    const members = [member(PAUL, { points: { daily: 0, weekly: 0, total: 0 } })];
+
+    const report = computePointsDriftReport(hh, members, [thresholdHabit], TODAY);
+
+    expect(rowFor(report, 'house1').verdict.kind).toBe('cannot_determine');
+    expect(rowFor(report, PAUL).verdict.kind).toBe('cannot_determine');
+    expect(planPointsDriftApply([report])).toEqual([]);
+  });
+
+  it('an ASSIGNED (chore) threshold habit does NOT confound the household row or another member — only a SHARED threshold habit does', () => {
+    const chore = habit({
+      id: 'chore1',
+      assignedTo: PAUL,
+      scoringType: 'threshold',
+      completedDates: [TODAY],
+      count: 1,
+    });
+    const sharedIncremental = habit({
+      id: 'h2',
+      completedDates: [TODAY],
+      count: 1,
+      completedBy: { [TODAY]: { [JEN]: 1 } },
+    });
+    const hh = household({ points: { daily: 0, weekly: 0, total: 10 } }); // matches sharedIncremental's award to JEN
+    const members = [member(JEN, { points: { daily: 0, weekly: 0, total: 10 } })];
+
+    const report = computePointsDriftReport(hh, members, [chore, sharedIncremental], TODAY);
+
+    expect(rowFor(report, 'house1').verdict).toEqual({ kind: 'looks_correct' });
+    expect(rowFor(report, JEN).verdict).toEqual({ kind: 'looks_correct' });
+  });
+});
+
+describe('computePointsDriftReport / planPointsDriftApply — non-finite recompute (malformed habit doc)', () => {
+  // 🛡️ MUTATION-KILLING FIXTURE for the CRITICAL-2 review finding: a habit
+  // doc with `basePoints: undefined` (exactly what an unvalidated `d.data()
+  // as Habit` cast can hand this module) makes the shared scorer return NaN.
+  // Confirmed by review probe: without the Number.isFinite guards in
+  // verdictForDelta/planPointsDriftApply, this produced verdict
+  // { kind: 'under_credited', amount: NaN } and a write of
+  // { newTotal: NaN } — `delta <= 0` is false for NaN so `proposedDeltaFor`
+  // wasn't skipped, and `Math.max(0, x + NaN) === x` is false so the no-op
+  // guard didn't catch it either. Firestore accepts NaN as a valid double, so
+  // that write would have been PERMANENT and un-recoverable by any future
+  // recompute.
+  it('a habit with a non-numeric basePoints never produces a determinable verdict or a write', () => {
+    const malformed = {
+      ...habit({ completedDates: [TODAY], count: 1, completedBy: { [TODAY]: { [PAUL]: 1 } } }),
+      basePoints: undefined,
+    } as unknown as Habit;
+    const hh = household({ points: { daily: 0, weekly: 0, total: 0 } });
+    const members = [member(PAUL, { points: { daily: 0, weekly: 0, total: 0 } })];
+
+    const report = computePointsDriftReport(hh, members, [malformed], TODAY);
+
+    const householdRow = rowFor(report, 'house1');
+    const memberRow = rowFor(report, PAUL);
+    // Whichever recompute went non-finite, its verdict must be
+    // cannot_determine — NEVER under_credited/over_debited with a NaN amount.
+    for (const row of [householdRow, memberRow]) {
+      if (row.verdict.kind === 'looks_correct') continue; // fine either way
+      expect(row.verdict.kind).toBe('cannot_determine');
+    }
+    // The real assertion: whatever the report says, NOTHING is ever queued
+    // for a write — planPointsDriftApply is the last line of defense.
+    const writes = planPointsDriftApply([report]);
+    for (const w of writes) {
+      expect(Number.isFinite(w.newTotal)).toBe(true);
+      expect(Number.isFinite(w.delta)).toBe(true);
+    }
   });
 });
 

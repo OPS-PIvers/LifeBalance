@@ -5,7 +5,7 @@ import { Switch } from '@/components/ui/Switch';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { db } from '@/firebase.config';
-import { collection, query, getDocs, getDoc, addDoc, updateDoc, doc, deleteDoc, orderBy, limit, arrayUnion, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, query, getDocs, getDoc, addDoc, updateDoc, doc, deleteDoc, orderBy, limit, arrayUnion, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { computeHabitHistoryRepair } from '@/utils/migrations/habitHistoryRepair';
 import {
   computePointsDriftReport,
@@ -14,7 +14,8 @@ import {
   type PointsDriftReport,
   type PointsDriftWrite,
 } from '@/utils/pointsDriftRepair';
-import { appendActivityLog } from '@/utils/activityLog';
+import { buildActivityLogEntry } from '@/utils/activityLog';
+import { habitConverter, householdMemberConverter, activityLogConverter } from '@/utils/firestoreConverters';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   readAppConfigFlags,
@@ -28,7 +29,7 @@ import {
   removeFlagTargetHousehold,
 } from '@/services/appConfig';
 import { getLimits, LEGACY_AI_DAILY_QUOTA } from '@/utils/entitlements';
-import { BetaTester, FeedbackReport, Household, HouseholdMember, Habit, HabitSubmission } from '@/types/schema';
+import { BetaTester, FeedbackReport, Household, Habit, HabitSubmission } from '@/types/schema';
 import { Loader2, Plus, Trash2, Copy, X, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -150,6 +151,12 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
   const [driftConfirmText, setDriftConfirmText] = useState('');
   const [driftApplying, setDriftApplying] = useState(false);
   const [driftApplyLog, setDriftApplyLog] = useState<string[]>([]);
+  // Household ids that threw during Scan (dropped from the report, not just
+  // silently absent) and how many household docs the scan actually fetched —
+  // both surfaced so an operator can't mistake "clean-looking report" for
+  // "every household was actually analyzed". See DRIFT_SCAN_HOUSEHOLD_CAP.
+  const [driftFailedHouseholdIds, setDriftFailedHouseholdIds] = useState<string[]>([]);
+  const [driftHouseholdsScanned, setDriftHouseholdsScanned] = useState(0);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -402,6 +409,12 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
 
   /** The literal phrase an operator must type before Phase 2 can commit anything. */
   const DRIFT_CONFIRM_PHRASE = 'REPAIR POINTS';
+  /** Ops cap on Scan — same 50-household ceiling the AI meter tab uses. A
+   *  household beyond this is never read, let alone reported on; the UI
+   *  states this explicitly so a clean report can't be read as "every
+   *  household is fine" when it may just mean "every household we looked
+   *  at is fine". */
+  const DRIFT_SCAN_HOUSEHOLD_CAP = 50;
 
   /** Human-readable verdict line for one report row. */
   const describeDriftVerdict = (row: DriftRow): string => {
@@ -423,39 +436,66 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
    * what each member's and the household's `points.total` SHOULD be from
    * habit data (see utils/pointsDriftRepair.ts for the full design and the
    * hard constraint around pre-attribution history), across the same
-   * 50-household ops cap the other sweeps here use.
+   * DRIFT_SCAN_HOUSEHOLD_CAP ops cap the other sweeps here use.
+   *
+   * Members/habits are read through the app's real `FirestoreDataConverter`s
+   * (`householdMemberConverter`/`habitConverter`) — NOT a raw `as Habit`
+   * cast — so this scan sees the same normalized shape every other read path
+   * in the app does (e.g. `Habit.scoringType` defaulting to `'threshold'`
+   * when absent, `completedBy` normalization). A raw cast on unvalidated
+   * legacy docs is exactly how a malformed doc (e.g. a missing `basePoints`)
+   * reaches the scorer in the first place. The household doc itself has no
+   * converter (none exists in the codebase — see firestoreConverters.ts's
+   * own doc comment on why Household reads are left raw elsewhere too).
+   *
+   * A household that throws while being scanned is DROPPED from the report,
+   * not silently treated as clean — `driftFailedHouseholdIds` records which,
+   * so the operator sees "N failed to scan" rather than reading their
+   * absence as "nothing wrong there".
    */
   const runPointsDriftScan = async () => {
     setDriftScanning(true);
     setDriftApplyLog([]);
     setDriftConfirmText('');
+    setDriftFailedHouseholdIds([]);
     try {
-      const householdsSnap = await getDocs(query(collection(db, 'households'), limit(50)));
+      const householdsSnap = await getDocs(
+        query(collection(db, 'households'), limit(DRIFT_SCAN_HOUSEHOLD_CAP))
+      );
       const reports: PointsDriftReport[] = [];
+      const failedHouseholdIds: string[] = [];
       for (const hh of householdsSnap.docs) {
         try {
           const household = { ...(hh.data() as Household), id: hh.id };
           const [membersSnap, habitsSnap] = await Promise.all([
-            getDocs(collection(db, `households/${hh.id}/members`)),
-            getDocs(collection(db, `households/${hh.id}/habits`)),
+            getDocs(
+              collection(db, `households/${hh.id}/members`).withConverter(householdMemberConverter)
+            ),
+            getDocs(collection(db, `households/${hh.id}/habits`).withConverter(habitConverter)),
           ]);
-          const members = membersSnap.docs.map(
-            d => ({ ...(d.data() as HouseholdMember), uid: d.id })
-          );
-          const habits = habitsSnap.docs.map(d => ({ ...(d.data() as Habit), id: d.id }));
+          const members = membersSnap.docs.map(d => d.data());
+          const habits = habitsSnap.docs.map(d => d.data());
           reports.push(computePointsDriftReport(household, members, habits));
         } catch (error) {
           console.error(`[runPointsDriftScan] Household ${hh.id} failed:`, error);
+          failedHouseholdIds.push(hh.id);
         }
       }
       setDriftReports(reports);
       setDriftScanned(true);
+      setDriftFailedHouseholdIds(failedHouseholdIds);
+      setDriftHouseholdsScanned(householdsSnap.docs.length);
       const proposed = planPointsDriftApply(reports).length;
-      toast.success(
-        proposed > 0
-          ? `Scan complete — ${proposed} determinable fix(es) found`
-          : 'Scan complete — no determinable drift found'
-      );
+      const failedNote = failedHouseholdIds.length > 0 ? ` — ${failedHouseholdIds.length} household(s) FAILED to scan` : '';
+      if (failedHouseholdIds.length > 0) {
+        toast.error(`Scan finished with ${failedHouseholdIds.length} household(s) failed — see report`);
+      } else {
+        toast.success(
+          proposed > 0
+            ? `Scan complete — ${proposed} determinable fix(es) found${failedNote}`
+            : `Scan complete — no determinable drift found${failedNote}`
+        );
+      }
     } catch (error) {
       console.error('[runPointsDriftScan] Failed:', error);
       toast.error('Scan failed — see console');
@@ -468,14 +508,44 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
    * Points-drift Phase 2 — APPLY. Only reachable once the operator has typed
    * `DRIFT_CONFIRM_PHRASE` verbatim (checked again here, not just via the
    * disabled-button affordance). Writes ONLY the deltas Phase 1 classified as
-   * determinable (`planPointsDriftApply` — never a `cannot_determine` row),
-   * one `writeBatch` per household, and logs an ActivityLogEntry per
-   * household so the change is auditable from the existing activity feed.
+   * determinable (`planPointsDriftApply` — never a `cannot_determine` row).
+   *
+   * 🛡️ TOCTOU GUARD (one `runTransaction` per household, not a plain
+   * `writeBatch`): Scan and Apply are separated by real time — the operator
+   * has to read the report, type the confirm phrase, and (per this panel's
+   * own instructions) manually think about it. `write.newTotal` was computed
+   * entirely from the SCAN-time snapshot; a plain absolute `batch.update`
+   * would silently clobber whatever the household has legitimately done
+   * since (a member finishing more habits, another admin editing points).
+   * Each household's transaction re-reads every target doc's LIVE
+   * `points.total` and only writes a row if it still equals exactly what
+   * Scan captured (`write.previousTotal`); anything that moved is skipped
+   * and surfaced as "changed since scan — re-scan required", never silently
+   * reconciled or silently applied over the new value. All reads happen
+   * before any write, per Firestore's transaction rule, and the whole
+   * household's writes + its audit-log entry commit as ONE transaction, so
+   * per-household atomicity is unchanged from the batch this replaced — a
+   * transaction per WRITE (rather than per household) would NOT preserve
+   * that atomicity, which is why every household's several rows share one
+   * `runTransaction` call, not one each.
+   *
+   * Every write is also re-asserted `Number.isFinite` immediately before the
+   * transaction write, even though `planPointsDriftApply` already guarantees
+   * it — the last line before a real Firestore write is not the place to
+   * trust an upstream invariant alone (see that function's own doc comment).
+   *
+   * The durable record: the activity-log entry written in the SAME
+   * transaction states each write's full `previousTotal → newTotal` (and its
+   * target id), not just the delta — a delta alone cannot reconstruct what
+   * was overwritten once any further points activity has happened, and this
+   * is a ONE-WAY DOWNWARD write against a lifetime counter nothing else ever
+   * lowers.
    */
   const applyPointsDriftFixes = async () => {
     if (driftConfirmText.trim() !== DRIFT_CONFIRM_PHRASE) return;
     setDriftApplying(true);
     const log: string[] = [];
+    const staleLog: string[] = [];
     try {
       const writes = planPointsDriftApply(driftReports);
       if (writes.length === 0) {
@@ -488,39 +558,79 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
           byHousehold.set(w.householdId, list);
         }
         for (const [householdId, householdWrites] of byHousehold) {
-          const batch = writeBatch(db);
-          for (const w of householdWrites) {
-            const ref =
-              w.scope === 'household'
-                ? doc(db, 'households', householdId)
-                : doc(db, `households/${householdId}/members`, w.memberUid as string);
-            // Absolute write of the already-floored (never-negative) total —
-            // planPointsDriftApply computed this from the scan's own snapshot,
-            // so the batch just commits exactly what the operator reviewed.
-            batch.update(ref, { 'points.total': w.newTotal });
-            log.push(`${householdId} · ${w.label}: ${w.previousTotal} → ${w.newTotal} (+${w.delta})`);
-          }
-          appendActivityLog(
-            batch,
-            db,
-            householdId,
-            { uid: user?.uid ?? 'admin', name: user?.displayName ?? 'Admin' },
-            {
-              domain: 'member',
-              action: 'points_drift_repaired',
-              summary: `Points drift repair: ${householdWrites.map(w => `${w.label} +${w.delta}`).join(', ')}`,
+          await runTransaction(db, async transaction => {
+            // ALL reads before any write — Firestore requires this ordering
+            // within one transaction.
+            const targets = householdWrites.map(w => ({
+              write: w,
+              ref:
+                w.scope === 'household'
+                  ? doc(db, 'households', householdId)
+                  : doc(db, `households/${householdId}/members`, w.memberUid as string),
+            }));
+            const snaps = await Promise.all(targets.map(t => transaction.get(t.ref)));
+
+            const applied: PointsDriftWrite[] = [];
+            for (let i = 0; i < targets.length; i++) {
+              const target = targets[i];
+              const snap = snaps[i];
+              if (!target || !snap) continue;
+              const { write, ref } = target;
+              const liveData = snap.data() as { points?: { total?: number } } | undefined;
+              const liveTotal = liveData?.points?.total ?? 0;
+              if (liveTotal !== write.previousTotal) {
+                staleLog.push(
+                  `${householdId} · ${write.label}: changed since scan (was ${write.previousTotal}, now ${liveTotal}) — skipped, re-scan required`
+                );
+                continue;
+              }
+              if (!Number.isFinite(write.newTotal)) {
+                staleLog.push(`${householdId} · ${write.label}: computed total was not finite — skipped`);
+                continue;
+              }
+              transaction.update(ref, { 'points.total': write.newTotal });
+              applied.push(write);
+              log.push(`${householdId} · ${write.label}: ${write.previousTotal} → ${write.newTotal} (+${write.delta})`);
             }
-          );
-          await batch.commit();
+
+            if (applied.length > 0) {
+              const activityRef = doc(collection(db, `households/${householdId}/activityLog`)).withConverter(
+                activityLogConverter
+              );
+              transaction.set(activityRef, {
+                id: activityRef.id,
+                ...buildActivityLogEntry(
+                  { uid: user?.uid ?? 'admin', name: user?.displayName ?? 'Admin' },
+                  {
+                    domain: 'member',
+                    action: 'points_drift_repaired',
+                    summary: `Points drift repair — ${applied
+                      .map(
+                        w =>
+                          `${w.label} (${w.scope === 'member' ? w.memberUid : householdId}): ${w.previousTotal} → ${w.newTotal}`
+                      )
+                      .join('; ')}`,
+                  },
+                  serverTimestamp()
+                ),
+              });
+            }
+          });
         }
+      }
+      if (staleLog.length > 0) {
+        log.push(...staleLog);
+        toast.error(`${staleLog.length} row(s) changed since scan — skipped, see log`);
+      } else {
+        toast.success(writes.length === 0 ? 'Nothing to apply' : 'Points drift repair applied');
       }
       setDriftApplyLog(log);
       // Force a fresh scan before another apply — the stored totals just
-      // changed, so the previous report is stale.
+      // changed (or a row was skipped as stale), so the previous report is
+      // no longer trustworthy either way.
       setDriftReports([]);
       setDriftScanned(false);
       setDriftConfirmText('');
-      toast.success('Points drift repair applied');
     } catch (error) {
       console.error('[applyPointsDriftFixes] Failed:', error);
       toast.error('Apply failed — see console');

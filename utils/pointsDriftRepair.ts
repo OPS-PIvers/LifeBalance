@@ -54,8 +54,7 @@ import { REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
  * `household`/`members`/`habits` we're given, and any of them present makes
  * that row `cannot_determine` rather than a guess.
  *
- * ⚠️ KNOWN GAP, not modeled (documented rather than guessed at, because it
- * can't be detected from data alone): `PointsBreakdownModal`'s past-date
+ * ⚠️ KNOWN GAP, MITIGATED BY EXCLUSION: `PointsBreakdownModal`'s past-date
  * toggle deliberately skips the `points.total` adjustment for a THRESHOLD
  * habit ("we cannot accurately know if points were earned/lost... without
  * knowing the count for that day" — see that file), while still mutating
@@ -65,11 +64,18 @@ import { REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
  * habit can make this module's recompute see a "completed" period the stored
  * total never credited — a false positive this tool cannot distinguish from
  * a genuine bug-1 cross-member drop, because both look identical in
- * `completedBy`. There is no stored marker for "this date was added via the
- * no-points-adjustment path." An operator MUST manually cross-check any
- * proposed threshold-habit-driven fix against known PointsBreakdownModal
- * edits before typing the confirm phrase — this tool's report is an input to
- * that judgment call, not a substitute for it.
+ * `completedBy`, and `PointsBreakdownModal` writes NO audit trail (it never
+ * calls `appendActivityLog`) for this tool to cross-reference against. A
+ * "the operator should manually check" mitigation asks a human to verify
+ * something un-auditable, which is not a real control — so
+ * `hasAnySharedThresholdHabit()` below makes ANY row touching a
+ * threshold-scoring, non-assigned habit `cannot_determine`, full stop. This
+ * is a deliberate, blunt trade: it also excludes the tool's own PRIMARY
+ * target bug (bug 1 is specifically about a weekly THRESHOLD habit) until a
+ * real data-level audit trail for `PointsBreakdownModal` edits exists —
+ * reduced recall in exchange for never guessing at a lifetime counter's
+ * one-way-downward correction. Do not remove this exclusion without first
+ * building that audit trail.
  *
  * Do not write new habit-scoring logic here — every point figure is produced
  * by the existing, already-tested `calculateHouseholdPointsForDateRange` /
@@ -172,6 +178,21 @@ const redemptionCostKnown = (household: DriftHousehold): number | null => {
 const hasAnySubmissionTracking = (habits: Habit[]): boolean =>
   habits.some(h => h.hasSubmissionTracking === true);
 
+/** Any SHARED (non-assigned) THRESHOLD-scoring habit — see the module doc
+ *  comment's "KNOWN GAP" section. `PointsBreakdownModal` can restore a past
+ *  date on a threshold habit without a matching `points.total` credit, with
+ *  no audit trail to distinguish that from genuine drift, so ANY threshold
+ *  habit in the shared set makes this tool refuse to determine a fix. An
+ *  ASSIGNED (chore) threshold habit is excluded here on purpose — it never
+ *  feeds the household pool or a non-assignee's own total (see
+ *  `habitFeedsMemberAttribution`), so it carries none of this risk for rows
+ *  it doesn't touch. */
+const hasAnySharedThresholdHabit = (habits: Habit[]): boolean =>
+  habits.some(h => !h.assignedTo && h.scoringType === 'threshold');
+
+const THRESHOLD_GAP_REASON =
+  'household has threshold-scoring habit(s); PointsBreakdownModal can restore a past date on a threshold habit without a matching points.total credit (by design), and that edit leaves no audit trail this tool can cross-reference — see the "KNOWN GAP" note in this module\'s doc comment';
+
 /**
  * Why the HOUSEHOLD row cannot be trusted, or null when it can.
  */
@@ -181,6 +202,9 @@ const householdConfound = (household: DriftHousehold, habits: Habit[]): string |
   }
   if (hasAnySubmissionTracking(habits)) {
     return 'household has submission-tracked habit(s); a submission-adjusted historical day is not reconstructed by the full-history recompute used here';
+  }
+  if (hasAnySharedThresholdHabit(habits)) {
+    return THRESHOLD_GAP_REASON;
   }
   return null;
 };
@@ -207,6 +231,9 @@ const memberConfound = (
   if (hasAnySubmissionTracking(sharedHabits)) {
     return 'member has shared submission-tracked habit(s); calculateMemberPointsForDateRange does not model submission overrides';
   }
+  if (hasAnySharedThresholdHabit(sharedHabits)) {
+    return THRESHOLD_GAP_REASON;
+  }
   return null;
 };
 
@@ -220,8 +247,26 @@ const memberConfound = (
  * may reflect a legitimate credit this tool doesn't model (a manual award, an
  * admin edit), and guessing it away is exactly the destructive mistake this
  * tool exists to avoid.
+ *
+ * 🛡️ NON-FINITE DELTAS ARE ALWAYS `cannot_determine`, NEVER A GUESS. A
+ * malformed habit doc (e.g. `basePoints: undefined`, which `d.data() as
+ * Habit` happily produces with no runtime validation) can make the shared
+ * scorer return `NaN`. Every other guard in this function is a numeric
+ * comparison that is FALSE for NaN (`NaN === 0`, `NaN < 0` are both false),
+ * so without this explicit check a NaN delta falls through to
+ * `under_credited`/`over_debited` with `amount: NaN` — and Firestore accepts
+ * NaN as a valid double, making the corruption permanent and, unlike the
+ * drift this tool exists to fix, un-recoverable by ANY future recompute
+ * (`Math.max(current, recompute)` stays NaN forever once written).
  */
 const verdictForDelta = (scope: 'household' | 'member', delta: number): DriftVerdict => {
+  if (!Number.isFinite(delta)) {
+    return {
+      kind: 'cannot_determine',
+      reason:
+        'the recomputed total was not a finite number (likely a malformed habit doc — e.g. a missing/non-numeric basePoints) — refusing to write a NaN/Infinity',
+    };
+  }
   if (delta === 0) return { kind: 'looks_correct' };
   if (delta < 0) {
     return {
@@ -347,14 +392,24 @@ export interface PointsDriftWrite {
  * non-negative can never end up negative — the floor exists purely as a
  * defense against a corrupted stored value that was ALREADY negative before
  * this tool ever ran.
+ *
+ * 🛡️ BELT-AND-BRACES: `delta <= 0` and `newTotal === row.storedTotal` are
+ * both `false` for NaN, so a non-finite delta should never even reach this
+ * function (`verdictForDelta` already converts it to `cannot_determine`,
+ * which `proposedDeltaFor` reads as `0`) — but this is the LAST pure
+ * function standing before a write, so it re-asserts finiteness on both the
+ * delta and the resulting `newTotal` rather than trusting that upstream
+ * conversion alone. Never emit a write Firestore would accept but no future
+ * recompute could ever repair.
  */
 export const planPointsDriftApply = (reports: PointsDriftReport[]): PointsDriftWrite[] => {
   const writes: PointsDriftWrite[] = [];
   for (const report of reports) {
     for (const row of report.rows) {
       const delta = proposedDeltaFor(row.verdict);
-      if (delta <= 0) continue;
+      if (!Number.isFinite(delta) || delta <= 0) continue;
       const newTotal = Math.max(0, row.storedTotal + delta);
+      if (!Number.isFinite(newTotal)) continue;
       if (newTotal === row.storedTotal) continue; // clamped to a no-op — nothing to write
       writes.push({
         householdId: report.householdId,
