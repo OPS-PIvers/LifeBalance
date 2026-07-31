@@ -603,8 +603,13 @@ describe('household share vs. chart consistency (recap-chart-negative-days)', ()
     });
     expect(buildRecapDeck({ ...base, recap: epsilon, viewerId: 'jen' }).householdSharePoints).toBe(0);
 
-    // ...but streak multipliers are 1.5x, so a genuine half-point is real data
-    // and must survive untouched — this is not integer rounding.
+    // ...but the rounding must not over-round to integers. This case pins
+    // GRANULARITY, not a producible datum: a per-completion rate is
+    // `sign × floor(|basePoints| × multiplier)` and units are integers, so the
+    // writer cannot actually emit a `.5` (5 × 1.5 floors to 7). 7.5 is a
+    // hand-built input standing in for anything fractional that reached the
+    // model through `weeklyRecapConverter`'s untyped cast — 2dp leaves it
+    // readable rather than flattening it.
     const fractional = recap({
       dailyPoints: DAYS.map((date, i) => ({
         date,

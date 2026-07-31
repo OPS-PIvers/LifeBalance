@@ -579,12 +579,16 @@ Per-member habit points follow-ups (from the 2026-07-30 six-stage ship, PRs #115
   whether the chart actually DRAWS a Household bar — a positive segment sitting on a column that
   has height, since segment existence (`day.unattributed`) and column height (`day.total`) are
   independent figures — and its wording keys off the figure's SIGN, so a loss is never phrased as
-  something "earned" and the stated reason for an absent bar is true both when all seven columns
-  are drawn (the omitted unit is the negative segment, not the day) and when none are.
-  `householdSharePoints` is also rounded to 2dp, which keeps a real `.5` from a 1.5x multiplier
-  while stopping a float-epsilon sum from rendering as `5.55e-17` and slipping past the card's
-  `!== 0` gate. The `?? 0` guards on `unattributed` are defensive only — the field is required and
-  its only writer has always written it.
+  something "earned". Each branch's stated reason is scoped to what it can actually prove: the
+  loss branch names the omitted SEGMENT (all seven columns can still be drawn), and the
+  positive/no-bar branch names only the days the share was GAINED on — a day carrying a NEGATIVE
+  contribution is clamped out of the chart however tall its column is, so it can be the week's max
+  while the total still nets positive. `householdSharePoints` is also rounded to 2dp, which is
+  defensive-only in the same way the `?? 0` guards on `unattributed` are: every value the writer
+  can emit is floored to an integer (`sign × floor(|basePoints| × multiplier)` × integer units, so
+  a 1.5x multiplier yields no `.5`), and the rounding insures against
+  `weeklyRecapConverter`'s untyped `as WeeklyRecap` cast letting a float-epsilon sum render as
+  `5.55e-17` and slip past the card's `!== 0` gate.
 
 From the 2026-07-09 product-scope audit — grounded findings, not yet greenlit:
 

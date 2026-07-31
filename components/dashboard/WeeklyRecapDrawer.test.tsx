@@ -307,6 +307,44 @@ describe('WeeklyRecapDrawer', () => {
     expect(householdShare).not.toHaveTextContent('this loss is not in it');
   });
 
+  it('scopes the positive/no-bar reason to the days the share was GAINED on, not every day it touched (recap-chart-negative-days, finding 1)', async () => {
+    // The mirror of the all-negative case above, and the one this branch's
+    // first wording got wrong. The share nets POSITIVE (+10 − 3 = 7) with no
+    // Household bar anywhere, but the two days it lands on disagree about why:
+    //
+    //   Mon  unattributed +10, total -105  → segment exists, column has NO height
+    //   Tue  unattributed  -3, total  +92  → clamped away, column is the week's MAX
+    //
+    // "the days it FELL ON ended flat or down" is false about Tuesday — it is
+    // drawn at full height, and the chart very much does draw a column for it.
+    // Only the days carrying a POSITIVE contribution are provably flat-or-down
+    // here (a positive contribution on a day with height is exactly what
+    // `hasHouseholdBar` detects), so the claim has to be scoped to those.
+    const mixedNoBar = ceremonyRecap({
+      dailyPoints: DAYS.map((date, i) => {
+        if (i === 0) return { date, byMember: { jen: -60, paul: -55 }, unattributed: 10, total: -105 };
+        if (i === 1) return { date, byMember: { jen: 50, paul: 45 }, unattributed: -3, total: 92 };
+        return { date, byMember: { jen: 0, paul: 0 }, unattributed: 0, total: 0 };
+      }),
+      totalPoints: -13,
+    });
+    render(<WeeklyRecapDrawer recap={mixedNoBar} isOpen onClose={() => {}} />);
+
+    await advance([WEEK_CARD]);
+
+    // No Household bar anywhere: Monday's segment sits on a zero-height column
+    // and Tuesday's negative contribution is clamped out of the chart entirely.
+    expect(screen.queryByText('Household')).not.toBeInTheDocument();
+
+    const householdShare = screen.getByTestId('recap-household-share');
+    expect(householdShare).toHaveTextContent('7');
+    expect(householdShare).toHaveTextContent('the days it was gained on ended flat or down');
+    // The over-broad noun phrase this test exists to keep out: Tuesday IS one
+    // of "the days it fell on", it ended UP, and it is the tallest column on
+    // the chart.
+    expect(householdShare).not.toHaveTextContent('the days it fell on');
+  });
+
   it('leads the week card with the head-to-head under the podium tone', async () => {
     mockCore.householdSettings = { name: 'The Ivers Household', ceremonyTone: 'podium' };
     render(<WeeklyRecapDrawer recap={ceremonyRecap()} isOpen onClose={() => {}} />);

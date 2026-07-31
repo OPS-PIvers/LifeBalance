@@ -187,9 +187,15 @@ function householdShareCopy(points: number, hasHouseholdBar: boolean): string {
   if (points > 0) {
     return hasHouseholdBar
       ? 'earned together, credited to no one member'
-      : // A real gain with no bar to sit in: every day carrying it netted <= 0
-        // overall, and the chart gives such a day no column height at all.
-        'earned together, credited to no one member — the days it fell on ended flat or down, so the chart draws no column for them';
+      : // A real gain with no bar to sit in. The reason is only provable for
+        // the days carrying a POSITIVE contribution — those are exactly what
+        // `hasHouseholdBar` looks for, so its being false means every one of
+        // them netted <= 0 overall and got no column height. Days carrying a
+        // NEGATIVE contribution are clamped out of the chart by
+        // `buildRecapChart` regardless of how they netted, and one of those can
+        // be the week's tallest column while the total still comes out
+        // positive — so this must say "gained on", never "fell on".
+        'earned together, credited to no one member — the days it was gained on ended flat or down, so the chart draws no column for them';
   }
   // A LOSS — never "earned". When a Household bar IS drawn (a mixed-sign week
   // whose positive days show while its bigger negative days don't), the figure
@@ -306,9 +312,12 @@ const WeekCard: React.FC<{ deck: RecapDeckModel }> = ({ deck }) => {
             honestly cover both: a negative share can sit beside seven
             full-height columns (the members carried the week, the household's
             own loss simply isn't a segment), and a positive share can sit
-            beside none at all (it landed on days that netted <= 0, which get
-            no column height). Never claim "only positive days are shown" —
-            in the first case every day IS shown. */}
+            beside none at all (every day it was GAINED on netted <= 0, so none
+            of those got column height). Never claim "only positive days are
+            shown" — in the first case every day IS shown; and never widen the
+            second reason past the days it was gained on — a day carrying a
+            negative contribution is clamped out of the chart no matter how
+            tall its column is. */}
         {deck.householdSharePoints !== 0 && (
           <p className="mt-1.5 text-[11.5px] text-brand-450 dark:text-brand-400" data-testid="recap-household-share">
             <b className="font-semibold text-brand-600 dark:text-brand-200">{deck.householdSharePoints}</b>{' '}

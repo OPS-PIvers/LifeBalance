@@ -328,10 +328,21 @@ export function buildRecapChart(
 }
 
 /**
- * Kill float-summation epsilon without flattening real fractional points.
- * 2dp is chosen deliberately: streak multipliers are 1.5x, so a `.5` is a real
- * figure the card must keep showing, while 5.55e-17 is an artifact of summing
- * decimals in binary.
+ * DEFENSIVE 2dp rounding — insurance, not a fix for an observed defect, the
+ * same standing as the `?? 0` guards on `unattributed`.
+ *
+ * Every value the only writer can emit is an INTEGER: a per-completion rate is
+ * `sign × Math.floor(|basePoints| × multiplier)` (`signedHabitPoints` in
+ * `utils/habitLogic.ts`, mirrored by `perUnitAt` in
+ * `functions/src/recap/memberFacts.ts`), and `unattributedPointsOnDate`
+ * multiplies that floored rate by an integer unit count. So a 1.5x streak
+ * multiplier does NOT produce a `.5` — 5 × 1.5 floors to 7 — and on real data
+ * this call is an identity. It stays because `weeklyRecapConverter` spreads raw
+ * Firestore data through an `as WeeklyRecap` cast, so nothing at runtime
+ * enforces that, and summing decimals in binary would land a truly-zero week on
+ * 5.55e-17 — a value that renders verbatim AND slips past the card's `!== 0`
+ * gate. 2dp rather than integer rounding so a fractional figure, if one ever
+ * did reach here, degrades to a readable number instead of being flattened.
  */
 function roundPoints(value: number): number {
   return Math.round(value * 100) / 100;
@@ -420,9 +431,10 @@ export function buildRecapDeck(input: RecapDeckInput): RecapDeck {
     // shape anyone has seen. Without it `sum + undefined` is NaN, and NaN !== 0
     // passes the card's render guard — it would print "NaN".
     //
-    // The rounding is NOT cosmetic: streak multipliers are 1.5x, so genuinely
-    // fractional points exist and must survive (2dp keeps every real `.5`), but
-    // summing them in binary floats lets a week that truly nets zero land on
+    // `roundPoints` has the SAME standing (see its docblock): every value the
+    // writer can emit is floored to an integer, so it is an identity on real
+    // data and insures against the same untyped cast. Were a fractional value
+    // to arrive, summing it in binary floats would land a truly-zero week on
     // 5.551115123125783e-17 — a value that renders verbatim on the card AND
     // slips past its `!== 0` gate. Round the model once so the figure and the
     // gate agree.
