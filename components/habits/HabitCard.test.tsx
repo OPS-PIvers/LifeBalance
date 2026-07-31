@@ -3,7 +3,7 @@ import { fireEvent, render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import HabitCard from './HabitCard';
-import { Habit, HouseholdMember } from '@/types/schema';
+import { Habit, HabitSubmission, HouseholdMember } from '@/types/schema';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { buildHabitRowMemberContext } from '@/utils/habitRowAttribution';
 import { habitPeriodStart } from '@/utils/habitLogic';
@@ -25,6 +25,12 @@ const { mockHouseholdContext } = vi.hoisted(() => ({
     uncreditHabitCompletion: vi.fn(() => Promise.resolve()),
     creditHouseholdCompletion: vi.fn(() => Promise.resolve()),
     uncreditHouseholdCompletion: vi.fn(() => Promise.resolve()),
+    // Household-undo dual-path guard: the handler checks for a submission doc
+    // before falling back to the attribution-only primitive (mirrors
+    // DayHabitEditor). Default to "no doc found" so every pre-existing test
+    // exercises the attribution-only fallback unchanged.
+    getHabitSubmissions: vi.fn((): Promise<HabitSubmission[]> => Promise.resolve([])),
+    deleteHabitSubmission: vi.fn(() => Promise.resolve()),
     activeChallenge: null as unknown,
   }
 }));
@@ -907,6 +913,49 @@ describe('HabitCard - attribution picker', () => {
     await user.click(household);
 
     expect(mockHouseholdContext.uncreditHouseholdCompletion).toHaveBeenCalledWith('h1', TODAY);
+    expect(mockHouseholdContext.deleteHabitSubmission).not.toHaveBeenCalled();
+  });
+
+  // Regression: a household credit logged via the past-day editor / reflection
+  // drawer (`addHabitSubmission`) writes a `HabitSubmission` doc with
+  // `creditsHousehold: true` — unlike this row's own tap
+  // (`creditHouseholdCompletion`), which writes no doc at all. Undoing from
+  // THIS row must find and delete that doc rather than calling the
+  // attribution-only `uncreditHouseholdCompletion`, or the doc outlives the
+  // reversed completion and a later corrective recompute
+  // (`pointsForHabitOnDate` reports a stored submission's points "as-is" once
+  // its date leaves `completedDates`) silently re-credits the household pool
+  // with the exact points this undo just took back — an orphan re-credit with
+  // no attribution trail to find it by.
+  it('undoes a household credit by deleting its own submission doc when one exists, leaving no orphan', async () => {
+    const user = userEvent.setup();
+    mockHouseholdContext.getHabitSubmissions.mockResolvedValueOnce([
+      // A pre-attribution (grandfathered) doc on the same day — no
+      // `creditsHousehold` and no `attributedTo` either — must NOT be swept
+      // up by the household undo; only a doc explicitly marked
+      // `creditsHousehold: true` may be deleted here.
+      { id: 'legacy', habitId: 'h1', date: TODAY, count: 1, createdBy: PAUL,
+        createdAt: '2026-07-15T08:00:00' } as HabitSubmission,
+      { id: 'hh', habitId: 'h1', date: TODAY, count: 1, createdBy: PAUL,
+        creditsHousehold: true, createdAt: '2026-07-15T09:00:00' } as HabitSubmission,
+    ]);
+    render(
+      <HabitCard
+        habit={attributedHabit({ [PAUL]: 1 }, { count: 2, creditMode: 'household' })}
+        attribution={ROSTER}
+      />,
+    );
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /^Household/ }));
+
+    expect(mockHouseholdContext.getHabitSubmissions).toHaveBeenCalledWith('h1', TODAY, TODAY);
+    expect(mockHouseholdContext.deleteHabitSubmission).toHaveBeenCalledWith('h1', 'hh');
+    // The attribution-only primitive must NOT ALSO run — deleting the
+    // submission doc already reverses the habit + pool in one batch (see
+    // `deleteHabitSubmission`), so calling both would double-reverse.
+    expect(mockHouseholdContext.uncreditHouseholdCompletion).not.toHaveBeenCalled();
   });
 
   it('sorts Household FIRST on a household habit and LAST on a members habit', async () => {

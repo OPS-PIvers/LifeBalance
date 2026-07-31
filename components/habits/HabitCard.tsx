@@ -56,6 +56,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     toggleHabit, deleteHabit, archiveHabit, unarchiveHabit, resetHabit, setHabitPause,
     activeChallenge, creditHabitCompletion, uncreditHabitCompletion,
     creditHouseholdCompletion, uncreditHouseholdCompletion,
+    getHabitSubmissions, deleteHabitSubmission,
   } = useGamification();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -275,25 +276,46 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     haptic('light');
     // Period-scoped checkmark, date-scoped mutation — see
     // householdUndoDateInPeriod. Daily habits resolve straight to today.
+    const targetDate = householdUndoDateInPeriod(habit, today);
+    // 🛡️ Dual-path guard, mirroring DayHabitEditor's handleUncreditHousehold —
+    // REQUIRED here specifically because a household-credited day can be
+    // logged two ways: this row's own tap (`creditHouseholdCompletion`, which
+    // writes no submission doc) or the past-day editor / reflection drawer
+    // (`addHabitSubmission`, which DOES write a `HabitSubmission` with
+    // `creditsHousehold: true`). `uncreditHouseholdCompletion` only reverses
+    // the habit doc's count/completedDates/streak + the pool's points; it has
+    // no idea a submission doc exists, so a submission-backed credit would
+    // survive un-deleted. Once `targetDate` leaves `completedDates`,
+    // `pointsForHabitOnDate`'s own contract — "a record that outlives its
+    // completion date... is reported as-is rather than silently dropped" —
+    // means the NEXT corrective recompute (midnight rollover / login sync)
+    // re-reads that surviving doc's stored points and silently re-credits the
+    // pool with the exact amount just reversed here: an invisible orphan
+    // re-credit with no attribution trail (household credit names nobody).
     //
-    // 🛡️ ATTRIBUTION-ONLY, exactly like `handleUncreditMember` above — this row
-    // deliberately does NOT hunt for a submission doc to delete first, the way
-    // `DayHabitEditor` does. That lookup is an async `getHabitSubmissions`
-    // query, and this component is a memoized list row on the habits page that
-    // holds no submission data and issues no reads (see `useHabitCalendarData`,
-    // which exists precisely because the CALENDAR surfaces need that fetch and
-    // this one does not).
-    //
-    // The cost is a known, narrow orphan: log a household completion for TODAY
-    // from the past-day editor, then undo it from this row, and the submission
-    // doc outlives the completion — a corrective recompute then re-credits it
-    // from `fetchSubmissionTotals`. That is the pre-existing behaviour of the
-    // member path on this same row (`uncreditHabitCompletion` never touches
-    // docs either), so household credit is CONSISTENT with it rather than
-    // introducing a new class of drift; the day editor's × still clears both.
-    // Fixing it means giving the habit row a submissions read, which is a
-    // separate change to make for BOTH paths at once, not for this one alone.
-    void uncreditHouseholdCompletion(habit.id, householdUndoDateInPeriod(habit, today)).catch(() => {});
+    // The `getHabitSubmissions` read happens INSIDE this click handler, never
+    // in render/props: this component is a `React.memo`-ed list row (see the
+    // comparator below), so wiring an async read into render would re-render
+    // every habit row on the page on every fetch. Scoping it to the handler
+    // costs nothing on the common case (a toggle-path credit has zero matching
+    // docs) and never touches the render path at all — unlike DayHabitEditor
+    // (a small, transient day-editor list), a habit-row read here would run at
+    // full list-page scale, so "derive it from props" and "hoist one read to
+    // the list parent" were both rejected: there is no prop that encodes
+    // per-date submission existence, and the parent (HabitCategoryList) has no
+    // reason to fetch submissions for every habit up front.
+    void (async () => {
+      const subs = await getHabitSubmissions(habit.id, targetDate, targetDate);
+      const householdDocs = subs
+        .filter(s => s.creditsHousehold === true && s.count > 0)
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+      const newest = householdDocs[0];
+      if (newest) await deleteHabitSubmission(habit.id, newest.id);
+      // No doc behind the credit (a Habits-page household credit, a toggle-path
+      // or grandfathered completion): the attribution-only primitive is the
+      // right reversal.
+      else await uncreditHouseholdCompletion(habit.id, targetDate);
+    })().catch(() => {});
   };
 
   // Grouped-flat ROW: borderless and hairline-separated by the parent
