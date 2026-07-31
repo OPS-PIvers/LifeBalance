@@ -192,6 +192,64 @@ describe('computePointsDriftReport — determinable drift', () => {
   });
 });
 
+describe('computePointsDriftReport — Habit.creditMode: "household" (Plan 1165)', () => {
+  // A household-credit completion writes NO completedBy entry at all — it pays
+  // the pool via the same unattributed path a pre-attribution legacy
+  // completion uses, and credits no member (see isHouseholdCreditHabit /
+  // unattributedPointsForHabitOnDate in utils/habitAttribution.ts). This must
+  // fold into the household recompute correctly and must NOT be mistaken for
+  // per-member attribution or corrupt attributionStartDate.
+  it('folds a household-credit habit into the household total without crediting any member', () => {
+    const creditHabit = habit({
+      id: 'dinner',
+      creditMode: 'household',
+      basePoints: 15,
+      completedDates: [TODAY],
+      count: 1,
+      // No completedBy — a household-credit completion never writes one.
+    });
+    const sharedHabit = habit({
+      id: 'run',
+      completedDates: [TODAY],
+      count: 1,
+      completedBy: { [TODAY]: { [PAUL]: 1 } },
+    });
+    const hh = household({ points: { daily: 0, weekly: 0, total: 25 } }); // 15 (household) + 10 (PAUL's run)
+    const members = [
+      member(PAUL, { points: { daily: 0, weekly: 0, total: 10 } }),
+      member(JEN, { points: { daily: 0, weekly: 0, total: 0 } }), // JEN touched nothing
+    ];
+
+    const report = computePointsDriftReport(hh, members, [creditHabit, sharedHabit], TODAY);
+
+    // attributionStartDate is driven by the SHARED habit's completedBy — the
+    // household-credit habit contributes no completedBy entry and must not
+    // suppress it.
+    expect(report.attributionStartDate).toBe(TODAY);
+    expect(rowFor(report, 'house1').verdict).toEqual({ kind: 'looks_correct' });
+    expect(rowFor(report, PAUL).verdict).toEqual({ kind: 'looks_correct' });
+    expect(rowFor(report, JEN).verdict).toEqual({ kind: 'looks_correct' });
+    expect(planPointsDriftApply([report])).toEqual([]);
+  });
+
+  it('a household with ONLY household-credit habits has no attribution data — every member row is cannot_determine', () => {
+    const creditHabit = habit({
+      id: 'dinner',
+      creditMode: 'household',
+      completedDates: [TODAY],
+      count: 1,
+    });
+    const hh = household({ points: { daily: 0, weekly: 0, total: 10 } }); // matches the legacy recompute
+    const members = [member(PAUL, { points: { daily: 0, weekly: 0, total: 50 } })]; // legitimate pre-existing history
+
+    const report = computePointsDriftReport(hh, members, [creditHabit], TODAY);
+
+    expect(report.attributionStartDate).toBeNull();
+    expect(rowFor(report, PAUL).verdict.kind).toBe('cannot_determine');
+    expect(planPointsDriftApply([report])).toEqual([]);
+  });
+});
+
 describe('computePointsDriftReport — confounds are cannot_determine, never guessed', () => {
   const attributedHabit = habit({
     completedDates: [TODAY],

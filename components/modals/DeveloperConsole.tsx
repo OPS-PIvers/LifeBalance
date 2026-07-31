@@ -978,7 +978,13 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                                   <li key={i}>{`${w.householdId} · ${w.label}: ${w.previousTotal} → ${w.newTotal} (+${w.delta})`}</li>
                                 ))}
                               </ul>
-                              <p className="mt-3 text-xs text-brand-500 dark:text-brand-400">
+                              <p className="mt-3 text-xs font-semibold text-red-600 dark:text-red-400">
+                                Before applying: manually cross-check any threshold-habit fix above against known
+                                PointsBreakdownModal past-date edits. That editor can restore a past date on a threshold habit
+                                without adjusting points (by design), which this scan cannot distinguish from real drift — see
+                                the &ldquo;KNOWN GAP&rdquo; note in utils/pointsDriftRepair.ts.
+                              </p>
+                              <p className="mt-2 text-xs text-brand-500 dark:text-brand-400">
                                 Type <span className="font-mono font-bold">{DRIFT_CONFIRM_PHRASE}</span> to enable Apply. This
                                 writes in a batch per household and is NOT reversible from this console.
                               </p>

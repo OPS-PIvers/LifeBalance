@@ -49,10 +49,27 @@ import { REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
  * recompute against a stored total that also reflects one of these would
  * manufacture phantom "drift" — and, worse, Phase 2 would then "fix" a
  * legitimate reward redemption by silently handing the spent points back.
- * `determineConfound()` below is the exhaustive, DATA-DRIVEN gate for every
- * one of these cases: each is something we can actually detect from the
+ * `householdConfound()`/`memberConfound()` below are the DATA-DRIVEN gate for
+ * every one of these cases: each is something we can actually detect from the
  * `household`/`members`/`habits` we're given, and any of them present makes
  * that row `cannot_determine` rather than a guess.
+ *
+ * ⚠️ KNOWN GAP, not modeled (documented rather than guessed at, because it
+ * can't be detected from data alone): `PointsBreakdownModal`'s past-date
+ * toggle deliberately skips the `points.total` adjustment for a THRESHOLD
+ * habit ("we cannot accurately know if points were earned/lost... without
+ * knowing the count for that day" — see that file), while still mutating
+ * `completedDates`/`completedBy`. `periodCompleted()` in habitAttribution.ts
+ * treats any `completedDates` entry in a PAST period as a completed period
+ * regardless of `count`, so a manually restored past date on a threshold
+ * habit can make this module's recompute see a "completed" period the stored
+ * total never credited — a false positive this tool cannot distinguish from
+ * a genuine bug-1 cross-member drop, because both look identical in
+ * `completedBy`. There is no stored marker for "this date was added via the
+ * no-points-adjustment path." An operator MUST manually cross-check any
+ * proposed threshold-habit-driven fix against known PointsBreakdownModal
+ * edits before typing the confirm phrase — this tool's report is an input to
+ * that judgment call, not a substitute for it.
  *
  * Do not write new habit-scoring logic here — every point figure is produced
  * by the existing, already-tested `calculateHouseholdPointsForDateRange` /
