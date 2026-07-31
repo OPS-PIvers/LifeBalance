@@ -1,12 +1,13 @@
-import { render as rtlRender, screen, within, fireEvent, waitFor } from '@testing-library/react';
+import { render as rtlRender, screen, within, fireEvent, waitFor, act } from '@testing-library/react';
 import { createPortal } from 'react-dom';
 import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import type { ReactElement } from 'react';
-import type { MerchantRule } from '@/types/schema';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { ComponentProps, ReactElement } from 'react';
+import type { HouseholdMember, MerchantRule } from '@/types/schema';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { ConfirmDialogHost } from '@/components/ui/ConfirmDialogHost';
+import { haptic } from '@/utils/haptics';
 import { ActionQueueItemCard } from './ActionQueueItem';
 import type {
   ActionQueueItem,
@@ -14,6 +15,16 @@ import type {
   ToDoActionQueueItem,
   TransactionQueueItem,
 } from '@/hooks/useActionQueue';
+
+// The long-press gesture haptic-confirms before entering selection mode, so the
+// "never arms" guarantee has to be observable as "no buzz". Mocked wholesale
+// (SwipeActionRow imports it too) — every transport is a no-op under jsdom
+// anyway, so this changes nothing for the other suites here.
+vi.mock('@/utils/haptics', () => ({
+  haptic: vi.fn(),
+  hapticForNativeSwitch: vi.fn(),
+  markAsWebKitSwitch: vi.fn(),
+}));
 
 // Household-authored merchant rules, mutable per-test. Empty ⇒ every merchant
 // renders exactly as it did before display-time renaming existed.
@@ -369,5 +380,135 @@ describe('ActionQueueItemCard delete confirmation', () => {
         within(within(drawer).getByTestId('transaction-review-form')).queryByRole('button'),
       ).toBeNull();
     });
+  });
+});
+
+/**
+ * `enableLongPressSelect` (default true) is the seam a surface with no bulk bar
+ * uses to opt out of the long-press gesture entirely: no armed timer, so no
+ * haptic confirming a gesture with nothing behind it, and no swallowed
+ * follow-up click.
+ *
+ * These render with REFERENTIALLY STABLE props (module-level `noop`/`NO_MEMBERS`
+ * and one handler set per test) so a rerender is only distinguishable by the
+ * prop under test — otherwise `areActionQueueItemPropsEqual` would bail out on
+ * a changed callback identity and the memo assertion would be vacuous.
+ */
+describe('ActionQueueItemCard long-press selection', () => {
+  const noop = () => {};
+  const NO_MEMBERS: HouseholdMember[] = [];
+  const LONG_PRESS_MS = 500;
+
+  type CardProps = ComponentProps<typeof ActionQueueItemCard>;
+
+  const makeProps = (
+    onEnterSelectionMode: () => void,
+    onToggleSelect: () => void
+  ): CardProps => ({
+    item: todoItem,
+    isExpanded: false,
+    setExpandedId: noop,
+    openPaySheet: noop,
+    selectionMode: false,
+    isSelected: false,
+    onToggleSelect,
+    onEnterSelectionMode,
+    onSwipeApprove: noop,
+    onSwipeDefer: noop,
+    buckets: [],
+    transactions: [],
+    members: NO_MEMBERS,
+    updateToDo: () => Promise.resolve(),
+    deleteToDo: () => Promise.resolve(),
+    completeToDo: () => Promise.resolve(),
+    deferCalendarItem: () => Promise.resolve(),
+    deleteCalendarItem: () => Promise.resolve(),
+    deleteTransaction: () => Promise.resolve(),
+  });
+
+  const wrap = (props: CardProps): ReactElement => (
+    <MemoryRouter>
+      <ThemeProvider>
+        <ActionQueueItemCard {...props} />
+      </ThemeProvider>
+    </MemoryRouter>
+  );
+
+  /** Press and hold past the 500ms threshold on the summary row (the pointer
+   *  events bubble from the title up to the row's handler). */
+  const longPress = () => {
+    fireEvent.pointerDown(screen.getByText('Buy milk'), { clientX: 10, clientY: 10 });
+    act(() => {
+      vi.advanceTimersByTime(LONG_PRESS_MS + 50);
+    });
+    fireEvent.pointerUp(screen.getByText('Buy milk'));
+  };
+
+  // The rail's Delete button also buzzes ('medium'), so the shared mock carries
+  // calls in from the delete suites above; reset it per test.
+  beforeEach(() => {
+    vi.mocked(haptic).mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('enters selection mode on a long press when the prop is omitted (default true)', () => {
+    vi.useFakeTimers({ now: new Date('2026-07-14T12:00:00') });
+    const onEnterSelectionMode = vi.fn();
+    const onToggleSelect = vi.fn();
+    const props = makeProps(onEnterSelectionMode, onToggleSelect);
+    const { rerender } = rtlRender(wrap(props));
+
+    longPress();
+
+    expect(onEnterSelectionMode).toHaveBeenCalledWith('todo-1');
+    expect(vi.mocked(haptic)).toHaveBeenCalledWith('medium');
+
+    // The parent flips into selection mode; the click that ENDED the long press
+    // must be swallowed, or the row would immediately deselect itself.
+    rerender(wrap({ ...props, selectionMode: true }));
+    fireEvent.click(screen.getByText('Buy milk'));
+    expect(onToggleSelect).not.toHaveBeenCalled();
+  });
+
+  it('never arms the timer when enableLongPressSelect is false', () => {
+    vi.useFakeTimers({ now: new Date('2026-07-14T12:00:00') });
+    const onEnterSelectionMode = vi.fn();
+    const onToggleSelect = vi.fn();
+    const props = { ...makeProps(onEnterSelectionMode, onToggleSelect), enableLongPressSelect: false };
+    const { rerender } = rtlRender(wrap(props));
+
+    longPress();
+
+    expect(onEnterSelectionMode).not.toHaveBeenCalled();
+    expect(vi.mocked(haptic)).not.toHaveBeenCalled();
+
+    // ...and nothing was armed, so no click gets swallowed afterwards. Driven
+    // through selection mode because that is the only state in which the row's
+    // click is observable at all — the point is that `longPressFired` was never
+    // set, so the very next click still counts.
+    rerender(wrap({ ...props, selectionMode: true }));
+    fireEvent.click(screen.getByText('Buy milk'));
+    expect(onToggleSelect).toHaveBeenCalledWith('todo-1');
+  });
+
+  it('is not swallowed by the memo comparator when only enableLongPressSelect flips', () => {
+    vi.useFakeTimers({ now: new Date('2026-07-14T12:00:00') });
+    const onEnterSelectionMode = vi.fn();
+    const onToggleSelect = vi.fn();
+    const props = makeProps(onEnterSelectionMode, onToggleSelect);
+    const { rerender } = rtlRender(wrap(props));
+
+    // Every other prop keeps its identity across this rerender, so if
+    // `areActionQueueItemPropsEqual` did not compare the new prop the component
+    // would still be running with `enableLongPressSelect` defaulted to true.
+    rerender(wrap({ ...props, enableLongPressSelect: false }));
+
+    longPress();
+
+    expect(onEnterSelectionMode).not.toHaveBeenCalled();
+    expect(vi.mocked(haptic)).not.toHaveBeenCalled();
   });
 });

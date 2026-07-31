@@ -6,7 +6,8 @@ import CountBadge from '@/components/ui/CountBadge';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
-import { needsReview } from '@/hooks/useActionQueue';
+import { needsReview, isReviewSnoozed } from '@/hooks/useActionQueue';
+import { getLocalDateString } from '@/utils/dateHelpers';
 
 // Lazy-loaded so the Capture drawer (tabs, AI capture, presets) stays out of
 // the boot bundle; preloaded on idle below so the first FAB tap is instant.
@@ -28,10 +29,20 @@ const BottomNav: React.FC = () => {
 
   // Pending-items nudge (Plan 063): count transactions awaiting review so the Money
   // tab can show a badge. Subscribes to the narrow finance slice only.
+  //
+  // INVARIANT: this predicate must count EXACTLY what Budget → Overview's
+  // "Needs review" section lists (`NeedsReviewSection`, which filters
+  // `useActionQueue`'s output), or the badge leads to a surface that doesn't
+  // explain it. That means snoozed rows are excluded here too — `useActionQueue`
+  // drops them, and a transaction the user deliberately deferred should stop
+  // nagging in the nav rather than keep the count high with nothing to show.
+  // Local day, never the UTC one (repo rule) — the snooze boundary is a local
+  // `yyyy-MM-dd`, so an evening UTC roll would un-snooze a row a day early.
   const { transactions } = useFinance();
+  const localToday = getLocalDateString();
   const pendingReviewCount = useMemo(
-    () => transactions.filter((t) => needsReview(t)).length,
-    [transactions]
+    () => transactions.filter((t) => needsReview(t) && !isReviewSnoozed(t, localToday)).length,
+    [transactions, localToday]
   );
 
   // Plan 090 — which top-level pages are enabled for this household.
