@@ -252,8 +252,15 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
       // without deleting the doc would leave the row badge reading 2 for 1
       // attributed unit.
       const subs = await getHabitSubmissions(habit.id, selectedDate, selectedDate);
+      // `creditsHousehold !== true` guards the OTHER direction of this same
+      // bug class: `createdBy` is always the TAPPING member regardless of
+      // who/what they credited, so the naive `attributedTo ?? createdBy`
+      // fallback alone would match a household-credit doc this member
+      // happens to have logged. That doc must survive a MEMBER undo —
+      // deleting it would corrupt the pool's own unit instead of this
+      // member's (mirrors HabitCard's `uncreditViaSubmissionOrFallback`).
       const mine = subs
-        .filter(s => (s.attributedTo ?? s.createdBy) === memberId && s.count > 0)
+        .filter(s => s.creditsHousehold !== true && (s.attributedTo ?? s.createdBy) === memberId && s.count > 0)
         .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
       const newest = mine[0];
       if (newest) await deleteHabitSubmission(habit.id, newest.id);
@@ -292,12 +299,21 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
       // Same preference as the member path: take back the SUBMISSION doc that
       // recorded the credit when there is one, so the day's submission totals
       // stay in step with the row counter and the reversal undoes exactly what
-      // was credited. `creditsHousehold` is what distinguishes such a doc from a
-      // pre-attribution one, which credited a member-less completion for an
-      // entirely different (grandfathered) reason and must not be swept up here.
+      // was credited.
+      //
+      // NOT `s.creditsHousehold === true` alone — that misses a GRANDFATHERED
+      // doc (written before either attribution or household-credit existed:
+      // no `attributedTo`, no `creditsHousehold`), which orphans identically
+      // to the bug this guard exists to close. `attributedTo == null` is the
+      // correct generalization: it matches BOTH member-less shapes and NEVER
+      // a doc some other member is actually credited for (which always has
+      // `attributedTo` set — see `addHabitSubmission`'s
+      // `actor !== null ? { attributedTo: actor } : { creditsHousehold: true }`,
+      // so the two fields are mutually exclusive by construction). Mirrors
+      // HabitCard's `uncreditViaSubmissionOrFallback` household predicate.
       const subs = await getHabitSubmissions(habit.id, selectedDate, selectedDate);
       const householdDocs = subs
-        .filter(s => s.creditsHousehold === true && s.count > 0)
+        .filter(s => s.attributedTo == null && s.count > 0)
         .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
       const newest = householdDocs[0];
       if (newest) await deleteHabitSubmission(habit.id, newest.id);

@@ -5,6 +5,7 @@ import DayHabitEditor from './DayHabitEditor';
 import { Habit, HabitSubmission, HouseholdMember } from '@/types/schema';
 import { buildHabitRowMemberContext } from '@/utils/habitRowAttribution';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { pointsForHabitOnDate } from '@/utils/habitLogic';
 
 vi.mock('@/services/analytics', () => ({ track: vi.fn() }));
 vi.mock('@/utils/haptics', () => ({ haptic: vi.fn() }));
@@ -468,6 +469,130 @@ describe('DayHabitEditor — past-day attribution', () => {
 
     expect(ctx.deleteHabitSubmission).toHaveBeenCalledWith('h1', 'hh');
     expect(ctx.uncreditHouseholdCompletion).not.toHaveBeenCalled();
+  });
+
+  // Reviewer-confirmed BLOCKING gap (fixed on HabitCard in PR #1166, ported
+  // here): a doc written before EITHER attribution or household-credit
+  // existed carries neither `attributedTo` nor `creditsHousehold`. Filtering
+  // on `creditsHousehold === true` alone lets this shape fall through as "no
+  // doc found", so the undo takes the attribution-only fallback and the
+  // grandfathered doc survives — an orphan that a later corrective recompute
+  // silently re-credits to the household pool. The probe mirrors the
+  // reviewer's own reproduction: with the doc gone (as this fix ensures),
+  // re-scoring the post-undo state must read 0, not the doc's stored award.
+  it('sweeps up a GRANDFATHERED doc too (no attributedTo, no creditsHousehold) — proven via pointsForHabitOnDate', async () => {
+    const legacyPoints = 10;
+    ctx.getHabitSubmissions.mockResolvedValue([
+      { id: 'legacy', habitId: 'h1', date: D, count: 1, pointsEarned: legacyPoints,
+        createdBy: PAUL, createdAt: '2026-07-15T08:00:00' } as HabitSubmission,
+    ]);
+    // Nobody attributed (no `completedBy`) + count 1 → the unit reads as
+    // household-credited regardless of which member-less doc shape backs it.
+    renderEditor({
+      habits: [baseHabit({ completedDates: [D], creditMode: 'household' })],
+      countForHabitOnDate: () => 1,
+    });
+    fireEvent.click(whoButton());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /^Household/ }));
+    });
+
+    expect(ctx.deleteHabitSubmission).toHaveBeenCalledWith('h1', 'legacy');
+    expect(ctx.uncreditHouseholdCompletion).not.toHaveBeenCalled();
+
+    // --- Probe -------------------------------------------------------------
+    // Simulates the state AFTER a real `deleteHabitSubmission` commit: the
+    // habit doc's own reversal (count 0, D out of completedDates) plus the
+    // submission doc now GONE, so a fresh `fetchSubmissionTotals` would
+    // return no entry for D.
+    const postUndoHabit: Habit = baseHabit({ count: 0, completedDates: [], creditMode: 'household' });
+    expect(pointsForHabitOnDate(postUndoHabit, D, D, new Map())).toBe(0);
+
+    // Contrast: the PRE-fix bug reproduction — same post-undo habit state,
+    // but with the leftover doc's stored total still present (i.e.
+    // `deleteHabitSubmission` was never called because the old predicate
+    // missed it). `pointsForHabitOnDate` reports it "as-is", silently
+    // re-crediting the exact amount the undo above just reversed.
+    const staleSubmissionTotals = new Map([[D, { count: 1, points: legacyPoints }]]);
+    expect(pointsForHabitOnDate(postUndoHabit, D, D, staleSubmissionTotals)).toBe(legacyPoints);
+  });
+
+  // Guards the OTHER direction the reviewer flagged: broadening the
+  // household predicate to `attributedTo == null` must never reach INTO a
+  // doc some OTHER member is actually credited for (`attributedTo` set) —
+  // that unit belongs to them, not to the household, no matter how
+  // "unattributed" the rest of the day looks.
+  it('household undo does not sweep up a doc a specific member is attributed for', async () => {
+    ctx.getHabitSubmissions.mockResolvedValue([
+      { id: 'jens', habitId: 'h1', date: D, count: 1, attributedTo: JEN,
+        createdBy: JEN, createdAt: '2026-07-15T09:00:00' } as HabitSubmission,
+    ]);
+    // Two units: Jen's attributed one, plus one nobody holds → Household
+    // reads checked for that second, genuinely unattributed unit.
+    renderEditor({
+      habits: [baseHabit({
+        completedDates: [D],
+        creditMode: 'household',
+        completedBy: { [D]: { [JEN]: 1 } },
+      })],
+      countForHabitOnDate: () => 2,
+    });
+    fireEvent.click(whoButton());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /^Household/ }));
+    });
+
+    expect(ctx.deleteHabitSubmission).not.toHaveBeenCalled();
+    expect(ctx.uncreditHouseholdCompletion).toHaveBeenCalledWith('h1', D);
+  });
+
+  // Guards the SAME bug class from the member side: `createdBy` is always
+  // the tapping member regardless of who/what they credited, so the naive
+  // `attributedTo ?? createdBy` fallback alone would match a household-credit
+  // doc this member happens to have logged. That doc must survive a MEMBER
+  // undo — deleting it would corrupt the pool's own unit instead of this
+  // member's.
+  it('member undo does not sweep up a household-credit doc logged by that same member', async () => {
+    ctx.getHabitSubmissions.mockResolvedValue([
+      { id: 'hh', habitId: 'h1', date: D, count: 1, creditsHousehold: true,
+        createdBy: JEN, createdAt: '2026-07-15T09:00:00' } as HabitSubmission,
+    ]);
+    renderEditor({
+      habits: [baseHabit({ completedDates: [D], completedBy: { [D]: { [JEN]: 1 } } })],
+    });
+    fireEvent.click(whoButton());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Jen/ }));
+    });
+
+    expect(ctx.deleteHabitSubmission).not.toHaveBeenCalled();
+    expect(ctx.uncreditHabitCompletion).toHaveBeenCalledWith('h1', JEN, D);
+  });
+
+  // Re-entrancy: the household-undo handler now does an `await
+  // getHabitSubmissions(...)` before any write. `runGuarded`'s ref-held Set
+  // (keyed by habit id) is the guard that closes that window — this proves
+  // it also covers the household-uncredit path specifically, using the same
+  // "two synchronous dispatches, no render in between" technique as the
+  // "swallows a second tap" test above for the log path.
+  it('swallows a second tap on Household undo before React can disable the picker', async () => {
+    ctx.getHabitSubmissions.mockImplementation(() => new Promise<HabitSubmission[]>(() => {}));
+    renderEditor({
+      habits: [baseHabit({ completedDates: [D], creditMode: 'household' })],
+      countForHabitOnDate: () => 1,
+    });
+    fireEvent.click(whoButton());
+    const household = screen.getByRole('menuitemcheckbox', { name: /^Household/ });
+
+    await act(async () => {
+      household.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      household.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(ctx.getHabitSubmissions).toHaveBeenCalledTimes(1);
   });
 
   it('a plain tap on a household-credit habit leaves attribution to the hook', async () => {
