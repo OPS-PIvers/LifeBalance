@@ -7,7 +7,7 @@ import { preloadOnIdle } from '@/utils/preloadOnIdle';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { needsReview, isReviewSnoozed } from '@/hooks/useActionQueue';
-import { getLocalDateString } from '@/utils/dateHelpers';
+import { useLocalToday } from '@/hooks/useLocalToday';
 
 // Lazy-loaded so the Capture drawer (tabs, AI capture, presets) stays out of
 // the boot bundle; preloaded on idle below so the first FAB tap is instant.
@@ -37,9 +37,13 @@ const BottomNav: React.FC = () => {
   // drops them, and a transaction the user deliberately deferred should stop
   // nagging in the nav rather than keep the count high with nothing to show.
   // Local day, never the UTC one (repo rule) — the snooze boundary is a local
-  // `yyyy-MM-dd`, so an evening UTC roll would un-snooze a row a day early.
+  // `yyyy-MM-dd`, so an evening UTC roll would un-snooze a row a day early. It
+  // comes from the SAME midnight-ticking source `useActionQueue` anchors on:
+  // deriving it during render instead would let the badge keep yesterday's day
+  // past midnight while the section had already rolled, so a just-un-snoozed
+  // row would appear in the list while the badge still counted it as snoozed.
   const { transactions } = useFinance();
-  const localToday = getLocalDateString();
+  const localToday = useLocalToday();
   const pendingReviewCount = useMemo(
     () => transactions.filter((t) => needsReview(t) && !isReviewSnoozed(t, localToday)).length,
     [transactions, localToday]
