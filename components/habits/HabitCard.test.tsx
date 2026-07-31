@@ -1,12 +1,12 @@
 import React from 'react';
-import { fireEvent, render, screen, act } from '@testing-library/react';
+import { fireEvent, render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import HabitCard from './HabitCard';
-import { Habit, HouseholdMember } from '@/types/schema';
+import { Habit, HabitSubmission, HouseholdMember } from '@/types/schema';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { buildHabitRowMemberContext } from '@/utils/habitRowAttribution';
-import { habitPeriodStart } from '@/utils/habitLogic';
+import { habitPeriodStart, pointsForHabitOnDate } from '@/utils/habitLogic';
 // Only `subDays` is faked below (for the freeze badge's "yesterday") — `format`
 // /`parseISO`/`subWeeks` pass through to the real implementation, so weekly
 // streak math (calculateWeeklyStreak walks ISO weeks via `subWeeks`, never
@@ -25,6 +25,12 @@ const { mockHouseholdContext } = vi.hoisted(() => ({
     uncreditHabitCompletion: vi.fn(() => Promise.resolve()),
     creditHouseholdCompletion: vi.fn(() => Promise.resolve()),
     uncreditHouseholdCompletion: vi.fn(() => Promise.resolve()),
+    // Household-undo dual-path guard: the handler checks for a submission doc
+    // before falling back to the attribution-only primitive (mirrors
+    // DayHabitEditor). Default to "no doc found" so every pre-existing test
+    // exercises the attribution-only fallback unchanged.
+    getHabitSubmissions: vi.fn((): Promise<HabitSubmission[]> => Promise.resolve([])),
+    deleteHabitSubmission: vi.fn(() => Promise.resolve()),
     activeChallenge: null as unknown,
   }
 }));
@@ -869,6 +875,129 @@ describe('HabitCard - attribution picker', () => {
     expect(mockHouseholdContext.creditHabitCompletion).not.toHaveBeenCalled();
   });
 
+  // Regression: the direct twin of the household submission-doc fix below —
+  // a member credit logged via the past-day editor (`addHabitSubmission`
+  // with an explicit actor) writes a `HabitSubmission` with
+  // `attributedTo: memberId`, which the attribution-only
+  // `uncreditHabitCompletion` never touches. Left un-deleted, it orphans
+  // exactly like the household case once its date leaves `completedDates`.
+  it('un-credits the checked member by deleting its own submission doc when one exists, leaving no orphan', async () => {
+    const user = userEvent.setup();
+    mockHouseholdContext.getHabitSubmissions.mockResolvedValueOnce([
+      { id: 'mine', habitId: 'h1', date: TODAY, count: 1, attributedTo: PAUL,
+        createdBy: PAUL, createdAt: '2026-07-15T09:00:00' } as HabitSubmission,
+    ]);
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /^Me/ }));
+
+    expect(mockHouseholdContext.getHabitSubmissions).toHaveBeenCalledWith('h1', TODAY, TODAY);
+    expect(mockHouseholdContext.deleteHabitSubmission).toHaveBeenCalledWith('h1', 'mine');
+    // Deleting the doc already reverses the habit + pool in one batch — the
+    // attribution-only primitive must NOT ALSO run, or the reversal doubles.
+    expect(mockHouseholdContext.uncreditHabitCompletion).not.toHaveBeenCalled();
+  });
+
+  // Guards the OTHER direction of the same bug class: `createdBy` is always
+  // the tapping member regardless of who/what they credited, so the naive
+  // `attributedTo ?? createdBy` fallback alone would match a household-credit
+  // doc this member happens to have logged. That doc must survive a MEMBER
+  // undo — deleting it would corrupt the pool's own unit instead of this
+  // member's.
+  it('member un-credit does not sweep up a household-credit doc logged by the same member', async () => {
+    const user = userEvent.setup();
+    mockHouseholdContext.getHabitSubmissions.mockResolvedValueOnce([
+      { id: 'hh', habitId: 'h1', date: TODAY, count: 1, creditsHousehold: true,
+        createdBy: PAUL, createdAt: '2026-07-15T09:00:00' } as HabitSubmission,
+    ]);
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /^Me/ }));
+
+    expect(mockHouseholdContext.deleteHabitSubmission).not.toHaveBeenCalled();
+    expect(mockHouseholdContext.uncreditHabitCompletion).toHaveBeenCalledWith('h1', PAUL, TODAY);
+  });
+
+  // 🛡️ THE `?? createdBy` FALLBACK IS THE BUG, not a safety net.
+  //
+  // `addHabitSubmission` writes `attributedTo` on EVERY member-credited doc
+  // (`actor !== null ? { attributedTo: actor } : { creditsHousehold: true }`),
+  // so the fallback can never reach a doc this member is genuinely credited
+  // for. The ONLY docs it can reach carry neither field — the automation
+  // writers (`transactionMutations`' keyword fire, `noSpendFire`, the backfill
+  // script) and pre-attribution history. On the keyword fire `createdBy` is
+  // whoever VERIFIED the triggering transaction: a REAL member uid, routinely
+  // the same admin who also logs habits by hand — this household's actual
+  // situation.
+  //
+  // Matching one is not a no-op. `deleteHabitSubmission` resolves
+  // `creditedUid = attributedTo ?? createdBy` and runs `reversalMoves`, so the
+  // wrong doc is deleted AND the member's genuine `completedBy` unit is
+  // debited (probed directly against the real mutation: it writes
+  // `completedBy.<date>.<uid>: -1` and `-10` to that member's points).
+  it('member un-credit does not sweep up an AUTOMATION doc whose createdBy is that same member', async () => {
+    const user = userEvent.setup();
+    mockHouseholdContext.getHabitSubmissions.mockResolvedValueOnce([
+      // Writer #2 (`transactionMutations`): NO attributedTo, NO creditsHousehold,
+      // `createdBy` = the member who verified the triggering transaction.
+      { id: 'automation', habitId: 'h1', date: TODAY, count: 1, pointsEarned: 10,
+        createdBy: PAUL, createdAt: '2026-07-15T10:00:00',
+        sourceTransactionId: 'txn-1' } as HabitSubmission,
+    ]);
+    // Paul ALSO holds one genuine attributed unit on this same date — the
+    // attribution the mis-delete would destroy.
+    render(
+      <HabitCard habit={attributedHabit({ [PAUL]: 1 }, { count: 2 })} attribution={ROSTER} />,
+    );
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /^Me/ }));
+
+    // The automation doc survives…
+    expect(mockHouseholdContext.deleteHabitSubmission).not.toHaveBeenCalled();
+    // …and Paul's real unit is reversed by the attribution-only primitive,
+    // which is bounded by `completedBy` and cannot over-take.
+    expect(mockHouseholdContext.uncreditHabitCompletion).toHaveBeenCalledWith('h1', PAUL, TODAY);
+  });
+
+  // 🛡️ PINS THE CHOSEN SEMANTICS of this PR's member-path change. Pre-fix,
+  // `handleUncreditMember` ALWAYS called `uncreditHabitCompletion`, which
+  // reverses exactly ONE unit. It now prefers the backing doc, and
+  // `deleteHabitSubmission` decrements `count`/`totalCount` by the whole
+  // `submission.count` — so one tap on a multi-unit doc clears all of it.
+  //
+  // Multi-unit attributed docs are ordinary, not a corner case:
+  // `HabitSubmissionLogModal` passes a free-text count straight to
+  // `addHabitSubmission(habit.id, count, …)`. The behaviour is deliberate and
+  // matches `DayHabitEditor` (the shipped template this was ported from), so
+  // this test exists to make any future move back to one-unit-at-a-time a
+  // conscious decision rather than a silent regression.
+  it('reverses ALL of a multi-unit attributed doc in one tap, not a single unit', async () => {
+    const user = userEvent.setup();
+    mockHouseholdContext.getHabitSubmissions.mockResolvedValueOnce([
+      { id: 'three', habitId: 'h1', date: TODAY, count: 3, pointsEarned: 30,
+        attributedTo: PAUL, createdBy: PAUL,
+        createdAt: '2026-07-15T09:00:00' } as HabitSubmission,
+    ]);
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 3 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /^Me/ }));
+
+    // The whole doc goes — `deleteHabitSubmission` reverses its 3 units and the
+    // 30 points it earned in one batch.
+    expect(mockHouseholdContext.deleteHabitSubmission).toHaveBeenCalledWith('h1', 'three');
+    // …and the one-unit primitive must NOT also run, or the day loses 4 units
+    // for a doc that only ever recorded 3.
+    expect(mockHouseholdContext.uncreditHabitCompletion).not.toHaveBeenCalled();
+  });
+
   // --- Household credit mode ------------------------------------------------
   // The Household row is a THIRD meaning, not a rename of "Both of us": one
   // award, to the pool, to nobody — versus N awards and a pool paid N times.
@@ -907,6 +1036,244 @@ describe('HabitCard - attribution picker', () => {
     await user.click(household);
 
     expect(mockHouseholdContext.uncreditHouseholdCompletion).toHaveBeenCalledWith('h1', TODAY);
+    expect(mockHouseholdContext.deleteHabitSubmission).not.toHaveBeenCalled();
+  });
+
+  // Regression: a household credit logged via the past-day editor / reflection
+  // drawer (`addHabitSubmission`) writes a `HabitSubmission` doc with
+  // `creditsHousehold: true` — unlike this row's own tap
+  // (`creditHouseholdCompletion`), which writes no doc at all. Undoing from
+  // THIS row must find and delete that doc rather than calling the
+  // attribution-only `uncreditHouseholdCompletion`, or the doc outlives the
+  // reversed completion and a later corrective recompute
+  // (`pointsForHabitOnDate` reports a stored submission's points "as-is" once
+  // its date leaves `completedDates`) silently re-credits the household pool
+  // with the exact points this undo just took back — an orphan re-credit with
+  // no attribution trail to find it by.
+  it('undoes a household credit by deleting its own submission doc when one exists, leaving no orphan', async () => {
+    const user = userEvent.setup();
+    mockHouseholdContext.getHabitSubmissions.mockResolvedValueOnce([
+      { id: 'hh', habitId: 'h1', date: TODAY, count: 1, createdBy: PAUL,
+        creditsHousehold: true, createdAt: '2026-07-15T09:00:00' } as HabitSubmission,
+    ]);
+    render(
+      <HabitCard
+        habit={attributedHabit({ [PAUL]: 1 }, { count: 2, creditMode: 'household' })}
+        attribution={ROSTER}
+      />,
+    );
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /^Household/ }));
+
+    expect(mockHouseholdContext.getHabitSubmissions).toHaveBeenCalledWith('h1', TODAY, TODAY);
+    expect(mockHouseholdContext.deleteHabitSubmission).toHaveBeenCalledWith('h1', 'hh');
+    // The attribution-only primitive must NOT ALSO run — deleting the
+    // submission doc already reverses the habit + pool in one batch (see
+    // `deleteHabitSubmission`), so calling both would double-reverse.
+    expect(mockHouseholdContext.uncreditHouseholdCompletion).not.toHaveBeenCalled();
+  });
+
+  // Reviewer-confirmed BLOCKING gap: a doc written before EITHER attribution
+  // or household-credit existed carries neither `attributedTo` nor
+  // `creditsHousehold`. Filtering on `creditsHousehold === true` alone lets
+  // this shape fall through as "no doc found", so the undo takes the
+  // attribution-only fallback and the grandfathered doc survives — the exact
+  // orphan this PR exists to close, just wearing a different doc shape. The
+  // probe at the end mirrors the reviewer's own reproduction: with the doc
+  // gone (as this fix ensures), re-scoring the post-undo state must read 0,
+  // not the doc's original stored award.
+  it('sweeps up a GRANDFATHERED doc too (no attributedTo, no creditsHousehold) — the doc that orphaned before this fix', async () => {
+    const user = userEvent.setup();
+    const legacyPoints = 10;
+    mockHouseholdContext.getHabitSubmissions.mockResolvedValueOnce([
+      { id: 'legacy', habitId: 'h1', date: TODAY, count: 1, pointsEarned: legacyPoints,
+        createdBy: PAUL, createdAt: '2026-07-15T08:00:00' } as HabitSubmission,
+    ]);
+    // Nobody attributed (`completedBy` empty) + count 1 → the unit reads as
+    // household-credited regardless of which member-less doc shape backs it.
+    render(
+      <HabitCard
+        habit={attributedHabit({}, { count: 1, creditMode: 'household' })}
+        attribution={ROSTER}
+      />,
+    );
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /^Household/ }));
+
+    expect(mockHouseholdContext.deleteHabitSubmission).toHaveBeenCalledWith('h1', 'legacy');
+    expect(mockHouseholdContext.uncreditHouseholdCompletion).not.toHaveBeenCalled();
+
+    // --- Reviewer's probe -----------------------------------------------
+    // Simulates the state AFTER a real `deleteHabitSubmission` commit: the
+    // habit doc's own reversal (count 0, TODAY out of completedDates — the
+    // part `uncreditHouseholdCompletion` always did correctly) plus the
+    // submission doc now GONE, so a fresh `fetchSubmissionTotals` would
+    // return no entry for TODAY.
+    const postUndoHabit: Habit = attributedHabit({}, { count: 0, completedDates: [], creditMode: 'household' });
+    expect(pointsForHabitOnDate(postUndoHabit, TODAY, TODAY, new Map())).toBe(0);
+
+    // Contrast: this is the reviewer's actual reproduction of the PRE-fix
+    // bug — same post-undo habit state, but with the leftover doc's stored
+    // total still present (i.e. `deleteHabitSubmission` was never called).
+    // `pointsForHabitOnDate` reports it "as-is", silently re-crediting the
+    // exact amount the undo above just reversed.
+    const staleSubmissionTotals = new Map([[TODAY, { count: 1, points: legacyPoints }]]);
+    expect(pointsForHabitOnDate(postUndoHabit, TODAY, TODAY, staleSubmissionTotals)).toBe(legacyPoints);
+  });
+
+  // Guards the OTHER direction the reviewer flagged: broadening the household
+  // predicate to `attributedTo == null` must never reach INTO a doc some
+  // OTHER member is actually credited for (`attributedTo` set) — that unit
+  // belongs to them, not to the household, no matter how "unattributed" the
+  // rest of the day looks.
+  it('household un-credit does not sweep up a doc a specific member is attributed for', async () => {
+    const user = userEvent.setup();
+    mockHouseholdContext.getHabitSubmissions.mockResolvedValueOnce([
+      { id: 'jens', habitId: 'h1', date: TODAY, count: 1, attributedTo: JEN,
+        createdBy: JEN, createdAt: '2026-07-15T09:00:00' } as HabitSubmission,
+    ]);
+    // Two units: Jen's attributed one, plus one nobody holds → Household
+    // reads checked for that second, genuinely unattributed unit.
+    render(
+      <HabitCard
+        habit={attributedHabit({ [JEN]: 1 }, { count: 2, creditMode: 'household' })}
+        attribution={ROSTER}
+      />,
+    );
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /^Household/ }));
+
+    expect(mockHouseholdContext.deleteHabitSubmission).not.toHaveBeenCalled();
+    expect(mockHouseholdContext.uncreditHouseholdCompletion).toHaveBeenCalledWith('h1', TODAY);
+  });
+
+  // 🛡️ The household analogue of the member-path automation test above, and
+  // the reason `attributedTo == null` ALONE is too wide.
+  //
+  // A grandfathered doc and an automation doc are FIELD-IDENTICAL — neither
+  // carries `attributedTo` or `creditsHousehold` — so no marker separates
+  // them. What separates the SAFE case from the corrupting one is the date:
+  // `deleteHabitSubmission` falls back to `creditedUid = createdBy` for any
+  // doc without `creditsHousehold`, and `resolveReversalSources` provably
+  // returns `[]` only when the date carries no attribution at all. Probed
+  // against the real mutation, a neither-field doc with `createdBy: user1`
+  // on a date where SOMEONE holds attribution writes
+  // `completedBy.<date>.<holder>: -1` and `-10` to that holder's points —
+  // and the holder is whoever `completedBy` records, not necessarily
+  // `createdBy`. So a mixed date must fall through to the attribution-only
+  // primitive; the clean date (the genuine grandfathered case, covered
+  // above) still sweeps.
+  it('household un-credit does not sweep up an AUTOMATION doc on a date that carries attribution', async () => {
+    const user = userEvent.setup();
+    mockHouseholdContext.getHabitSubmissions.mockResolvedValueOnce([
+      { id: 'automation', habitId: 'h1', date: TODAY, count: 1, pointsEarned: 10,
+        createdBy: PAUL, createdAt: '2026-07-15T10:00:00',
+        sourceTransactionId: 'txn-1' } as HabitSubmission,
+    ]);
+    // Two units: Paul's genuine attributed one, plus the automation's
+    // unattributed one → Household reads checked for the second.
+    render(
+      <HabitCard
+        habit={attributedHabit({ [PAUL]: 1 }, { count: 2, creditMode: 'household' })}
+        attribution={ROSTER}
+      />,
+    );
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /^Household/ }));
+
+    // Deleting it would have debited Paul's REAL `completedBy` unit.
+    expect(mockHouseholdContext.deleteHabitSubmission).not.toHaveBeenCalled();
+    expect(mockHouseholdContext.uncreditHouseholdCompletion).toHaveBeenCalledWith('h1', TODAY);
+  });
+
+  // Reviewer-confirmed BLOCKING gap: the old handler called `uncreditCompletion`
+  // synchronously off `habitsRef.current` — zero async reads before its one
+  // `batch.commit()`, so a double-tap couldn't race it. This fix inserts an
+  // `await getHabitSubmissions(...)` before any write, and
+  // `HabitAttributionPicker` closes itself SYNCHRONOUSLY before calling
+  // `onUncreditHousehold()` — but `habit` is a prop that only updates once
+  // Firestore's listener pushes the reversal back, so RE-OPENING the picker
+  // mid-flight still shows Household checked. The reviewer's own probe:
+  // open → tap Household → re-open → tap again, before the first read
+  // resolves. Pre-guard this dispatched `getHabitSubmissions` (and
+  // `deleteHabitSubmission`) TWICE with the same doc id — a double-debit of
+  // the pool, since Firestore `increment()` deltas are not idempotent.
+  it('a re-entrant tap before the submissions read resolves cannot double-dispatch (household)', async () => {
+    const user = userEvent.setup();
+    let resolveSubs!: (docs: HabitSubmission[]) => void;
+    const deferred = new Promise<HabitSubmission[]>((resolve) => { resolveSubs = resolve; });
+    mockHouseholdContext.getHabitSubmissions.mockReturnValueOnce(deferred);
+
+    render(
+      <HabitCard
+        habit={attributedHabit({ [PAUL]: 1 }, { count: 2, creditMode: 'household' })}
+        attribution={ROSTER}
+      />,
+    );
+
+    const openAndTapHousehold = async () => {
+      await user.click(screen.getByLabelText('Options for Morning walk'));
+      await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+      await user.click(screen.getByRole('menuitemcheckbox', { name: /^Household/ }));
+    };
+
+    // First tap starts the async lookup and leaves it unresolved.
+    await openAndTapHousehold();
+    // Re-open and tap again while the first flow is still in flight — the
+    // reviewer's exact reproduction.
+    await openAndTapHousehold();
+
+    // The guard blocks the second dispatch at the handler's own synchronous
+    // entry, before it ever reaches the async read.
+    expect(mockHouseholdContext.getHabitSubmissions).toHaveBeenCalledTimes(1);
+
+    resolveSubs([
+      { id: 'hh', habitId: 'h1', date: TODAY, count: 1, createdBy: PAUL,
+        creditsHousehold: true, createdAt: '2026-07-15T09:00:00' } as HabitSubmission,
+    ]);
+    await waitFor(() => {
+      expect(mockHouseholdContext.deleteHabitSubmission).toHaveBeenCalledTimes(1);
+    });
+    expect(mockHouseholdContext.deleteHabitSubmission).toHaveBeenCalledWith('h1', 'hh');
+  });
+
+  // Direct twin of the household re-entrancy test above — same guard, same
+  // shared ref, member path.
+  it('a re-entrant tap before the submissions read resolves cannot double-dispatch (member)', async () => {
+    const user = userEvent.setup();
+    let resolveSubs!: (docs: HabitSubmission[]) => void;
+    const deferred = new Promise<HabitSubmission[]>((resolve) => { resolveSubs = resolve; });
+    mockHouseholdContext.getHabitSubmissions.mockReturnValueOnce(deferred);
+
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+
+    const openAndTapMe = async () => {
+      await user.click(screen.getByLabelText('Options for Morning walk'));
+      await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+      await user.click(screen.getByRole('menuitemcheckbox', { name: /^Me/ }));
+    };
+
+    await openAndTapMe();
+    await openAndTapMe();
+
+    expect(mockHouseholdContext.getHabitSubmissions).toHaveBeenCalledTimes(1);
+
+    resolveSubs([
+      { id: 'mine', habitId: 'h1', date: TODAY, count: 1, attributedTo: PAUL,
+        createdBy: PAUL, createdAt: '2026-07-15T09:00:00' } as HabitSubmission,
+    ]);
+    await waitFor(() => {
+      expect(mockHouseholdContext.deleteHabitSubmission).toHaveBeenCalledTimes(1);
+    });
+    expect(mockHouseholdContext.deleteHabitSubmission).toHaveBeenCalledWith('h1', 'mine');
   });
 
   it('sorts Household FIRST on a household habit and LAST on a members habit', async () => {
@@ -1103,7 +1470,7 @@ describe('HabitCard - attribution picker is PERIOD-scoped, not day-scoped (F2)',
     }
   });
 
-  it('un-crediting a weekly checkmark reverses the day the unit actually lives on, not today', () => {
+  it('un-crediting a weekly checkmark reverses the day the unit actually lives on, not today', async () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date(WEDNESDAY));
@@ -1122,7 +1489,10 @@ describe('HabitCard - attribution picker is PERIOD-scoped, not day-scoped (F2)',
 
       fireEvent.click(screen.getByLabelText('Options for Morning walk'));
       fireEvent.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
-      fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /^Me/ }));
+      // The uncredit handler now does an async submissions read before
+      // deciding which primitive to call — flush it explicitly rather than
+      // relying on a bare fireEvent.click's synchronous return.
+      await act(async () => { fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /^Me/ })); });
 
       // Reverses MONDAY's unit — the day it actually lives on. The old
       // day-scoped un-credit had no way to reach it at all (it always targeted
@@ -1136,7 +1506,7 @@ describe('HabitCard - attribution picker is PERIOD-scoped, not day-scoped (F2)',
     }
   });
 
-  it('period-scopes a THRESHOLD weekly habit\'s picker too, and un-credits the day the unit lives on', () => {
+  it('period-scopes a THRESHOLD weekly habit\'s picker too, and un-credits the day the unit lives on', async () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date(WEDNESDAY));
@@ -1158,14 +1528,14 @@ describe('HabitCard - attribution picker is PERIOD-scoped, not day-scoped (F2)',
       fireEvent.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
       expect(screen.getByRole('menuitemcheckbox', { name: /^Me/ })).toHaveAttribute('aria-checked', 'true');
 
-      fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /^Me/ }));
+      await act(async () => { fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /^Me/ })); });
       expect(mockHouseholdContext.uncreditHabitCompletion).toHaveBeenCalledWith('h1', PAUL, MONDAY);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('regression: a DAILY habit still targets today, exactly as before (period === day)', () => {
+  it('regression: a DAILY habit still targets today, exactly as before (period === day)', async () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date(WEDNESDAY));
@@ -1186,7 +1556,7 @@ describe('HabitCard - attribution picker is PERIOD-scoped, not day-scoped (F2)',
       fireEvent.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
       expect(screen.getByRole('menuitemcheckbox', { name: /^Me/ })).toHaveAttribute('aria-checked', 'true');
 
-      fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /^Me/ }));
+      await act(async () => { fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /^Me/ })); });
       expect(mockHouseholdContext.uncreditHabitCompletion).toHaveBeenCalledWith('h1', PAUL, today);
     } finally {
       vi.useRealTimers();
