@@ -41,6 +41,10 @@ interface ActionQueueItemProps {
   onToggleSelect: (id: string) => void;
   /** Long-press entry point — enter selection mode with this item selected. */
   onEnterSelectionMode: (id: string) => void;
+  /** Whether a long press arms the selection-mode gesture at all (default true).
+      A surface with no bulk bar passes false so the press never buzzes and then
+      does nothing — no haptic, no swallowed click, no armed timer. */
+  enableLongPressSelect?: boolean;
   // Mobile triage: swipe gestures (right = instant approve, left = defer)
   onSwipeApprove: (item: ActionQueueItem) => void;
   onSwipeDefer: (item: ActionQueueItem) => void;
@@ -88,6 +92,7 @@ const areActionQueueItemPropsEqual = (
       prev.isSelected !== next.isSelected ||
       prev.onToggleSelect !== next.onToggleSelect ||
       prev.onEnterSelectionMode !== next.onEnterSelectionMode ||
+      prev.enableLongPressSelect !== next.enableLongPressSelect ||
       prev.onSwipeApprove !== next.onSwipeApprove ||
       prev.onSwipeDefer !== next.onSwipeDefer ||
       prev.approveDetail !== next.approveDetail) {
@@ -165,6 +170,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
   isSelected,
   onToggleSelect,
   onEnterSelectionMode,
+  enableLongPressSelect = true,
   onSwipeApprove,
   onSwipeDefer,
   approveDetail,
@@ -240,7 +246,10 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (selectionMode || isExpanded) return;
+    // Never arm the timer on a surface that can't enter selection mode — an
+    // armed timer would haptic-confirm a gesture with nothing behind it and
+    // then swallow the click that ended it.
+    if (selectionMode || isExpanded || !enableLongPressSelect) return;
     pressOrigin.current = { x: e.clientX, y: e.clientY };
     longPressFired.current = false;
     cancelLongPress();

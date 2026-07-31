@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   endOfDay, isBefore, parseISO, isSameDay, subMonths, addMonths,
-  startOfDay, addDays, differenceInMilliseconds, isToday, isTomorrow, isValid
+  isToday, isTomorrow, isValid
 } from 'date-fns';
 import { Transaction, CalendarItem, ToDo } from '@/types/schema';
 import { useFinance, useTodos, useExpandedCalendarItems, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useMerchantRules } from '@/hooks/useMerchantRules';
-import { getLocalDateString } from '@/utils/dateHelpers';
+import { useLocalToday } from '@/hooks/useLocalToday';
 import { parseRecurringId } from '@/utils/calendarRecurrence';
 import {
   pickBillToPay,
@@ -106,29 +106,10 @@ export const useActionQueue = () => {
   const showMoney = isModuleEnabled('money');
   const showTodos = isPlanTabVisible('todos');
 
-  // Local-day anchor for every date comparison below. Held in state (not a
-  // mount-time memo) so an always-open dashboard (e.g. wall-mounted tablet PWA)
-  // rolls forward at local midnight instead of keeping yesterday's "today"
-  // until a remount. A self-rescheduling timeout re-derives the day just past
-  // midnight; setState with the unchanged string is a no-op, so renders only
-  // happen when the day actually flips.
-  const [localToday, setLocalToday] = useState(() => getLocalDateString());
-  useEffect(() => {
-    let timeoutId: ReturnType<typeof setTimeout>;
-    const scheduleMidnightTick = () => {
-      const now = new Date();
-      // addDays is DST-safe (vs. a manual 24h add); the +1s buffer keeps a
-      // slightly-early wakeup from re-arming a zero-delay loop.
-      const msUntilMidnight =
-        differenceInMilliseconds(startOfDay(addDays(now, 1)), now) + 1000;
-      timeoutId = setTimeout(() => {
-        setLocalToday(getLocalDateString());
-        scheduleMidnightTick();
-      }, msUntilMidnight);
-    };
-    scheduleMidnightTick();
-    return () => clearTimeout(timeoutId);
-  }, []);
+  // Local-day anchor for every date comparison below, rolling forward at local
+  // midnight. Shared with the footer's review badge (`BottomNav`) so the badge
+  // and this queue can never anchor on different days — see `useLocalToday`.
+  const localToday = useLocalToday();
 
   // parseISO on a local yyyy-MM-dd string yields local midnight — the same
   // instant startOfToday() returns while `localToday` is current — so the Date

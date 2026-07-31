@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { MoneyPulseWidget } from '@/components/dashboard/MoneyPulseWidget';
 import { UpcomingBillsWidget } from '@/components/dashboard/UpcomingBillsWidget';
 import { CategorySpendWidget } from '@/components/dashboard/CategorySpendWidget';
 import { AccountPicker } from '@/components/budget/AccountPicker';
 import { SafeToSpendDetail } from '@/components/budget/SafeToSpendDetail';
+import NeedsReviewSection from '@/components/budget/NeedsReviewSection';
 
 /**
  * Money → Overview tab. Hosts the money widgets that were relocated off Home
@@ -25,9 +26,22 @@ const MoneyOverview: React.FC = () => {
   const { payCalendarItem } = useFinance();
   const [payModalItem, setPayModalItem] = useState<{ id: string; amount: number } | null>(null);
 
+  // Stable identity, deliberately NOT an inline arrow: `useActionQueueTriage`
+  // lists its `onOpenPaySheet` option in `openPaySheet`'s deps, and
+  // `handleSwipeApprove` in turn depends on `openPaySheet`. A fresh arrow each
+  // render would churn both, and both are compared by
+  // `areActionQueueItemPropsEqual` — every queue row would re-render on every
+  // render of this tab, defeating the card's memoization.
+  const openPaySheet = useCallback((id: string, amount: number) => {
+    setPayModalItem({ id, amount });
+  }, []);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-(--duration-base)">
-      <UpcomingBillsWidget onPay={(id, amount) => setPayModalItem({ id, amount })} />
+      {/* Leads the tab: it's the destination the footer's Budget badge points
+          at, and it renders nothing when nothing needs review. */}
+      <NeedsReviewSection onOpenPaySheet={openPaySheet} />
+      <UpcomingBillsWidget onPay={openPaySheet} />
       <MoneyPulseWidget />
       <CategorySpendWidget />
       <SafeToSpendDetail />
