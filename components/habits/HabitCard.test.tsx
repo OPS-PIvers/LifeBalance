@@ -965,6 +965,39 @@ describe('HabitCard - attribution picker', () => {
     expect(mockHouseholdContext.uncreditHabitCompletion).toHaveBeenCalledWith('h1', PAUL, TODAY);
   });
 
+  // 🛡️ PINS THE CHOSEN SEMANTICS of this PR's member-path change. Pre-fix,
+  // `handleUncreditMember` ALWAYS called `uncreditHabitCompletion`, which
+  // reverses exactly ONE unit. It now prefers the backing doc, and
+  // `deleteHabitSubmission` decrements `count`/`totalCount` by the whole
+  // `submission.count` — so one tap on a multi-unit doc clears all of it.
+  //
+  // Multi-unit attributed docs are ordinary, not a corner case:
+  // `HabitSubmissionLogModal` passes a free-text count straight to
+  // `addHabitSubmission(habit.id, count, …)`. The behaviour is deliberate and
+  // matches `DayHabitEditor` (the shipped template this was ported from), so
+  // this test exists to make any future move back to one-unit-at-a-time a
+  // conscious decision rather than a silent regression.
+  it('reverses ALL of a multi-unit attributed doc in one tap, not a single unit', async () => {
+    const user = userEvent.setup();
+    mockHouseholdContext.getHabitSubmissions.mockResolvedValueOnce([
+      { id: 'three', habitId: 'h1', date: TODAY, count: 3, pointsEarned: 30,
+        attributedTo: PAUL, createdBy: PAUL,
+        createdAt: '2026-07-15T09:00:00' } as HabitSubmission,
+    ]);
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 3 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /^Me/ }));
+
+    // The whole doc goes — `deleteHabitSubmission` reverses its 3 units and the
+    // 30 points it earned in one batch.
+    expect(mockHouseholdContext.deleteHabitSubmission).toHaveBeenCalledWith('h1', 'three');
+    // …and the one-unit primitive must NOT also run, or the day loses 4 units
+    // for a doc that only ever recorded 3.
+    expect(mockHouseholdContext.uncreditHabitCompletion).not.toHaveBeenCalled();
+  });
+
   // --- Household credit mode ------------------------------------------------
   // The Household row is a THIRD meaning, not a rename of "Both of us": one
   // award, to the pool, to nobody — versus N awards and a pool paid N times.

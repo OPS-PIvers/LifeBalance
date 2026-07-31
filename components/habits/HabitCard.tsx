@@ -297,6 +297,16 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
    * (`handleUncredit`/`handleUncreditHousehold`), the existing, shipped
    * template.
    *
+   * 🛡️ A MATCHED DOC REVERSES ALL `submission.count` UNITS, not one. The
+   * attribution-only fallback takes back exactly ONE unit; `deleteHabitSubmission`
+   * decrements `count`/`totalCount` by the whole `submission.count` and reverses
+   * the points that doc earned. So on a multi-unit doc — `HabitSubmissionLogModal`
+   * passes a free-text count straight to `addHabitSubmission`, so `count: 3` is
+   * ordinary — one tap on the checkmark clears the entire doc rather than
+   * decrementing it. That is deliberate and matches `DayHabitEditor`, the
+   * shipped template this was ported from; the checkmark means "this person is
+   * credited for this day", so undoing it un-credits the day, not one unit of it.
+   *
    * 🛡️ THE TWO MATCH PREDICATES BELOW MUST STAY SEMANTICALLY IDENTICAL TO
    * `DayHabitEditor`'s (`handleUncredit` / `handleUncreditHousehold`) — the
    * two surfaces undo the SAME credit, so a divergence means one of them
@@ -435,13 +445,60 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     //     → `completedBy.<date>.jen-uid: -1`, jen points -10   ← corruption
     //   • same doc, NO attribution anywhere on the date
     //     → no `completedBy` write, no member write, pool -10  ← correct
-    // The third row is the grandfathered case, and it is safe for exactly one
-    // reason: `resolveReversalSources` provably returns `[]` when the date
-    // carries no attribution at all. `completedBy` shipped WITH `attributedTo`,
-    // so genuine pre-attribution history satisfies that by construction — the
-    // generalization keeps working — while a mixed date (the only shape that
-    // can corrupt) falls through to `uncreditHouseholdCompletion`, i.e. exactly
-    // the pre-fix behaviour. Under-reversing beats debiting the wrong ledger.
+    // Only a MIXED date can corrupt, and it falls through to
+    // `uncreditHouseholdCompletion`, i.e. exactly the pre-fix behaviour.
+    // Under-reversing beats debiting the wrong ledger.
+    //
+    // 🛡️ WHAT `dateHasNoAttribution` DOES AND DOES NOT BUY. It is DATE-scoped;
+    // a reversal's member blast radius is PERIOD-scoped. All it guarantees is
+    // that `reversalMoves` → `resolveReversalSources` returns `[]`, so
+    // `deleteHabitSubmission` takes nothing off the doc's own `createdBy` (nor
+    // off a holder-fallback member) — the three rows above. It does NOT mean no
+    // member is debited: `queueHabitPointsMove` writes `move.perMember`
+    // UNCONDITIONALLY (`attributionMoved` gates only the POOL term), and
+    // `periodPointsMove` scopes members to `periodScoredDates` — the whole week
+    // for a weekly habit. Executed against the real mutation (weekly threshold
+    // habit, `targetCount: 2`, Monday unattributed + Wednesday attributed to
+    // Jen, neither-field doc dated Monday):
+    //     jen-uid `points.{total,daily,weekly}: -10`, pool -10
+    // Jen is debited although MONDAY carries no attribution. That is not a
+    // defect and not new: the pre-fix `uncreditHouseholdCompletion` fallback
+    // writes the identical member deltas on the identical input. Losing a
+    // threshold period's award strips it from every holder in that period,
+    // which is the intended reversal — just don't read this branch as "no
+    // member can be debited".
+    //
+    // 🛡️ THIS BRANCH ROUTINELY SWEEPS AUTOMATION DOCS, and that is the point —
+    // automation is NOT the case `dateHasNoAttribution` excludes.
+    // `transactionMutations` writes NO attribution at all on a keyword fire
+    // (just count/totalCount/completedDates/streakDays/hasSubmissionTracking
+    // plus the submission), so a habit fired only by a keyword transaction has
+    // `attributedUnitsOnDate === 0` on that date AND `count - attributedUnits
+    // > 0` — which is exactly what makes the Household chip read as credited in
+    // the first place. Deleting that doc IS the correct undo: the two unit
+    // kinds are indistinguishable to this UI, and leaving the doc behind is the
+    // orphan re-credit this guard exists to close.
+    //
+    // ⚠️ One bad sub-case, knowingly accepted: a date carrying BOTH an
+    // automation doc and a manual `creditsHousehold` doc. Both match, and the
+    // sort picks by newest `createdAt`, so the automation doc may be the one
+    // deleted — permanently destroying its `sourceTransactionId` audit record,
+    // and `firedHabitIds` (`transactionMutations`, `arrayUnion`, cleared only
+    // by un-verifying the transaction) then means that habit can never re-fire
+    // from it. A `creditsHousehold`-first tie-break would fix it, but it is NOT
+    // points-neutral — the two classes reverse the pool by different arithmetic
+    // (`isHouseholdSubmission` takes the derived decomposition, a neither-field
+    // doc takes its stored `pointsEarned`) — so it is deliberately left out of
+    // this fix rather than smuggled in unprobed.
+    //
+    // ⚠️ Path change, pre-existing behaviour: routing a grandfathered/automation
+    // household undo through `deleteHabitSubmission` puts it on that function's
+    // ABSOLUTE `count`/`totalCount` writes (computed from the client cache)
+    // where the `uncreditHouseholdCompletion` fallback used `increment()`
+    // deltas — the same absolute-write shape behind the 2026-07-15
+    // habit-history clobber. That is `deleteHabitSubmission`'s own
+    // long-standing behaviour on every submission delete, not something
+    // introduced here.
     const dateHasNoAttribution = attributedUnitsOnDate(habit, targetDate) === 0;
     void uncreditViaSubmissionOrFallback(
       targetDate,
