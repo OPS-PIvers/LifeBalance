@@ -76,6 +76,17 @@ export interface MemberAvatarProps {
   /** Overrides the derived initial in the fallback circle (e.g. a kid
    *  profile's chosen `avatarEmoji`). Ignored while a photo is showing. */
   fallbackGlyph?: string;
+  /**
+   * A glyph NODE (an icon) rendered in the circle instead of an initial —
+   * `fallbackGlyph`'s non-textual sibling, for a badge that stands for something
+   * other than a person's name (today: the household house, `HouseholdAvatar`).
+   *
+   * It lives here rather than in a lookalike component so the circle, the size
+   * and the white separating ring are literally the same code every member
+   * avatar uses; a hand-rolled twin is how two adjacent badges drift apart.
+   * Ignored while a photo is showing (a glyph avatar never has one).
+   */
+  icon?: React.ReactNode;
   /** Accessible name; omit for a decorative avatar (see module doc). */
   alt?: string;
   /** Native tooltip, shown for either state (photo or fallback). */
@@ -93,6 +104,7 @@ const MemberAvatar: React.FC<MemberAvatarProps> = ({
   shape = 'circle',
   ring = true,
   fallbackGlyph,
+  icon,
   alt,
   title,
   className,
@@ -140,7 +152,7 @@ const MemberAvatar: React.FC<MemberAvatarProps> = ({
       )}
       style={{ ...sizeStyle, backgroundColor: color, fontSize: Math.round(size * 0.44) }}
     >
-      {initial}
+      {icon ?? initial}
     </span>
   );
 };

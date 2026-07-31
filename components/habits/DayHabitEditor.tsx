@@ -7,10 +7,15 @@ import { Badge } from '@/components/ui/Badge';
 import Eyebrow from '@/components/ui/Eyebrow';
 import EmptyState from '@/components/ui/EmptyState';
 import MemberAvatar from '@/components/ui/MemberAvatar';
+import HouseholdAvatar from '@/components/ui/HouseholdAvatar';
 import HabitAttributionPicker from '@/components/habits/HabitAttributionPicker';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { signedHabitPoints } from '@/utils/habitLogic';
-import { habitFeedsMemberAttribution } from '@/utils/habitAttribution';
+import {
+  attributedUnitsOnDate,
+  habitFeedsMemberAttribution,
+  isHouseholdCreditHabit,
+} from '@/utils/habitAttribution';
 import {
   dayPickerMembers,
   LONG_PRESS_MS,
@@ -74,6 +79,7 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
     deleteHabitSubmission,
     getHabitSubmissions,
     uncreditHabitCompletion,
+    uncreditHouseholdCompletion,
   } = useGamification();
 
   // Habit ids with an in-flight write, so a slow network can't double-log a
@@ -156,7 +162,8 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
     // to the top of the viewport for the sheet to fit, in which case flip below
     // rather than render it off-screen. Mirrors the picker's own row set: the
     // compound "Both of us" row only exists with two or more adults.
-    const rows = adultCount + (adultCount > 1 ? 1 : 0);
+    // + 1 for the Household row, which every habit gets.
+    const rows = adultCount + (adultCount > 1 ? 1 : 0) + 1;
     const rect = anchor?.getBoundingClientRect();
     setPickerPlacement(rect && rect.top < rows * 44 + 16 ? 'below' : 'above');
     setPickerHabitId(habit.id);
@@ -188,9 +195,14 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
       // credits the ASSIGNEE — naming the tapper there would credit the parent
       // for a kid's chore. (Both hosts filter assigned habits out today; this
       // keeps the component correct if one ever stops.)
-      const selfCredit = currentUserId && habitFeedsMemberAttribution(habit)
-        ? [currentUserId]
-        : undefined;
+      //
+      // A `creditMode: 'household'` habit is left to the hook too: naming the
+      // tapper there would credit a member on a habit whose whole point is that
+      // a completion credits the household and nobody individually.
+      const selfCredit =
+        currentUserId && habitFeedsMemberAttribution(habit) && !isHouseholdCreditHabit(habit)
+          ? [currentUserId]
+          : undefined;
       await addHabitSubmission(
         habit.id,
         1,
@@ -249,6 +261,51 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
       // fire): the attribution-only primitive is the right reversal.
       else await uncreditHabitCompletion(habit.id, memberId, selectedDate);
     }), [deleteHabitSubmission, getHabitSubmissions, runGuarded, selectedDate, uncreditHabitCompletion]);
+
+  /**
+   * Household credit mode — log ONE completion for the household on this day,
+   * credited to nobody individually. The empty `attributeTo` array is the
+   * explicit "credit the household" signal (see `addHabitSubmission`).
+   */
+  const handleCreditHousehold = useCallback((habit: Habit) =>
+    runGuarded(habit.id, async () => {
+      haptic('success');
+      await addHabitSubmission(
+        habit.id,
+        1,
+        `${selectedDate}T12:00:00`,
+        undefined,
+        undefined,
+        [],
+      );
+      track('habit_past_day_logged', {
+        daysAgo: differenceInCalendarDays(parseISO(getLocalDateString()), parseISO(selectedDate)),
+        positive: habit.type === 'positive',
+        members: 0,
+        picked: true,
+      });
+    }), [addHabitSubmission, runGuarded, selectedDate]);
+
+  const handleUncreditHousehold = useCallback((habit: Habit) =>
+    runGuarded(habit.id, async () => {
+      haptic('light');
+      // Same preference as the member path: take back the SUBMISSION doc that
+      // recorded the credit when there is one, so the day's submission totals
+      // stay in step with the row counter and the reversal undoes exactly what
+      // was credited. `creditsHousehold` is what distinguishes such a doc from a
+      // pre-attribution one, which credited a member-less completion for an
+      // entirely different (grandfathered) reason and must not be swept up here.
+      const subs = await getHabitSubmissions(habit.id, selectedDate, selectedDate);
+      const householdDocs = subs
+        .filter(s => s.creditsHousehold === true && s.count > 0)
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+      const newest = householdDocs[0];
+      if (newest) await deleteHabitSubmission(habit.id, newest.id);
+      // No doc behind the credit (a Habits-page household credit, a toggle-path
+      // or grandfathered completion): the attribution-only primitive is the
+      // right reversal.
+      else await uncreditHouseholdCompletion(habit.id, selectedDate);
+    }), [deleteHabitSubmission, getHabitSubmissions, runGuarded, selectedDate, uncreditHouseholdCompletion]);
 
   const handleClearDay = useCallback((habit: Habit) => runGuarded(habit.id, async () => {
     await resetHabitDay(habit.id, selectedDate);
@@ -331,7 +388,15 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
                 ? dayPickerMembers(habit, attribution, selectedDate)
                 : [];
               const credited = pickerMembers.filter(m => m.credited);
-              const creditedNames = credited.map(m => (m.isSelf ? 'you' : m.displayName));
+              // Household credit: units logged on this day that NOBODY holds —
+              // the same `max(count − attributed, 0)` the unattributed scorer
+              // computes, and exactly the unit the Household row takes back.
+              const householdCredited =
+                pickable && dayCount - attributedUnitsOnDate(habit, selectedDate) > 0;
+              const creditedNames = [
+                ...(householdCredited ? ['the household'] : []),
+                ...credited.map(m => (m.isSelf ? 'you' : m.displayName)),
+              ];
               return (
                 <div
                   key={habit.id}
@@ -454,10 +519,14 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
                       className="relative shrink-0 flex min-h-11 min-w-11 items-center justify-center rounded-full text-brand-400 dark:text-brand-450 hover:bg-brand-100 dark:hover:bg-brand-700/50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
                       style={{ zIndex: 2 }}
                     >
-                      {credited.length > 0 ? (
+                      {credited.length > 0 || householdCredited ? (
                         <span className="flex">
+                          {householdCredited && <HouseholdAvatar size={20} />}
                           {credited.map((m, i) => (
-                            <span key={m.uid} className={i > 0 ? '-ml-1.5' : undefined}>
+                            <span
+                              key={m.uid}
+                              className={i > 0 || householdCredited ? '-ml-1.5' : undefined}
+                            >
                               <MemberAvatar
                                 name={m.displayName}
                                 photoURL={m.photoURL}
@@ -482,6 +551,10 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
                       placement={pickerPlacement}
                       onCredit={(ids) => { void handleCredit(habit, ids); }}
                       onUncredit={(id) => { void handleUncredit(habit, id); }}
+                      householdCredited={householdCredited}
+                      householdFirst={isHouseholdCreditHabit(habit)}
+                      onCreditHousehold={() => { void handleCreditHousehold(habit); }}
+                      onUncreditHousehold={() => { void handleUncreditHousehold(habit); }}
                     />
                   )}
                 </div>

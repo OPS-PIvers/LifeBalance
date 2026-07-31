@@ -290,6 +290,20 @@ describe('habitConverter', () => {
     expect(result.lastUpdated).toBe('2024-02-01T08:00:00.000Z');
   });
 
+  it('(a) creditMode round-trips in both directions', () => {
+    const result = habitConverter.fromFirestore(
+      fakeSnap('habit-hh', { ...wellFormed, creditMode: 'household' }),
+    );
+    expect(result.creditMode).toBe('household');
+    expect(callToFirestore(habitConverter, { ...result })['creditMode']).toBe('household');
+  });
+
+  it('(b) an absent creditMode stays absent — no migration, no default written', () => {
+    const result = habitConverter.fromFirestore(fakeSnap('habit-legacy', wellFormed));
+    expect(result.creditMode).toBeUndefined();
+    expect('creditMode' in callToFirestore(habitConverter, { ...result })).toBe(false);
+  });
+
   it('(b) missing scoringType defaults to "threshold"', () => {
     const { scoringType: _dropped, ...partial } = wellFormed;
     const result = habitConverter.fromFirestore(fakeSnap('habit-3', partial));

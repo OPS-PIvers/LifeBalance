@@ -548,6 +548,33 @@ Per-member habit points follow-ups (from the 2026-07-30 six-stage ship, PRs #115
 - **`payCalendarItem` atomicity test flake under heavy parallel load** — `checkPointsReset`'s
   100ms midnight-scheduler timer can add a second batch to the test's capture; fix is to
   reset/filter `batches` in that test (contexts/FirebaseHouseholdContext.test.tsx), not the code.
+- **Existing `points.total` drift from the cross-member period-award bug** (fixed in PR #1163,
+  2026-07-30). Before that fix, a weekly threshold habit completed by two members on different
+  days paid the pool both awards but wrote only the triggering member's. `points.total` is a
+  lifetime counter `computeMemberPointsReset` deliberately omits and `computeHouseholdPointsSync`
+  only ever RAISES, so any drift already banked is permanent and will not self-heal. Repairing it
+  means a deliberate one-way downward write against real member docs — a DATA decision, not a
+  code one. Needs: does the owner want a one-off reconciliation script, and against which source
+  of truth (recompute every member's lifetime total from `completedBy`, which is only complete
+  back to when attribution shipped)? **S / product decision first.**
+- **Threshold reversal's daily/weekly bucket gating is order-sensitive** (its `total` telescopes,
+  so this is bucket PLACEMENT, not drift). With `completedDates` `[Mon, Thu]` and today = Thu,
+  whichever date is processed first absorbs the whole gated delta, while the award actually sits
+  on Mon. `periodPointsMove` would fix it, but doing so flips a deliberately pinned, documented
+  behaviour: `habitAttribution.test.ts` asserts "gated by the COMPLETION day, which is where the
+  credit landed", which directly contradicts `applyGatedDelta`'s and `periodPointsMove`'s own
+  "gate by the AWARD date" rule. That is a genuine conflict between two documented rules — pick
+  the winning rule first, then implement. Self-heals for daily/weekly on the next sync.
+  **S / decide the rule before coding.**
+- **`HouseholdBadge` duplicates `MemberAvatar`'s glyph variant** — PR #1164 shipped a standalone
+  `components/ui/HouseholdBadge.tsx` because the parallel Household-credit-mode PR owned
+  `MemberAvatar.tsx`. Two components now draw the same circle/size/ring. Unify onto the shared
+  primitive so the ring and sizing cannot drift. **XS.**
+- **Recap chart hides non-positive unattributed days** — `buildRecapChart` filters segments to
+  `> 0`, so a week whose household share is net NEGATIVE draws no Household bar while the legend
+  (added in #1164) reports the signed total. Pre-existing chart behavior, surfaced by adding the
+  number next to it. Decide whether the chart should represent negative days or the legend should
+  match the chart's positive-only scope. **XS.**
 
 From the 2026-07-09 product-scope audit — grounded findings, not yet greenlit:
 

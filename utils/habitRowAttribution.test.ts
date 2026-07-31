@@ -3,6 +3,7 @@ import { addDays, format, parseISO, startOfISOWeek } from 'date-fns';
 import type { Habit, HouseholdMember } from '@/types/schema';
 import {
   buildHabitRowMemberContext,
+  householdUndoDateInPeriod,
   rowCompletionSegments,
   sameHabitRowMemberContext,
 } from '@/utils/habitRowAttribution';
@@ -192,5 +193,29 @@ describe('rowCompletionSegments', () => {
       completedBy: { [d(0)]: { [PAUL]: 0, [JEN]: 1 } },
     });
     expect(rowCompletionSegments(h, ctx, d(0)).map(s => s.memberId)).toEqual([JEN]);
+  });
+});
+
+describe('householdUndoDateInPeriod', () => {
+  it('returns today for a daily habit completed today (period === day)', () => {
+    const h = habit({ completedDates: [d(2)] });
+    expect(householdUndoDateInPeriod(h, d(2))).toBe(d(2));
+  });
+
+  it('returns the week’s latest completed day for a WEEKLY habit', () => {
+    // The checkmark is period-scoped, so a Wednesday tap must undo the unit
+    // that actually lives on Monday — `uncreditHouseholdCompletion` takes a
+    // DATE and would no-op against a day holding no completion.
+    const h = habit({ period: 'weekly', completedDates: [d(0), d(1)] });
+    expect(householdUndoDateInPeriod(h, d(2))).toBe(d(1));
+  });
+
+  it('ignores completions outside the period, and days after today', () => {
+    const h = habit({ period: 'weekly', completedDates: [d(-3), d(4)] });
+    expect(householdUndoDateInPeriod(h, d(2))).toBe(d(2));
+  });
+
+  it('falls back to today when the period holds no completion at all', () => {
+    expect(householdUndoDateInPeriod(habit(), d(2))).toBe(d(2));
   });
 });
