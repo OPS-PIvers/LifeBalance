@@ -240,6 +240,13 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
                       <TrendingDown size={11} aria-hidden="true" />
                     )}
                     {Math.abs(trend.percent)}%
+                    {/* The arrow supplying the direction is aria-hidden, so
+                        without this a screen reader gets an unqualified "12%"
+                        with nothing to say whether it is up or down. Matches
+                        the ScoreboardWidget chip. */}
+                    <span className="sr-only">
+                      {trend.percent >= 0 ? ' up' : ' down'} vs last week
+                    </span>
                   </span>
                 )}
               </span>

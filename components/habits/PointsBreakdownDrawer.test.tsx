@@ -256,6 +256,9 @@ describe('PointsBreakdownDrawer', () => {
     renderDrawer();
     // (610 - 545) / 545 ≈ 11.9% → rounds to 12%.
     expect(screen.getByText('12%')).toBeInTheDocument();
+    // The arrow carrying the direction is aria-hidden, so the chip spells it
+    // out sr-only — otherwise a screen reader hears a bare "12%".
+    expect(screen.getByText(/up vs last week/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('radio', { name: 'Day' }));
     expect(screen.queryByText('12%')).not.toBeInTheDocument();

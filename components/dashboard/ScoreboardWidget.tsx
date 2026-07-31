@@ -376,7 +376,9 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
                         overruns the subtitle slot by ~7px and wraps the hero to
                         a second line — which is exactly the ragged silhouette
                         this row was restructured to fix. */}
-                    <span className="sr-only"> vs last week</span>
+                    <span className="sr-only">
+                      {trendPositive ? ' up' : ' down'} vs last week
+                    </span>
                   </span>
                 )}
               </div>
