@@ -586,11 +586,19 @@ Per-member habit points follow-ups (from the 2026-07-30 six-stage ship, PRs #115
   2026-07-30). Before that fix, a weekly threshold habit completed by two members on different
   days paid the pool both awards but wrote only the triggering member's. `points.total` is a
   lifetime counter `computeMemberPointsReset` deliberately omits and `computeHouseholdPointsSync`
-  only ever RAISES, so any drift already banked is permanent and will not self-heal. Repairing it
-  means a deliberate one-way downward write against real member docs — a DATA decision, not a
-  code one. Needs: does the owner want a one-off reconciliation script, and against which source
-  of truth (recompute every member's lifetime total from `completedBy`, which is only complete
-  back to when attribution shipped)? **S / product decision first.**
+  only ever RAISES, so any drift already banked is permanent and will not self-heal. **DECIDED
+  2026-07-31: do NOT repair.** Nothing reads an adult's `points.total` — every adult surface
+  (standings, podium, crown, scoreboard, recap) reads `points.weekly`/`daily`, and the only
+  gating reads are kid-only (`KidDashboard.tsx`, `gamificationMutations.ts`) with Kid Mode
+  dormant. Magnitude is tens of points over a ~1.5-day exposure window, and the bug is frozen. A
+  hardened repair tool (TOCTOU transaction guard, `Number.isFinite` guards, blanket
+  threshold-habit exclusion) is PARKED on branch `fix/points-drift-repair`; PR #1168 is closed
+  with the full reasoning, including the correction that the tool writes **upward only** — the
+  earlier "one-way downward write" framing was wrong. Its Scan path is read-only, so a number can
+  be obtained at zero risk if ever wanted. The live successor is `PointsBreakdownModal`'s
+  threshold past-date edit (`pointsChange = 0` at `:210` while `completedDates` is still
+  written; the `:185` comment already concedes the over-credit "drifts permanently"), which is
+  NOT frozen and inflates the redeemable household pool.
 - **Reversal never rescores surviving periods whose streak multiplier the clear changed** —
   clearing period A shifts the multiplier of LATER periods that SURVIVE it, and neither
   `attributionReversalForDates` branch scores those dates: `periodPointsMove` is period-scoped by
