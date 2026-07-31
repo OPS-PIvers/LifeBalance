@@ -368,7 +368,15 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
                     )}
                   >
                     <TrendIcon size={10} aria-hidden="true" />
-                    {Math.abs(trend.trendPct)}% vs last week
+                    {Math.abs(trend.trendPct)}%
+                    {/* Visually just the percentage, matching the drawer's chip.
+                        Spelled out for screen readers because the arrow that
+                        supplies the direction is aria-hidden, and because at
+                        375px "N% vs last week" beside "Best week this month"
+                        overruns the subtitle slot by ~7px and wraps the hero to
+                        a second line — which is exactly the ragged silhouette
+                        this row was restructured to fix. */}
+                    <span className="sr-only"> vs last week</span>
                   </span>
                 )}
               </div>

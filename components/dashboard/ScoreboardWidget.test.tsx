@@ -151,7 +151,11 @@ describe('ScoreboardWidget', () => {
 
     render(<ScoreboardWidget />);
 
-    expect(screen.getByText('12% vs last week')).toBeInTheDocument();
+    // The chip shows the bare percentage (matching the drawer's); "vs last
+    // week" is carried sr-only, since the arrow that supplies the direction is
+    // aria-hidden.
+    expect(screen.getByText('12%')).toBeInTheDocument();
+    expect(screen.getByText(/vs last week/)).toBeInTheDocument();
     expect(screen.getByText('Best week this month')).toBeInTheDocument();
   });
 
@@ -333,7 +337,8 @@ describe('ScoreboardWidget', () => {
       render(<ScoreboardWidget />);
 
       const heroRow = within(screen.getByTestId('scoreboard-hero-row'));
-      expect(heroRow.getByText('12% vs last week')).toBeInTheDocument();
+      expect(heroRow.getByText('12%')).toBeInTheDocument();
+      expect(heroRow.getByText(/vs last week/)).toBeInTheDocument();
       expect(heroRow.getByText('Best week this month')).toBeInTheDocument();
     });
   });
