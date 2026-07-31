@@ -268,6 +268,36 @@ describe('DayHabitEditor — past-day attribution', () => {
     expect(ctx.uncreditHabitCompletion).not.toHaveBeenCalled();
   });
 
+  // 🛡️ TWIN of `HabitCard`'s "reverses ALL of a multi-unit attributed doc"
+  // test — the two surfaces undo the SAME credit, so the unit semantics must
+  // stay in lockstep too, not just the match predicates. `deleteHabitSubmission`
+  // decrements `count`/`totalCount` by the whole `submission.count`, so one tap
+  // on a `count: 3` doc clears all three units rather than decrementing to 2.
+  // Multi-unit docs are ordinary: `HabitSubmissionLogModal` passes a free-text
+  // count straight to `addHabitSubmission`.
+  it('reverses ALL of a multi-unit attributed doc in one tap, not a single unit', async () => {
+    ctx.getHabitSubmissions.mockResolvedValue([
+      {
+        id: 'sub-3', habitId: 'h1', habitTitle: 'Read', timestamp: `${D}T12:00:00`, date: D,
+        count: 3, pointsEarned: 30, streakDaysAtTime: 1, multiplierApplied: 1,
+        createdBy: PAUL, attributedTo: JEN, createdAt: `${D}T12:00:01`,
+      } as HabitSubmission,
+    ]);
+    renderEditor({
+      habits: [baseHabit({ completedDates: [D], completedBy: { [D]: { [JEN]: 3 } } })],
+    });
+    fireEvent.click(whoButton());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Jen/ }));
+    });
+
+    expect(ctx.deleteHabitSubmission).toHaveBeenCalledWith('h1', 'sub-3');
+    // The one-unit primitive must NOT also run, or the day loses 4 units for a
+    // doc that only ever recorded 3.
+    expect(ctx.uncreditHabitCompletion).not.toHaveBeenCalled();
+  });
+
   it('falls back to un-crediting when no submission doc backs the credit', async () => {
     // A Habits-page credit or an automated fire leaves attribution with no doc.
     ctx.getHabitSubmissions.mockResolvedValue([]);
