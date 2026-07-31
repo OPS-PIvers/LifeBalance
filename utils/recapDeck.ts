@@ -286,7 +286,23 @@ export function buildRecapChart(
     const positive = positives[i] ?? 0;
     const segmentSource: Array<[string, number]> = [
       ...Object.entries(day.byMember),
-      [UNATTRIBUTED_SERIES, day.unattributed],
+      // DEFENSIVE `?? 0` — insurance, not a fix for an observed defect.
+      // `unattributed` is REQUIRED on `RecapDayPoints` and landed in the same
+      // commit as `byMember`/`total`, written unconditionally by its only
+      // writer (`functions/src/recap/memberFacts.ts`); a recap old enough to
+      // predate it has no `dailyPoints` at all (`hasCeremonyData` routes it to
+      // the pre-deck layout) rather than days missing this one field. The guard
+      // stays because `weeklyRecapConverter` spreads raw Firestore data through
+      // an `as WeeklyRecap` cast, so nothing at runtime enforces the type, and
+      // the failure mode would be quiet and wide: `Math.max(0, undefined)` is
+      // NaN, which poisons `segmentTotal` below and zeroes out EVERY segment's
+      // `pct` for that day — the real member segments included.
+      //
+      // It is NOT a complete legacy-shape defence and shouldn't be read as one:
+      // `Object.entries(day.byMember)` one line above throws outright on a day
+      // missing `byMember`, and `Math.max(0, d.total)` above carries the same
+      // NaN exposure for a missing `total`.
+      [UNATTRIBUTED_SERIES, day.unattributed ?? 0],
     ];
     const segmentTotal = segmentSource.reduce((sum, [, v]) => sum + Math.max(0, v), 0);
 
@@ -309,6 +325,27 @@ export function buildRecapChart(
       segments,
     };
   });
+}
+
+/**
+ * DEFENSIVE 2dp rounding — insurance, not a fix for an observed defect, the
+ * same standing as the `?? 0` guards on `unattributed`.
+ *
+ * Every value the only writer can emit is an INTEGER: a per-completion rate is
+ * `sign × Math.floor(|basePoints| × multiplier)` (`signedHabitPoints` in
+ * `utils/habitLogic.ts`, mirrored by `perUnitAt` in
+ * `functions/src/recap/memberFacts.ts`), and `unattributedPointsOnDate`
+ * multiplies that floored rate by an integer unit count. So a 1.5x streak
+ * multiplier does NOT produce a `.5` — 5 × 1.5 floors to 7 — and on real data
+ * this call is an identity. It stays because `weeklyRecapConverter` spreads raw
+ * Firestore data through an `as WeeklyRecap` cast, so nothing at runtime
+ * enforces that, and summing decimals in binary would land a truly-zero week on
+ * 5.55e-17 — a value that renders verbatim AND slips past the card's `!== 0`
+ * gate. 2dp rather than integer rounding so a fractional figure, if one ever
+ * did reach here, degrades to a readable number instead of being flattened.
+ */
+function roundPoints(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 /**
@@ -387,12 +424,21 @@ export function buildRecapDeck(input: RecapDeckInput): RecapDeck {
     viewer,
     viewerStanding,
     totalPoints: recapTotalPoints(recap),
-    // `?? 0` is load-bearing, not defensive noise: `weeklyRecapConverter`
-    // spreads raw Firestore data with `as WeeklyRecap`, so a recap written
-    // before `unattributed` joined `RecapDayPoints` has `dailyPoints` but no
-    // `unattributed` on its days. `sum + undefined` is NaN, and NaN !== 0
-    // passes the render guard — the card would print "NaN pts".
-    householdSharePoints: (recap.dailyPoints ?? []).reduce((sum, d) => sum + (d.unattributed ?? 0), 0),
+    // The `?? 0` is the twin of the guard in `buildRecapChart` above and is
+    // defensive for the same reason: `unattributed` is a REQUIRED field its
+    // only writer has always written, so this insures against the
+    // `as WeeklyRecap` cast in `weeklyRecapConverter` rather than against a
+    // shape anyone has seen. Without it `sum + undefined` is NaN, and NaN !== 0
+    // passes the card's render guard — it would print "NaN".
+    //
+    // `roundPoints` has the SAME standing (see its docblock): every value the
+    // writer can emit is floored to an integer, so it is an identity on real
+    // data and insures against the same untyped cast. Were a fractional value
+    // to arrive, summing it in binary floats would land a truly-zero week on
+    // 5.551115123125783e-17 — a value that renders verbatim on the card AND
+    // slips past its `!== 0` gate. Round the model once so the figure and the
+    // gate agree.
+    householdSharePoints: roundPoints((recap.dailyPoints ?? []).reduce((sum, d) => sum + (d.unattributed ?? 0), 0)),
     trendPct: recapTrendPct(recap),
     isBestWeekThisMonth: isBestWeekOfMonth(recap, recaps),
     weekNumber: weekNumberOf(recap.isoWeek),

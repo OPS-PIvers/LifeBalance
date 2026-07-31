@@ -223,11 +223,126 @@ describe('WeeklyRecapDrawer', () => {
     expect(legendEntry.textContent).toBe('Household');
     expect(screen.queryByText(/Household ·/)).not.toBeInTheDocument();
 
-    // The signed net (15 + -20 = -5) instead shows on the household card, as
-    // its own "earned together" figure.
+    // The signed net (15 + -20 = -5) instead shows on the household card...
     const householdShare = screen.getByTestId('recap-household-share');
     expect(householdShare).toHaveTextContent('-5');
-    expect(householdShare).toHaveTextContent('earned together');
+    expect(householdShare).toHaveTextContent('credited to no one member');
+
+    // ...and a LOSS is never framed as a gain, in this branch either: the
+    // all-negative case below already refuses "earned together", and a week
+    // that merely nets negative gets the same treatment.
+    expect(householdShare).not.toHaveTextContent('earned together');
+
+    // Monday's +15 IS drawn, so this branch must NOT claim the figure is
+    // missing from the chart — part of it is right there.
+    expect(householdShare).not.toHaveTextContent('not in it');
+  });
+
+  it('names the RIGHT reason when an ALL-NEGATIVE unattributed week leaves NO Household segment anywhere (recap-chart-negative-days)', async () => {
+    // Every day negative — `buildRecapChart` clamps every segment to its
+    // positive share, so unlike the mixed-sign case above, there is no day
+    // left to draw a Household bar on at all. Without an acknowledgment, the
+    // household card would assert a figure ("-35 earned together") that
+    // nothing else on the card shows any cause for.
+    //
+    // Note WHAT is missing: each day still totals 50+45-5 = 90, so all SEVEN
+    // columns are drawn at full height. The omitted unit is the negative
+    // SEGMENT, not the day — copy blaming "only positive days are shown" is
+    // flatly false about this, the very fixture it was written for.
+    const allNegativeRecap = ceremonyRecap({
+      dailyPoints: DAYS.map(date => {
+        const byMember = { jen: 50, paul: 45 };
+        const unattributed = -5;
+        return { date, byMember, unattributed, total: byMember.jen + byMember.paul + unattributed };
+      }),
+    });
+    render(<WeeklyRecapDrawer recap={allNegativeRecap} isOpen onClose={() => {}} />);
+
+    await advance([WEEK_CARD]);
+
+    // No "Household" legend entry — the chart never draws a segment for it.
+    expect(screen.queryByText('Household')).not.toBeInTheDocument();
+
+    // The card still surfaces the signed total, but now says so plainly
+    // instead of claiming it was "earned together" with nothing to show for it.
+    const householdShare = screen.getByTestId('recap-household-share');
+    expect(householdShare).toHaveTextContent('-35');
+    expect(householdShare).not.toHaveTextContent('earned together');
+    expect(householdShare).toHaveTextContent('the chart only draws points gained, so this loss is not in it');
+    // The old wording, which the fixture itself disproves — all seven days are
+    // drawn.
+    expect(householdShare).not.toHaveTextContent('only shows positive days');
+  });
+
+  it('never claims a Household presence when the segment sits on a ZERO-HEIGHT column (recap-chart-negative-days, fix 1)', async () => {
+    // The members bleed points on a day a Household-credit habit scores:
+    // `unattributed` is +10 (so `buildRecapChart` emits a segment) while the
+    // day totals -105 (so the column has NO height). Segment existence and
+    // column height are independent, and gating on existence alone paints a
+    // "Household" legend swatch and claims points "earned together" over zero
+    // drawn pixels. Note the figure here is POSITIVE — the "no visible cause"
+    // branch is not a negative-only branch.
+    const householdOnlyGain = ceremonyRecap({
+      dailyPoints: DAYS.map((date, i) => ({
+        date,
+        byMember: i === 0 ? { jen: -60, paul: -55 } : { jen: 0, paul: 0 },
+        unattributed: i === 0 ? 10 : 0,
+        total: i === 0 ? -105 : 0,
+      })),
+      totalPoints: -105,
+    });
+    render(<WeeklyRecapDrawer recap={householdOnlyGain} isOpen onClose={() => {}} />);
+
+    await advance([WEEK_CARD]);
+
+    // Nothing is drawn for it, so the legend must not advertise it.
+    expect(screen.queryByText('Household')).not.toBeInTheDocument();
+
+    const householdShare = screen.getByTestId('recap-household-share');
+    expect(householdShare).toHaveTextContent('10');
+    // The gain is real, so it still reads as earned — but the card says why
+    // the chart shows nothing for it rather than leaving a figure hanging.
+    expect(householdShare).toHaveTextContent('the chart draws no column for them');
+    // ...and never the loss wording, which would be wrong about a gain.
+    expect(householdShare).not.toHaveTextContent('this loss is not in it');
+  });
+
+  it('scopes the positive/no-bar reason to the days the share was GAINED on, not every day it touched (recap-chart-negative-days, finding 1)', async () => {
+    // The mirror of the all-negative case above, and the one this branch's
+    // first wording got wrong. The share nets POSITIVE (+10 − 3 = 7) with no
+    // Household bar anywhere, but the two days it lands on disagree about why:
+    //
+    //   Mon  unattributed +10, total -105  → segment exists, column has NO height
+    //   Tue  unattributed  -3, total  +92  → clamped away, column is the week's MAX
+    //
+    // "the days it FELL ON ended flat or down" is false about Tuesday — it is
+    // drawn at full height, and the chart very much does draw a column for it.
+    // Only the days carrying a POSITIVE contribution are provably flat-or-down
+    // here (a positive contribution on a day with height is exactly what
+    // `hasHouseholdBar` detects), so the claim has to be scoped to those.
+    const mixedNoBar = ceremonyRecap({
+      dailyPoints: DAYS.map((date, i) => {
+        if (i === 0) return { date, byMember: { jen: -60, paul: -55 }, unattributed: 10, total: -105 };
+        if (i === 1) return { date, byMember: { jen: 50, paul: 45 }, unattributed: -3, total: 92 };
+        return { date, byMember: { jen: 0, paul: 0 }, unattributed: 0, total: 0 };
+      }),
+      totalPoints: -13,
+    });
+    render(<WeeklyRecapDrawer recap={mixedNoBar} isOpen onClose={() => {}} />);
+
+    await advance([WEEK_CARD]);
+
+    // No Household bar anywhere: Monday's segment sits on a zero-height column
+    // and Tuesday's negative contribution is clamped out of the chart entirely.
+    expect(screen.queryByText('Household')).not.toBeInTheDocument();
+
+    const householdShare = screen.getByTestId('recap-household-share');
+    expect(householdShare).toHaveTextContent('7');
+    expect(householdShare).toHaveTextContent('the days it was gained on ended flat or down');
+    // The over-broad noun phrase this test exists to keep out: Tuesday IS one
+    // of "the days it fell on", it ended UP, and it is the tallest column on
+    // the chart.
+    expect(householdShare).not.toHaveTextContent('the days it fell on');
   });
 
   it('leads the week card with the head-to-head under the podium tone', async () => {

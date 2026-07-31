@@ -168,11 +168,58 @@ const DayColumn: React.FC<{ day: RecapChartDay }> = ({ day }) => (
   </div>
 );
 
+/**
+ * The wording of the household-share line under the chart.
+ *
+ * TWO independent facts decide it, and conflating them is the whole bug this
+ * function exists to prevent:
+ *
+ *  - the figure's SIGN — a loss must never be phrased as something "earned";
+ *  - whether the chart actually DRAWS a Household bar (`hasHouseholdBar`) —
+ *    only then does the figure have a visible cause anywhere on the card.
+ *
+ * All four combinations are reachable (see `WeekCard` for why bar-drawn and
+ * figure-sign are independent), so each gets copy that is literally true of
+ * what is on screen. The chart itself stays POSITIVE-ONLY by product decision;
+ * every fix here is on the labelling side.
+ */
+function householdShareCopy(points: number, hasHouseholdBar: boolean): string {
+  if (points > 0) {
+    return hasHouseholdBar
+      ? 'earned together, credited to no one member'
+      : // A real gain with no bar to sit in. The reason is only provable for
+        // the days carrying a POSITIVE contribution — those are exactly what
+        // `hasHouseholdBar` looks for, so its being false means every one of
+        // them netted <= 0 overall and got no column height. Days carrying a
+        // NEGATIVE contribution are clamped out of the chart by
+        // `buildRecapChart` regardless of how they netted, and one of those can
+        // be the week's tallest column while the total still comes out
+        // positive — so this must say "gained on", never "fell on".
+        'earned together, credited to no one member — the days it was gained on ended flat or down, so the chart draws no column for them';
+  }
+  // A LOSS — never "earned". When a Household bar IS drawn (a mixed-sign week
+  // whose positive days show while its bigger negative days don't), the figure
+  // already has a visible cause, and claiming "this loss is not in it" would be
+  // wrong about the part that IS drawn — so say nothing about the chart there.
+  return hasHouseholdBar
+    ? 'points, credited to no one member'
+    : 'points, credited to no one member — the chart only draws points gained, so this loss is not in it';
+}
+
 const WeekCard: React.FC<{ deck: RecapDeckModel }> = ({ deck }) => {
   const { headToHead: h2h, framing } = deck;
   const podium = framing === 'podium' && h2h.leader && h2h.runnerUp;
   const legend = h2h.standings.filter(s => s.points !== 0);
-  const hasUnattributed = deck.chart.some(d => d.segments.some(s => s.key === UNATTRIBUTED_SERIES));
+  // Does the chart actually DRAW a Household bar? Segment EXISTENCE is not the
+  // same question: a segment exists when `day.unattributed > 0`, while the
+  // column has height only when `day.total > 0` — two independent figures. A
+  // day where the members net deeply negative while a household-credit habit
+  // scores puts a household segment on a ZERO-HEIGHT column, so gating on
+  // existence alone paints a legend swatch and claims points "earned together"
+  // beside zero drawn pixels. Both conditions, always.
+  const hasHouseholdBar = deck.chart.some(
+    d => d.heightPct > 0 && d.segments.some(s => s.key === UNATTRIBUTED_SERIES)
+  );
 
   return (
     <div className="flex h-full flex-col justify-center px-5">
@@ -228,7 +275,7 @@ const WeekCard: React.FC<{ deck: RecapDeckModel }> = ({ deck }) => {
               {s.name}
             </span>
           ))}
-          {hasUnattributed && (
+          {hasHouseholdBar && (
             // Label only — deliberately NO figure here. `buildRecapChart`
             // clamps every segment to its positive share (`Math.max(0, ...)`,
             // `points > 0`), so a week with a net-negative unattributed total
@@ -255,15 +302,26 @@ const WeekCard: React.FC<{ deck: RecapDeckModel }> = ({ deck }) => {
         )}
         {/* The household's OWN (signed) share of the week — `unattributed`
             summed across all 7 days, which can legitimately be negative (a
-            net-negative unattributed day, e.g. a legacy penalty habit).
-            Placed here, on the household card, rather than on the chart
-            legend above: nothing here draws a bar for it, so a negative
-            figure can't contradict anything the way it would next to the
-            chart's positive-only segments. */}
+            penalty habit that credits the household). It lives here rather
+            than on the legend above because nothing here draws a bar beside
+            it, so it can't contradict the chart's positive-only segments the
+            way a figure on the swatch would.
+
+            The wording is `householdShareCopy`'s job, because the figure and
+            the chart can disagree in BOTH directions and one sentence cannot
+            honestly cover both: a negative share can sit beside seven
+            full-height columns (the members carried the week, the household's
+            own loss simply isn't a segment), and a positive share can sit
+            beside none at all (every day it was GAINED on netted <= 0, so none
+            of those got column height). Never claim "only positive days are
+            shown" — in the first case every day IS shown; and never widen the
+            second reason past the days it was gained on — a day carrying a
+            negative contribution is clamped out of the chart no matter how
+            tall its column is. */}
         {deck.householdSharePoints !== 0 && (
           <p className="mt-1.5 text-[11.5px] text-brand-450 dark:text-brand-400" data-testid="recap-household-share">
             <b className="font-semibold text-brand-600 dark:text-brand-200">{deck.householdSharePoints}</b>{' '}
-            earned together, credited to no one member
+            {householdShareCopy(deck.householdSharePoints, hasHouseholdBar)}
           </p>
         )}
       </div>

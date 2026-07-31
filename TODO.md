@@ -574,11 +574,25 @@ Per-member habit points follow-ups (from the 2026-07-30 six-stage ship, PRs #115
   `components/ui/HouseholdBadge.tsx` because the parallel Household-credit-mode PR owned
   `MemberAvatar.tsx`. Two components now draw the same circle/size/ring. Unify onto the shared
   primitive so the ring and sizing cannot drift. **XS.**
-- **Recap chart hides non-positive unattributed days** — `buildRecapChart` filters segments to
+- ~~**Recap chart hides non-positive unattributed days** — `buildRecapChart` filters segments to
   `> 0`, so a week whose household share is net NEGATIVE draws no Household bar while the legend
   (added in #1164) reports the signed total. Pre-existing chart behavior, surfaced by adding the
   number next to it. Decide whether the chart should represent negative days or the legend should
-  match the chart's positive-only scope. **XS.**
+  match the chart's positive-only scope. **XS.**~~ ✅ Resolved — the chart stays positive-only
+  (product decision); every fix is on the LABELLING side. The household card's line now gates on
+  whether the chart actually DRAWS a Household bar — a positive segment sitting on a column that
+  has height, since segment existence (`day.unattributed`) and column height (`day.total`) are
+  independent figures — and its wording keys off the figure's SIGN, so a loss is never phrased as
+  something "earned". Each branch's stated reason is scoped to what it can actually prove: the
+  loss branch names the omitted SEGMENT (all seven columns can still be drawn), and the
+  positive/no-bar branch names only the days the share was GAINED on — a day carrying a NEGATIVE
+  contribution is clamped out of the chart however tall its column is, so it can be the week's max
+  while the total still nets positive. `householdSharePoints` is also rounded to 2dp, which is
+  defensive-only in the same way the `?? 0` guards on `unattributed` are: every value the writer
+  can emit is floored to an integer (`sign × floor(|basePoints| × multiplier)` × integer units, so
+  a 1.5x multiplier yields no `.5`), and the rounding insures against
+  `weeklyRecapConverter`'s untyped `as WeeklyRecap` cast letting a float-epsilon sum render as
+  `5.55e-17` and slip past the card's `!== 0` gate.
 
 From the 2026-07-09 product-scope audit — grounded findings, not yet greenlit:
 
