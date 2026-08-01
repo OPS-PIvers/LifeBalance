@@ -10,6 +10,8 @@ const breakdown = (safeToSpend: number): SafeToSpendBreakdown => ({
   pendingSpend: 0,
   safeToSpend,
   nextPaycheckDate: null,
+  unpaidBillItems: [],
+  pendingTransactions: [],
 });
 
 const bucket = (id: string, name: string, limit: number): BudgetBucket => ({
@@ -35,10 +37,11 @@ describe('computeSafeToSpendDistribution', () => {
     const result = computeSafeToSpendDistribution(breakdown(1700), buckets, map);
 
     expect(result.rows).toEqual([
-      { id: 'groc', name: 'Groceries', limit: 200, spent: 50, remaining: 150, isOver: false },
-      { id: 'ent', name: 'Entertainment', limit: 200, spent: 0, remaining: 200, isOver: false },
+      { id: 'groc', name: 'Groceries', limit: 200, spent: 50, remaining: 150, isOver: false, claim: 150 },
+      { id: 'ent', name: 'Entertainment', limit: 200, spent: 0, remaining: 200, isOver: false, claim: 200 },
     ]);
     // claimed = 150 + 200 = 350; leftover = 1700 − 350 = 1350
+    expect(result.claimed).toBe(350);
     expect(result.leftover).toBe(1350);
     expect(result.overAllocated).toBe(false);
   });
@@ -55,7 +58,10 @@ describe('computeSafeToSpendDistribution', () => {
     const gasRow = result.rows.find(r => r.id === 'gas')!;
     expect(gasRow.remaining).toBe(-50);
     expect(gasRow.isOver).toBe(true);
+    // The over-budget row's own claim is 0, not its negative remaining.
+    expect(gasRow.claim).toBe(0);
     // claimed = 150 (groc) + 0 (gas contributes 0, NOT -50); leftover = 1000 − 150 = 850
+    expect(result.claimed).toBe(150);
     expect(result.leftover).toBe(850);
     expect(result.overAllocated).toBe(false);
   });
@@ -77,6 +83,7 @@ describe('computeSafeToSpendDistribution', () => {
   it('empty buckets: leftover equals StS', () => {
     const result = computeSafeToSpendDistribution(breakdown(1700), [], new Map());
     expect(result.rows).toEqual([]);
+    expect(result.claimed).toBe(0);
     expect(result.leftover).toBe(1700);
     expect(result.overAllocated).toBe(false);
   });
@@ -87,7 +94,7 @@ describe('computeSafeToSpendDistribution', () => {
     const result = computeSafeToSpendDistribution(breakdown(1000), buckets, new Map());
 
     expect(result.rows).toEqual([
-      { id: 'new', name: 'New Bucket', limit: 300, spent: 0, remaining: 300, isOver: false },
+      { id: 'new', name: 'New Bucket', limit: 300, spent: 0, remaining: 300, isOver: false, claim: 300 },
     ]);
     // claimed = 300; leftover = 1000 − 300 = 700
     expect(result.leftover).toBe(700);
