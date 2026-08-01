@@ -10,6 +10,7 @@ import { isReviewSnoozed, needsReview, useActionQueue } from '@/hooks/useActionQ
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { buildReviewQueueSnapshot, type ReviewQueueItem } from '@/utils/reviewQueue';
 import { useAppReopen } from '@/hooks/useAppReopen';
+import { useOpenDrawerCount } from '@/hooks/useOpenDrawerCount';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { useKeyboardViewportAnchor } from '@/hooks/useKeyboardViewportAnchor';
@@ -95,10 +96,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     [pendingReviewTransactions, todosAwaitingReview, shoppingAwaitingReview, householdSettings, isPlanTabVisible],
   );
   // Once-per-app-open: snapshot the combined review queue and auto-open the
-  // cycling review drawer.
+  // cycling review drawer. `autoOpenPending` is the latch's second half — see
+  // the deferral block below.
   const [hasAutoOpenedReview, setHasAutoOpenedReview] = useState(false);
+  const [autoOpenPending, setAutoOpenPending] = useState(false);
   const [reviewDrawerOpen, setReviewDrawerOpen] = useState(false);
   const [reviewSnapshot, setReviewSnapshot] = useState<ReviewQueueItem[]>([]);
+  // How many bottom sheets are on screen. The auto-open is the ONLY drawer in
+  // the app that opens without the user asking for it, so it is the only one
+  // that has to check.
+  const openDrawerCount = useOpenDrawerCount();
 
   useEffect(() => preloadOnIdle(loadReviewPendingDrawer), []);
 
@@ -145,6 +152,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   // while backgrounded (e.g. a spouse's iOS-Shortcut purchase) auto-surface for
   // every household member. Skipped while the drawer is already open: the user
   // is mid-review, and re-snapshotting would reshuffle the cycle under them.
+  // Any OTHER sheet being open is handled downstream — re-arming here only
+  // arms the latch, and the deferral block waits for the stack to empty.
   // (useAppReopen tracks the latest callback in a ref, so a changed dep here
   // never re-subscribes the document listener.)
   useAppReopen(
@@ -173,10 +182,31 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   // `activeKid` keeps the flag from latching on a render destined for the
   // Kid-Mode early return (which never mounts the review drawer) — otherwise it
   // could be consumed without ever showing the drawer, or pop on Kid-Mode exit.
+  //
+  // Firing only ARMS the auto-open; the block below decides when it lands. The
+  // trigger has never been tied to a user gesture (a late Firestore delivery
+  // taking the queue 0 → >0, or `useAppReopen` re-arming the latch, both fire
+  // it at an arbitrary moment), so it can land while the user is mid-review in
+  // some other sheet.
   if (!isLoading && !activeKid && !hasAutoOpenedReview && reviewQueueItems.length > 0) {
     setHasAutoOpenedReview(true);
-    setReviewSnapshot(reviewQueueItems); // snapshot so the cycle is stable
-    setReviewDrawerOpen(true);
+    setAutoOpenPending(true);
+  }
+
+  // DEFER, don't drop. An armed auto-open waits for every other bottom sheet to
+  // close, then takes its turn — so it can never stack a second live review
+  // form over the one the user opened themselves (both bound to the same
+  // transaction, the second holding a snapshot that goes stale the moment the
+  // first approves), while still delivering the prompt it was armed for.
+  // Re-snapshotting HERE rather than when it was armed is the point: whatever
+  // the user resolved in the sheet they were already in is gone from the queue
+  // by the time this opens.
+  if (autoOpenPending && openDrawerCount === 0) {
+    setAutoOpenPending(false);
+    if (reviewQueueItems.length > 0) {
+      setReviewSnapshot(reviewQueueItems); // snapshot so the cycle is stable
+      setReviewDrawerOpen(true);
+    }
   }
 
   // On refresh while acting as a kid, the members listener hasn't resolved yet, so
