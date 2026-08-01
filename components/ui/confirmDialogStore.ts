@@ -9,8 +9,20 @@
 export interface DeleteConfirmRequest {
   /** Callback to execute when the user confirms deletion. */
   onConfirm: () => void | Promise<void>;
-  /** Name of the item being deleted (e.g. "task", "calendar item"). */
+  /** Name of the item being deleted (e.g. "task", "calendar item"). Also names
+   *  the thing in the host's failure toast, so pass a correct noun even when
+   *  the copy below is overridden. */
   itemName: string;
+  /** Optional heading override. Absent ⇒ `Delete this {itemName}?`, which is
+   *  the right question for a plain delete and the wrong one for a destructive
+   *  action that isn't literally a delete (e.g. merging one row into another). */
+  title?: string;
+  /** Optional body override. Absent ⇒ "This action cannot be undone." Pass a
+   *  body whenever the user needs to be told WHAT is removed and what survives
+   *  — and don't claim irreversibility for a path that mirrors into trash. */
+  message?: string;
+  /** Optional confirm-button label. Absent ⇒ "Delete". */
+  confirmLabel?: string;
 }
 
 type Listener = (request: DeleteConfirmRequest) => void;

@@ -222,6 +222,7 @@ import {
   makeKidProfileCrudMutations,
 } from '@/contexts/household/mutations/kidMutations';
 import type {
+  MergeLearnAlias,
   MutationOpts,
   HouseholdContextType,
   FinanceContextValue,
@@ -234,6 +235,7 @@ import type {
 } from '@/contexts/household/types';
 
 export type {
+  MergeLearnAlias,
   MutationOpts,
   HouseholdContextType,
   FinanceContextValue,
@@ -1985,12 +1987,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeDeleteTransaction({ db, householdId, transactions, accounts, user, calendarItems }).deleteTransaction(id, opts);
   }, [householdId, transactions, accounts, user, calendarItems]);
 
-  const mergeTransactions = useCallback(async (keeperId: string, dupeId: string) => {
-    await makeMergeTransactions({ db, householdId, transactions, accounts, calendarItems }).mergeTransactions(keeperId, dupeId);
-  }, [householdId, transactions, accounts, calendarItems]);
+  const mergeTransactions = useCallback(async (keeperId: string, dupeId: string, learnAlias?: MergeLearnAlias) => (
+    // `user` rides along for the trash mirror's `deletedBy` stamp — a merge
+    // deletes the dupe, so it mirrors it exactly as deleteTransaction does.
+    makeMergeTransactions({ db, householdId, transactions, accounts, user, calendarItems }).mergeTransactions(keeperId, dupeId, learnAlias)
+  ), [householdId, transactions, accounts, user, calendarItems]);
 
-  const keepBothTransactions = useCallback(async (txnId: string) => {
-    await makeKeepBothTransactions({ db, householdId }).keepBothTransactions(txnId);
+  const keepBothTransactions = useCallback(async (txnId: string, dismissDuplicateOf?: string) => {
+    await makeKeepBothTransactions({ db, householdId }).keepBothTransactions(txnId, dismissDuplicateOf);
   }, [householdId]);
 
   const splitTransaction = useCallback(async (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => {

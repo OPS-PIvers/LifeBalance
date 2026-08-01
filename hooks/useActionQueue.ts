@@ -9,6 +9,7 @@ import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { useLocalToday } from '@/hooks/useLocalToday';
 import { parseRecurringId } from '@/utils/calendarRecurrence';
+import { needsReview } from '@/utils/reviewQueue';
 import {
   pickBillToPay,
   type BillMatchSource,
@@ -76,17 +77,12 @@ export const isReviewSnoozed = (
 ): boolean => !!tx.reviewSnoozedUntil && tx.reviewSnoozedUntil > today;
 
 /**
- * A transaction is a REVIEW candidate when it is either a classic
- * `pending_review` row OR a bank-email-sync row that was born `verified` but
- * still `needsCategory` (bankEmailSync Cloud Function). The latter carries an
- * authoritative balance already, so its review is a bucket-assignment only (no
- * balance delta on categorize) — but it must still surface in the same review
- * surfaces (Action Queue + on-open review drawer) so it doesn't sit
- * uncategorized forever.
+ * `needsReview` now lives in `@/utils/reviewQueue` (a pure module) so
+ * dependency-light utils can use it without dragging React/contexts in. It is
+ * re-exported here unchanged, so every existing `from '@/hooks/useActionQueue'`
+ * import keeps working.
  */
-export const needsReview = (
-  tx: Pick<Transaction, 'status' | 'needsCategory'>,
-): boolean => tx.status === 'pending_review' || (tx.status === 'verified' && tx.needsCategory === true);
+export { needsReview };
 
 export const useActionQueue = () => {
   const { transactions } = useFinance();

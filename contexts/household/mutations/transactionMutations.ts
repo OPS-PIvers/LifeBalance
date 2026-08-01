@@ -30,7 +30,7 @@ import {
   SplitParticipant,
   Transaction,
 } from '@/types/schema';
-import type { MutationOpts } from '@/contexts/household/types';
+import type { MergeLearnAlias, MutationOpts } from '@/contexts/household/types';
 import { effectiveAccountImpact, isBankSyncTransaction, resolveTargetAccount, shouldSkipBankSyncDelta } from '@/utils/accountImpact';
 import { findSettledBill, settledBillRefusal, touchesSettledBillFields } from '@/utils/settledBillGuard';
 import { splitParticipantKey } from '@/utils/settlement';
@@ -1357,12 +1357,20 @@ export function makeMergeTransactions(deps: {
   householdId: string | null;
   transactions: Transaction[];
   accounts: Account[];
+  user: { uid: string } | null;
   calendarItems: CalendarItem[];
 }) {
-  const { db, householdId, transactions, accounts, calendarItems } = deps;
+  const { db, householdId, transactions, accounts, user, calendarItems } = deps;
 
-  const mergeTransactions = async (keeperId: string, dupeId: string) => {
-    if (!householdId) return;
+  /**
+   * Resolves TRUE when the dupe was actually merged away, FALSE when the merge
+   * was refused without writing anything (no household, or the settled-bill
+   * guard). Callers advance their review UI only on `true` — returning void
+   * made a refusal look identical to a success and the drawer moved on as
+   * though a row had been merged. Errors still THROW (unchanged).
+   */
+  const mergeTransactions = async (keeperId: string, dupeId: string, learnAlias?: MergeLearnAlias): Promise<boolean> => {
+    if (!householdId) return false;
 
     try {
       const keeperTx = transactions.find(tx => tx.id === keeperId);
@@ -1383,48 +1391,90 @@ export function makeMergeTransactions(deps: {
       const dupeSettledBill = findSettledBill(dupeTx, calendarItems);
       if (dupeSettledBill) {
         toast.error(settledBillRefusal('merge away', dupeSettledBill.title));
-        return;
+        return false;
       }
 
       const updates = buildMergeUpdates(keeperTx, dupeTx);
 
-      const mergeBatch = writeBatch(db);
+      // The dupe is DELETED here, so it gets the same trash mirror
+      // `deleteTransaction` writes (F-XCUT-03) — a merge is the one delete in
+      // this app the user is invited to perform on a hunch, so it is the last
+      // one that should be unrecoverable. Same graceful degradation too: if the
+      // `trash` write is permission-denied (rules not deployed), the merge is
+      // retried WITHOUT the mirror rather than failing.
+      const buildBatch = (withTrashMirror: boolean) => {
+        const mergeBatch = writeBatch(db);
 
-      mergeBatch.update(doc(db, `households/${householdId}/transactions`, keeperId), {
-        ...updates,
-        // Always clear the flag on the surviving row — Firestore rejects a
-        // plain `undefined`, so this uses the deleteField() sentinel rather
-        // than routing through the pure `buildMergeUpdates` patch.
-        possibleDuplicateOf: deleteField(),
-      });
-
-      // VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE: deleting the dupe must reverse
-      // its EFFECTIVE impact on the account it was tagged to — exactly the
-      // same rule `deleteTransaction` applies. A pending_review dupe never
-      // touched a balance, so this is a no-op for the (expected) common case
-      // of merging two still-pending rows; it only fires when the dupe was
-      // independently verified against a (possibly different) account than
-      // the keeper, so both accounts are adjusted correctly.
-      // (Bank-sync exception, same PER-TARGET rule as deleteTransaction: skip
-      // only on the dupe's currently-authoritative account — see
-      // shouldSkipBankSyncDelta / bankSyncAccountId.)
-      const dupeTarget = resolveTargetAccount(dupeTx.accountId, accounts);
-      const dupeBalanceDelta = shouldSkipBankSyncDelta(dupeTx, dupeTarget?.id, dupeTarget?.id)
-        ? 0
-        : -effectiveAccountImpact(dupeTx, dupeTarget);
-      if (dupeBalanceDelta !== 0 && dupeTarget) {
-        mergeBatch.update(doc(db, `households/${householdId}/accounts`, dupeTarget.id), {
-          balance: increment(roundMoney(dupeBalanceDelta)),
-          lastUpdated: serverTimestamp(),
+        mergeBatch.update(doc(db, `households/${householdId}/transactions`, keeperId), {
+          ...updates,
+          // Always clear the flag on the surviving row — Firestore rejects a
+          // plain `undefined`, so this uses the deleteField() sentinel rather
+          // than routing through the pure `buildMergeUpdates` patch.
+          possibleDuplicateOf: deleteField(),
         });
+
+        // VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE: deleting the dupe must reverse
+        // its EFFECTIVE impact on the account it was tagged to — exactly the
+        // same rule `deleteTransaction` applies. A pending_review dupe never
+        // touched a balance, so this is a no-op for the (expected) common case
+        // of merging two still-pending rows; it only fires when the dupe was
+        // independently verified against a (possibly different) account than
+        // the keeper, so both accounts are adjusted correctly.
+        // (Bank-sync exception, same PER-TARGET rule as deleteTransaction: skip
+        // only on the dupe's currently-authoritative account — see
+        // shouldSkipBankSyncDelta / bankSyncAccountId.)
+        const dupeTarget = resolveTargetAccount(dupeTx.accountId, accounts);
+        const dupeBalanceDelta = shouldSkipBankSyncDelta(dupeTx, dupeTarget?.id, dupeTarget?.id)
+          ? 0
+          : -effectiveAccountImpact(dupeTx, dupeTarget);
+        if (dupeBalanceDelta !== 0 && dupeTarget) {
+          mergeBatch.update(doc(db, `households/${householdId}/accounts`, dupeTarget.id), {
+            balance: increment(roundMoney(dupeBalanceDelta)),
+            lastUpdated: serverTimestamp(),
+          });
+        }
+
+        // Learn the bank's descriptor onto the bill IN THIS BATCH. A separate
+        // write could half-fail and leave the pair merged with nothing learned,
+        // so next month's sync would import the same duplicate all over again
+        // with no trace of why. Guarded on non-empty strings so a caller that
+        // couldn't resolve either half writes nothing rather than an empty alias.
+        // The caller MUST have resolved `calendarItemId` against the live
+        // calendar (see `aliasTargetForSettledRow`): an update() on a missing
+        // doc rejects this whole batch, keeper patch and dupe delete included.
+        if (learnAlias?.calendarItemId && learnAlias.descriptor.trim()) {
+          mergeBatch.update(doc(db, `households/${householdId}/calendarItems`, learnAlias.calendarItemId), {
+            bankDescriptorAliases: arrayUnion(learnAlias.descriptor.trim()),
+          });
+        }
+
+        if (withTrashMirror) {
+          // Identical shape to deleteTransaction's mirror so Recently Deleted
+          // lists and restores a merged-away row exactly like a deleted one
+          // (restore re-applies the balance impact reversed above).
+          mergeBatch.set(doc(db, `households/${householdId}/trash`, trashDocId('transaction', dupeId)), {
+            domain: 'transaction',
+            originalId: dupeId,
+            data: sanitizeFirestoreData(transactionTrashData(dupeTx)),
+            deletedAt: serverTimestamp(),
+            deletedBy: user?.uid ?? null,
+          });
+        }
+
+        mergeBatch.delete(doc(db, `households/${householdId}/transactions`, dupeId));
+        return mergeBatch;
+      };
+
+      try {
+        await buildBatch(true).commit();
+      } catch (error) {
+        if ((error as { code?: string } | null)?.code !== 'permission-denied') throw error;
+        await buildBatch(false).commit();
       }
-
-      mergeBatch.delete(doc(db, `households/${householdId}/transactions`, dupeId));
-
-      await mergeBatch.commit();
 
       track('duplicate_merged', { source: dupeTx.source });
       toast.success('Transactions merged');
+      return true;
     } catch (error) {
       console.error('[mergeTransactions] Failed:', error);
       toast.error(describeError(error, 'merge the transactions'));
@@ -1444,12 +1494,25 @@ export function makeKeepBothTransactions(deps: {
 }) {
   const { db, householdId } = deps;
 
-  const keepBothTransactions = async (txnId: string) => {
+  /**
+   * `dismissDuplicateOf` is the id of the SETTLED-BILL counterpart being
+   * dismissed, and is passed ONLY by that arm. The ordinary duplicate banner
+   * passes nothing and writes nothing beyond the flag clear: writing the
+   * dismissal unconditionally meant "Keep both" on the ordinary banner silently
+   * suppressed a settled-bill question the user was never asked, forever, and
+   * nothing ever cleared it.
+   */
+  const keepBothTransactions = async (txnId: string, dismissDuplicateOf?: string) => {
     if (!householdId) return;
 
     try {
+      // Clearing the stored flag settles the `possibleDuplicateOf` banner. The
+      // settled-bill arm is computed at render and has no stored flag to clear,
+      // so it persists the counterpart it was asked about instead — scoped, so
+      // a later pairing against a different bill payment still gets asked.
       await updateDoc(doc(db, `households/${householdId}/transactions`, txnId), {
         possibleDuplicateOf: deleteField(),
+        ...(dismissDuplicateOf ? { duplicateDismissedFor: dismissDuplicateOf } : {}),
       });
       track('duplicate_kept_both');
     } catch (error) {

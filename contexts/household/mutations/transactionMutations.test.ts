@@ -95,7 +95,8 @@ vi.mock('react-hot-toast', () => ({
 
 vi.mock('@/services/analytics', () => ({ track: vi.fn() }));
 
-import { makeAddTransaction, makeDeleteTransaction, makeMergeTransactions, makeSplitTransaction, makeUpdateTransaction, makeUpdateTransactionCategory, makeReverseTransactionApproval } from './transactionMutations';
+import { updateDoc } from 'firebase/firestore';
+import { makeAddTransaction, makeDeleteTransaction, makeKeepBothTransactions, makeMergeTransactions, makeSplitTransaction, makeUpdateTransaction, makeUpdateTransactionCategory, makeReverseTransactionApproval } from './transactionMutations';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { addDays, format, parseISO, subDays } from 'date-fns';
 import type { Account, CalendarItem, FreezeBank, Habit, Transaction } from '@/types/schema';
@@ -1141,10 +1142,13 @@ describe('settled-bill guard across every mutation that could orphan the bill', 
       householdId: HOUSEHOLD_ID,
       transactions: [plainDupe, settledTx],
       accounts,
+      user: { uid: 'user-1' },
       calendarItems: [paidBill],
     });
-    await mergeTransactions('tx-2', 'tx-1');
+    const merged = await mergeTransactions('tx-2', 'tx-1');
 
+    // FALSE, not void: the review UI must not advance on a refusal.
+    expect(merged).toBe(false);
     expect(commitCount).toBe(0);
     expect(capturedDeletes).toHaveLength(0);
   });
@@ -1155,9 +1159,10 @@ describe('settled-bill guard across every mutation that could orphan the bill', 
       householdId: HOUSEHOLD_ID,
       transactions: [settledTx, plainDupe],
       accounts,
+      user: { uid: 'user-1' },
       calendarItems: [paidBill],
     });
-    await mergeTransactions('tx-1', 'tx-2');
+    expect(await mergeTransactions('tx-1', 'tx-2')).toBe(true);
 
     expect(commitCount).toBe(1);
     expect(capturedDeletes.some(d => d.ref.__path === `households/${HOUSEHOLD_ID}/transactions/tx-2`)).toBe(true);
@@ -1218,5 +1223,210 @@ describe('settled-bill guard across every mutation that could orphan the bill', 
 
     expect(commitCount).toBe(0);
     expect(capturedUpdates).toHaveLength(0);
+  });
+});
+
+// The settled-bill DUPLICATE arm (utils/settledBillDuplicate.ts): the user
+// confirms the nightly sync's row is the bank's own copy of a bill they already
+// paid by hand, so the merge also LEARNS the bank's descriptor onto the bill.
+describe('makeMergeTransactions — learning a bank descriptor in the merge batch', () => {
+  const calPath = `households/${HOUSEHOLD_ID}/calendarItems`;
+
+  const template: CalendarItem = {
+    id: 'cal-tmpl',
+    title: 'Centerpoint Energy (Natural Gas)',
+    amount: 142,
+    date: '2026-07-05',
+    type: 'expense',
+    isPaid: false,
+    isRecurring: true,
+    frequency: 'monthly',
+  };
+
+  const paidInstance: CalendarItem = {
+    id: 'cal-paid',
+    title: 'Centerpoint Energy (Natural Gas)',
+    amount: 142,
+    date: '2026-07-05',
+    type: 'expense',
+    isPaid: true,
+    isRecurring: false,
+    parentRecurringId: 'cal-tmpl',
+  };
+
+  // The hand-paid row (the KEEPER on this arm — never chosen by pickKeeper).
+  const settledRow: Transaction = {
+    id: 'tx-manual',
+    amount: 142,
+    merchant: 'Centerpoint Energy (Natural Gas)',
+    category: 'Budgeted in Calendar',
+    date: '2026-07-05',
+    status: 'verified',
+    isRecurring: true,
+    source: 'recurring',
+    autoCategorized: true,
+    accountId: 'acc-check',
+    paidCalendarItemId: 'cal-paid',
+    createdAt: '2026-07-05T12:00:00.000Z',
+  };
+
+  // The bank-sync copy (the DUPE — deleted by the merge).
+  const bankRow: Transaction = {
+    id: 'tx-bank',
+    amount: 142,
+    merchant: 'CPENERGY MNGCO 260805',
+    category: 'Uncategorized',
+    date: '2026-07-09',
+    status: 'verified',
+    isRecurring: false,
+    source: 'bank-sync',
+    autoCategorized: false,
+    accountId: 'acc-check',
+    needsCategory: true,
+    bankRef: 'synth:cpenergy',
+    createdAt: '2026-07-04T12:00:00.000Z',
+  };
+
+  const deps = () => ({
+    db,
+    householdId: HOUSEHOLD_ID,
+    transactions: [settledRow, bankRow],
+    accounts,
+    user: { uid: 'user-1' },
+    calendarItems: [template, paidInstance],
+  });
+
+  beforeEach(() => {
+    capturedSets = [];
+    capturedUpdates = [];
+    capturedDeletes = [];
+    commitCount = 0;
+    commitErrors = [];
+    submissionDocs = {};
+    vi.clearAllMocks();
+  });
+
+  it('stages the alias arrayUnion onto the recurring TEMPLATE in the same batch as the merge', async () => {
+    const { mergeTransactions } = makeMergeTransactions(deps());
+    await mergeTransactions('tx-manual', 'tx-bank', {
+      calendarItemId: 'cal-tmpl',
+      descriptor: 'CPENERGY MNGCO 260805',
+    });
+
+    // ONE batch: the keeper update, the alias write and the dupe delete.
+    expect(commitCount).toBe(1);
+    const aliasWrite = capturedUpdates.find(u => u.ref.__path === `${calPath}/cal-tmpl`);
+    expect(aliasWrite?.data?.['bankDescriptorAliases']).toEqual({
+      __arrayUnion: ['CPENERGY MNGCO 260805'],
+    });
+    // NEVER the one-shot paid-instance doc — an alias there teaches nothing
+    // about next month's occurrence.
+    expect(capturedUpdates.some(u => u.ref.__path === `${calPath}/cal-paid`)).toBe(false);
+    expect(capturedDeletes.some(d => d.ref.__path === `households/${HOUSEHOLD_ID}/transactions/tx-bank`)).toBe(true);
+  });
+
+  it('writes no calendar update at all when no learnAlias is passed', async () => {
+    const { mergeTransactions } = makeMergeTransactions(deps());
+    expect(await mergeTransactions('tx-manual', 'tx-bank')).toBe(true);
+
+    expect(commitCount).toBe(1);
+    expect(capturedUpdates.some(u => u.ref.__path.startsWith(calPath))).toBe(false);
+    // The only update is the keeper's `possibleDuplicateOf` clear.
+    expect(capturedUpdates).toHaveLength(1);
+    expect(capturedUpdates[0]!.ref.__path).toBe(`households/${HOUSEHOLD_ID}/transactions/tx-manual`);
+    expect(capturedUpdates[0]!.data?.['possibleDuplicateOf']).toEqual({ __deleteField: true });
+  });
+
+  // A merge DELETES the dupe, so it owes the same recoverability as
+  // `deleteTransaction` — a mis-merge on a hunch is the one delete in this app
+  // the UI actively invites, and it was the only unrecoverable one.
+  it('mirrors the merged-away dupe into trash, in the SAME batch', async () => {
+    const { mergeTransactions } = makeMergeTransactions(deps());
+    await mergeTransactions('tx-manual', 'tx-bank');
+
+    expect(commitCount).toBe(1);
+    expect(capturedSets).toHaveLength(1);
+    const mirror = capturedSets[0]!;
+    expect(mirror.ref.__path).toBe(`households/${HOUSEHOLD_ID}/trash/transaction_tx-bank`);
+    expect(mirror.data).toMatchObject({ domain: 'transaction', originalId: 'tx-bank', deletedBy: 'user-1' });
+    const mirrored = mirror.data!['data'] as Record<string, unknown>;
+    expect(mirrored).toMatchObject({ amount: 142, merchant: 'CPENERGY MNGCO 260805', bankRef: 'synth:cpenergy' });
+    expect(mirrored).not.toHaveProperty('id');
+  });
+
+  it('falls back to a merge WITHOUT the mirror when the trash write is permission-denied', async () => {
+    // Same graceful degradation as deleteTransaction: losing Recently Deleted
+    // must never cost the user the merge itself.
+    commitErrors = [{ code: 'permission-denied' }];
+    const { mergeTransactions } = makeMergeTransactions(deps());
+    expect(await mergeTransactions('tx-manual', 'tx-bank')).toBe(true);
+
+    expect(commitCount).toBe(1);
+    expect(capturedSets.filter(s => s.ref.__path.includes('/trash/'))).toHaveLength(1);
+    expect(capturedDeletes.filter(d => d.ref.__path.endsWith('/transactions/tx-bank'))).toHaveLength(2);
+  });
+
+  it('ignores an empty descriptor rather than learning a blank alias', async () => {
+    const { mergeTransactions } = makeMergeTransactions(deps());
+    await mergeTransactions('tx-manual', 'tx-bank', { calendarItemId: 'cal-tmpl', descriptor: '   ' });
+
+    expect(commitCount).toBe(1);
+    expect(capturedUpdates.some(u => u.ref.__path.startsWith(calPath))).toBe(false);
+  });
+
+  it('applies NO balance delta for the bank-sync dupe — the bank already stated the balance', async () => {
+    const { mergeTransactions } = makeMergeTransactions(deps());
+    await mergeTransactions('tx-manual', 'tx-bank', {
+      calendarItemId: 'cal-tmpl',
+      descriptor: 'CPENERGY MNGCO 260805',
+    });
+
+    expect(capturedUpdates.some(u => u.ref.__path === accountPath('acc-check'))).toBe(false);
+  });
+
+  it('DOES reverse the dupe balance for a non-bank-sync verified dupe (the skip is bank-sync-only)', async () => {
+    const manualDupe: Transaction = {
+      ...bankRow, id: 'tx-manual-dupe', source: 'manual', bankRef: undefined, needsCategory: undefined,
+    };
+    const { mergeTransactions } = makeMergeTransactions({
+      ...deps(),
+      transactions: [settledRow, manualDupe],
+    });
+    await mergeTransactions('tx-manual', 'tx-manual-dupe');
+
+    const balanceWrite = capturedUpdates.find(u => u.ref.__path === accountPath('acc-check'));
+    // A verified expense debited 142; deleting it credits 142 back.
+    expect(balanceWrite?.data?.['balance']).toEqual({ __increment: 142 });
+  });
+});
+
+describe('makeKeepBothTransactions — the dismissal is scoped to the arm that asked', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('clears ONLY the stored flag for the ordinary duplicate arm', async () => {
+    // Writing a settled-bill dismissal here suppressed a question the user was
+    // never asked, on that row, forever — and nothing ever cleared it.
+    const { keepBothTransactions } = makeKeepBothTransactions({ db, householdId: HOUSEHOLD_ID });
+    await keepBothTransactions('tx-bank');
+
+    expect(updateDoc).toHaveBeenCalledTimes(1);
+    const [ref, data] = vi.mocked(updateDoc).mock.calls[0]!;
+    expect((ref as unknown as { __path: string }).__path).toBe(`households/${HOUSEHOLD_ID}/transactions/tx-bank`);
+    expect(data).toEqual({ possibleDuplicateOf: { __deleteField: true } });
+  });
+
+  it('persists the COUNTERPART id when the settled-bill arm dismisses', async () => {
+    const { keepBothTransactions } = makeKeepBothTransactions({ db, householdId: HOUSEHOLD_ID });
+    await keepBothTransactions('tx-bank', 'tx-manual');
+
+    const [, data] = vi.mocked(updateDoc).mock.calls[0]!;
+    // Scoped, not a bare boolean: a different bill payment next month is a
+    // different question, and deserves to be asked.
+    expect(data).toEqual({
+      possibleDuplicateOf: { __deleteField: true },
+      duplicateDismissedFor: 'tx-manual',
+    });
   });
 });

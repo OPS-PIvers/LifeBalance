@@ -4,6 +4,7 @@ import { Check, Copy, Link2, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { subMonths, addMonths, parseISO, format as formatDate } from 'date-fns';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
+import { requestDeleteConfirmation } from '@/components/ui/confirmDialogStore';
 import { Transaction, CREDIT_CARD_CATEGORY, INCOME_CATEGORY } from '@/types/schema';
 import { Switch } from '@/components/ui/Switch';
 import { getAutoSelectedHabitIds } from '@/utils/habitSuggestions';
@@ -18,6 +19,11 @@ import { buildTransactionCategoryOptions } from '@/utils/categories';
 import { getBillLinkCandidates } from '@/utils/billLinkCandidates';
 import { roundMoney } from '@/utils/money';
 import { pickKeeper } from '@/utils/transactionMerge';
+import {
+  aliasTargetForSettledRow,
+  findSettledBillDuplicate,
+  type SettledBillDuplicateMatch,
+} from '@/utils/settledBillDuplicate';
 import { useFinance, useGamification, useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
 import { useMerchantRules } from '@/hooks/useMerchantRules';
 import InlineMerchantRename from '@/components/transactions/InlineMerchantRename';
@@ -74,7 +80,7 @@ export interface TransactionReviewFormProps {
  */
 const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transaction, onDone, onDeleted, matchedBill, actionsContainer }) => {
   const {
-    accounts, buckets, transactions,
+    accounts, buckets, transactions, calendarItems,
     updateTransactionCategory, deleteTransaction, addCalendarItem,
     mergeTransactions, keepBothTransactions, linkBankTransactionToBill,
   } = useFinance();
@@ -137,8 +143,33 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   const [isMerging, setIsMerging] = useState(false);
   // "Keep both" clears the flag in Firestore, but the host drawer passes a
   // SNAPSHOT transaction (deliberately — stable cycle indices), so the prop
-  // never updates. Hide the banner locally after a successful dismiss.
+  // never updates. Hide the banner locally after a successful dismiss. Shared
+  // by BOTH duplicate arms, since `keepBothTransactions` dismisses both in one
+  // update and only one banner can ever be on screen at a time.
   const [duplicateDismissed, setDuplicateDismissed] = useState(false);
+  // A completed settled-bill merge. The host drawer passes a SNAPSHOT
+  // transaction, so the memo below keeps re-deriving the match from the
+  // unchanged prop and the banner would come straight back — offering to merge
+  // a row that no longer exists ("Transaction not found" on the next tap).
+  const [settledMergeDone, setSettledMergeDone] = useState(false);
+
+  // The SETTLED-BILL arm (utils/settledBillDuplicate.ts): this bank-sync row
+  // looks like the bank's own copy of a bill the household already paid by
+  // hand. Computed at render — unlike `possibleDuplicateOf` there is no stored
+  // flag, because neither the ingestion-time identity check (both rows are
+  // `verified`) nor the "Link to bill" picker (the bill is already paid) can
+  // see this pair at all.
+  //
+  // Only ONE duplicate banner ever renders, and the stored-flag arm wins: it
+  // reflects a decision already recorded on the document, so it should not be
+  // displaced by something re-derived on every render.
+  const settledDuplicate = useMemo(
+    () => (possibleDuplicate ? undefined : findSettledBillDuplicate(transaction, transactions, calendarItems)),
+    [possibleDuplicate, transaction, transactions, calendarItems]
+  );
+  // What the settled-bill banner actually renders from: the match, unless this
+  // row has been dismissed or already merged in this mount.
+  const settledBanner = duplicateDismissed || settledMergeDone ? undefined : settledDuplicate;
 
   // An income transaction (e.g. a Venmo/paycheck deposit) has no budget bucket,
   // so `buildTransactionCategoryOptions` never contains INCOME_CATEGORY. Prepend
@@ -414,7 +445,11 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     setIsMerging(true);
     try {
       const { keeper, dupe } = pickKeeper(transaction, possibleDuplicate);
-      await mergeTransactions(keeper.id, dupe.id);
+      // Same rule as the settled-bill arm below: a refusal (the mutation's own
+      // settled-bill guard, which can fire here too when the DUPE settled a
+      // bill) writes nothing, so the review must not advance as if it had.
+      const merged = await mergeTransactions(keeper.id, dupe.id);
+      if (!merged) return;
       onDone();
     } catch (error) {
       console.error('Failed to merge duplicate transaction:', error);
@@ -424,14 +459,92 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     }
   };
 
-  const handleKeepBothDuplicate = async () => {
+  // Settled-bill arm. The keeper is HARD-CODED to the settled row, never chosen
+  // by `pickKeeper`: both rows here are `verified`, so pickKeeper's status arm
+  // never fires, richness usually ties, and it falls through to `createdAt` —
+  // which names the BANK row keeper whenever the sync happened to write first
+  // (the ordinary case: sync imports overnight, then the bill gets paid by
+  // hand). `mergeTransactions` would then hit its `findSettledBill(dupeTx)`
+  // guard and refuse with a toast, making this button a dead tap about half the
+  // time. The settled row is also the RIGHT keeper on the merits: it is the one
+  // wired to the paid calendar doc, and deleting it is what would orphan a bill.
+  const performSettledMerge = async (match: SettledBillDuplicateMatch) => {
+    setIsMerging(true);
     try {
-      await keepBothTransactions(transaction.id);
+      // ALIAS LEARNING IS DESCRIPTOR-TIER ONLY. On `amount-only` evidence the
+      // app knows nothing beyond amount/date/account, and a wrong alias is
+      // unrecoverable through the UI: `pickBillToPay`'s alias tier would
+      // auto-settle future occurrences of this bill against an unrelated
+      // descriptor, overstating Safe-to-Spend, and nothing in the app reads or
+      // clears `bankDescriptorAliases`. A confirmed merge is worth one deleted
+      // row; it is not worth a standing rule.
+      //
+      // The RAW stored merchant, never a merchant-rule display name — the alias
+      // has to match what the bank sends next month.
+      const aliasTarget = match.evidence === 'descriptor'
+        ? aliasTargetForSettledRow(match.counterpart, calendarItems)
+        : undefined;
+      const descriptor = transaction.merchant.trim();
+      const merged = await mergeTransactions(
+        match.counterpart.id,
+        transaction.id,
+        aliasTarget && descriptor ? { calendarItemId: aliasTarget, descriptor } : undefined,
+      );
+      // A refusal (the mutation's own settled-bill guard) writes nothing and
+      // toasts its own reason — advancing the review here would claim a merge
+      // that never happened.
+      if (!merged) return;
+      setSettledMergeDone(true);
+      onDone();
+    } catch (error) {
+      console.error('Failed to merge the bank copy of a settled bill:', error);
+      toast.error('Failed to merge transactions');
+    } finally {
+      setIsMerging(false);
+    }
+  };
+
+  const handleMergeSettledDuplicate = () => {
+    if (!settledDuplicate) return;
+    const match = settledDuplicate;
+    // Descriptor evidence — the row's own identity backs the pairing, so one
+    // tap is honest.
+    if (match.evidence === 'descriptor') {
+      void performSettledMerge(match);
+      return;
+    }
+    // Amount-only evidence — a guess. Name both rows again in the dialog so the
+    // decision is made against the actual data, not against a headline.
+    requestDeleteConfirmation({
+      itemName: 'transaction',
+      title: `Merge into “${match.bill.title}”?`,
+      message: `Removes this row — ${transaction.merchant}, $${transaction.amount.toFixed(2)} on ${transaction.date}. Keeps the bill payment — ${match.counterpart.merchant}, $${match.counterpart.amount.toFixed(2)} on ${match.counterpart.date}. The removed row goes to Recently Deleted.`,
+      confirmLabel: 'Merge',
+      onConfirm: () => performSettledMerge(match),
+    });
+  };
+
+  const dismissDuplicate = async (dismissDuplicateOf?: string) => {
+    try {
+      // The ordinary arm's call stays a single argument — it has no counterpart
+      // to name, and must not write a settled-bill dismissal it wasn't asked for.
+      await (dismissDuplicateOf
+        ? keepBothTransactions(transaction.id, dismissDuplicateOf)
+        : keepBothTransactions(transaction.id));
       setDuplicateDismissed(true);
     } catch (error) {
       console.error('Failed to dismiss duplicate flag:', error);
       toast.error('Failed to update transaction');
     }
+  };
+
+  // The ORDINARY arm passes no counterpart: it clears its own stored flag and
+  // must not also answer a settled-bill question that was never asked.
+  const handleKeepBothDuplicate = () => dismissDuplicate();
+  // The settled-bill arm scopes its dismissal to the counterpart on screen.
+  const handleKeepBothSettled = () => {
+    if (!settledDuplicate) return;
+    void dismissDuplicate(settledDuplicate.counterpart.id);
   };
 
   // The approve CTA + its inline secondary delete, defined ONCE. They render at
@@ -497,6 +610,90 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
               size="sm"
               className="flex-1 text-xs"
               onClick={handleKeepBothDuplicate}
+              disabled={isMerging}
+            >
+              Keep both
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* SETTLED-BILL duplicate (utils/settledBillDuplicate.ts). Same warm
+          treatment as the banner above so the two read as one affordance, but
+          deliberately DIFFERENT wording: this is not "these might be the same
+          purchase", it is "you already paid this bill and the bank just sent
+          its own copy". Rendered only on the BANK row — the settled manual row
+          is `verified` with no `needsCategory` and never opens this drawer.
+
+          TWO TIERS, TWO VOICES. `descriptor` evidence (a learned alias, or a
+          significant token shared with the bill's title) states the finding and
+          offers a one-tap merge. `amount-only` evidence — the two rows agree on
+          amount, account and timing and nothing else — ASKS, names both rows so
+          they can be told apart, and routes Merge through a confirmation. The
+          copy is what carries the difference in confidence; do not flatten the
+          two into one assertive banner. */}
+      {settledBanner && (
+        <div className="rounded-card border border-warm-200 bg-warm-50 px-3 py-2.5 space-y-2 dark:border-warm-700 dark:bg-warm-900/20">
+          <div className="flex items-start gap-2">
+            <Copy size={14} className="mt-0.5 shrink-0 text-warm-600 dark:text-warm-400" />
+            {settledBanner.evidence === 'descriptor' ? (
+              <div className="space-y-1">
+                <p className="text-xs text-warm-700 dark:text-warm-300">
+                  Already paid — this looks like your bank’s copy of{' '}
+                  <span className="font-semibold">{settledBanner.bill.title}</span>
+                  {' — '}${settledBanner.counterpart.amount.toFixed(2)} on {settledBanner.counterpart.date}
+                </p>
+                {/* Deliberately narrow: `matchesAlias` is exact normalized
+                    equality, and plenty of bank descriptors carry a reference
+                    number that changes monthly, so learning this one may not
+                    prevent a recurrence. Never promise that it will. */}
+                <p className="text-xxs text-warm-600 dark:text-warm-400">
+                  Merging keeps the bill payment and removes this row. We’ll remember this
+                  descriptor for {settledBanner.bill.title}.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <p className="text-xs text-warm-700 dark:text-warm-300">
+                  Is this your bank’s copy of{' '}
+                  <span className="font-semibold">{settledBanner.bill.title}</span>?
+                </p>
+                {/* BOTH rows, each with its own merchant, amount and date. The
+                    only thing the app knows here is that these three fields
+                    agree, so the user needs the raw rows to answer at all. */}
+                <ul className="text-xxs text-warm-700 dark:text-warm-300 space-y-0.5">
+                  <li>
+                    <span className="font-semibold">This row:</span>{' '}
+                    {transaction.merchant} — ${transaction.amount.toFixed(2)} on {transaction.date}
+                  </li>
+                  <li>
+                    <span className="font-semibold">Bill payment:</span>{' '}
+                    {settledBanner.counterpart.merchant} — $
+                    {settledBanner.counterpart.amount.toFixed(2)} on {settledBanner.counterpart.date}
+                  </li>
+                </ul>
+                <p className="text-xxs text-warm-600 dark:text-warm-400">
+                  They match on amount, date and account — but the names have nothing in
+                  common, so we can’t tell. Merging removes this row and keeps the bill payment.
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="warning"
+              size="sm"
+              className="flex-1 text-xs"
+              onClick={handleMergeSettledDuplicate}
+              disabled={isMerging}
+            >
+              Merge
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="flex-1 text-xs"
+              onClick={handleKeepBothSettled}
               disabled={isMerging}
             >
               Keep both

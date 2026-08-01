@@ -451,6 +451,22 @@ export interface Transaction {
    *  ingestion time). The review UI renders a Merge / Keep-both choice; both
    *  actions clear the flag. Absent on rows with no suspected twin. */
   possibleDuplicateOf?: string;
+  /** "Keep both", persisted for the RENDER-TIME settled-bill duplicate arm —
+   *  the doc id of the COUNTERPART it was dismissed against.
+   *
+   *  `possibleDuplicateOf` is a STORED flag, so dismissing that banner just
+   *  clears the field. The settled-bill arm (`utils/settledBillDuplicate.ts` —
+   *  a hand-paid bill plus the bank's overnight copy of it) is computed fresh
+   *  on every render from the transaction/calendar lists, so it has no field to
+   *  clear and would otherwise re-appear on the next mount.
+   *
+   *  Scoped to ONE counterpart rather than a bare boolean for two reasons: a
+   *  "Keep both" on the ORDINARY duplicate banner must not silently suppress a
+   *  settled-bill question the user was never asked, and answering "these are
+   *  two different charges" about one bill payment says nothing about a
+   *  different bill next month. Written ONLY by the settled-bill arm's own
+   *  Keep-both; absent ⇒ never dismissed. Never affects balances or matching. */
+  duplicateDismissedFor?: string;
   /** Action-Queue snooze for a `pending_review` transaction (yyyy-MM-dd, local).
    *  Set by the "Defer" gesture on the Action Queue; while it is AFTER today the
    *  row is hidden from the queue (it still counts toward pendingSpend /

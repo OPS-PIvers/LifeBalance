@@ -63,9 +63,9 @@ export const ConfirmDialogHost: React.FC = () => {
       isOpen={request !== null}
       onClose={handleClose}
       onConfirm={handleConfirm}
-      title={`Delete this ${request?.itemName ?? 'item'}?`}
-      message="This action cannot be undone."
-      confirmLabel="Delete"
+      title={request?.title ?? `Delete this ${request?.itemName ?? 'item'}?`}
+      message={request?.message ?? 'This action cannot be undone.'}
+      confirmLabel={request?.confirmLabel ?? 'Delete'}
       isConfirming={isConfirming}
     />
   );
