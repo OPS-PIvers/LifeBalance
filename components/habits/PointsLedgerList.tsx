@@ -7,6 +7,15 @@ import {
   type PointsLedgerEntry,
 } from '@/utils/pointsLedger';
 
+/**
+ * Disclosure key for the "Shared habits" row, shared by both scoreboard
+ * surfaces so the two can't drift apart. Deliberately not a member uid (and not
+ * anything Firestore could produce), and deliberately NOT in
+ * utils/pointsLedger.ts — that module is the scoring layer; this is a UI toggle
+ * key, and it belongs with the row UI both surfaces already import.
+ */
+export const SHARED_ROW_ID = '__shared__';
+
 interface PointsLedgerListProps {
   /** Already-built ledger — see utils/pointsLedger.ts for the sum invariant. */
   entries: readonly PointsLedgerEntry[];

@@ -23,7 +23,7 @@ import { Section, SurfaceList } from '@/components/ui/Section';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import MemberAvatar from '@/components/ui/MemberAvatar';
 import HouseholdAvatar from '@/components/ui/HouseholdAvatar';
-import PointsLedgerList from '@/components/habits/PointsLedgerList';
+import PointsLedgerList, { SHARED_ROW_ID } from '@/components/habits/PointsLedgerList';
 
 /** Result of the async past-week recompute, keyed to whichever week it was fetched for. */
 interface PastWeekData {
@@ -40,9 +40,6 @@ interface PastWeekData {
    */
   submissionTotals: SubmissionTotalsByHabitDate;
 }
-
-/** Row id for the "Shared habits" row's disclosure — never a real member uid. */
-const SHARED_ROW_ID = '__shared__';
 
 /**
  * ScoreboardWidget — home-feed points scoreboard (per-member points, PR 4/6).

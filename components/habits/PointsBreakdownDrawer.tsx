@@ -17,15 +17,12 @@ import { calculateHouseholdShareForDateRange } from '@/utils/scoreboardWidget';
 import { fetchSubmissionTotals, submissionCacheKey } from '@/utils/habitSubmissionTotals';
 import type { SubmissionTotalsByHabitDate } from '@/utils/habitLogic';
 import { buildMemberPointsLedger, buildSharedPointsLedger } from '@/utils/pointsLedger';
-import PointsLedgerList from '@/components/habits/PointsLedgerList';
+import PointsLedgerList, { SHARED_ROW_ID } from '@/components/habits/PointsLedgerList';
 
 interface PointsBreakdownDrawerProps {
   open: boolean;
   onClose: () => void;
 }
-
-/** Row id for the "Shared habits" row's disclosure — never a real member uid. */
-const SHARED_ROW_ID = '__shared__';
 
 /**
  * Points Breakdown drawer (PER_MEMBER_POINTS_HANDOFF.md §4, PR3) — opened by
