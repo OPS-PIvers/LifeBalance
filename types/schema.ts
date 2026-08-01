@@ -1247,6 +1247,15 @@ export interface Household {
   // another's — see utils/freezeSettings.ts `memberFreezeBankPatch`.
   freezeBanksByMember?: Record<string, FreezeBank>;
   accounts: Account[];
+
+  // The account every new transaction pre-selects when it carries no account of
+  // its own (manual entry, AI scans, quick-add automation). Absent on every
+  // existing household, and absent means "exactly today's behaviour" — the
+  // pickers open empty and `resolveTargetAccount` falls back to the first
+  // checking account. A household-level id (not a per-account boolean) so two
+  // accounts can never both claim to be the default.
+  defaultAccountId?: string;
+
   rewardsInventory: RewardItem[];
   coreTemplates: {
     expenses: Transaction[];

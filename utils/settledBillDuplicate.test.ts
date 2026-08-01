@@ -143,10 +143,45 @@ describe('findSettledBillDuplicate', () => {
     expect(find({ ...bankRow, paidCalendarItemId: 'cal-other' })).toBeUndefined();
   });
 
-  it('rejects a candidate that is not a bank-sync row', () => {
+  it('rejects a NON-bank-sync candidate that has amount-only evidence', () => {
+    // A screenshot/CSV/manual row reaches this arm too, but only on name
+    // evidence — amount + account + week alone is not enough for the far
+    // larger population of rows the nightly sync did not write.
     expect(find({ ...bankRow, source: 'manual', bankRef: undefined })).toBeUndefined();
-    // `bankRef` alone still classifies it (isBankSyncTransaction's OR arm).
+    // `bankRef` alone still classifies it as bank-sync (isBankSyncTransaction's
+    // OR arm), which keeps the amount-only tier available.
     expect(find({ ...bankRow, source: 'manual' })?.counterpart.id).toBe('tx-manual');
+  });
+
+  it('matches a screenshot import whose NOTE names the bill (Chewy / "Manny Meds")', () => {
+    // The reported pair: a settled "Manny Medicine" bill and an imported row
+    // whose merchant is the storefront ("Chewy") while the bill's name lives in
+    // the note. Same cent, same day, same account — and a real token overlap
+    // ("Manny"), which is what admits a non-bank-sync row at all.
+    const mannyBill: CalendarItem = {
+      id: 'cal-manny', title: 'Manny Medicine', amount: 102.83,
+      date: '2026-07-31', type: 'expense', isPaid: true,
+    };
+    const mannySettled: Transaction = {
+      ...settledRow, id: 'tx-manny', amount: 102.83, merchant: 'Manny Medicine',
+      date: '2026-07-31', paidCalendarItemId: 'cal-manny',
+    };
+    const chewyImport: Transaction = {
+      ...bankRow, id: 'tx-chewy', amount: 102.83, merchant: 'Chewy', notes: 'Manny Meds',
+      date: '2026-07-31', category: BUDGETED_IN_CALENDAR,
+      status: 'pending_review', source: 'image-capture',
+      bankRef: undefined, needsCategory: undefined,
+    };
+
+    const match = find(chewyImport, [mannySettled, chewyImport], [mannyBill]);
+    expect(match?.counterpart.id).toBe('tx-manny');
+    expect(match?.evidence).toBe('descriptor');
+
+    // …but the note has to actually name the bill: a note about something else
+    // leaves the pair on amount-only, which a non-bank-sync row cannot use.
+    expect(
+      find({ ...chewyImport, notes: 'dog food' }, [mannySettled, { ...chewyImport, notes: 'dog food' }], [mannyBill]),
+    ).toBeUndefined();
   });
 
   it('rejects a candidate that is not awaiting review', () => {

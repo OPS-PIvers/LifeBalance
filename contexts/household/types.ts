@@ -235,6 +235,11 @@ export interface HouseholdContextType {
   unarchiveAccount: (id: string) => Promise<void>;
   updateAccountOrder: (accountId: string, newOrder: number) => Promise<void>;
   reorderAccounts: (orderedIds: string[]) => Promise<void>;
+  /** `Household.defaultAccountId` — the account new transactions pre-select when
+   *  they carry none of their own. `undefined` while unset (legacy behaviour). */
+  defaultAccountId: string | undefined;
+  /** Set (account id) or clear (null) the household's default account. */
+  setDefaultAccountId: (accountId: string | null) => Promise<void>;
 
   // Savings Goal Actions (Plan 24) — v1 manual contributions only.
   addSavingsGoal: (goal: Omit<SavingsGoal, 'id' | 'createdAt' | 'completedAt'>) => Promise<void>;
@@ -702,7 +707,7 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'isLoadingOlderBucketHistory' | 'hasMoreBucketHistory' | 'loadAllBucketHistory'
   | 'addAccount' | 'updateAccountBalance' | 'setAccountGoal' | 'setAccountCardLast4' | 'setAccountCardDetails' | 'deleteAccount'
   | 'archiveAccount' | 'unarchiveAccount'
-  | 'updateAccountOrder' | 'reorderAccounts'
+  | 'updateAccountOrder' | 'reorderAccounts' | 'defaultAccountId' | 'setDefaultAccountId'
   | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal'
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'setBucketLimits' | 'saveCeremonyChanges' | 'reallocateBucket'
   | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'

@@ -1,5 +1,5 @@
 import { memo, type KeyboardEvent } from 'react';
-import { History, FileText, ArrowUpRight, ArrowDownLeft, Edit, Trash2, CheckSquare, Copy, Scissors, MoreVertical, MessageSquare } from 'lucide-react';
+import { History, FileText, ArrowUpRight, ArrowDownLeft, Edit, Trash2, CheckSquare, Copy, Scissors, MoreVertical, MessageSquare, GitMerge } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Transaction, INCOME_CATEGORY } from '@/types/schema';
 import { Button } from '@/components/ui/Button';
@@ -43,6 +43,14 @@ export interface TransactionItemProps {
   isSelectionMode: boolean;
   isSelected: boolean;
   onToggleSelection: (id: string) => void;
+  /** Merge-selection mode: the list is waiting for the user to pick the row to
+   *  merge the source row with. Owned by the LIST (never row-local state) — the
+   *  virtualizer recycles rows out of the viewport. */
+  isMergeMode?: boolean;
+  /** True on the row the merge was started from. It is never selectable as its
+   *  own partner, so it stays inert while merge mode is active. */
+  isMergeSource?: boolean;
+  onMergeSelect?: (tx: Transaction) => void;
 }
 
 /**
@@ -80,21 +88,27 @@ export interface TransactionItemProps {
  *   to nest and the role sits on the row itself (`role="checkbox"` +
  *   `aria-checked`), keeping the whole row the tap target for bulk select.
  */
-export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDuplicate, onSplit, onMore, isSelectionMode, isSelected, onToggleSelection }: TransactionItemProps) => {
+export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDuplicate, onSplit, onMore, isSelectionMode, isSelected, onToggleSelection, isMergeMode = false, isMergeSource = false, onMergeSelect }: TransactionItemProps) => {
   const fmt = useFormatCurrency();
   const { displayNameFor } = useMerchantRules();
   const merchantName = displayNameFor({ merchant: tx.merchant, amount: tx.amount });
   const isIncome = tx.category === INCOME_CATEGORY;
 
+  // Merge mode turns every row EXCEPT the source into a "pick this partner"
+  // target; the source itself stays inert (a row can't be its own partner).
+  const isMergeTarget = isMergeMode && !isMergeSource;
+
   const activate = () => {
-    if (isSelectionMode) onToggleSelection(tx.id);
+    if (isMergeTarget) onMergeSelect?.(tx);
+    else if (isSelectionMode) onToggleSelection(tx.id);
     else onEdit(tx);
   };
 
   // The row's own accessible name. It carries the expense/income distinction in
   // words, which is why the leading glyph below can be purely decorative — the
   // arrow direction and the amount's "+" sign are visual cues only.
-  const rowLabel = `${isSelectionMode ? 'Select' : 'Edit'} ${isIncome ? 'income' : 'expense'} of ${fmt(tx.amount)} from ${sanitizeMerchantName(merchantName)}, ${format(parseISO(tx.date), 'MMM d, yyyy')}`;
+  const rowVerb = isMergeTarget ? 'Merge with' : isSelectionMode ? 'Select' : 'Edit';
+  const rowLabel = `${rowVerb} ${isIncome ? 'income' : 'expense'} of ${fmt(tx.amount)} from ${sanitizeMerchantName(merchantName)}, ${format(parseISO(tx.date), 'MMM d, yyyy')}`;
 
   // A `role="button"` / `role="checkbox"` div gets no free keyboard activation,
   // so Enter/Space are handled explicitly. `preventDefault` stops Space from
@@ -122,6 +136,14 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
     'aria-checked': isSelectionMode ? isSelected : undefined,
   };
 
+  // Which host carries `targetProps` — never both. Merge mode follows the
+  // SELECTION-mode arm of the rule above: it hides the action cluster, so there
+  // is no interactive descendant and the Row itself may host the role. The
+  // merge SOURCE row hosts it nowhere: it is not a valid partner, so it offers
+  // no activation at all.
+  const rowIsTarget = isSelectionMode || isMergeTarget;
+  const bodyIsTarget = !isSelectionMode && !isMergeMode;
+
   return (
     // `interactive` paints `hover:bg-* cursor-pointer` on the Row, so it may only
     // be set in the mode where the Row ITSELF activates. Outside selection mode
@@ -132,12 +154,13 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
     // affordance travels WITH the handlers (same rule as
     // `components/todos/TodoRow.tsx`): hovered surface == clickable surface.
     <Row
-      interactive={isSelectionMode}
-      {...(isSelectionMode ? targetProps : {})}
+      interactive={rowIsTarget}
+      {...(rowIsTarget ? targetProps : {})}
       className={cn(
         'justify-between group',
-        isSelectionMode && focusRing,
-        isSelected && 'bg-brand-50 dark:bg-brand-700/40'
+        rowIsTarget && focusRing,
+        isSelected && 'bg-brand-50 dark:bg-brand-700/40',
+        isMergeSource && 'bg-accent-50 dark:bg-accent-900/40 ring-1 ring-inset ring-accent-500/40'
       )}
     >
       {/* Row body — identity + amount, i.e. everything that is NOT a control.
@@ -151,10 +174,10 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
           box the virtualizer measures is byte-for-byte the one it measured
           before. */}
       <div
-        {...(isSelectionMode ? {} : targetProps)}
+        {...(bodyIsTarget ? targetProps : {})}
         className={cn(
           'flex flex-1 min-w-0 items-center justify-between gap-3 text-left',
-          !isSelectionMode && [
+          bodyIsTarget && [
             focusRing,
             'cursor-pointer rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-brand-50 dark:hover:bg-brand-700/40',
           ]
@@ -261,9 +284,31 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
         </div>
       </div>
 
+      {/* Merge-selection affordance — a real <button> with its own accessible
+          name (the Row's `role="button"` above covers whole-row taps; this is
+          the visible, unambiguous control). The source row shows a static
+          marker instead: it is not a partner candidate. */}
+      {isMergeMode && (
+        <div className="flex shrink-0 items-center pl-2">
+          {isMergeSource ? (
+            <Badge variant="brand" size="sm">Merging</Badge>
+          ) : (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={(e) => { e.stopPropagation(); onMergeSelect?.(tx); }}
+              leftIcon={<GitMerge size={16} />}
+              aria-label={getSanitizedLabel(merchantName, 'Merge with')}
+            >
+              Select
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Actions — SIBLINGS of the row body above, never descendants of it, and
-          HIDDEN IN SELECTION MODE. */}
-      {!isSelectionMode && (
+          HIDDEN IN SELECTION MODE (and in merge mode, for the same reason). */}
+      {!isSelectionMode && !isMergeMode && (
         <div className="flex shrink-0 items-center">
           {/* Desktop: Hover Actions */}
           <div className="hidden sm:flex gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
@@ -355,7 +400,10 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
     prevProps.onMore === nextProps.onMore &&
     prevProps.isSelectionMode === nextProps.isSelectionMode &&
     prevProps.isSelected === nextProps.isSelected &&
-    prevProps.onToggleSelection === nextProps.onToggleSelection
+    prevProps.onToggleSelection === nextProps.onToggleSelection &&
+    prevProps.isMergeMode === nextProps.isMergeMode &&
+    prevProps.isMergeSource === nextProps.isMergeSource &&
+    prevProps.onMergeSelect === nextProps.onMergeSelect
   );
 });
 

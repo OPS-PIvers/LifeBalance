@@ -391,7 +391,7 @@ describe('ScoreboardWidget', () => {
       expect(44 + 17 + expectedHouseholdShare).toBe(total);
     });
 
-    it('omits the Shared habits row when there is no unattributed remainder', async () => {
+    it('still shows the Shared habits row at 0 when there is no unattributed remainder', async () => {
       // Fully attributed — nothing left for the household pool alone.
       const habits = [
         makeHabit({ id: 'h-attributed', completedDates: ['2026-07-28'], completedBy: { '2026-07-28': { paul: 1 } } }),
@@ -404,15 +404,13 @@ describe('ScoreboardWidget', () => {
       mockWeeklyPoints.mockReturnValue(10);
 
       render(<ScoreboardWidget />);
-      // Let the current-week submission fetch settle before asserting an
-      // absence — otherwise this would pass trivially while the row is just
-      // still loading.
-      await act(async () => {});
 
-      // Asserts the SHARE ROW is gone — queried by testid, not by the bare
-      // string "Household", which the hero row now always renders.
-      expect(screen.queryByTestId('scoreboard-household-row')).not.toBeInTheDocument();
-      expect(screen.queryByText('Shared habits')).not.toBeInTheDocument();
+      // The row stays visible even when its value is 0 — same as the
+      // per-member rows — so the scoreboard doesn't change height across the
+      // Day/Week toggle (see the row's render guard in the component).
+      const householdRow = await screen.findByTestId('scoreboard-household-row');
+      expect(householdRow).toHaveTextContent('Shared habits');
+      expect(householdRow).toHaveTextContent('0');
       // …while the hero, which is a different thing, still stands.
       expect(within(screen.getByTestId('scoreboard-hero-row')).getByText('Household')).toBeInTheDocument();
     });

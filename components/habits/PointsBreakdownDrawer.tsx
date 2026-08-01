@@ -287,11 +287,11 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
         {/* Per-member standings — adults only — plus the "Shared habits" row,
             the `unattributed` remainder of `household = Σ members +
             unattributed` (pre-attribution legacy history today, plus habits
-            that credit the household). Shown only when nonzero
-            (and only once its submission-aware figure has loaded — see
-            `householdShare`'s doc comment) so an ordinary household with none
-            sees exactly what it saw before this row existed. */}
-        {(standings.length > 0 || (householdShare !== undefined && householdShare !== 0)) && (
+            that credit the household). Always shown once its submission-aware
+            figure has loaded — see `householdShare`'s doc comment — even at 0,
+            same as the per-member rows, so the drawer doesn't jump when the
+            Day/Week toggle moves this value across zero. */}
+        {(standings.length > 0 || householdShare !== undefined) && (
           <SurfaceList>
             {standings.map((row) => (
               <Row key={row.memberId} className="gap-3">
@@ -324,7 +324,7 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
                 </span>
               </Row>
             ))}
-            {householdShare !== undefined && householdShare !== 0 && (
+            {householdShare !== undefined && (
               <Row className="gap-3" data-testid="points-drawer-household-row">
                 <HouseholdAvatar size={30} className="flex-none" data-testid="points-drawer-household-badge" />
                 <span className="min-w-0 flex-1 flex items-center gap-1.5">

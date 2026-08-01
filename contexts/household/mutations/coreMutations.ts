@@ -113,6 +113,15 @@ export function makeHouseholdSettingsMutations(deps: {
     await updateDoc(ref, { mealCookedHabitId: habitId === null ? deleteField() : habitId });
   };
 
+  // Default account: the account new transactions pre-select when they carry
+  // none of their own. `null` clears it (deleteField, matching
+  // setMealCookedHabitId's clear semantics), restoring the legacy behaviour.
+  const setDefaultAccountId = async (accountId: string | null): Promise<void> => {
+    if (!householdId) return;
+    const ref = doc(db, 'households', householdId);
+    await updateDoc(ref, { defaultAccountId: accountId === null ? deleteField() : accountId });
+  };
+
   // F-PLAT-07 — apply an entire module preset (e.g. "Finance only") in one
   // write. Same dotted-path-merge approach as setModuleVisibility, just N
   // keys in a single updateDoc so the write is atomic and there's no
@@ -127,7 +136,7 @@ export function makeHouseholdSettingsMutations(deps: {
     await updateDoc(doc(db, 'households', householdId), dottedPatch);
   };
 
-  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setCaptureReviewMode, setKidModePin, setDietaryProfile, setMealCookedHabitId, setFreezeMode, setCeremonyTone };
+  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setCaptureReviewMode, setKidModePin, setDietaryProfile, setMealCookedHabitId, setFreezeMode, setCeremonyTone, setDefaultAccountId };
 }
 
 /**

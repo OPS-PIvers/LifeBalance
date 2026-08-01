@@ -74,15 +74,18 @@ const verifiedHistoryFor = (name: string, transactions: readonly Transaction[]):
  *   1. the account the calendar item is explicitly tagged to,
  *   2. the account used the last time a same-titled bill was paid
  *      (`payCalendarItem` stamps `accountId` on the transactions it creates),
- *   3. the checking account.
+ *   3. the household's default account (`Household.defaultAccountId`),
+ *   4. the checking account.
  * Credit cards are never suggested (bills are paid from checking/savings, same
  * rule as the AccountPicker). Returns `undefined` when no payable account
- * exists — the caller should fall back to opening the picker.
+ * exists — the caller should fall back to opening the picker. `defaultAccountId`
+ * is absent for every legacy household, which then behaves exactly as before.
  */
 export function suggestAccountForCalendarItem(
   item: Pick<CalendarItem, 'title' | 'accountId'>,
   accounts: readonly Account[],
-  transactions: readonly Transaction[]
+  transactions: readonly Transaction[],
+  defaultAccountId?: string
 ): Account | undefined {
   const payable = (id: string | undefined): Account | undefined => {
     if (!id) return undefined;
@@ -98,6 +101,9 @@ export function suggestAccountForCalendarItem(
     if (fromHistory) return fromHistory;
   }
 
+  const preferred = payable(defaultAccountId);
+  if (preferred) return preferred;
+
   return accounts.find(a => a.type === 'checking');
 }
 
@@ -105,12 +111,15 @@ export function suggestAccountForCalendarItem(
  * The account a swipe-approved pending TRANSACTION should be tagged to, or
  * `undefined` to leave the tag unchanged (untagged transactions already land on
  * checking via `resolveTargetAccount`). History only fills a MISSING tag — an
- * explicit tag (e.g. routed by card-last-4) is never second-guessed.
+ * explicit tag (e.g. routed by card-last-4) is never second-guessed, and the
+ * household default (`Household.defaultAccountId`, absent for every legacy
+ * household) only applies when history has nothing to say.
  */
 export function suggestAccountIdForTransaction(
   tx: Pick<Transaction, 'merchant' | 'store' | 'accountId'>,
   accounts: readonly Account[],
-  transactions: readonly Transaction[]
+  transactions: readonly Transaction[],
+  defaultAccountId?: string
 ): string | undefined {
   if (tx.accountId && accounts.some(a => a.id === tx.accountId)) return undefined;
 
@@ -119,6 +128,7 @@ export function suggestAccountIdForTransaction(
       return past.accountId;
     }
   }
+  if (defaultAccountId && accounts.some(a => a.id === defaultAccountId)) return defaultAccountId;
   return undefined;
 }
 

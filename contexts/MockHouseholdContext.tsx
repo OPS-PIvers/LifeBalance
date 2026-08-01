@@ -1139,6 +1139,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // Test Mode reproduces the inert default before anything is picked.
   const [freezeMode, setFreezeModeState] = useState<FreezeMode | undefined>(undefined);
   const [ceremonyTone, setCeremonyToneState] = useState<CeremonyTone | undefined>(undefined);
+  // Default account — ABSENT to start, mirroring a legacy household (pickers
+  // open empty, resolveTargetAccount falls back to checking).
+  const [defaultAccountId, setDefaultAccountIdState] = useState<string | undefined>(undefined);
   // Per-member freeze banks, only touched while freezeMode === 'per_member'.
   const [freezeBanksByMember, setFreezeBanksByMember] = useState<Record<string, FreezeBank>>({});
   // F-MONEY-14 — merchant rules are STATE (not the frozen MOCK_MERCHANT_RULES
@@ -1249,6 +1252,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const setCeremonyTone = useCallback(async (tone: CeremonyTone) => {
     setCeremonyToneState(tone);
     toast.success(`Mock: wrap-up tone set to ${tone}`);
+  }, []);
+
+  const setDefaultAccountId = useCallback(async (accountId: string | null) => {
+    setDefaultAccountIdState(accountId ?? undefined);
+    toast.success(accountId ? 'Mock: default account set' : 'Mock: default account cleared');
   }, []);
 
   const updateModuleVisibility = useCallback(async (patch: Partial<Record<ModuleKey, boolean>>) => {
@@ -1651,13 +1659,18 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   const deleteTransaction = useCallback(async (id: string) => {
-    // Settled-bill guard parity (utils/settledBillGuard.ts): deleting a row that
-    // paid a bill would leave the calendar doc marked paid and orphaned.
+    // Settled-bill AUTO-UNDO parity (utils/settledBillGuard.ts): deleting a row
+    // that paid a bill would leave the calendar doc marked paid and orphaned, so
+    // the delete un-settles it too — a created paid-instance doc is removed, a
+    // one-off bill's own doc goes back to unpaid.
     const existing = transactions.find(t => t.id === id);
     const settledBill = existing ? findSettledBill(existing, calendarItems) : undefined;
     if (settledBill) {
-      toast.error(settledBillRefusal('delete', settledBill.title));
-      return;
+      setCalendarItems(prev =>
+        settledBill.parentRecurringId && !settledBill.isRecurring
+          ? prev.filter(i => i.id !== settledBill.id)
+          : prev.map(i => (i.id === settledBill.id ? { ...i, isPaid: false } : i))
+      );
     }
     setTransactions(prev => {
       const target = prev.find(t => t.id === id);
@@ -1665,7 +1678,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       if (target) pushToTrash('transaction', target as unknown as { id: string } & Record<string, unknown>);
       return prev.filter(t => t.id !== id);
     });
-    toast.success('Mock: Transaction deleted');
+    toast.success(settledBill ? 'Mock: Transaction deleted — bill marked unpaid' : 'Mock: Transaction deleted');
   }, [pushToTrash, transactions, calendarItems]);
 
   // Test-Mode parity for the Merge action (plan 03 PR-3): applies the same
@@ -3597,6 +3610,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     ceremonyTone,
     freezeBanksByMember,
     accounts: accounts,
+    defaultAccountId,
     rewardsInventory: rewards,
     coreTemplates: { expenses: [], buckets: [] },
     stores: stores,
@@ -3744,6 +3758,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     setAccountCardDetails: noOp,
     updateAccountOrder: noOp,
     reorderAccounts: noOp,
+    defaultAccountId,
+    setDefaultAccountId,
     addSavingsGoal,
     updateSavingsGoal,
     deleteSavingsGoal,

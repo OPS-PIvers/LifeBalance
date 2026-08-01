@@ -315,18 +315,18 @@ describe('PointsBreakdownDrawer', () => {
       expect(householdRow).toHaveTextContent('10');
     });
 
-    it('omits the Shared habits row when there is no unattributed remainder', async () => {
+    it('still shows the Shared habits row at 0 when there is no unattributed remainder', async () => {
       setup({ habits: [] });
       renderDrawer();
-      // Let the submission fetch settle before asserting an absence.
+      // Let the submission fetch settle before asserting the value.
       await act(async () => {});
-      // Asserts the SHARE ROW is gone — queried by testid, not by the bare
-      // string "Household", which the hero row now always renders (this
-      // assertion used to read `queryByText('Household')` back when the share
-      // row was the only thing on screen carrying that word).
-      expect(screen.queryByTestId('points-drawer-household-row')).not.toBeInTheDocument();
-      expect(screen.queryByText('Shared habits')).not.toBeInTheDocument();
-      // …while the hero, which is a different thing, still stands.
+      // The row stays visible even when its value is 0 — same as the
+      // per-member rows — so the drawer doesn't change height across the
+      // Day/Week toggle (see the row's render guard in the component).
+      const householdRow = await screen.findByTestId('points-drawer-household-row');
+      expect(householdRow).toHaveTextContent('Shared habits');
+      expect(householdRow).toHaveTextContent('0');
+      // …and the hero, which is a different thing, still stands.
       expect(hero().getByText('Household')).toBeInTheDocument();
     });
 

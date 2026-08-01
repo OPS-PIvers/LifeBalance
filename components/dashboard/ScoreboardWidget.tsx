@@ -457,12 +457,13 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
             ))}
             {/* "Shared habits" row — the unattributed remainder: pre-attribution
                 legacy history, plus habits that credit the household instead of
-                a member. Shown only when nonzero so an ordinary household with
-                neither sees exactly what it saw before this row existed.
+                a member. Always shown once loaded (even at 0), same as the
+                per-member rows, so the scoreboard doesn't change height when
+                the Day/Week toggle moves this value across zero.
                 Labelled "Shared habits", not "Household": the hero row above is
                 the household now, and two rows with the same badge and the same
                 word would be indistinguishable at a glance. */}
-            {householdShare !== undefined && householdShare !== 0 && (
+            {householdShare !== undefined && (
               <div className="flex items-center gap-[11px] py-[5px]" data-testid="scoreboard-household-row">
                 <HouseholdAvatar size={30} data-testid="scoreboard-household-badge" />
                 <div className="flex-1 min-w-0">

@@ -106,6 +106,8 @@ vi.mock('lucide-react', () => ({
   MoreVertical: () => <div data-testid="more-vertical-icon" />,
   Receipt: () => <div data-testid="receipt-icon" />,
   PlusCircle: () => <div data-testid="plus-circle-icon" />,
+  GitMerge: () => <div data-testid="git-merge-icon" />,
+  MessageSquare: () => <div data-testid="message-square-icon" />,
 }));
 
 // ---------------------------------------------------------------------------
@@ -194,6 +196,7 @@ describe('TransactionMasterList', () => {
   const mockUpdateTransaction = vi.fn();
   const mockAddTransaction = vi.fn();
   const mockSplitTransaction = vi.fn();
+  const mockMergeTransactions = vi.fn(async () => true);
 
   const mockTransactions = [
     {
@@ -238,6 +241,7 @@ describe('TransactionMasterList', () => {
     updateTransaction: mockUpdateTransaction,
     addTransaction: mockAddTransaction,
     splitTransaction: mockSplitTransaction,
+    mergeTransactions: mockMergeTransactions,
     householdId: 'test-household',
     stores: [],
     buckets: [],
@@ -483,6 +487,91 @@ describe('TransactionMasterList', () => {
           autoCategorized: false,
           date: expectedToday
         }));
+      });
+    });
+  });
+
+  describe('Merge with recent (row kebab)', () => {
+    // A bank row (verified, no bill link) and the hand-paid copy of the same
+    // bill (still pending, calendar-linked). `pickKeeper` alone would name the
+    // VERIFIED bank row the keeper — the calendar-linked row must win instead,
+    // which is also what keeps the merge on the right side of `mergeTransactions`'
+    // settled-bill guard.
+    const mergeTxns = [
+      {
+        ...mockTransactions[0]!,
+        id: 'bank',
+        merchant: 'Bank Row',
+        status: 'verified',
+        date: '2023-02-02',
+      },
+      {
+        ...mockTransactions[0]!,
+        id: 'bill',
+        merchant: 'Bill Row',
+        status: 'pending_review',
+        date: '2023-02-01',
+        paidCalendarItemId: 'cal-1',
+      },
+    ];
+
+    const renderMergeList = () => {
+      vi.mocked(useHousehold).mockReturnValue({
+        ...defaultMockValue(),
+        transactions: mergeTxns,
+      } as unknown as ReturnType<typeof useHousehold>);
+      render(<TransactionMasterList />);
+    };
+
+    const startMergeFromBankRow = () => {
+      fireEvent.click(screen.getByLabelText('More options transaction from Bank Row'));
+      fireEvent.click(screen.getByRole('button', { name: 'Merge with recent' }));
+    };
+
+    it('enters merge mode from the kebab and exempts the source row', () => {
+      renderMergeList();
+      startMergeFromBankRow();
+
+      expect(screen.getByText(/Pick the transaction to merge with/)).toBeInTheDocument();
+
+      // Every row EXCEPT the source offers a real, named select control.
+      expect(screen.getByRole('button', { name: 'Merge with transaction from Bill Row' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Merge with transaction from Bank Row' })).not.toBeInTheDocument();
+      expect(screen.getByText('Merging')).toBeInTheDocument();
+    });
+
+    it('cancelling leaves merge mode without writing', () => {
+      renderMergeList();
+      startMergeFromBankRow();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel merge' }));
+
+      expect(screen.queryByText(/Pick the transaction to merge with/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Merge with transaction from Bill Row' })).not.toBeInTheDocument();
+      expect(mockMergeTransactions).not.toHaveBeenCalled();
+    });
+
+    it('confirms before merging and keeps the calendar-linked row', async () => {
+      renderMergeList();
+      startMergeFromBankRow();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Merge with transaction from Bill Row' }));
+
+      // Nothing is written until the confirm dialog is accepted.
+      expect(screen.getByText('Merge Transactions')).toBeInTheDocument();
+      expect(mockMergeTransactions).not.toHaveBeenCalled();
+
+      const dialog = screen.getByTestId('generic-modal');
+      fireEvent.click(within(dialog).getByRole('button', { name: /^Merge$/ }));
+
+      await waitFor(() => {
+        // keeper = the calendar-linked 'bill' row, dupe = the bank row.
+        expect(mockMergeTransactions).toHaveBeenCalledWith('bill', 'bank');
+      });
+
+      // Merge mode exits on success.
+      await waitFor(() => {
+        expect(screen.queryByText(/Pick the transaction to merge with/)).not.toBeInTheDocument();
       });
     });
   });
