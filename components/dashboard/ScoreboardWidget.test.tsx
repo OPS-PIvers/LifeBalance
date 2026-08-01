@@ -415,6 +415,49 @@ describe('ScoreboardWidget', () => {
       expect(within(screen.getByTestId('scoreboard-hero-row')).getByText('Household')).toBeInTheDocument();
     });
 
+    it('renders the Shared habits row — with a placeholder, never a number — while the submissions fetch is still in flight', async () => {
+      // The member rows derive synchronously from context state; this row's
+      // value does not. Gating the ROW on that async fetch made it pop in a
+      // beat late and shift everything below it. So the row must exist at
+      // FIRST PAINT, asserted here with the synchronous `getByTestId` — every
+      // other test in this block uses `findByTestId`, which polls, and would
+      // therefore pass just as happily against the old hidden-row behaviour.
+      let releaseFetch!: (submissions: HabitSubmission[]) => void;
+      mockGetHabitSubmissions.mockImplementation(
+        () => new Promise<HabitSubmission[]>(resolve => { releaseFetch = resolve; }),
+      );
+      mockHabits.mockReturnValue([
+        makeHabit({
+          id: 'h-tracked',
+          hasSubmissionTracking: true,
+          completedDates: ['2026-07-28'],
+          completedBy: undefined,
+        }),
+      ]);
+      mockMembers.mockReturnValue([
+        makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 0, weekly: 0, total: 0 } }),
+        makeMember({ uid: 'jen', displayName: 'Jen', points: { daily: 0, weekly: 0, total: 0 } }),
+      ]);
+      mockWeeklyPoints.mockReturnValue(0);
+
+      render(<ScoreboardWidget />);
+
+      const householdRow = screen.getByTestId('scoreboard-household-row');
+      expect(householdRow).toHaveTextContent('Shared habits');
+      // …and NO figure while the value is unknown. This is the other half of
+      // the guarantee: the original render guard existed so the row could
+      // never flash a submission-less, possibly-wrong number, and moving the
+      // guard from the row to the value slot has to preserve that. A digit
+      // here would mean the row is asserting a number the fetch hasn't
+      // produced yet.
+      expect(householdRow.textContent).not.toMatch(/\d/);
+
+      // Once the fetch lands the real figure takes the placeholder's place —
+      // including a legitimately-resolved 0, which must still render.
+      await act(async () => { releaseFetch([]); });
+      expect(screen.getByTestId('scoreboard-household-row')).toHaveTextContent('0');
+    });
+
     it('includes a stored submission that OUTLIVES its completion date in the CURRENT week — a reverted toggle must not silently zero out the Household row (finding 1)', async () => {
       // A legacy incremental habit whose completion was reverted — the date
       // is gone from `completedDates` — but its submission doc (worth -20)
