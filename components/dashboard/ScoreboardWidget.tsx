@@ -11,6 +11,7 @@ import {
   weekHasMemberAttribution,
   buildWeekStandings,
   calculateHouseholdShareForDateRange,
+  scoreboardBarPct,
   type ScoreboardWeekOption,
   type ScoreboardWeekStanding,
 } from '@/utils/scoreboardWidget';
@@ -347,7 +348,6 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
         avatarEmoji: s.avatarEmoji,
         photoURL: s.photoURL,
         isLeader: s.isLeader,
-        barPct: s.barPct,
         value: s.points,
         subLabel: null as string | null,
       }))
@@ -357,7 +357,6 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
         avatarEmoji: s.avatarEmoji,
         photoURL: s.photoURL,
         isLeader: s.isLeader,
-        barPct: s.barPct,
         value: s.weekly,
         subLabel: `${s.today} today`,
       }));
@@ -368,24 +367,22 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
   // whose `subLabel` is likewise null there.
   const sharedToday = isPastWeek ? null : currentWeekHouseholdToday;
 
-  // The Shared habits bar, measured against the SAME denominator the member
-  // bars use — the leader's week, which `rows` is sorted by, so every bar on
-  // the board reads on one axis rather than each against itself.
+  // The scale EVERY bar on the board is measured against — the largest row on
+  // it, member or shared, which is what keeps them comparable to each other
+  // (see `scoreboardBarPct`). Usually that IS the leader, whom `rows` is
+  // already sorted by; but the Shared habits row is not part of the population
+  // the leader was picked from and can outrun it, so it takes part in choosing
+  // the scale rather than being pegged at a misleading full bar beside a
+  // leader it actually exceeds.
   //
-  // Two deliberate asymmetries with a member's bar:
-  //  - clamped at 100, because this row is NOT part of the population the
-  //    leader was picked from and can genuinely exceed it (a habit that credits
-  //    the household pays this row, not a person). An unclamped width > 100%
-  //    would just be clipped by the track's overflow-hidden anyway;
-  //  - the denominator does NOT widen to include this value, even though that
-  //    would be the more faithful scale. It arrives asynchronously, so folding
-  //    it in would visibly re-scale every member bar the moment the fetch
-  //    landed — the same load-time shift the row itself was fixed to stop.
-  const leaderValue = rows[0]?.value ?? 0;
-  const sharedBarPct =
-    householdShare === undefined || leaderValue <= 0
-      ? 0
-      : Math.min(100, Math.max(0, Math.round((householdShare / leaderValue) * 100)));
+  // It joins the scale only once the fetch that produces it lands — so while
+  // `householdShare` is undefined the scale is exactly the leader's and the
+  // member bars are untouched. The one case where they DO change on load is
+  // the one case where the shared row genuinely tops the board: they render
+  // against the leader, then narrow. `transition-[width]` below makes that a
+  // settle rather than a jump, and index.css's app-wide reduced-motion guard
+  // collapses that duration for anyone who asked for less of it.
+  const barScale = Math.max(rows[0]?.value ?? 0, householdShare ?? 0);
 
   return (
     <Section
@@ -545,9 +542,10 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
                       </div>
                       <div className="mt-[5px] h-1 rounded-full bg-brand-100 dark:bg-brand-700 overflow-hidden">
                         <div
-                          className="h-full rounded-full"
+                          data-testid={`scoreboard-bar-${s.memberId}`}
+                          className="h-full rounded-full transition-[width] duration-(--duration-base) ease-(--ease-standard)"
                           style={{
-                            width: `${s.barPct}%`,
+                            width: `${scoreboardBarPct(s.value, barScale)}%`,
                             backgroundColor: memberColorFor(colors, s.memberId),
                           }}
                         />
@@ -630,9 +628,9 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
                       {householdShare !== undefined && (
                         <div
                           data-testid="scoreboard-shared-bar"
-                          className="h-full rounded-full"
+                          className="h-full rounded-full transition-[width] duration-(--duration-base) ease-(--ease-standard)"
                           style={{
-                            width: `${sharedBarPct}%`,
+                            width: `${scoreboardBarPct(householdShare, barScale)}%`,
                             // Neutral, so the row reads as "the house" rather
                             // than as one more person's identity colour — but
                             // brand-400, NOT the badge's brand-600. The badge
