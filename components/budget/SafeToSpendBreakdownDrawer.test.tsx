@@ -324,6 +324,75 @@ describe('SafeToSpendBreakdownDrawer', () => {
       ).toBeInTheDocument();
     });
 
+    it('blames bills, not buckets, when Safe-to-Spend itself is negative', async () => {
+      const user = userEvent.setup();
+      // leftover = safeToSpend − claimed, so a negative pool forces
+      // over-allocation on its own — with NO buckets at all, `claimed` is $0.00
+      // and any bucket-blaming copy would be talking about nothing.
+      setFinance({
+        safeToSpendBreakdown: {
+          checkingBalance: 500, unpaidBills: 600, pendingSpend: 0, safeToSpend: -100,
+          nextPaycheckDate: null, unpaidBillItems: [], pendingTransactions: [],
+        },
+      });
+      render(<SafeToSpendBreakdownDrawer open={true} onClose={() => {}} />);
+
+      await user.click(screen.getByRole('button', { name: /Over-allocated/ }));
+
+      expect(
+        screen.getByText(/Bills and pending transactions already exceed your balance by \$100\.00/)
+      ).toBeInTheDocument();
+      expect(screen.getByText(/No bucket limit is claiming this money/)).toBeInTheDocument();
+      // Never "only -$100.00 is left", and never a trim-a-bucket instruction
+      // when there is no bucket to trim.
+      expect(screen.queryByText(/is left after bills and pending/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Your budgets exceed available cash/)).not.toBeInTheDocument();
+      expect(screen.getByText('Bills and pending spend have outrun your balance.')).toBeInTheDocument();
+    });
+
+    it('names both causes when the pool is negative AND buckets still claim', async () => {
+      const user = userEvent.setup();
+      setFinance({
+        safeToSpendBreakdown: {
+          checkingBalance: 500, unpaidBills: 600, pendingSpend: 0, safeToSpend: -100,
+          nextPaycheckDate: null, unpaidBillItems: [], pendingTransactions: [],
+        },
+        buckets: [bucket('groc', 'Groceries', 200)],
+        bucketSpentMap: new Map<string, BucketSpent>([['groc', { verified: 0, pending: 0 }]]),
+      });
+      render(<SafeToSpendBreakdownDrawer open={true} onClose={() => {}} />);
+
+      await user.click(screen.getByRole('button', { name: /Over-allocated/ }));
+
+      expect(
+        screen.getByText(
+          /already exceed your balance by \$100\.00, and your buckets expect to spend \$200\.00 on top of that/
+        )
+      ).toBeInTheDocument();
+    });
+
+    it('only points aria-controls at a panel that exists', async () => {
+      const user = userEvent.setup();
+      setFinance({
+        safeToSpendBreakdown: {
+          checkingBalance: 2000, unpaidBills: 350, pendingSpend: 0, safeToSpend: 1650,
+          nextPaycheckDate: null,
+          unpaidBillItems: [bill({ id: 'b1', title: 'Rent', amount: 350 })],
+          pendingTransactions: [],
+        },
+      });
+      render(<SafeToSpendBreakdownDrawer open={true} onClose={() => {}} />);
+
+      // Collapsed: no dangling reference to a panel that isn't rendered.
+      const toggle = screen.getByRole('button', { name: /Unpaid bills this period/ });
+      expect(toggle).not.toHaveAttribute('aria-controls');
+
+      await user.click(toggle);
+      const panelId = toggle.getAttribute('aria-controls');
+      expect(panelId).toBeTruthy();
+      expect(document.getElementById(panelId as string)).not.toBeNull();
+    });
+
     it('leaves a row with nothing to itemize inert (no toggle, no empty panel)', () => {
       setFinance({
         currentPeriodId: '2026-07-15',

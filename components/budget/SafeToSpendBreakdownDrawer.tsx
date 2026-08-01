@@ -150,6 +150,25 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
   const claimingRows = rows.filter(r => r.claim > 0).sort((a, b) => b.claim - a.claim);
   const overspentRows = rows.filter(r => r.isOver);
 
+  // Over-allocation has two distinct causes, and they need different words.
+  // `leftover = safeToSpend − claimed`, so a NEGATIVE Safe-to-Spend forces
+  // `overAllocated` on its own, whatever the buckets are doing — bills and
+  // pending have already outrun the balance. Blaming bucket limits there (they
+  // may not even exist: with no buckets `claimed` is $0.00) would misdirect the
+  // one person who most needs a straight answer.
+  const gap = fmt(Math.abs(leftover));
+  const overAllocationCopy = (): string => {
+    if (breakdown.safeToSpend < 0) {
+      const over = fmt(Math.abs(breakdown.safeToSpend));
+      return claimed >= 0.005
+        ? `Bills and pending transactions already exceed your balance by ${over}, and your buckets expect to spend ${fmt(claimed)} on top of that. Trimming a bucket limit or moving a bill to the next period closes the ${gap} gap.`
+        : `Bills and pending transactions already exceed your balance by ${over}. No bucket limit is claiming this money — moving a bill to the next period is what closes the gap.`;
+    }
+    return `Your buckets still expect to spend ${fmt(claimed)} before payday, but only ${fmt(
+      breakdown.safeToSpend
+    )} is left after bills and pending transactions. Trim a bucket limit, or move a bill to the next period, to close the ${gap} gap.`;
+  };
+
   return (
     <Drawer isOpen={open} onClose={onClose} title="Safe to spend">
       <div className="flex flex-col gap-5">
@@ -341,7 +360,7 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
                     type="button"
                     onClick={() => togglePanel(panelKey)}
                     aria-expanded={expanded}
-                    aria-controls={panelId}
+                    aria-controls={expanded ? panelId : undefined}
                     className={cn(
                       'flex w-full flex-col items-stretch gap-1.5 px-4 py-3.5 text-left hairline-divider',
                       'transition-colors duration-(--duration-fast) ease-(--ease-standard)',
@@ -430,11 +449,7 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
 
               <p className="pt-2.5 text-xxs leading-relaxed text-brand-500 dark:text-brand-400">
                 {overAllocated
-                  ? `Your buckets still expect to spend ${fmt(claimed)} before payday, but only ${fmt(
-                      breakdown.safeToSpend
-                    )} is left after bills and pending transactions. Trim a bucket limit, or move a bill to the next period, to close the ${fmt(
-                      Math.abs(leftover)
-                    )} gap.`
+                  ? overAllocationCopy()
                   : `${fmt(leftover)} of your Safe-to-Spend isn't claimed by any bucket limit.`}
               </p>
             </LedgerRow>
@@ -442,7 +457,11 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
 
           {overAllocated && (
             <p className="px-1 pt-2 text-xs text-money-neg dark:text-money-negDark">
-              Your budgets exceed available cash — trim a bucket.
+              {/* Same split as the panel's explanation: with a negative pool the
+                  budgets aren't what exceeded the cash, so don't say they were. */}
+              {breakdown.safeToSpend < 0
+                ? 'Bills and pending spend have outrun your balance.'
+                : 'Your budgets exceed available cash — trim a bucket.'}
             </p>
           )}
         </Section>
@@ -607,7 +626,7 @@ const LedgerRow: React.FC<{
         type="button"
         onClick={() => onToggle?.(panelKey as string)}
         aria-expanded={expanded}
-        aria-controls={panelId}
+        aria-controls={expanded ? panelId : undefined}
         className={cn(
           'flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left hairline-divider',
           'transition-colors duration-(--duration-fast) ease-(--ease-standard)',
