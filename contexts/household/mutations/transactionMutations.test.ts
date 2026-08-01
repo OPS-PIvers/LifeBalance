@@ -9,6 +9,20 @@ interface CapturedWrite {
   data?: Record<string, unknown>;
 }
 
+/**
+ * Snapshot a write payload the way real Firestore does: `WriteBatch.set/update`
+ * SERIALIZE their argument at call time, so anything the caller assigns to that
+ * object afterwards never reaches the server. Storing the live reference instead
+ * made post-`set` mutations visible to assertions, which is exactly how a
+ * `docData.fundingAccountId = …` written after `batch.set` passed its test while
+ * never persisting in production. Deep-cloned so a nested mutation is caught too;
+ * the sentinels the mock emits (`{ __increment }`, `{ __serverTimestamp }`, …)
+ * are plain data and survive the clone, keeping `toEqual` assertions valid.
+ */
+function snapshotPayload(data: Record<string, unknown>): Record<string, unknown> {
+  return structuredClone(data);
+}
+
 let capturedSets: CapturedWrite[] = [];
 let capturedUpdates: CapturedWrite[] = [];
 let capturedDeletes: CapturedWrite[] = [];
@@ -72,10 +86,10 @@ vi.mock('firebase/firestore', () => {
     }),
     writeBatch: vi.fn(() => ({
       set: (ref: { __path: string }, data: Record<string, unknown>) => {
-        capturedSets.push({ ref, data });
+        capturedSets.push({ ref, data: snapshotPayload(data) });
       },
       update: (ref: { __path: string }, data: Record<string, unknown>) => {
-        capturedUpdates.push({ ref, data });
+        capturedUpdates.push({ ref, data: snapshotPayload(data) });
       },
       delete: (ref: { __path: string }) => {
         capturedDeletes.push({ ref });
@@ -162,6 +176,20 @@ describe('makeAddTransaction — credit-card payment funding transfer', () => {
     expect(cardUpdate?.data?.['balance']).toEqual({ __increment: -100 });
     expect(fundingUpdate?.data?.['balance']).toEqual({ __increment: -100 });
     expect(capturedUpdates).toHaveLength(2);
+  });
+
+  // REGRESSION (write ordering): `fundingAccountId` must land on the doc payload
+  // BEFORE `batch.set` runs. Firestore serializes a set payload at call time, so
+  // an assignment made afterwards never reaches the server — and the symptom is
+  // invisible from behavior, because the balance transfer reads the local id
+  // rather than the stored doc. `capturedSets` holds a snapshot taken inside the
+  // `set` mock, so this can only pass if the field was already on the object.
+  it('persists fundingAccountId in the payload AS CAPTURED AT set() time', async () => {
+    const { addTransaction } = makeAddTransaction(makeDeps());
+    await addTransaction({ ...basePayment, fundingAccountId: '  acc-check  ' });
+
+    expect(capturedSets).toHaveLength(1);
+    expect(capturedSets[0]!.data?.['fundingAccountId']).toBe('acc-check');
   });
 
   it('behaves as today (card only) when no funding account is given', async () => {
