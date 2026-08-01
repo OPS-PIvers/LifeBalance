@@ -511,4 +511,90 @@ describe('PointsBreakdownDrawer', () => {
       });
     });
   });
+
+  describe('row disclosure (itemized breakdown)', () => {
+    const ledgerHabits = [
+      makeHabit({
+        id: 'h-run',
+        title: 'Morning run',
+        completedDates: ['2026-07-28', '2026-07-30'],
+        count: 1,
+        completedBy: { '2026-07-28': { jen: 1 }, '2026-07-30': { paul: 1 } },
+      }),
+      // No completedBy — belongs to nobody, so it lands on the Shared row.
+      makeHabit({ id: 'h-dishes', title: 'Dishes', basePoints: 8, completedDates: ['2026-07-28'] }),
+    ];
+
+    it('expands a member row into the habits and dates behind their total', () => {
+      setup({ habits: ledgerHabits });
+      renderDrawer();
+
+      const row = screen.getByTestId('points-drawer-row-jen');
+      expect(row).toHaveAttribute('aria-expanded', 'false');
+
+      fireEvent.click(row);
+
+      expect(row).toHaveAttribute('aria-expanded', 'true');
+      const detail = document.getElementById('points-drawer-ledger-jen');
+      expect(detail).toHaveTextContent('Morning run');
+      expect(detail).toHaveTextContent('Tue, Jul 28');
+      // Paul's completion of the same habit belongs on HIS row, and an
+      // unattributed one belongs to nobody.
+      expect(detail).not.toHaveTextContent('Today');
+      expect(detail).not.toHaveTextContent('Dishes');
+    });
+
+    it('expands the Shared habits row into the completions that belong to nobody', async () => {
+      setup({ habits: ledgerHabits });
+      renderDrawer();
+
+      fireEvent.click(await screen.findByTestId('points-drawer-row-shared'));
+
+      const detail = document.getElementById('points-drawer-ledger-shared');
+      expect(detail).toHaveTextContent('Dishes');
+      expect(detail).toHaveTextContent('Tue, Jul 28');
+      expect(detail).not.toHaveTextContent('Morning run');
+    });
+
+    it('re-scopes an open receipt to today when the period switches to Day', () => {
+      setup({ habits: ledgerHabits });
+      renderDrawer();
+
+      fireEvent.click(screen.getByTestId('points-drawer-row-paul'));
+      expect(document.getElementById('points-drawer-ledger-paul')).toHaveTextContent('Today');
+
+      // Jen's only completion is Tuesday, so her Day receipt is empty — the
+      // range narrows with the figure the row reports.
+      fireEvent.click(screen.getByTestId('points-drawer-row-jen'));
+      fireEvent.click(screen.getByRole('radio', { name: 'Day' }));
+
+      expect(document.getElementById('points-drawer-ledger-jen')).toHaveTextContent(
+        "Jen hasn't logged a habit today."
+      );
+    });
+
+    it('keeps one row open at a time', () => {
+      setup({ habits: ledgerHabits });
+      renderDrawer();
+
+      fireEvent.click(screen.getByTestId('points-drawer-row-jen'));
+      fireEvent.click(screen.getByTestId('points-drawer-row-paul'));
+
+      expect(screen.getByTestId('points-drawer-row-jen')).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.getByTestId('points-drawer-row-paul')).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('collapses an open receipt on close, since the drawer stays mounted between opens', () => {
+      setup({ habits: ledgerHabits });
+      const onClose = vi.fn();
+      const { rerender } = render(<PointsBreakdownDrawer open onClose={onClose} />);
+
+      fireEvent.click(screen.getByTestId('points-drawer-row-jen'));
+      fireEvent.click(screen.getByRole('button', { name: 'Close drawer' }));
+      expect(onClose).toHaveBeenCalled();
+
+      rerender(<PointsBreakdownDrawer open onClose={onClose} />);
+      expect(screen.getByTestId('points-drawer-row-jen')).toHaveAttribute('aria-expanded', 'false');
+    });
+  });
 });

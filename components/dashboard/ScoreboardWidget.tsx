@@ -17,11 +17,13 @@ import {
 import { calculateHouseholdPointsForDateRange, calculateMemberPointsForDateRange } from '@/utils/habitAttribution';
 import { fetchSubmissionTotals, submissionCacheKey } from '@/utils/habitSubmissionTotals';
 import type { SubmissionTotalsByHabitDate } from '@/utils/habitLogic';
+import { buildMemberPointsLedger, buildSharedPointsLedger } from '@/utils/pointsLedger';
 import { cn } from '@/utils/cn';
 import { Section, SurfaceList } from '@/components/ui/Section';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import MemberAvatar from '@/components/ui/MemberAvatar';
 import HouseholdAvatar from '@/components/ui/HouseholdAvatar';
+import PointsLedgerList from '@/components/habits/PointsLedgerList';
 
 /** Result of the async past-week recompute, keyed to whichever week it was fetched for. */
 interface PastWeekData {
@@ -30,7 +32,17 @@ interface PastWeekData {
   hasAttribution: boolean;
   /** The household's own share of `total` — see `calculateHouseholdShareForDateRange`. */
   householdShare: number;
+  /**
+   * The submissions the figures above were scored against — RETAINED (rather
+   * than discarded once the totals are computed) so expanding a past week's row
+   * itemizes it against the same map its total came from. Re-fetching, or
+   * itemizing without it, would let a receipt disagree with the row above it.
+   */
+  submissionTotals: SubmissionTotalsByHabitDate;
 }
+
+/** Row id for the "Shared habits" row's disclosure — never a real member uid. */
+const SHARED_ROW_ID = '__shared__';
 
 /**
  * ScoreboardWidget — home-feed points scoreboard (per-member points, PR 4/6).
@@ -223,6 +235,7 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
           standings: hasAttribution ? buildWeekStandings(adults, pointsByMemberId) : [],
           hasAttribution,
           householdShare,
+          submissionTotals,
         });
       } catch {
         // A transient Firestore failure in fetchSubmissionTotals must not leave
@@ -242,6 +255,42 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
     // view rather than leaving it stale.
   }, [isPastWeek, selectedWeek, habits, adults, getHabitSubmissions]);
 
+  // Which row's itemized breakdown is open — a member uid, `SHARED_ROW_ID`, or
+  // null. One at a time, matching CreditCardActivityWidget's disclosure.
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+
+  // The open row's receipt. Built only while a row is expanded, and always over
+  // the SAME window + submission map the collapsed figures above were scored
+  // against — see utils/pointsLedger.ts for why that's what makes the lines add
+  // up to the number they explain.
+  const expandedLedger = useMemo(() => {
+    if (!expandedRowId) return null;
+    const today = getLocalDateString();
+    const rangeStart = isPastWeek && selectedWeek ? selectedWeek.weekStart : currentWeek?.weekStart ?? today;
+    const rangeEnd = isPastWeek && selectedWeek ? selectedWeek.weekEnd : today;
+    const totals = isPastWeek ? pastWeekData?.submissionTotals : currentWeekSubmissionTotals;
+
+    if (expandedRowId === SHARED_ROW_ID) {
+      return buildSharedPointsLedger(habits, rangeStart, rangeEnd, today, totals);
+    }
+    // A PAST week's member row is derived from attribution alone
+    // (`buildWeekStandings` over `calculateMemberPointsForDateRange`), while the
+    // CURRENT week's row reads the member's stored `points.weekly` — which also
+    // carries their assigned chores. Itemize whichever scope the row above was
+    // built from, or the receipt lists points that row never counted.
+    return buildMemberPointsLedger(habits, expandedRowId, rangeStart, rangeEnd, today, totals, {
+      includeChores: !isPastWeek,
+    });
+  }, [
+    expandedRowId,
+    isPastWeek,
+    selectedWeek,
+    currentWeek,
+    pastWeekData,
+    currentWeekSubmissionTotals,
+    habits,
+  ]);
+
   const handleSelectWeek = useCallback((option: ScoreboardWeekOption) => {
     setSelectedWeekStart(option.isCurrent ? null : option.weekStart);
     // Clear eagerly (not just inside the fetch effect) so switching directly
@@ -249,6 +298,10 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
     // week's totals/standings under the new week's label while the fetch for
     // the new selection is in flight.
     setPastWeekData(null);
+    // Collapse too: an open receipt belongs to the week it was opened under,
+    // and leaving it open would show the previous week's lines under the new
+    // week's row until the fetch lands.
+    setExpandedRowId(null);
   }, []);
 
   // No adult members at all is not a real scenario (the signed-in admin is
@@ -395,6 +448,11 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
               Week
             </div>
           </div>
+          {/* Placeholder for the disclosure chevron the expandable rows below
+              carry. The hero has nothing to itemize (it IS the sum of those
+              rows), but without this its total would sit 25px right of theirs
+              and break the single vertical grid the whole widget is built on. */}
+          <span className="flex-none w-[14px]" aria-hidden="true" />
         </div>
 
         {/* A grandfathered past week (no per-member attribution recorded) gets a
@@ -408,53 +466,85 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
         {/* Standings */}
         {(!isPastWeek || (pastWeekData?.hasAttribution ?? false)) && (
           <div className="border-t border-brand-200 dark:border-brand-700 pt-1">
-            {rows.map(s => (
-              <div key={s.memberId} className="flex items-center gap-[11px] py-[5px]">
-                <MemberAvatar
-                  data-testid={`scoreboard-avatar-${s.memberId}`}
-                  name={s.name}
-                  photoURL={s.photoURL}
-                  color={memberColorFor(colors, s.memberId)}
-                  fallbackGlyph={s.avatarEmoji}
-                  size={30}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-[13.5px] font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate">
-                      {s.name}
-                    </span>
-                    {s.isLeader && (
-                      <>
-                        <Crown size={12} className="text-habit-gold shrink-0 self-center" aria-hidden="true" />
-                        <span className="sr-only">Leading</span>
-                      </>
-                    )}
-                    {s.subLabel && (
-                      <span className="text-[10.5px] text-brand-500 dark:text-brand-400 whitespace-nowrap">
-                        {s.subLabel}
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-[5px] h-1 rounded-full bg-brand-100 dark:bg-brand-700 overflow-hidden">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${s.barPct}%`,
-                        backgroundColor: memberColorFor(colors, s.memberId),
-                      }}
+            {rows.map(s => {
+              const isExpanded = expandedRowId === s.memberId;
+              const detailId = `scoreboard-ledger-${s.memberId}`;
+              return (
+                <div key={s.memberId}>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedRowId(prev => (prev === s.memberId ? null : s.memberId))}
+                    aria-expanded={isExpanded}
+                    aria-controls={detailId}
+                    data-testid={`scoreboard-row-${s.memberId}`}
+                    className="flex w-full items-center gap-[11px] py-[5px] text-left rounded-card focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+                  >
+                    <MemberAvatar
+                      data-testid={`scoreboard-avatar-${s.memberId}`}
+                      name={s.name}
+                      photoURL={s.photoURL}
+                      color={memberColorFor(colors, s.memberId)}
+                      fallbackGlyph={s.avatarEmoji}
+                      size={30}
                     />
-                  </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-[13.5px] font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate">
+                          {s.name}
+                        </span>
+                        {s.isLeader && (
+                          <>
+                            <Crown size={12} className="text-habit-gold shrink-0 self-center" aria-hidden="true" />
+                            <span className="sr-only">Leading</span>
+                          </>
+                        )}
+                        {s.subLabel && (
+                          <span className="text-[10.5px] text-brand-500 dark:text-brand-400 whitespace-nowrap">
+                            {s.subLabel}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-[5px] h-1 rounded-full bg-brand-100 dark:bg-brand-700 overflow-hidden">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${s.barPct}%`,
+                            backgroundColor: memberColorFor(colors, s.memberId),
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex-none w-14 text-right">
+                      <div className="font-mono font-bold text-[17px] leading-tight text-brand-900 dark:text-brand-50 tabular-nums">
+                        {s.value}
+                      </div>
+                      <div className="text-[9px] font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">
+                        Week
+                      </div>
+                    </div>
+                    <ChevronDown
+                      size={14}
+                      aria-hidden="true"
+                      className={cn(
+                        'flex-none text-brand-400 dark:text-brand-450 transition-transform duration-(--duration-base) ease-(--ease-standard)',
+                        isExpanded && 'rotate-180'
+                      )}
+                    />
+                  </button>
+                  {isExpanded && (
+                    <div
+                      id={detailId}
+                      className="pb-2.5 pl-[41px] pr-[25px] animate-in fade-in slide-in-from-top-2 duration-(--duration-base)"
+                    >
+                      <PointsLedgerList
+                        entries={expandedLedger ?? []}
+                        emptyLabel={`${s.name} hasn't logged a habit ${isPastWeek ? 'that week' : 'this week'}.`}
+                      />
+                    </div>
+                  )}
                 </div>
-                <div className="flex-none w-14 text-right">
-                  <div className="font-mono font-bold text-[17px] leading-tight text-brand-900 dark:text-brand-50 tabular-nums">
-                    {s.value}
-                  </div>
-                  <div className="text-[9px] font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">
-                    Week
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
             {/* "Shared habits" row — the unattributed remainder: pre-attribution
                 legacy history, plus habits that credit the household instead of
                 a member. Always shown once loaded (even at 0), same as the
@@ -464,21 +554,51 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
                 the household now, and two rows with the same badge and the same
                 word would be indistinguishable at a glance. */}
             {householdShare !== undefined && (
-              <div className="flex items-center gap-[11px] py-[5px]" data-testid="scoreboard-household-row">
-                <HouseholdAvatar size={30} data-testid="scoreboard-household-badge" />
-                <div className="flex-1 min-w-0">
-                  <span className="text-[13.5px] font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate">
-                    Shared habits
-                  </span>
-                </div>
-                <div className="flex-none w-14 text-right">
-                  <div className="font-mono font-bold text-[17px] leading-tight text-brand-900 dark:text-brand-50 tabular-nums">
-                    {householdShare}
+              <div data-testid="scoreboard-household-row">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedRowId(prev => (prev === SHARED_ROW_ID ? null : SHARED_ROW_ID))
+                  }
+                  aria-expanded={expandedRowId === SHARED_ROW_ID}
+                  aria-controls="scoreboard-ledger-shared"
+                  data-testid="scoreboard-row-shared"
+                  className="flex w-full items-center gap-[11px] py-[5px] text-left rounded-card focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+                >
+                  <HouseholdAvatar size={30} data-testid="scoreboard-household-badge" />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[13.5px] font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate">
+                      Shared habits
+                    </span>
                   </div>
-                  <div className="text-[9px] font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">
-                    Week
+                  <div className="flex-none w-14 text-right">
+                    <div className="font-mono font-bold text-[17px] leading-tight text-brand-900 dark:text-brand-50 tabular-nums">
+                      {householdShare}
+                    </div>
+                    <div className="text-[9px] font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">
+                      Week
+                    </div>
                   </div>
-                </div>
+                  <ChevronDown
+                    size={14}
+                    aria-hidden="true"
+                    className={cn(
+                      'flex-none text-brand-400 dark:text-brand-450 transition-transform duration-(--duration-base) ease-(--ease-standard)',
+                      expandedRowId === SHARED_ROW_ID && 'rotate-180'
+                    )}
+                  />
+                </button>
+                {expandedRowId === SHARED_ROW_ID && (
+                  <div
+                    id="scoreboard-ledger-shared"
+                    className="pb-2.5 pl-[41px] pr-[25px] animate-in fade-in slide-in-from-top-2 duration-(--duration-base)"
+                  >
+                    <PointsLedgerList
+                      entries={expandedLedger ?? []}
+                      emptyLabel={`No shared-habit points ${isPastWeek ? 'that week' : 'this week'}.`}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>

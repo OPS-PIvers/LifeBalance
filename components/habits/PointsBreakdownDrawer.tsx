@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Crown, Gift, TrendingDown, TrendingUp, X } from 'lucide-react';
+import { ArrowRight, ChevronDown, Crown, Gift, TrendingDown, TrendingUp, X } from 'lucide-react';
 import { format, parseISO, startOfWeek, endOfWeek } from 'date-fns';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
@@ -16,11 +16,16 @@ import { getAdultStandings, computePointsTrend, type PointsDrawerPeriod } from '
 import { calculateHouseholdShareForDateRange } from '@/utils/scoreboardWidget';
 import { fetchSubmissionTotals, submissionCacheKey } from '@/utils/habitSubmissionTotals';
 import type { SubmissionTotalsByHabitDate } from '@/utils/habitLogic';
+import { buildMemberPointsLedger, buildSharedPointsLedger } from '@/utils/pointsLedger';
+import PointsLedgerList from '@/components/habits/PointsLedgerList';
 
 interface PointsBreakdownDrawerProps {
   open: boolean;
   onClose: () => void;
 }
+
+/** Row id for the "Shared habits" row's disclosure — never a real member uid. */
+const SHARED_ROW_ID = '__shared__';
 
 /**
  * Points Breakdown drawer (PER_MEMBER_POINTS_HANDOFF.md §4, PR3) — opened by
@@ -156,16 +161,52 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
     return () => { cancelled = true; };
   }, [habits, shareWindowStart, getHabitSubmissions]);
 
+  /**
+   * The fetched submissions when they still describe the CURRENT window, else
+   * `undefined` — a key mismatch is treated exactly like "not fetched yet" (see
+   * `fetchedShare`'s doc comment). Shared by the Household row's figure and by
+   * the itemized receipts below, so a row and its own breakdown are always
+   * scored against the same map.
+   */
+  const shareTotals = useMemo(() => {
+    const cacheKey = submissionCacheKey(habits, shareWindowStart);
+    return fetchedShare && fetchedShare.key === cacheKey ? fetchedShare.totals : undefined;
+  }, [habits, shareWindowStart, fetchedShare]);
+
   // The DISPLAY range narrows to today for Day; the totals map behind it stays
   // the week-wide one fetched above (a superset — see `shareWindowStart`), so
   // switching period re-scores synchronously without dropping the row.
   const householdShare = useMemo(() => {
-    const cacheKey = submissionCacheKey(habits, shareWindowStart);
-    if (!fetchedShare || fetchedShare.key !== cacheKey) return undefined;
+    if (!shareTotals) return undefined;
     const today = getLocalDateString();
     const start = period === 'day' ? today : shareWindowStart;
-    return calculateHouseholdShareForDateRange(habits, start, today, today, fetchedShare.totals);
-  }, [habits, shareWindowStart, period, fetchedShare]);
+    return calculateHouseholdShareForDateRange(habits, start, today, today, shareTotals);
+  }, [habits, shareWindowStart, period, shareTotals]);
+
+  // Which row's itemized breakdown is open — a member uid, `SHARED_ROW_ID`, or
+  // null. One at a time, matching the Scoreboard widget's disclosure.
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+
+  /**
+   * The open row's receipt — every habit that moved that row's figure, with the
+   * date it was completed on. Scored over the SAME range the row's own number
+   * is (today for Day, the Monday-anchored week for Week) so the lines add up to
+   * it; see utils/pointsLedger.ts.
+   *
+   * Chores are itemized because a member's row here reads their stored
+   * `points.daily`/`points.weekly`, which carries both their assigned chores and
+   * their attributed share (`computeMemberPointsReset`).
+   */
+  const expandedLedger = useMemo(() => {
+    if (!expandedRowId) return null;
+    const today = getLocalDateString();
+    const start = period === 'day' ? today : shareWindowStart;
+    return expandedRowId === SHARED_ROW_ID
+      ? buildSharedPointsLedger(habits, start, today, today, shareTotals)
+      : buildMemberPointsLedger(habits, expandedRowId, start, today, today, shareTotals);
+  }, [expandedRowId, habits, period, shareWindowStart, shareTotals]);
+
+  const periodLabel = period === 'day' ? 'today' : 'this week';
 
   const trend = useMemo(
     () => (period === 'week' ? computePointsTrend(weeklyPoints, recaps, members) : null),
@@ -185,15 +226,26 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
   // memory" note). Dormant unless Kid Mode is on and a request is waiting.
   const pendingRedemptionCount = kidModeEnabled ? household?.pendingRedemptions?.length ?? 0 : 0;
 
-  const goToRewards = () => {
+  /**
+   * Every dismissal path funnels through here (the Drawer's own backdrop/swipe
+   * close included), so an open receipt is collapsed on the way out rather than
+   * greeting the next open still expanded — this drawer is kept MOUNTED by
+   * `LazyMount`, so its state outlives a close.
+   */
+  const handleClose = () => {
+    setExpandedRowId(null);
     onClose();
+  };
+
+  const goToRewards = () => {
+    handleClose();
     navigate('/habits', { state: { tab: 'rewards' } });
   };
 
   return (
     <Drawer
       isOpen={open}
-      onClose={onClose}
+      onClose={handleClose}
       ariaLabelledBy={titleId}
       noPadding
       header={
@@ -215,7 +267,7 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
             />
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="p-2.5 min-w-11 min-h-11 flex items-center justify-center text-brand-400 hover:text-brand-600 rounded-full hover:bg-brand-100 dark:text-brand-450 dark:hover:text-brand-200 dark:hover:bg-brand-700"
               aria-label="Close drawer"
             >
@@ -293,54 +345,121 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
             Day/Week toggle moves this value across zero. */}
         {(standings.length > 0 || householdShare !== undefined) && (
           <SurfaceList>
-            {standings.map((row) => (
-              <Row key={row.memberId} className="gap-3">
-                <MemberAvatar
-                  data-testid={`points-drawer-avatar-${row.memberId}`}
-                  name={row.name}
-                  photoURL={row.photoURL}
-                  color={memberColorFor(colors, row.memberId)}
-                  size={30}
-                  className="flex-none"
-                />
-                <span className="min-w-0 flex-1 flex items-center gap-1.5">
-                  <span className="truncate text-sm font-semibold tracking-tight text-brand-900 dark:text-brand-50">
-                    {row.name}
-                  </span>
-                  {row.isLeader && (
-                    <>
-                      <Crown size={13} className="flex-none text-habit-gold" aria-hidden="true" />
-                      <span className="sr-only">{`${row.name} is leading`}</span>
-                    </>
+            {standings.map((row) => {
+              const isExpanded = expandedRowId === row.memberId;
+              const detailId = `points-drawer-ledger-${row.memberId}`;
+              return (
+                // The wrapper (not the button) is the SurfaceList's direct
+                // child, so it carries the row's hairline and the list's
+                // `[&>*:first-child]:border-t-0` reset still finds it.
+                <div key={row.memberId} className="hairline-divider">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedRowId(prev => (prev === row.memberId ? null : row.memberId))
+                    }
+                    aria-expanded={isExpanded}
+                    aria-controls={detailId}
+                    data-testid={`points-drawer-row-${row.memberId}`}
+                    className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-brand-50 dark:hover:bg-brand-700/40 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-inset"
+                  >
+                    <MemberAvatar
+                      data-testid={`points-drawer-avatar-${row.memberId}`}
+                      name={row.name}
+                      photoURL={row.photoURL}
+                      color={memberColorFor(colors, row.memberId)}
+                      size={30}
+                      className="flex-none"
+                    />
+                    <span className="min-w-0 flex-1 flex items-center gap-1.5">
+                      <span className="truncate text-sm font-semibold tracking-tight text-brand-900 dark:text-brand-50">
+                        {row.name}
+                      </span>
+                      {row.isLeader && (
+                        <>
+                          <Crown size={13} className="flex-none text-habit-gold" aria-hidden="true" />
+                          <span className="sr-only">{`${row.name} is leading`}</span>
+                        </>
+                      )}
+                    </span>
+                    <span className="flex-none flex items-baseline gap-1">
+                      <span className="font-mono font-bold tabular-nums text-base text-brand-900 dark:text-brand-50">
+                        {row.points}
+                      </span>
+                      <span className="text-[9px] font-semibold uppercase tracking-wide text-brand-450 dark:text-brand-450">
+                        pts
+                      </span>
+                    </span>
+                    <ChevronDown
+                      size={15}
+                      aria-hidden="true"
+                      className={cn(
+                        'flex-none text-brand-400 dark:text-brand-450 transition-transform duration-(--duration-base) ease-(--ease-standard)',
+                        isExpanded && 'rotate-180',
+                      )}
+                    />
+                  </button>
+                  {isExpanded && (
+                    <div
+                      id={detailId}
+                      className="px-4 pb-3.5 pl-[54px] animate-in fade-in slide-in-from-top-2 duration-(--duration-base)"
+                    >
+                      <PointsLedgerList
+                        entries={expandedLedger ?? []}
+                        emptyLabel={`${row.name} hasn't logged a habit ${periodLabel}.`}
+                      />
+                    </div>
                   )}
-                </span>
-                <span className="flex-none flex items-baseline gap-1">
-                  <span className="font-mono font-bold tabular-nums text-base text-brand-900 dark:text-brand-50">
-                    {row.points}
-                  </span>
-                  <span className="text-[9px] font-semibold uppercase tracking-wide text-brand-450 dark:text-brand-450">
-                    pts
-                  </span>
-                </span>
-              </Row>
-            ))}
+                </div>
+              );
+            })}
             {householdShare !== undefined && (
-              <Row className="gap-3" data-testid="points-drawer-household-row">
-                <HouseholdAvatar size={30} className="flex-none" data-testid="points-drawer-household-badge" />
-                <span className="min-w-0 flex-1 flex items-center gap-1.5">
-                  <span className="truncate text-sm font-semibold tracking-tight text-brand-900 dark:text-brand-50">
-                    Shared habits
+              <div className="hairline-divider" data-testid="points-drawer-household-row">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedRowId(prev => (prev === SHARED_ROW_ID ? null : SHARED_ROW_ID))
+                  }
+                  aria-expanded={expandedRowId === SHARED_ROW_ID}
+                  aria-controls="points-drawer-ledger-shared"
+                  data-testid="points-drawer-row-shared"
+                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-brand-50 dark:hover:bg-brand-700/40 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-inset"
+                >
+                  <HouseholdAvatar size={30} className="flex-none" data-testid="points-drawer-household-badge" />
+                  <span className="min-w-0 flex-1 flex items-center gap-1.5">
+                    <span className="truncate text-sm font-semibold tracking-tight text-brand-900 dark:text-brand-50">
+                      Shared habits
+                    </span>
                   </span>
-                </span>
-                <span className="flex-none flex items-baseline gap-1">
-                  <span className="font-mono font-bold tabular-nums text-base text-brand-900 dark:text-brand-50">
-                    {householdShare}
+                  <span className="flex-none flex items-baseline gap-1">
+                    <span className="font-mono font-bold tabular-nums text-base text-brand-900 dark:text-brand-50">
+                      {householdShare}
+                    </span>
+                    <span className="text-[9px] font-semibold uppercase tracking-wide text-brand-450 dark:text-brand-450">
+                      pts
+                    </span>
                   </span>
-                  <span className="text-[9px] font-semibold uppercase tracking-wide text-brand-450 dark:text-brand-450">
-                    pts
-                  </span>
-                </span>
-              </Row>
+                  <ChevronDown
+                    size={15}
+                    aria-hidden="true"
+                    className={cn(
+                      'flex-none text-brand-400 dark:text-brand-450 transition-transform duration-(--duration-base) ease-(--ease-standard)',
+                      expandedRowId === SHARED_ROW_ID && 'rotate-180',
+                    )}
+                  />
+                </button>
+                {expandedRowId === SHARED_ROW_ID && (
+                  <div
+                    id="points-drawer-ledger-shared"
+                    className="px-4 pb-3.5 pl-[54px] animate-in fade-in slide-in-from-top-2 duration-(--duration-base)"
+                  >
+                    <PointsLedgerList
+                      entries={expandedLedger ?? []}
+                      emptyLabel={`No shared-habit points ${periodLabel}.`}
+                    />
+                  </div>
+                )}
+              </div>
             )}
           </SurfaceList>
         )}
