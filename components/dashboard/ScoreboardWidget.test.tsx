@@ -569,10 +569,13 @@ describe('ScoreboardWidget', () => {
         expect(bar.style.backgroundColor).not.toBe(memberColorFor(buildMemberColorMap(mockMembers()), 'paul'));
       });
 
-      it('clamps the meter at 100% when the shared share outruns the leader', async () => {
+      it('takes the whole board with it when the shared share outruns the leader — the member bars shrink rather than the shared one being clamped', async () => {
         // A household-credit habit pays this row and no member, so it can
-        // legitimately exceed the leader it is measured against — unlike a
-        // member row, which is measured against the largest of its own kind.
+        // legitimately outrun every member — this row is not part of the
+        // population the leader was picked from. Scaling it to the LEADER
+        // would peg it at a full bar next to a leader that is genuinely
+        // smaller: two identical bars for two different numbers, and the
+        // track's overflow-hidden would hide the overflow that gave it away.
         const habits = [makeHabit({ id: 'h-shared', completedDates: ['2026-07-28'] })];
         mockHabits.mockReturnValue(habits);
         const expectedWeek = calculateHouseholdShareForDateRange(habits, '2026-07-27', '2026-07-30', '2026-07-30');
@@ -584,12 +587,20 @@ describe('ScoreboardWidget', () => {
 
         render(<ScoreboardWidget />);
 
+        // Before the fetch lands the shared value is unknown, so the scale is
+        // the leader's and Paul holds a full bar — unchanged from every other
+        // week. This is what makes the re-scale below cost nothing in the
+        // ordinary case, where the shared row does NOT top the board.
+        expect(screen.getByTestId('scoreboard-bar-paul').style.width).toBe('100%');
+
         const householdRow = screen.getByTestId('scoreboard-household-row');
-        // Unclamped this would be 500% — a width the track would clip into
-        // looking identical, but which no other bar on the board can produce.
         await waitFor(() =>
           expect(within(householdRow).getByTestId('scoreboard-shared-bar').style.width).toBe('100%')
         );
+        // …and Paul, now measured against a board the shared row tops, reads
+        // as the fraction he actually is.
+        expect(screen.getByTestId('scoreboard-bar-paul').style.width)
+          .toBe(`${Math.round((2 / expectedWeek) * 100)}%`);
       });
 
       it('keeps the meter but drops "N today" for a past week, matching the member rows', async () => {

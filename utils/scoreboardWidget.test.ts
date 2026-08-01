@@ -6,6 +6,7 @@ import {
   weekHasMemberAttribution,
   buildWeekStandings,
   calculateHouseholdShareForDateRange,
+  scoreboardBarPct,
 } from '@/utils/scoreboardWidget';
 import type { Habit, HouseholdMember, WeeklyRecap } from '@/types/schema';
 import type { SubmissionTotalsByHabitDate } from '@/utils/habitLogic';
@@ -64,9 +65,8 @@ describe('selectAdultStandings', () => {
     const standings = selectAdultStandings(members);
 
     expect(standings.map(s => s.memberId)).toEqual(['jen', 'paul']);
-    expect(standings[0]).toMatchObject({ name: 'Jen', today: 60, weekly: 325, barPct: 100, isLeader: true });
-    // 285 / 325 = 0.8769... -> 88
-    expect(standings[1]).toMatchObject({ name: 'Paul', today: 45, weekly: 285, barPct: 88, isLeader: false });
+    expect(standings[0]).toMatchObject({ name: 'Jen', today: 60, weekly: 325, isLeader: true });
+    expect(standings[1]).toMatchObject({ name: 'Paul', today: 45, weekly: 285, isLeader: false });
   });
 
   it('excludes managed (kid) members', () => {
@@ -81,7 +81,7 @@ describe('selectAdultStandings', () => {
     expect(standings[0]?.memberId).toBe('paul');
   });
 
-  it('renders a quiet zero state — no crown, 0% bars — before any points exist', () => {
+  it('renders a quiet zero state — no crown — before any points exist', () => {
     const members: HouseholdMember[] = [
       member({ uid: 'paul', displayName: 'Paul' }),
       member({ uid: 'jen', displayName: 'Jen' }),
@@ -93,7 +93,6 @@ describe('selectAdultStandings', () => {
     for (const s of standings) {
       expect(s.today).toBe(0);
       expect(s.weekly).toBe(0);
-      expect(s.barPct).toBe(0);
       expect(s.isLeader).toBe(false);
     }
   });
@@ -117,12 +116,11 @@ describe('selectAdultStandings', () => {
     const standings = selectAdultStandings(members);
 
     expect(standings).toEqual([
-      // barPct is still 100 (full relative to itself); only the crown withholds.
-      expect.objectContaining({ memberId: 'paul', barPct: 100, isLeader: false }),
+      expect.objectContaining({ memberId: 'paul', isLeader: false }),
     ]);
   });
 
-  it('crowns the strict leader even in a net-negative week, with both bars clamped empty', () => {
+  it('crowns the strict leader even in a net-negative week', () => {
     const members: HouseholdMember[] = [
       member({ uid: 'paul', displayName: 'Paul', points: { daily: -5, weekly: -10, total: 200 } }),
       member({ uid: 'jen', displayName: 'Jen', points: { daily: -20, weekly: -40, total: 200 } }),
@@ -132,20 +130,21 @@ describe('selectAdultStandings', () => {
 
     // Paul lost the least (-10 > -40) — a real competition was won.
     expect(standings.map(s => s.memberId)).toEqual(['paul', 'jen']);
-    expect(standings[0]).toMatchObject({ memberId: 'paul', isLeader: true, barPct: 0 });
-    expect(standings[1]).toMatchObject({ memberId: 'jen', isLeader: false, barPct: 0 });
+    expect(standings[0]).toMatchObject({ memberId: 'paul', isLeader: true });
+    expect(standings[1]).toMatchObject({ memberId: 'jen', isLeader: false });
   });
 
-  it('clamps a negative member weekly to a 0% bar against a positive leader (never a negative CSS width)', () => {
-    const members: HouseholdMember[] = [
+  it('carries no bar percentage — a bar is scaled to the whole BOARD, which a member-only selector cannot see', () => {
+    // `scoreboardBarPct` owns that math instead, because the scale has to
+    // include the Shared habits row, which is derived asynchronously and is
+    // not a member at all. A `barPct` here could only ever be leader-relative,
+    // and rendering it would peg a shared row that outruns the leader at a
+    // full bar beside a leader that is genuinely smaller.
+    const standings = selectAdultStandings([
       member({ uid: 'paul', displayName: 'Paul', points: { daily: 20, weekly: 100, total: 200 } }),
-      member({ uid: 'jen', displayName: 'Jen', points: { daily: -5, weekly: -20, total: 200 } }),
-    ];
+    ]);
 
-    const standings = selectAdultStandings(members);
-    const jen = standings.find(s => s.memberId === 'jen');
-
-    expect(jen?.barPct).toBe(0);
+    expect(standings[0]).not.toHaveProperty('barPct');
   });
 
   it('returns [] when there are no adult members', () => {
@@ -394,14 +393,17 @@ describe('buildWeekStandings', () => {
     { uid: 'jen', displayName: 'Jen' },
   ];
 
-  it('sorts by points descending, computes bar percentages, and crowns the strict leader', () => {
+  it('sorts by points descending and crowns the strict leader', () => {
     const pointsByMemberId = new Map([['paul', 30], ['jen', 90]]);
 
     const standings = buildWeekStandings(adults, pointsByMemberId);
 
     expect(standings.map(s => s.memberId)).toEqual(['jen', 'paul']);
-    expect(standings[0]).toMatchObject({ points: 90, barPct: 100, isLeader: true });
-    expect(standings[1]).toMatchObject({ points: 30, barPct: 33, isLeader: false });
+    expect(standings[0]).toMatchObject({ points: 90, isLeader: true });
+    expect(standings[1]).toMatchObject({ points: 30, isLeader: false });
+    // No bar percentage — see the same note on `selectAdultStandings`: the
+    // scale belongs to the board, which includes a row that is not a member.
+    expect(standings[0]).not.toHaveProperty('barPct');
   });
 
   it('defaults a member absent from the points map to 0, not a crash', () => {
@@ -410,11 +412,47 @@ describe('buildWeekStandings', () => {
     const standings = buildWeekStandings(adults, pointsByMemberId);
     const jen = standings.find(s => s.memberId === 'jen');
 
-    expect(jen).toMatchObject({ points: 0, barPct: 0, isLeader: false });
+    expect(jen).toMatchObject({ points: 0, isLeader: false });
   });
 
   it('never crowns an all-zero field (both members absent from the map)', () => {
     const standings = buildWeekStandings(adults, new Map());
     expect(standings.every(s => !s.isLeader)).toBe(true);
+  });
+});
+
+describe('scoreboardBarPct', () => {
+  it('measures every bar against the board-wide scale, so the widths stay comparable', () => {
+    // The usual case: the leader IS the largest row, so this is exactly the
+    // leader-relative math the selectors used to carry.
+    expect(scoreboardBarPct(325, 325)).toBe(100);
+    expect(scoreboardBarPct(285, 325)).toBe(88); // 0.8769… -> 88
+    expect(scoreboardBarPct(0, 325)).toBe(0);
+  });
+
+  it('shrinks the member bars — rather than clamping the shared one — when the shared row tops the board', () => {
+    // The case the leader-as-denominator got wrong. A habit that credits the
+    // household pays the Shared row and no person, so it can outrun every
+    // member. Scaled to the leader (40) the shared row would read 200% —
+    // clipped by the track into looking IDENTICAL to the leader's full bar,
+    // i.e. two equal bars for 80 and 40.
+    const scale = Math.max(40, 80);
+    expect(scoreboardBarPct(80, scale)).toBe(100);
+    expect(scoreboardBarPct(40, scale)).toBe(50);
+  });
+
+  it('clamps a negative value to 0 — a negative CSS width is dropped, rendering a FULL bar', () => {
+    expect(scoreboardBarPct(-20, 100)).toBe(0);
+  });
+
+  it('returns 0 for a non-positive scale, so a wholly negative board draws empty bars', () => {
+    // Everyone lost points this week: there is no meaningful proportion to
+    // draw, and dividing by a negative scale would flip every sign.
+    expect(scoreboardBarPct(-10, -10)).toBe(0);
+    expect(scoreboardBarPct(0, 0)).toBe(0);
+  });
+
+  it('clamps at 100 defensively, even though a correct scale is the maximum by construction', () => {
+    expect(scoreboardBarPct(500, 100)).toBe(100);
   });
 });

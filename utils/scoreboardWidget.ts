@@ -32,11 +32,30 @@ export interface ScoreboardStanding {
   today: number;
   /** This member's `points.weekly`. */
   weekly: number;
-  /** 0-100, this member's weekly points relative to the leader's (0 when the leader has 0). */
-  barPct: number;
   /** True only for a single, strict leader — never on a tie, never with one adult. */
   isLeader: boolean;
 }
+
+/**
+ * Width (0-100) of one scoreboard bar, against the scale EVERY bar on the
+ * board shares.
+ *
+ * That scale is the largest row on the board — which is usually the leader's,
+ * but deliberately isn't defined as the leader's. The Shared habits row is not
+ * part of the population the leader was picked from: a habit with
+ * `creditMode: 'household'` pays that row and no person, so it can genuinely
+ * top the board. Measuring it against a leader it exceeds would peg it at a
+ * misleading 100% beside a leader that is actually smaller — two full bars
+ * for two different numbers. Callers therefore pass
+ * `max(leader, householdShare)`, and every bar stays comparable.
+ *
+ * Clamped at 0 because a negative CSS width is invalid and browsers DROP the
+ * declaration — rendering a full bar where an empty one was meant. Clamped at
+ * 100 defensively: `scale` is the maximum by construction, so nothing should
+ * exceed it.
+ */
+export const scoreboardBarPct = (value: number, scale: number): number =>
+  scale > 0 ? Math.min(100, Math.max(0, Math.round((value / scale) * 100))) : 0;
 
 /**
  * Adult (non-managed) members, sorted by weekly points descending (ties broken
@@ -55,7 +74,6 @@ export function selectAdultStandings(members: readonly HouseholdMember[]): Score
     return a.displayName.localeCompare(b.displayName);
   });
 
-  const leaderWeekly = sorted[0]?.points.weekly ?? 0;
   // A crown means an actual competition was won: at least two adults, a
   // nonzero score for the leader, and no tie for first. A strict leader still
   // wins even in a net-negative week (someone lost the least) — the gate is
@@ -72,10 +90,6 @@ export function selectAdultStandings(members: readonly HouseholdMember[]): Score
     photoURL: m.photoURL,
     today: m.points.daily,
     weekly: m.points.weekly,
-    // Clamped to >= 0: a negative weekly (relative to a positive leader, or a
-    // negative leader itself) must never produce a negative CSS width — that's
-    // an invalid length browsers drop, rendering a FULL bar instead of empty.
-    barPct: leaderWeekly > 0 ? Math.max(0, Math.round((m.points.weekly / leaderWeekly) * 100)) : 0,
     isLeader: m.uid === leaderId,
   }));
 }
@@ -262,8 +276,6 @@ export interface ScoreboardWeekStanding {
   photoURL?: string;
   /** This member's derived points for the selected week. */
   points: number;
-  /** 0-100, relative to the leader's points (0 when the leader has 0). */
-  barPct: number;
   isLeader: boolean;
 }
 
@@ -293,20 +305,15 @@ export function buildWeekStandings(
     return a.displayName.localeCompare(b.displayName);
   });
 
-  const leaderPoints = sorted[0] ? pointsOf(sorted[0].uid) : 0;
   const leaderId = findLeaderId(sorted.map(m => ({ memberId: m.uid, points: pointsOf(m.uid) })));
 
-  return sorted.map(m => {
-    const points = pointsOf(m.uid);
-    return {
-      memberId: m.uid,
-      name: m.displayName,
-      avatarColor: m.avatarColor,
-      avatarEmoji: m.avatarEmoji,
-      photoURL: m.photoURL,
-      points,
-      barPct: leaderPoints > 0 ? Math.max(0, Math.round((points / leaderPoints) * 100)) : 0,
-      isLeader: m.uid === leaderId,
-    };
-  });
+  return sorted.map(m => ({
+    memberId: m.uid,
+    name: m.displayName,
+    avatarColor: m.avatarColor,
+    avatarEmoji: m.avatarEmoji,
+    photoURL: m.photoURL,
+    points: pointsOf(m.uid),
+    isLeader: m.uid === leaderId,
+  }));
 }
