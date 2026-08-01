@@ -924,8 +924,8 @@ export interface HabitSubmission {
    * `resolveReversalSources` falls through to the date's holders — some other
    * member's. `deleteHabitSubmission` therefore reverses a doc with no
    * `attributedTo` against the POOL alone, at its stored `pointsEarned`.
-   * ⚠️ `updateHabitSubmission` still carries the `?? createdBy` fallback and has
-   * the same defect on a count edit; it is knowingly unfixed here.
+   * `updateHabitSubmission` applies the same rule to a count edit: such a doc
+   * moves no member in either direction, only the pool.
    */
   attributedTo?: string;
   /**
