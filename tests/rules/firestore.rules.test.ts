@@ -268,6 +268,45 @@ describe('member access', () => {
     );
   });
 
+  it('can create a transaction carrying duplicateDismissedFor (settled-bill "Keep both")', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'transactions', 'txn-dup-dismissed'), {
+        amount: 142,
+        merchant: 'CPENERGY MNGCO 260805',
+        category: 'Uncategorized',
+        date: '2026-06-22',
+        status: 'verified',
+        duplicateDismissedFor: 'txn-settled-bill-payment',
+      }),
+    );
+  });
+
+  it('rejects a transaction whose duplicateDismissedFor is not a string', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'transactions', 'txn-bad-dismissed'), {
+        amount: 142,
+        merchant: 'CPENERGY MNGCO 260805',
+        category: 'Uncategorized',
+        date: '2026-06-22',
+        status: 'verified',
+        duplicateDismissedFor: true,
+      }),
+    );
+  });
+
+  it('rejects a transaction dismissed against ITSELF', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'transactions', 'txn-self-dismissed'), {
+        amount: 142,
+        merchant: 'CPENERGY MNGCO 260805',
+        category: 'Uncategorized',
+        date: '2026-06-22',
+        status: 'verified',
+        duplicateDismissedFor: 'txn-self-dismissed',
+      }),
+    );
+  });
+
   it('rejects a transaction whose possibleDuplicateOf is its own id', async () => {
     await assertFails(
       setDoc(doc(dbFor(BOB), 'households', H1, 'transactions', 'txn-self-dup'), {

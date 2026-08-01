@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import TransactionReviewForm from './TransactionReviewForm';
-import { Transaction, MerchantRule } from '@/types/schema';
+import { CalendarItem, Transaction, MerchantRule } from '@/types/schema';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { addDays, format, isSameDay, parseISO, startOfISOWeek, subDays } from 'date-fns';
 
@@ -20,7 +20,9 @@ const {
 } = vi.hoisted(() => ({
   mockUpdateTransactionCategory: vi.fn((..._args: unknown[]) => Promise.resolve()),
   mockDeleteTransaction: vi.fn((..._args: unknown[]) => Promise.resolve()),
-  mockMergeTransactions: vi.fn((..._args: unknown[]) => Promise.resolve()),
+  // Resolves TRUE by default: the real mutation reports whether the dupe was
+  // actually merged away, and the settled-bill arm only advances on `true`.
+  mockMergeTransactions: vi.fn((..._args: unknown[]) => Promise.resolve(true)),
   mockKeepBothTransactions: vi.fn((..._args: unknown[]) => Promise.resolve()),
   mockAddCalendarItem: vi.fn((..._args: unknown[]) => Promise.resolve()),
   mockLinkBankTransactionToBill: vi.fn((..._args: unknown[]) => Promise.resolve()),
@@ -29,8 +31,9 @@ const {
   mockRequestDeleteConfirmation: vi.fn(),
 }));
 
-// Only `utils/toastHelpers` imports this store, so stubbing it here intercepts
-// the confirmation without disturbing anything else the form does.
+// Both confirmation paths route through this store — `utils/toastHelpers` for
+// Delete, and the form directly for the amount-only settled-bill merge — so
+// stubbing it here intercepts both without disturbing anything else.
 vi.mock('@/components/ui/confirmDialogStore', () => ({
   requestDeleteConfirmation: mockRequestDeleteConfirmation,
 }));
@@ -53,6 +56,9 @@ const mockHabits: {
 // Household merchant rules, mutable per-test the same way. Empty ⇒ the form
 // renders exactly as it did before display-time renaming existed.
 const mockMerchantRules: MerchantRule[] = [];
+// Calendar items backing the settled-bill duplicate arm — the form resolves a
+// counterpart's `paidCalendarItemId` against these.
+const mockCalendarItems: CalendarItem[] = [];
 
 // Mock the domain slices consumed by the form (same pattern as
 // EditTransactionModal.test.tsx).
@@ -64,6 +70,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
       { id: '2', name: 'Gas' },
     ],
     transactions: mockTransactions,
+    calendarItems: mockCalendarItems,
     updateTransactionCategory: mockUpdateTransactionCategory,
     deleteTransaction: mockDeleteTransaction,
     mergeTransactions: mockMergeTransactions,
@@ -112,6 +119,7 @@ describe('TransactionReviewForm', () => {
     mockAccounts.length = 0;
     mockHabits.length = 0;
     mockMerchantRules.length = 0;
+    mockCalendarItems.length = 0;
   });
 
   it('pre-selects the Income option for an income transaction', () => {
@@ -374,6 +382,306 @@ describe('TransactionReviewForm', () => {
 
       expect(mockToast.error).toHaveBeenCalledWith('Failed to update transaction');
       expect(screen.getByText(/possible duplicate of/i)).toBeInTheDocument();
+    });
+  });
+
+  // utils/settledBillDuplicate.ts — the bank's own copy of a bill the household
+  // already paid by hand. Distinct copy from the arm above on purpose (both to
+  // say a different thing, and so those six /possible duplicate of/i assertions
+  // stay unambiguous).
+  describe('settled-bill duplicate notice', () => {
+    const paidInstance: CalendarItem = {
+      id: 'cal-paid',
+      title: 'Centerpoint Energy (Natural Gas)',
+      amount: 142,
+      date: '2026-06-05',
+      type: 'expense',
+      isPaid: true,
+      isRecurring: false,
+      parentRecurringId: 'cal-tmpl',
+    };
+
+    /** The hand-paid row, exactly as `payCalendarItem` writes it. */
+    const settledRow: Transaction = {
+      id: 'tx-manual',
+      amount: 142,
+      merchant: 'Centerpoint Energy (Natural Gas)',
+      category: 'Budgeted in Calendar',
+      date: '2026-06-05',
+      status: 'verified',
+      isRecurring: true,
+      source: 'recurring',
+      autoCategorized: true,
+      accountId: 'acc-check',
+      paidCalendarItemId: 'cal-paid',
+      createdAt: '2026-06-05T12:00:00.000Z',
+    };
+
+    /** The bank-sync copy — the row the drawer actually opens on. */
+    const bankRow: Transaction = {
+      ...baseTx,
+      id: 'tx-bank',
+      amount: 142,
+      merchant: 'CPENERGY MNGCO 260805',
+      category: 'Uncategorized',
+      date: '2026-06-09',
+      status: 'verified',
+      source: 'bank-sync',
+      accountId: 'acc-check',
+      needsCategory: true,
+      bankRef: 'synth:cpenergy',
+      createdAt: '2026-06-04T12:00:00.000Z',
+    };
+
+    /**
+     * Seeds the pair. `aliases` puts a learned descriptor on the TEMPLATE,
+     * which is the only thing that lifts this fixture to the `descriptor` tier
+     * — "CPENERGY MNGCO" and "Centerpoint Energy (Natural Gas)" share no
+     * significant token at all, which is exactly why the server-side matcher
+     * couldn't pair them and why this feature exists.
+     */
+    const seed = (settled: Transaction = settledRow, aliases?: string[]) => {
+      mockAccounts.push({ id: 'acc-check', name: 'Checking', type: 'checking' });
+      mockCalendarItems.push({
+        id: 'cal-tmpl', title: 'Centerpoint Energy (Natural Gas)', amount: 142,
+        date: '2026-06-05', type: 'expense', isPaid: false, isRecurring: true, frequency: 'monthly',
+        ...(aliases ? { bankDescriptorAliases: aliases } : {}),
+      }, paidInstance);
+      mockTransactions.push(settled, bankRow);
+    };
+    /** Descriptor-tier seed: the bill already knows this exact descriptor. */
+    const seedConfident = (settled: Transaction = settledRow) =>
+      seed(settled, ['CPENERGY MNGCO 260805']);
+
+    describe('descriptor evidence — states the finding, merges in one tap', () => {
+      it('renders the settled-bill notice (not the possible-duplicate copy) with Merge / Keep both', () => {
+        seedConfident();
+        render(<TransactionReviewForm transaction={bankRow} onDone={mockOnDone} />);
+
+        expect(screen.getByText(/already paid/i)).toBeInTheDocument();
+        expect(screen.getByText(/your bank’s copy of/i)).toBeInTheDocument();
+        // The other arm's copy must NOT appear — those assertions stay unique.
+        expect(screen.queryByText(/possible duplicate of/i)).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^merge$/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /keep both/i })).toBeInTheDocument();
+      });
+
+      it('promises only that the descriptor is remembered — never that it cannot recur', () => {
+        seedConfident();
+        render(<TransactionReviewForm transaction={bankRow} onDone={mockOnDone} />);
+
+        expect(screen.getByText(/we’ll remember this descriptor/i)).toBeInTheDocument();
+        expect(screen.queryByText(/won’t happen again|will not happen again/i)).not.toBeInTheDocument();
+      });
+
+      // The whole reason the keeper is hard-coded: both rows are `verified`, so
+      // pickKeeper falls through to createdAt and would name the BANK row keeper
+      // whenever the sync wrote first — and mergeTransactions would then refuse
+      // via its settled-bill guard, making the button a dead tap.
+      it.each([
+        ['bank row created FIRST', '2026-06-04T12:00:00.000Z', '2026-06-05T12:00:00.000Z'],
+        ['settled row created FIRST', '2026-06-06T12:00:00.000Z', '2026-06-05T12:00:00.000Z'],
+      ])('Merge passes (settled, bank) in that order — %s', async (_label, bankCreatedAt, settledCreatedAt) => {
+        const user = userEvent.setup();
+        seedConfident({ ...settledRow, createdAt: settledCreatedAt });
+        const tx = { ...bankRow, createdAt: bankCreatedAt };
+        // Keep the list in step with the transaction the drawer renders.
+        mockTransactions.splice(mockTransactions.indexOf(bankRow), 1, tx);
+
+        render(<TransactionReviewForm transaction={tx} onDone={mockOnDone} />);
+        await user.click(screen.getByRole('button', { name: /^merge$/i }));
+
+        expect(mockMergeTransactions).toHaveBeenCalledTimes(1);
+        const [keeperId, dupeId] = mockMergeTransactions.mock.calls[0]!;
+        expect(keeperId).toBe('tx-manual');
+        expect(dupeId).toBe('tx-bank');
+        expect(mockOnDone).toHaveBeenCalled();
+      });
+
+      it('Merge learns the RAW bank descriptor onto the recurring TEMPLATE', async () => {
+        const user = userEvent.setup();
+        seedConfident();
+        // A rule that renames this descriptor on display — the alias must still
+        // be the raw stored merchant, never the friendly name.
+        mockMerchantRules.push({
+          id: 'r1', pattern: 'CPENERGY', name: 'Natural gas',
+          createdAt: '2026-06-01T00:00:00.000Z',
+        });
+        render(<TransactionReviewForm transaction={bankRow} onDone={mockOnDone} />);
+
+        await user.click(screen.getByRole('button', { name: /^merge$/i }));
+
+        expect(mockMergeTransactions.mock.calls[0]![2]).toEqual({
+          calendarItemId: 'cal-tmpl',
+          descriptor: 'CPENERGY MNGCO 260805',
+        });
+        // No confirmation on this tier — the evidence carries it.
+        expect(mockRequestDeleteConfirmation).not.toHaveBeenCalled();
+      });
+
+      // The host drawer passes a SNAPSHOT transaction, so the memo keeps
+      // re-deriving the match from an unchanged prop; without a local hide the
+      // banner offers to merge a row that no longer exists.
+      it('hides the banner after a successful merge', async () => {
+        const user = userEvent.setup();
+        seedConfident();
+        render(<TransactionReviewForm transaction={bankRow} onDone={mockOnDone} />);
+
+        await user.click(screen.getByRole('button', { name: /^merge$/i }));
+
+        expect(screen.queryByText(/your bank’s copy of/i)).not.toBeInTheDocument();
+      });
+
+      it('does NOT advance the review when the merge was refused', async () => {
+        const user = userEvent.setup();
+        // The mutation's own settled-bill guard writes nothing and toasts its
+        // reason; advancing here would claim a merge that never happened.
+        mockMergeTransactions.mockResolvedValueOnce(false);
+        seedConfident();
+        render(<TransactionReviewForm transaction={bankRow} onDone={mockOnDone} />);
+
+        await user.click(screen.getByRole('button', { name: /^merge$/i }));
+
+        expect(mockOnDone).not.toHaveBeenCalled();
+        expect(screen.getByText(/your bank’s copy of/i)).toBeInTheDocument();
+      });
+    });
+
+    describe('amount-only evidence — asks, and confirms before deleting anything', () => {
+      it('phrases the notice as a QUESTION and names BOTH rows', () => {
+        seed();
+        render(<TransactionReviewForm transaction={bankRow} onDone={mockOnDone} />);
+
+        expect(screen.getByText(/is this your bank’s copy of/i)).toBeInTheDocument();
+        // Never the confident copy — the app has no evidence beyond arithmetic.
+        expect(screen.queryByText(/already paid —/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/we’ll remember this descriptor/i)).not.toBeInTheDocument();
+        // Both rows, each labelled and carrying its own merchant, amount and
+        // date. (getByText compares an element's DIRECT text nodes, so the
+        // bold label and its row read as two matches, not one.)
+        expect(screen.getByText('This row:')).toBeInTheDocument();
+        expect(screen.getByText(/CPENERGY MNGCO 260805 — \$142\.00 on 2026-06-09/)).toBeInTheDocument();
+        expect(screen.getByText('Bill payment:')).toBeInTheDocument();
+        expect(
+          screen.getByText(/Centerpoint Energy \(Natural Gas\) — \$142\.00 on 2026-06-05/)
+        ).toBeInTheDocument();
+      });
+
+      it('Merge opens a confirmation and writes NOTHING until it is confirmed', async () => {
+        const user = userEvent.setup();
+        seed();
+        render(<TransactionReviewForm transaction={bankRow} onDone={mockOnDone} />);
+
+        await user.click(screen.getByRole('button', { name: /^merge$/i }));
+
+        expect(mockMergeTransactions).not.toHaveBeenCalled();
+        expect(mockRequestDeleteConfirmation).toHaveBeenCalledTimes(1);
+        const request = mockRequestDeleteConfirmation.mock.calls[0]![0] as {
+          title: string; message: string; confirmLabel: string; itemName: string;
+          onConfirm: () => Promise<void>;
+        };
+        expect(request.title).toMatch(/Centerpoint Energy \(Natural Gas\)/);
+        expect(request.confirmLabel).toBe('Merge');
+        // The noun is the thing on screen — a recent fix stopped this dialog
+        // saying "task" over a transaction.
+        expect(request.itemName).toBe('transaction');
+        // Spells out what goes and what stays.
+        expect(request.message).toMatch(/Removes this row — CPENERGY MNGCO 260805, \$142\.00 on 2026-06-09/);
+        expect(request.message).toMatch(/Keeps the bill payment — Centerpoint Energy \(Natural Gas\), \$142\.00 on 2026-06-05/);
+        expect(request.message).toMatch(/Recently Deleted/);
+
+        await request.onConfirm();
+        expect(mockMergeTransactions).toHaveBeenCalledTimes(1);
+      });
+
+      it('learns NO alias on this tier — the evidence does not earn a standing rule', async () => {
+        const user = userEvent.setup();
+        seed();
+        render(<TransactionReviewForm transaction={bankRow} onDone={mockOnDone} />);
+
+        await user.click(screen.getByRole('button', { name: /^merge$/i }));
+        const request = mockRequestDeleteConfirmation.mock.calls[0]![0] as { onConfirm: () => Promise<void> };
+        await request.onConfirm();
+
+        const [keeperId, dupeId, learnAlias] = mockMergeTransactions.mock.calls[0]!;
+        expect(keeperId).toBe('tx-manual');
+        expect(dupeId).toBe('tx-bank');
+        // A wrong alias auto-settles future occurrences of this bill via
+        // pickBillToPay, and nothing in the app can read or clear it.
+        expect(learnAlias).toBeUndefined();
+      });
+    });
+
+    it('Keep both scopes the dismissal to the counterpart on screen', async () => {
+      const user = userEvent.setup();
+      seed();
+      render(<TransactionReviewForm transaction={bankRow} onDone={mockOnDone} />);
+
+      await user.click(screen.getByRole('button', { name: /keep both/i }));
+
+      expect(mockKeepBothTransactions).toHaveBeenCalledWith('tx-bank', 'tx-manual');
+      expect(mockOnDone).not.toHaveBeenCalled();
+      expect(screen.queryByText(/your bank’s copy of/i)).not.toBeInTheDocument();
+    });
+
+    it('renders nothing once the row carries the persisted dismissal for THIS counterpart', () => {
+      seed();
+      render(
+        <TransactionReviewForm
+          transaction={{ ...bankRow, duplicateDismissedFor: 'tx-manual' }}
+          onDone={mockOnDone}
+        />
+      );
+
+      expect(screen.queryByText(/your bank’s copy of/i)).not.toBeInTheDocument();
+    });
+
+    it('still asks when the dismissal named a DIFFERENT counterpart', () => {
+      seed();
+      render(
+        <TransactionReviewForm
+          transaction={{ ...bankRow, duplicateDismissedFor: 'tx-some-older-payment' }}
+          onDone={mockOnDone}
+        />
+      );
+
+      expect(screen.getByText(/your bank’s copy of/i)).toBeInTheDocument();
+    });
+
+    it('renders nothing when the predicate fails (amounts one cent apart)', () => {
+      seed();
+      render(
+        <TransactionReviewForm
+          transaction={{ ...bankRow, amount: 142.01 }}
+          onDone={mockOnDone}
+        />
+      );
+
+      expect(screen.queryByText(/your bank’s copy of/i)).not.toBeInTheDocument();
+    });
+
+    it('renders nothing when the bill it points at is no longer paid', () => {
+      mockAccounts.push({ id: 'acc-check', name: 'Checking', type: 'checking' });
+      mockCalendarItems.push({ ...paidInstance, isPaid: false });
+      mockTransactions.push(settledRow, bankRow);
+
+      render(<TransactionReviewForm transaction={bankRow} onDone={mockOnDone} />);
+      expect(screen.queryByText(/your bank’s copy of/i)).not.toBeInTheDocument();
+    });
+
+    it('defers to the stored-flag arm when both could resolve', () => {
+      seed();
+      render(
+        <TransactionReviewForm
+          transaction={{ ...bankRow, possibleDuplicateOf: 'tx-manual' }}
+          onDone={mockOnDone}
+        />
+      );
+
+      expect(screen.getByText(/possible duplicate of/i)).toBeInTheDocument();
+      expect(screen.queryByText(/your bank’s copy of/i)).not.toBeInTheDocument();
+      // Exactly one Merge button — the two banners never stack.
+      expect(screen.getAllByRole('button', { name: /^merge$/i })).toHaveLength(1);
     });
   });
 

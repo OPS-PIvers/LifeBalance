@@ -15,6 +15,24 @@ export type ReviewQueueItem =
   | { kind: 'shopping'; id: string; item: ShoppingItem }
   | { kind: 'todo'; id: string; item: ToDo };
 
+/**
+ * A transaction is a REVIEW candidate when it is either a classic
+ * `pending_review` row OR a bank-email-sync row that was born `verified` but
+ * still `needsCategory` (bankEmailSync Cloud Function). The latter carries an
+ * authoritative balance already, so its review is a bucket-assignment only (no
+ * balance delta on categorize) — but it must still surface in the same review
+ * surfaces (Action Queue + on-open review drawer) so it doesn't sit
+ * uncategorized forever.
+ *
+ * Lives here (a pure util) rather than in `hooks/useActionQueue.ts`, which is
+ * where it used to be declared and is still re-exported from, so pure modules
+ * — e.g. `utils/settledBillDuplicate.ts` — can answer "is this row in review?"
+ * without importing a module that pulls in React and the household contexts.
+ */
+export const needsReview = (
+  tx: Pick<Transaction, 'status' | 'needsCategory'>,
+): boolean => tx.status === 'pending_review' || (tx.status === 'verified' && tx.needsCategory === true);
+
 interface BuildReviewQueueSnapshotParams {
   /**
    * Pending-review transactions ALREADY filtered (`needsReview && !snoozed`)

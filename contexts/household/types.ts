@@ -53,6 +53,26 @@ export interface MutationOpts {
   silent?: boolean;
 }
 
+/**
+ * A bank descriptor to LEARN onto a bill in the SAME batch as the merge that
+ * proved it (`mergeTransactions`' optional third argument). Used by the
+ * settled-bill duplicate arm (`utils/settledBillDuplicate.ts`): once the user
+ * confirms the bank's row is a copy of a bill they already paid by hand, the
+ * descriptor the bank used is known to name that bill, so teaching it lets the
+ * nightly sync match it server-side next month instead of importing another
+ * duplicate.
+ *
+ * `calendarItemId` must be the recurring TEMPLATE when the settled doc is a
+ * paid instance — a paid instance is a one-shot doc and an alias there teaches
+ * nothing about the next occurrence (`aliasTargetForSettledRow` resolves it).
+ * `descriptor` must be the RAW stored merchant, never a merchant-rule display
+ * name.
+ */
+export interface MergeLearnAlias {
+  calendarItemId: string;
+  descriptor: string;
+}
+
 export interface HouseholdContextType {
   // State
   /** True during the initial cold load before the first household snapshot resolves. */
@@ -341,12 +361,26 @@ export interface HouseholdContextType {
    *  deletes the dupe, and reverses the dupe's account-balance impact if it
    *  was `verified` — all in ONE writeBatch (mirrors `deleteTransaction`). The
    *  caller picks which id is the keeper vs. the dupe (typically via
-   *  `pickKeeper` from the same util). */
-  mergeTransactions: (keeperId: string, dupeId: string) => Promise<void>;
-  /** Dismiss a possible-duplicate flag without merging: clears
-   *  `possibleDuplicateOf` on the given transaction (single update, no batch
-   *  needed — nothing else changes). */
-  keepBothTransactions: (txnId: string) => Promise<void>;
+   *  `pickKeeper` from the same util) — EXCEPT on the settled-bill arm, where
+   *  the keeper is always the row carrying `paidCalendarItemId` (see
+   *  `utils/settledBillDuplicate.ts`; `pickKeeper` would name the bank row and
+   *  the merge would then refuse via the settled-bill guard).
+   *
+   *  `learnAlias` optionally teaches a bank descriptor to a bill in the SAME
+   *  batch — used by that arm (only on `descriptor`-tier evidence) so the
+   *  nightly sync matches the descriptor server-side next month instead of
+   *  importing another duplicate.
+   *
+   *  Resolves TRUE when the dupe was merged away, FALSE when the merge was
+   *  refused without writing (no household / the settled-bill guard); throws on
+   *  a real failure. Advance a review UI only on `true`. */
+  mergeTransactions: (keeperId: string, dupeId: string, learnAlias?: MergeLearnAlias) => Promise<boolean>;
+  /** Dismiss a duplicate banner without merging: clears `possibleDuplicateOf`.
+   *  `dismissDuplicateOf` — passed ONLY by the settled-bill arm, which is
+   *  computed at render and has no stored flag to clear — additionally
+   *  persists `duplicateDismissedFor` so that ONE pairing stops being offered
+   *  (see `utils/settledBillDuplicate.ts`). */
+  keepBothTransactions: (txnId: string, dismissDuplicateOf?: string) => Promise<void>;
 
   // Transaction Comment Actions (Plan 23) — ON-DEMAND fetch (no standing
   // listener). NOTE: the `comments` subcollection has no firestore.rules

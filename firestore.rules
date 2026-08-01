@@ -571,6 +571,11 @@ service cloud.firestore {
                               isValidOptionalString(request.resource.data.get('plaidTransactionId', null), 100) && // Plaid dedup key (server writes via Admin SDK; this is defense-in-depth)
                               isValidOptionalString(request.resource.data.get('possibleDuplicateOf', null), 100) && // Plan 03: doc id of a suspected duplicate row (cleared by Merge/Keep-both)
                               request.resource.data.get('possibleDuplicateOf', null) != transactionId && // a row can never be its own duplicate
+                              // "Keep both" for the RENDER-TIME settled-bill duplicate arm
+                              // (utils/settledBillDuplicate.ts) — the doc id of the counterpart
+                              // it was dismissed against. That arm has no stored flag to clear.
+                              isValidOptionalString(request.resource.data.get('duplicateDismissedFor', null), 100) &&
+                              request.resource.data.get('duplicateDismissedFor', null) != transactionId && // a row is never its own counterpart
                               // Plan 23: denormalized comment counter, bumped via increment() in the same
                               // writeBatch as each comment doc write/delete (see commentMutations.ts).
                               isValidOptionalNumber(request.resource.data.get('commentCount', null)) &&

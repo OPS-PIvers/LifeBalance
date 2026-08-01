@@ -35,6 +35,7 @@ import { computeBackdatedHabitFire, computeHabitTriggerFire, computeHabitTrigger
 import { evaluateTodoSubtaskGate, TodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import { setSubtaskDone, subtaskProgress } from '@/utils/subtasks';
 import type { TodoSubtaskToggleResult, TodoCompletionOptions } from '@/contexts/household/mutations/todoMutations';
+import type { MergeLearnAlias } from '@/contexts/household/types';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import { attributionString, type TriggerSource } from '@/utils/habitTriggers';
 import { selectAutoFreezeCandidates, selectMemberAutoFreezeCandidates } from '@/utils/freezeBank';
@@ -130,9 +131,11 @@ const normalizeCategory = (value: string | undefined) => (value ?? '').trim().to
  *     hand-entered recurring utility bill PLUS the screenshot-imported charge
  *     that actually paid it, at a different amount. The only variant that seeds
  *     `calendarItems` at all, and the only way to exercise
- *     `settleBillWithTransaction` in Test Mode. Not seeded by default for the
- *     same reason as 'stub' (its `pending_review` row changes the Money nav
- *     link's accessible name).
+ *     `settleBillWithTransaction` in Test Mode. It ALSO seeds two independent
+ *     settled-bill duplicate pairs (`utils/settledBillDuplicate.ts`), one per
+ *     evidence tier — `tx_water_bank` (descriptor) and `tx_electric_bank`
+ *     (amount-only). Not seeded by default for the same reason as 'stub' (its
+ *     `pending_review` row changes the Money nav link's accessible name).
  * Absent/unknown values leave the default seeds untouched.
  */
 const readTestSeedVariant = (): 'fresh' | 'stub' | 'merchant-rules' | 'bill-merge' | null => {
@@ -257,15 +260,136 @@ const STUB_TRANSACTION: Transaction = {
  * NOTE the row is `pending_review` with NO `bankRef`: that is what the capture
  * pipeline writes, and it is why the sibling `linkBankTransactionToBill`
  * affordance correctly refuses to appear for it.
+ *
+ * The variant ALSO carries the second, distinct case
+ * (`utils/settledBillDuplicate.ts`): a bill already paid by hand — a
+ * paid-instance calendar doc plus the `verified` transaction `payCalendarItem`
+ * writes — and the nightly bank sync's own copy of that same charge, imported
+ * under the bank's raw descriptor. Neither the "Link to bill" picker (which
+ * filters to unpaid bills) nor `isLikelyDuplicate` (both rows verified) can see
+ * that pair, which is what the settled-bill banner is for.
+ *
+ * Those settled pairs get their OWN recurring series (water, electric) rather
+ * than reusing the gas one. Sharing it broke the gas scenario on days 1–4 of
+ * the month: `expandCalendarItems` suppresses the template's occurrence once a
+ * paid instance exists for that {template, date}, and `getBillLinkCandidates`
+ * drops paid items — so the unpaid gas bill vanished from `tx_cpenergy`'s
+ * picker, which is the one thing that scenario exists to demonstrate.
+ *
+ * BOTH evidence tiers are seeded, because they render differently:
+ *   - water — the descriptor shares the significant token "WATER" with the bill
+ *     title, so the banner asserts and Merge is one tap (and learns the alias).
+ *   - electric — "NSPM UTILITY …" shares NOTHING with "Xcel Energy (Electric)",
+ *     the CPENERGY-shaped case, so the banner ASKS, Merge asks again through a
+ *     confirmation, and no alias is learned.
  */
+const BILL_MERGE_MONTH = getLocalDateString().slice(0, 7);
+/**
+ * The settled pairs are anchored to TODAY, not to a fixed day of the month, so
+ * the banner fires on every day of every month. A fixed 5th/9th pair is the
+ * kind of date-dependent seed that has already cost this repo a production
+ * deploy (see the weekday-dependent test incident).
+ */
+const SETTLED_DUE_DATE = getLocalDateString(subDays(new Date(), 4));
+/** The bank's CLEARING date: 4 days after the due date — inside the 7-day
+ *  settled-bill window and outside the generic 3-day DUPLICATE_WINDOW_DAYS. */
+const SETTLED_CLEAR_DATE = getLocalDateString();
+/** Cent-identical within each pair — the predicate allows no tolerance at all.
+ *  Distinct BETWEEN pairs so neither pair is ambiguous against the other. */
+const SETTLED_WATER_AMOUNT = 88.4;
+const SETTLED_ELECTRIC_AMOUNT = 214.75;
+
+/**
+ * One settled pair: the recurring template, the paid-instance doc
+ * `payCalendarItem` creates (a one-shot, NON-recurring record pointing back at
+ * its template — `parentRecurringId` is what makes a learned alias land on the
+ * TEMPLATE), the hand-paid transaction, and the bank's copy.
+ */
+const settledBillPair = (
+  key: string,
+  title: string,
+  descriptor: string,
+  amount: number,
+): { calendarItems: CalendarItem[]; transactions: Transaction[] } => ({
+  calendarItems: [
+    {
+      id: `cal_${key}_template`,
+      title,
+      amount,
+      date: SETTLED_DUE_DATE,
+      type: 'expense',
+      isPaid: false,
+      isRecurring: true,
+      frequency: 'monthly',
+    },
+    {
+      id: `cal_${key}_paid_instance`,
+      title,
+      amount,
+      date: SETTLED_DUE_DATE,
+      type: 'expense',
+      isPaid: true,
+      isRecurring: false,
+      parentRecurringId: `cal_${key}_template`,
+    },
+  ],
+  transactions: [
+    // The hand-paid half: exactly the shape `payCalendarItem` writes — verified,
+    // merchant = the bill's TITLE, BUDGETED_IN_CALENDAR, source 'recurring', and
+    // stamped with the paid-instance doc id. Dated to the occurrence's DUE date.
+    {
+      id: `tx_${key}_manual`,
+      amount,
+      merchant: title,
+      category: BUDGETED_IN_CALENDAR,
+      date: SETTLED_DUE_DATE,
+      status: 'verified', isRecurring: true, source: 'recurring',
+      autoCategorized: true, payPeriodId: MOCK_PAY_PERIOD_ID,
+      // Both halves must name the SAME account, and both must name one at all.
+      accountId: 'acc1',
+      paidCalendarItemId: `cal_${key}_paid_instance`,
+      createdAt: new Date(Date.now() - 3600000).toISOString(),
+    },
+    // The overnight bank-sync copy: exactly the shape `bankEmailSync` writes —
+    // born `verified` (its balance is already authoritative) but still
+    // `needsCategory`, under the bank's RAW descriptor, dated to the clearing
+    // date. `createdAt` is deliberately EARLIER than the manual row's, which is
+    // the ordering under which `pickKeeper` would name this row the keeper — the
+    // banner must still merge INTO the settled row.
+    {
+      id: `tx_${key}_bank`,
+      amount,
+      merchant: descriptor,
+      category: 'Uncategorized',
+      date: SETTLED_CLEAR_DATE,
+      status: 'verified', isRecurring: false, source: 'bank-sync',
+      autoCategorized: false, payPeriodId: MOCK_PAY_PERIOD_ID,
+      accountId: 'acc1',
+      needsCategory: true,
+      bankRef: `synth:test-${key}`,
+      createdAt: new Date(Date.now() - 7200000).toISOString(),
+    },
+  ],
+});
+
+/** DESCRIPTOR tier — "WATER" is a significant token of both sides. */
+const SETTLED_WATER = settledBillPair(
+  'water', 'City of Orono Water', 'ORONO WATER UTIL 4471', SETTLED_WATER_AMOUNT,
+);
+/** AMOUNT-ONLY tier — no token in common, the CPENERGY-shaped case. */
+const SETTLED_ELECTRIC = settledBillPair(
+  'electric', 'Xcel Energy (Electric)', 'NSPM UTILITY 8823', SETTLED_ELECTRIC_AMOUNT,
+);
+
 const BILL_MERGE_CALENDAR_ITEMS: CalendarItem[] = [
   {
     id: 'cal_gas_template',
     title: 'Centerpoint Energy (Natural Gas)',
     amount: 142,
     // The 5th of the current month, recurring monthly — inside every window the
-    // calendar and the review drawer expand.
-    date: `${getLocalDateString().slice(0, 7)}-05`,
+    // calendar and the review drawer expand. NOTHING marks this series paid, so
+    // its occurrence stays in the bill picker on every day of the month.
+    date: `${BILL_MERGE_MONTH}-05`,
     type: 'expense',
     isPaid: false,
     isRecurring: true,
@@ -279,6 +403,8 @@ const BILL_MERGE_CALENDAR_ITEMS: CalendarItem[] = [
     type: 'expense',
     isPaid: false,
   },
+  ...SETTLED_WATER.calendarItems,
+  ...SETTLED_ELECTRIC.calendarItems,
 ];
 
 const BILL_MERGE_TRANSACTIONS: Transaction[] = [
@@ -288,6 +414,8 @@ const BILL_MERGE_TRANSACTIONS: Transaction[] = [
     status: 'pending_review', isRecurring: false, source: 'image-capture',
     autoCategorized: false, payPeriodId: MOCK_PAY_PERIOD_ID,
   },
+  ...SETTLED_WATER.transactions,
+  ...SETTLED_ELECTRIC.transactions,
 ];
 
 /**
@@ -1547,7 +1675,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // NOT a mirror of the mock `deleteTransaction` above, which never reverses
   // a balance at all (see the parity note near its real-context counterpart
   // further down this file).
-  const mergeTransactions = useCallback(async (keeperId: string, dupeId: string) => {
+  const mergeTransactions = useCallback(async (keeperId: string, dupeId: string, learnAlias?: MergeLearnAlias): Promise<boolean> => {
     const keeperTx = transactions.find(t => t.id === keeperId);
     const dupeTx = transactions.find(t => t.id === dupeId);
     if (!keeperTx || !dupeTx) {
@@ -1559,10 +1687,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
     // Settled-bill guard parity (utils/settledBillGuard.ts): the DUPE is deleted
     // by this merge, so a dupe that settled a bill orphans the paid calendar doc.
+    // FALSE (not void) so the caller can tell a refusal from a merge — parity
+    // with the real mutation's return contract.
     const dupeSettledBill = findSettledBill(dupeTx, calendarItems);
     if (dupeSettledBill) {
       toast.error(settledBillRefusal('merge away', dupeSettledBill.title));
-      return;
+      return false;
     }
 
     const updates = buildMergeUpdates(keeperTx, dupeTx);
@@ -1580,6 +1710,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         : a));
     }
 
+    // F-XCUT-03 parity: the merged-away dupe is a DELETE, so it lands in
+    // Recently Deleted exactly like `deleteTransaction`'s row does. Outside the
+    // updater below — `dupeTx` is already resolved, and state updaters stay pure.
+    pushToTrash('transaction', dupeTx as unknown as { id: string } & Record<string, unknown>);
+
     setTransactions(prev => {
       const withoutDupe = prev.filter(t => t.id !== dupeId);
       return withoutDupe.map(t => {
@@ -1590,14 +1725,27 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       });
     });
 
+    // Alias-learning parity (settled-bill duplicate arm): the real mutation
+    // stages this arrayUnion into the SAME batch as the merge.
+    if (learnAlias?.calendarItemId && learnAlias.descriptor.trim()) {
+      const descriptor = learnAlias.descriptor.trim();
+      setCalendarItems(prev => prev.map(i => i.id === learnAlias.calendarItemId
+        ? { ...i, bankDescriptorAliases: Array.from(new Set([...(i.bankDescriptorAliases ?? []), descriptor])) }
+        : i));
+    }
+
     track('duplicate_merged', { source: dupeTx.source });
     toast.success('Mock: Transactions merged');
-  }, [transactions, accounts, calendarItems]);
+    return true;
+  }, [pushToTrash, transactions, accounts, calendarItems]);
 
-  const keepBothTransactions = useCallback(async (txnId: string) => {
+  const keepBothTransactions = useCallback(async (txnId: string, dismissDuplicateOf?: string) => {
     setTransactions(prev => prev.map(t => {
       if (t.id !== txnId) return t;
-      const next = { ...t };
+      // Parity with the real mutation: the stored flag is always cleared, and
+      // the SETTLED-BILL arm additionally persists the counterpart it was asked
+      // about (that arm is computed at render, so it has no flag to clear).
+      const next: Transaction = { ...t, ...(dismissDuplicateOf ? { duplicateDismissedFor: dismissDuplicateOf } : {}) };
       delete next.possibleDuplicateOf;
       return next;
     }));
