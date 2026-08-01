@@ -182,6 +182,20 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
     [habits, currentWeek, currentWeekSubmissionTotals]
   );
 
+  // The same figure narrowed to TODAY, for the row's "N today" sub-label —
+  // the one every member row above it carries. Derived from `decomposeDayPoints`
+  // exactly like the week figure above, never from a `points.daily` field: no
+  // member doc holds the household's own share, so there is nothing stored to
+  // read. Today is inside the current-week window, so it reuses that window's
+  // already-fetched `submissionTotals` and costs no extra query — and it
+  // resolves in the same tick as the week figure, so the row never shows one
+  // of the two while still loading the other.
+  const currentWeekHouseholdToday = useMemo(() => {
+    if (currentWeekSubmissionTotals === undefined) return undefined;
+    const today = getLocalDateString();
+    return calculateHouseholdShareForDateRange(habits, today, today, today, currentWeekSubmissionTotals);
+  }, [habits, currentWeekSubmissionTotals]);
+
   // null = current week. Component state only, never written to storage.
   const [selectedWeekStart, setSelectedWeekStart] = useState<string | null>(null);
   const [isWeekMenuOpen, setIsWeekMenuOpen] = useState(false);
@@ -347,6 +361,31 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
         value: s.weekly,
         subLabel: `${s.today} today`,
       }));
+
+  // "N today" for the Shared habits row. `undefined` = the submissions fetch
+  // hasn't landed (render nothing, same rule as the value slot); `null` = a
+  // PAST week, where "today" isn't a concept — matching the member rows above,
+  // whose `subLabel` is likewise null there.
+  const sharedToday = isPastWeek ? null : currentWeekHouseholdToday;
+
+  // The Shared habits bar, measured against the SAME denominator the member
+  // bars use — the leader's week, which `rows` is sorted by, so every bar on
+  // the board reads on one axis rather than each against itself.
+  //
+  // Two deliberate asymmetries with a member's bar:
+  //  - clamped at 100, because this row is NOT part of the population the
+  //    leader was picked from and can genuinely exceed it (a habit that credits
+  //    the household pays this row, not a person). An unclamped width > 100%
+  //    would just be clipped by the track's overflow-hidden anyway;
+  //  - the denominator does NOT widen to include this value, even though that
+  //    would be the more faithful scale. It arrives asynchronously, so folding
+  //    it in would visibly re-scale every member bar the moment the fetch
+  //    landed — the same load-time shift the row itself was fixed to stop.
+  const leaderValue = rows[0]?.value ?? 0;
+  const sharedBarPct =
+    householdShare === undefined || leaderValue <= 0
+      ? 0
+      : Math.min(100, Math.max(0, Math.round((householdShare / leaderValue) * 100)));
 
   return (
     <Section
@@ -551,6 +590,11 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
                 the value slot until the submissions fetch lands) and at 0 —
                 same as the per-member rows, so the scoreboard never changes
                 height as this value loads or crosses zero.
+                Carries the full member-row silhouette — bar AND "N today" —
+                because it is one of the standings rows, not a footnote to
+                them: it competes for the same week's points and reads on the
+                same scale, and a row missing two of its neighbours' three
+                figures looks like data that failed to load.
                 Labelled "Shared habits", not "Household": the hero row above is
                 the household now, and two rows with the same badge and the same
                 word would be indistinguishable at a glance. */}
@@ -567,9 +611,41 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
                 >
                   <HouseholdAvatar size={30} data-testid="scoreboard-household-badge" />
                   <div className="flex-1 min-w-0">
-                    <span className="text-[13.5px] font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate">
-                      Shared habits
-                    </span>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-[13.5px] font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate">
+                        Shared habits
+                      </span>
+                      {typeof sharedToday === 'number' && (
+                        <span className="text-[10.5px] text-brand-500 dark:text-brand-400 whitespace-nowrap">
+                          {sharedToday} today
+                        </span>
+                      )}
+                    </div>
+                    {/* The track always renders, so this row keeps the exact
+                        silhouette of the member rows above it whether or not
+                        the figure is known — but the FILL waits for the value,
+                        since a bar is a statement about the number just as much
+                        as the numeral is. */}
+                    <div className="mt-[5px] h-1 rounded-full bg-brand-100 dark:bg-brand-700 overflow-hidden">
+                      {householdShare !== undefined && (
+                        <div
+                          data-testid="scoreboard-shared-bar"
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${sharedBarPct}%`,
+                            // Neutral, so the row reads as "the house" rather
+                            // than as one more person's identity colour — but
+                            // brand-400, NOT the badge's brand-600. The badge
+                            // picked a step that does NOT lighten under `.dark`
+                            // so its white glyph stays legible; a bar has the
+                            // opposite need (contrast against a track that
+                            // darkens to brand-700), and brand-400 is the
+                            // neutral that does lighten there.
+                            backgroundColor: 'var(--color-brand-400)',
+                          }}
+                        />
+                      )}
+                    </div>
                   </div>
                   <div className="flex-none w-14 text-right">
                     {householdShare === undefined ? (
