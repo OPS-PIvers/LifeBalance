@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { getTopOpenDrawerId, registerOpenDrawer } from '@/utils/openDrawerRegistry';
 
 // Sheet motion — extracted so the sheet animates on one named curve instead of
 // inline literals, and the values retune together. The spring is a framer-motion
@@ -14,10 +15,6 @@ import { useFocusTrap } from '@/hooks/useFocusTrap';
 // module if another primitive ever needs the same curve.
 const DRAWER_SPRING = { type: 'spring', damping: 25, stiffness: 200 } as const;
 const BACKDROP_FADE_SEC = 0.2; // seconds; mirrors --duration-base (200ms)
-
-// Module-level stack of currently-open drawers (topmost last), so nested
-// drawers can scope Escape handling to the top sheet only.
-const openDrawerStack: symbol[] = [];
 
 interface DrawerProps {
   isOpen: boolean;
@@ -94,26 +91,24 @@ export const Drawer: React.FC<DrawerProps> = ({
     }
   }, [isOpen]);
 
-  // Register on the open-drawer stack so Escape only reaches the TOPMOST sheet
-  // when drawers nest (e.g. the habit picker inside the review drawer) —
-  // otherwise every open drawer's window listener fires and all sheets close.
+  // Register on the shared open-drawer stack. Two consumers: Escape only
+  // reaches the TOPMOST sheet when drawers nest (e.g. the habit picker inside
+  // the review drawer) — otherwise every open drawer's window listener fires
+  // and all sheets close — and self-opening surfaces (MainLayout's
+  // once-per-app-open review drawer) wait for the stack to empty rather than
+  // stacking a second sheet over whatever the user is already reading.
   const stackIdRef = useRef<symbol | null>(null);
   if (stackIdRef.current === null) stackIdRef.current = Symbol('drawer');
   useEffect(() => {
     if (!isOpen) return;
-    const id = stackIdRef.current as symbol;
-    openDrawerStack.push(id);
-    return () => {
-      const i = openDrawerStack.indexOf(id);
-      if (i !== -1) openDrawerStack.splice(i, 1);
-    };
+    return registerOpenDrawer(stackIdRef.current as symbol);
   }, [isOpen]);
 
   // Handle Escape key
   useEffect(() => {
     if (!isOpen || disableClose) return;
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && openDrawerStack[openDrawerStack.length - 1] === stackIdRef.current) {
+      if (e.key === 'Escape' && getTopOpenDrawerId() === stackIdRef.current) {
         onClose();
       }
     };
