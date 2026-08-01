@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act, within } from '@testing-library/react';
+import { render, screen, fireEvent, act, within, waitFor } from '@testing-library/react';
 import type { Habit, HabitSubmission, HouseholdMember, WeeklyRecap } from '@/types/schema';
 import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 import { calculateHouseholdPointsForDateRange, calculateMemberPointsForDateRange } from '@/utils/habitAttribution';
@@ -378,7 +378,13 @@ describe('ScoreboardWidget', () => {
       // household now, and two identically-badged "Household" rows would be
       // indistinguishable.
       expect(householdRow).toHaveTextContent('Shared habits');
-      expect(householdRow).toHaveTextContent(String(expectedHouseholdShare));
+      // Wait on the VALUE, not the row. The row renders at first paint with a
+      // Skeleton in its value slot, so `findByTestId` resolves before the
+      // submissions fetch lands — it is no longer an implicit wait for the
+      // figure, and asserting straight off it raced (a CI-only flake).
+      await waitFor(() =>
+        expect(householdRow).toHaveTextContent(String(expectedHouseholdShare))
+      );
       // Paul (44) and Jen (17) each still render their own weekly value.
       expect(screen.getByText('44')).toBeInTheDocument();
       expect(screen.getByText('17')).toBeInTheDocument();
@@ -410,7 +416,8 @@ describe('ScoreboardWidget', () => {
       // Day/Week toggle (see the row's render guard in the component).
       const householdRow = await screen.findByTestId('scoreboard-household-row');
       expect(householdRow).toHaveTextContent('Shared habits');
-      expect(householdRow).toHaveTextContent('0');
+      // Wait on the VALUE — see the note above; the row now precedes its figure.
+      await waitFor(() => expect(householdRow).toHaveTextContent('0'));
       // …while the hero, which is a different thing, still stands.
       expect(within(screen.getByTestId('scoreboard-hero-row')).getByText('Household')).toBeInTheDocument();
     });
@@ -508,7 +515,9 @@ describe('ScoreboardWidget', () => {
       render(<ScoreboardWidget />);
 
       const householdRow = await screen.findByTestId('scoreboard-household-row');
-      expect(householdRow).toHaveTextContent('-20');
+      // Wait on the VALUE — see the note above; the row now precedes its figure.
+      // This is the assertion that actually flaked in CI, reading the Skeleton.
+      await waitFor(() => expect(householdRow).toHaveTextContent('-20'));
       expect(screen.getByTestId('scoreboard-total')).toHaveTextContent(String(total));
       // The visible rows — Paul (44), Jen (17), Household (-20) — sum EXACTLY
       // to the displayed total, which is the invariant this feature exists
