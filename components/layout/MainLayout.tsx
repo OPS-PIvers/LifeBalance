@@ -201,7 +201,17 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   // Re-snapshotting HERE rather than when it was armed is the point: whatever
   // the user resolved in the sheet they were already in is gone from the queue
   // by the time this opens.
-  if (autoOpenPending && openDrawerCount === 0) {
+  //
+  // `!activeKid` mirrors the arm block's guard for the same reason it exists
+  // there. Landing is now a SEPARATE render from arming, so Kid Mode can be
+  // entered in between — and entering it swaps the whole shell, which unmounts
+  // the sheet that was holding this open and drops the count to 0 on the very
+  // render `activeKid` turns true. Without this, the open would be consumed on
+  // a render whose tree never mounts the review drawer at all: `reviewDrawerOpen`
+  // would flip true invisibly and the sheet would ambush the parent on
+  // Kid-Mode exit. Held instead of consumed, so it still lands afterwards —
+  // re-snapshotted, since the block below re-reads the queue when it fires.
+  if (autoOpenPending && openDrawerCount === 0 && !activeKid) {
     setAutoOpenPending(false);
     if (reviewQueueItems.length > 0) {
       setReviewSnapshot(reviewQueueItems); // snapshot so the cycle is stable

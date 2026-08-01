@@ -7,12 +7,20 @@ import { resetOpenDrawersForTest } from '@/utils/openDrawerRegistry';
 import { APP_REOPEN_MIN_HIDDEN_MS } from '@/hooks/useAppReopen';
 import MainLayout from './MainLayout';
 import type { ReviewQueueItem } from '@/utils/reviewQueue';
+import type { HouseholdMember } from '@/types/schema';
 
 // The combined review queue MainLayout's auto-open latch watches. Mutable so a
 // test can take it 0 → >0 the way a late Firestore delivery does. The context
 // mocks below hand back fresh objects each render, so the `reviewQueueItems`
 // memo recomputes and picks the new value up.
 let queueItems: ReviewQueueItem[] = [];
+
+// The three inputs `activeKid` is derived from, mutable for the same reason:
+// arming and landing the auto-open are separate renders, so a test has to be
+// able to switch into (and back out of) Kid Mode BETWEEN them.
+let kidModeEnabled = false;
+let members: HouseholdMember[] = [];
+let activeMemberId: string | null = null;
 
 vi.mock('./TopToolbar', () => ({ default: () => <div data-testid="top-toolbar" /> }));
 vi.mock('./BottomNav', () => ({ default: () => <div data-testid="bottom-nav" /> }));
@@ -21,7 +29,11 @@ vi.mock('@/components/habits/HabitLocationPromptBanner', () => ({ default: () =>
 vi.mock('@/components/habits/HabitLogIntent', () => ({ default: () => null }));
 vi.mock('@/utils/preloadOnIdle', () => ({ preloadOnIdle: () => () => {} }));
 vi.mock('@/hooks/useAppBadge', () => ({ useAppBadge: () => {} }));
-vi.mock('@/hooks/useKidModeEnabled', () => ({ useKidModeEnabled: () => false }));
+vi.mock('@/hooks/useKidModeEnabled', () => ({ useKidModeEnabled: () => kidModeEnabled }));
+// The kid surface MainLayout early-returns INSTEAD of the whole parent shell.
+vi.mock('@/components/kid/KidDashboard', () => ({
+  default: () => <div data-testid="kid-dashboard" />,
+}));
 vi.mock('@/hooks/useKeyboardViewportAnchor', () => ({
   useKeyboardViewportAnchor: () => ({ shellRef: { current: null }, isKeyboardAnchored: false }),
 }));
@@ -40,8 +52,8 @@ vi.mock('@/hooks/useActionQueue', () => ({
 vi.mock('@/utils/reviewQueue', () => ({ buildReviewQueueSnapshot: () => queueItems }));
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useHouseholdCore: () => ({
-    members: [],
-    activeMemberId: null,
+    members,
+    activeMemberId,
     isLoading: false,
     householdId: 'h1',
     householdSettings: {},
@@ -64,6 +76,23 @@ vi.mock('@/components/modals/ReviewPendingDrawer', () => ({
 
 const SHELL = 'Review (1 of 1)';
 const ROW = 'Review Transaction';
+
+/**
+ * The shell cycler's title carries the size of the snapshot it opened with, so
+ * it doubles as a read-out of WHEN the queue was snapshotted.
+ */
+const shellTitleFor = (queueSize: number) => `Review (1 of ${queueSize})`;
+
+const member = (uid: string, extra: Partial<HouseholdMember> = {}): HouseholdMember => ({
+  uid,
+  displayName: uid,
+  role: 'admin',
+  points: { daily: 0, weekly: 0, total: 0 },
+  ...extra,
+});
+
+const ADULT = member('adult-1');
+const KID = member('kid_abc', { role: 'member', isManaged: true, managedByUid: 'adult-1' });
 
 const txItem = (id: string): ReviewQueueItem => ({
   kind: 'transaction',
@@ -125,19 +154,26 @@ const reopenAppAfterAbsence = () => {
   nowSpy.mockRestore();
 };
 
-const renderShell = () =>
-  render(
-    <MemoryRouter>
-      <MainLayout>
-        <RowDrawerPage />
-      </MainLayout>
-    </MemoryRouter>,
-  );
+// A FRESH element each call — `rerender` with a referentially identical element
+// is a no-op (React bails out), which would silently skip the render the mutated
+// Kid-Mode mocks are meant to drive.
+const shellTree = () => (
+  <MemoryRouter>
+    <MainLayout>
+      <RowDrawerPage />
+    </MainLayout>
+  </MemoryRouter>
+);
+
+const renderShell = () => render(shellTree());
 
 describe('MainLayout — the auto-opened review drawer never stacks on another sheet', () => {
   beforeEach(() => {
     resetOpenDrawersForTest();
     queueItems = [];
+    kidModeEnabled = false;
+    members = [];
+    activeMemberId = null;
   });
 
   afterEach(() => {
@@ -201,5 +237,60 @@ describe('MainLayout — the auto-opened review drawer never stacks on another s
     closeDrawer(ROW);
 
     await waitFor(() => expect(screen.queryAllByRole('dialog')).toHaveLength(0));
+  });
+
+  it('holds a pending auto-open across a Kid Mode round-trip instead of consuming it on the kid render', async () => {
+    const { rerender } = renderShell();
+    await waitFor(() => expect(screen.getByTestId('top-toolbar')).toBeInTheDocument());
+
+    // Armed while the user is in a row sheet, so it is held rather than landed.
+    queueItems = [txItem('t1')];
+    fireEvent.click(screen.getByRole('button', { name: 'Open row review' }));
+    await waitFor(() => expect(dialogTitles()).toEqual([ROW]));
+
+    // A parent switches into a kid. This swaps the ENTIRE shell, which unmounts
+    // the row sheet that was holding the auto-open back — so the open-drawer
+    // count drops to 0 on the very render `activeKid` turns true. That is the
+    // hazard render: without `!activeKid` on the landing block the open is
+    // consumed by a tree that never mounts the review drawer at all.
+    kidModeEnabled = true;
+    members = [ADULT, KID];
+    activeMemberId = KID.uid;
+    rerender(shellTree());
+
+    await waitFor(() => expect(screen.getByTestId('kid-dashboard')).toBeInTheDocument());
+    expect(screen.queryByTestId('top-toolbar')).not.toBeInTheDocument();
+    expect(dialogTitles()).toHaveLength(0);
+
+    // A second item syncs in while the kid has the screen. It is the tell: the
+    // landing block re-snapshots the queue when it FIRES, so the size baked
+    // into the cycler's title says whether the open was held until now (2) or
+    // silently consumed back on the kid render with a stale snapshot (1).
+    queueItems = [txItem('t1'), txItem('t2')];
+
+    // Back to the parent — held, not dropped, so it lands now.
+    kidModeEnabled = false;
+    members = [];
+    activeMemberId = null;
+    rerender(shellTree());
+
+    await waitFor(() => expect(dialogTitles()).toEqual([shellTitleFor(2)]));
+  });
+
+  it('lands normally for an adult in a household that HAS Kid Mode turned on', async () => {
+    // The guard keys on `activeKid`, not on the global flag or the presence of
+    // a managed member — an adult in a kid-enabled household is untouched.
+    kidModeEnabled = true;
+    members = [ADULT, KID];
+    activeMemberId = ADULT.uid;
+    renderShell();
+    await waitFor(() => expect(screen.getByTestId('top-toolbar')).toBeInTheDocument());
+
+    queueItems = [txItem('t1')];
+    fireEvent.click(screen.getByRole('button', { name: 'Open row review' }));
+    await waitFor(() => expect(dialogTitles()).toEqual([ROW]));
+
+    closeDrawer(ROW);
+    await waitFor(() => expect(dialogTitles()).toContain(SHELL));
   });
 });
