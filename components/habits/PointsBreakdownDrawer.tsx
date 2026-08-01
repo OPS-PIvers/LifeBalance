@@ -73,13 +73,30 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
 
   const householdTotal = period === 'day' ? dailyPoints : weeklyPoints;
 
-  // The Household row's date window — Anchored on `getLocalDateString()`
-  // (never a bare `new Date()`) so it's deterministic under the same mock the
-  // rest of the per-member-points surfaces use in tests.
-  const householdShareStart = useMemo(() => {
-    const today = getLocalDateString();
-    return period === 'day' ? today : format(startOfWeek(parseISO(today), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-  }, [period]);
+  // The submissions FETCH window — always the current week, for BOTH periods,
+  // and therefore deliberately independent of `period`.
+  //
+  // It used to narrow to today for Day, which meant every Day↔Week tap changed
+  // the window, changed `submissionCacheKey`, and sent `householdShare` back to
+  // `undefined` until a fresh fetch resolved — unmounting the "Shared habits"
+  // row for a frame or two. In a bottom sheet that costs a whole row of height,
+  // so the drawer visibly dropped and snapped back on every toggle. The day
+  // window (today..today) is a strict SUBSET of the week window, and
+  // `calculateHouseholdShareForDateRange` only ever looks totals up for the
+  // dates it walks — so one week-wide fetch serves both periods exactly, and a
+  // period switch is now a pure synchronous recompute with no refetch at all.
+  //
+  // Anchored on `getLocalDateString()` (never a bare `new Date()`) so it's
+  // deterministic under the same mock the rest of the per-member-points
+  // surfaces use in tests. Recomputed every render rather than memoized: it's
+  // a plain STRING, so the effect/memo dependency comparisons below behave
+  // identically to a memoized one, while a drawer left mounted across a week
+  // rollover (this one is kept mounted by `LazyMount`) still picks up the new
+  // week instead of pinning the one it first mounted under.
+  const shareWindowStart = format(
+    startOfWeek(parseISO(getLocalDateString()), { weekStartsOn: 1 }),
+    'yyyy-MM-dd',
+  );
 
   // Stored submissions covering the Household row's window — see the module
   // doc comment's "ONE exception" above. A submission can OUTLIVE its
@@ -92,36 +109,37 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
   // Household row structurally disagree with the total it exists to explain.
   // Fetched via the same `fetchSubmissionTotals` helper `usePointsSync` uses.
   //
-  // `key` is `submissionCacheKey(habits, householdShareStart)` — the window
-  // PLUS the fingerprint of every tracked habit's `lastUpdated` — rather than
-  // just the window, so a habits snapshot that can't have touched a
-  // submission (any toggle on a habit without `hasSubmissionTracking`, which
-  // is most of them) doesn't re-fetch. `fetchedShareCacheRef` mirrors this
-  // same {key, totals} shape but is read (not a dependency) by the effect
-  // below purely to gate the fetch — putting the state itself in the
-  // dependency array would retry a persistently-failing fetch on every
-  // render instead of only on the next real habits/window change.
+  // `key` is `submissionCacheKey(habits, shareWindowStart)` — the window PLUS
+  // the fingerprint of every tracked habit's `lastUpdated` — rather than just
+  // the window, so a habits snapshot that can't have touched a submission (any
+  // toggle on a habit without `hasSubmissionTracking`, which is most of them)
+  // doesn't re-fetch. `fetchedShareCacheRef` mirrors this same {key, totals}
+  // shape but is read (not a dependency) by the effect below purely to gate
+  // the fetch — putting the state itself in the dependency array would retry a
+  // persistently-failing fetch on every render instead of only on the next
+  // real habits/window change.
   //
   // Read at render time by `householdShare` below, rather than eagerly reset
   // with a synchronous setState at the top of the effect (a react-hooks/
-  // set-state-in-effect footgun) — so a period switch (Day ↔ Week) can't
-  // render the OTHER period's stale figure under the new period's label: the
-  // memo below treats a `key` mismatch exactly like "not fetched yet" and
-  // hides the row (see the `householdShare !== undefined` render guards).
+  // set-state-in-effect footgun). A `key` mismatch is treated exactly like
+  // "not fetched yet" and hides the row (see the `householdShare !== undefined`
+  // render guards) — render nothing, never a wrong number. Since the window no
+  // longer depends on `period`, that hidden state is reached only by a real
+  // habits change or a failed fetch, not by a Day↔Week tap.
   const fetchedShareCacheRef =
     useRef<{ key: string; totals: SubmissionTotalsByHabitDate } | null>(null);
   const [fetchedShare, setFetchedShare] =
     useState<{ key: string; totals: SubmissionTotalsByHabitDate } | undefined>(undefined);
 
   useEffect(() => {
-    const cacheKey = submissionCacheKey(habits, householdShareStart);
+    const cacheKey = submissionCacheKey(habits, shareWindowStart);
     if (fetchedShareCacheRef.current?.key === cacheKey) return;
 
     let cancelled = false;
     (async () => {
       try {
         const today = getLocalDateString();
-        const totals = await fetchSubmissionTotals(habits, householdShareStart, today, getHabitSubmissions);
+        const totals = await fetchSubmissionTotals(habits, shareWindowStart, today, getHabitSubmissions);
         if (!cancelled) {
           const entry = { key: cacheKey, totals };
           fetchedShareCacheRef.current = entry;
@@ -136,14 +154,18 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
       }
     })();
     return () => { cancelled = true; };
-  }, [habits, householdShareStart, getHabitSubmissions]);
+  }, [habits, shareWindowStart, getHabitSubmissions]);
 
+  // The DISPLAY range narrows to today for Day; the totals map behind it stays
+  // the week-wide one fetched above (a superset — see `shareWindowStart`), so
+  // switching period re-scores synchronously without dropping the row.
   const householdShare = useMemo(() => {
-    const cacheKey = submissionCacheKey(habits, householdShareStart);
+    const cacheKey = submissionCacheKey(habits, shareWindowStart);
     if (!fetchedShare || fetchedShare.key !== cacheKey) return undefined;
     const today = getLocalDateString();
-    return calculateHouseholdShareForDateRange(habits, householdShareStart, today, today, fetchedShare.totals);
-  }, [habits, householdShareStart, fetchedShare]);
+    const start = period === 'day' ? today : shareWindowStart;
+    return calculateHouseholdShareForDateRange(habits, start, today, today, fetchedShare.totals);
+  }, [habits, shareWindowStart, period, fetchedShare]);
 
   const trend = useMemo(
     () => (period === 'week' ? computePointsTrend(weeklyPoints, recaps, members) : null),

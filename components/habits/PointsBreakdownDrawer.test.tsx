@@ -345,6 +345,76 @@ describe('PointsBreakdownDrawer', () => {
       expect(await screen.findByTestId('points-drawer-household-row')).toHaveTextContent('10');
     });
 
+    it('narrows the Household value to today in Day view while the WEEK figure covers the whole week', async () => {
+      // Monday (the week start) plus today, both legacy/unattributed. Week must
+      // see both (20), Day only today's (10) — the assertion that the fix
+      // didn't simply widen Day's window to the week along with the fetch.
+      const habits = [
+        makeHabit({ completedDates: ['2026-07-27', '2026-07-30'], completedBy: undefined, count: 1 }),
+      ];
+      setup({ habits });
+      renderDrawer();
+
+      expect(await screen.findByTestId('points-drawer-household-row')).toHaveTextContent('20');
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Day' }));
+      expect(screen.getByTestId('points-drawer-household-row')).toHaveTextContent('10');
+    });
+
+    // The display glitch this pair pins: the submissions fetch window used to
+    // narrow to today for Day, so every Day↔Week tap changed
+    // `submissionCacheKey`, sent `householdShare` back to `undefined`, and
+    // UNMOUNTED this row until a fresh fetch resolved. A bottom sheet is sized
+    // by its content, so losing a row mid-toggle dropped the whole drawer and
+    // snapped it back. The window is the week for both periods now (the day
+    // window is a strict subset of it), making a period switch a pure
+    // synchronous recompute.
+    it('keeps the Shared habits row mounted across a Day↔Week switch, with no intermediate blank frame', async () => {
+      const habits = [
+        makeHabit({ completedDates: ['2026-07-27', '2026-07-30'], completedBy: undefined, count: 1 }),
+      ];
+      setup({ habits });
+      renderDrawer();
+      await screen.findByTestId('points-drawer-household-row');
+
+      // Synchronous `getBy*` immediately after each click — NOT `findBy*`,
+      // which would poll right past the missing frame this test exists to
+      // catch.
+      fireEvent.click(screen.getByRole('radio', { name: 'Day' }));
+      expect(screen.getByTestId('points-drawer-household-row')).toHaveTextContent('10');
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Week' }));
+      expect(screen.getByTestId('points-drawer-household-row')).toHaveTextContent('20');
+    });
+
+    it('issues no additional submissions fetch when the period changes', async () => {
+      const getHabitSubmissions = vi.fn(async () => []);
+      setup({
+        habits: [
+          makeHabit({
+            id: 'h-tracked',
+            hasSubmissionTracking: true,
+            completedDates: ['2026-07-30'],
+            completedBy: undefined,
+            count: 1,
+          }),
+        ],
+        getHabitSubmissions,
+      });
+      renderDrawer();
+      await act(async () => {});
+      expect(getHabitSubmissions).toHaveBeenCalledTimes(1);
+      // The one fetch covers the whole week, so both periods read from it.
+      expect(getHabitSubmissions).toHaveBeenCalledWith('h-tracked', '2026-07-27', mockToday);
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Day' }));
+      await act(async () => {});
+      fireEvent.click(screen.getByRole('radio', { name: 'Week' }));
+      await act(async () => {});
+
+      expect(getHabitSubmissions).toHaveBeenCalledTimes(1);
+    });
+
     it('threads submissionTotals through the CURRENT window so a submission that OUTLIVES its completion date still counts toward the Household row (finding 1)', async () => {
       // A legacy incremental habit whose completion was reverted — the date
       // is gone from `completedDates` — but its submission doc (worth -20)
