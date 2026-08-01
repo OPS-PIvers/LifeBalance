@@ -282,6 +282,16 @@ export interface HouseholdContextType {
    *  guard early-return (already paid, bad id, etc.); callers must not treat
    *  a `false` result as success. */
   linkBankTransactionToBill: (transactionId: string, calendarItemId: string) => Promise<boolean>;
+  /** The retract half of alias learning: drop ONE learned bank descriptor from
+   *  a bill's `bankDescriptorAliases`. A wrong alias makes the nightly sync
+   *  auto-mark that bill paid off an unrelated charge every period, so this is
+   *  the repair path for it. `calendarItemId` must be the REAL doc id that
+   *  carries the array — the recurring TEMPLATE for a series, never a synthetic
+   *  occurrence id. `alias` must be the exact stored string (`arrayRemove`
+   *  matches by equality; do not normalize it first). Deliberately NOT folded
+   *  into `updateCalendarItem`, whose field allowlist omits this array on
+   *  purpose so a stale-snapshot Save can never clobber it. */
+  forgetBillDescriptorAlias: (calendarItemId: string, alias: string) => Promise<void>;
   /** TODO.md 2H(a) — "this charge IS that planned bill". Settles an unpaid
    *  expense calendar item using an EXISTING transaction, creating no second
    *  transaction: marks the bill paid at the transaction's (scanned) amount,
@@ -696,7 +706,7 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal'
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'setBucketLimits' | 'saveCeremonyChanges' | 'reallocateBucket'
   | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
-  | 'linkBankTransactionToBill' | 'settleBillWithTransaction'
+  | 'linkBankTransactionToBill' | 'settleBillWithTransaction' | 'forgetBillDescriptorAlias'
   | 'addTransaction' | 'addTransactions' | 'updateTransactionCategory' | 'reverseTransactionApproval' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
   | 'setTransactionSplit' | 'markSplitSettled'
   | 'mergeTransactions' | 'keepBothTransactions'

@@ -26,6 +26,7 @@ import {
   doc,
   collection,
   arrayUnion,
+  arrayRemove,
   getDoc,
   getDocs,
   setDoc,
@@ -2107,6 +2108,46 @@ describe('calendar items (bill↔transaction alias learning)', () => {
     await assertSucceeds(
       updateDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', BILL), {
         bankDescriptorAliases: deleteField(),
+      }),
+    );
+  });
+
+  // The unlink that clause was written for now exists: `forgetBillDescriptorAlias`
+  // (contexts/household/mutations/calendarMutations.ts). It is a repair path for a
+  // genuinely damaging state — one wrong alias makes the nightly sync auto-mark
+  // this bill paid off an unrelated charge every period, overstating Safe-to-Spend
+  // permanently — so pin all three retraction shapes. A future tightening of the
+  // calendarItem allowlist must not silently take the repair away.
+  it('allows RETRACTING one alias with arrayRemove (the shipped Forget button)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(asFirestore(ctx.firestore()), 'households', H1, 'calendarItems', BILL), {
+        bankDescriptorAliases: ['CPENERGY MNGCO', 'CENTERPOINT ENERGY'],
+      });
+    });
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', BILL), {
+        bankDescriptorAliases: arrayRemove('CPENERGY MNGCO'),
+      }),
+    );
+  });
+
+  it('allows retracting to an EMPTY list (the last alias removed)', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', BILL), {
+        bankDescriptorAliases: [],
+      }),
+    );
+  });
+
+  it('allows a SHORTER whole-array write (the size cap is an upper bound, not a floor)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(asFirestore(ctx.firestore()), 'households', H1, 'calendarItems', BILL), {
+        bankDescriptorAliases: ['CPENERGY MNGCO', 'CENTERPOINT ENERGY', 'CP ENERGY'],
+      });
+    });
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', BILL), {
+        bankDescriptorAliases: ['CENTERPOINT ENERGY'],
       }),
     );
   });

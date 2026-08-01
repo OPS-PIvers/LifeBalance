@@ -472,12 +472,13 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     setIsMerging(true);
     try {
       // ALIAS LEARNING IS DESCRIPTOR-TIER ONLY. On `amount-only` evidence the
-      // app knows nothing beyond amount/date/account, and a wrong alias is
-      // unrecoverable through the UI: `pickBillToPay`'s alias tier would
-      // auto-settle future occurrences of this bill against an unrelated
-      // descriptor, overstating Safe-to-Spend, and nothing in the app reads or
-      // clears `bankDescriptorAliases`. A confirmed merge is worth one deleted
-      // row; it is not worth a standing rule.
+      // app knows nothing beyond amount/date/account, and a wrong alias goes on
+      // costing until someone catches it: `pickBillToPay`'s alias tier
+      // auto-settles future occurrences of this bill against an unrelated
+      // descriptor, overstating Safe-to-Spend every period. It IS retractable
+      // now (the Edit-event drawer's "Learned bank names" section), but a silent
+      // standing rule nobody asked for is still the wrong default. A confirmed
+      // merge is worth one deleted row; it is not worth a standing rule.
       //
       // The RAW stored merchant, never a merchant-rule display name — the alias
       // has to match what the bank sends next month.

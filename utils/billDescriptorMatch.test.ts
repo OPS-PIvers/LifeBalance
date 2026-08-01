@@ -84,6 +84,27 @@ describe('pickBillToPay', () => {
     expect(got?.matchedBy).toBe('alias');
   });
 
+  // The end-to-end proof that `forgetBillDescriptorAlias` actually repairs
+  // something. A wrong alias is not cosmetic: the alias tier is checked FIRST,
+  // so an unrelated recurring charge marks this bill paid every period and
+  // Safe-to-Spend stays overstated. Retracting the alias must put the matcher
+  // back exactly where it was before the alias was learned.
+  it('stops matching once the learned alias is retracted', () => {
+    // A charge with NO token overlap with the bill title — the alias is the
+    // only thing that could ever match it.
+    const charge = { descriptor: 'CPENERGY MNGCO', amount: 118 };
+    const stored = ['CPENERGY MNGCO'];
+    const withAlias = bill({ title: 'Natural Gas', bankDescriptorAliases: stored });
+    expect(pickBillToPay(charge, [withAlias])?.matchedBy).toBe('alias');
+
+    // Exactly what `arrayRemove` leaves behind: the same bill, one fewer alias.
+    const remaining = stored.filter(a => a !== 'CPENERGY MNGCO');
+    const retracted = bill({ title: 'Natural Gas', bankDescriptorAliases: remaining });
+    expect(remaining).toEqual([]);
+    expect(matchesAlias(charge.descriptor, remaining)).toBe(false);
+    expect(pickBillToPay(charge, [retracted])).toBeNull();
+  });
+
   it('matches on title token-overlap when no alias was learned (matchedBy "token")', () => {
     const got = pickBillToPay({ descriptor: 'XCEL ENERGY WEB PYMT', amount: 118 }, [bill()]);
     expect(got?.matchedBy).toBe('token');

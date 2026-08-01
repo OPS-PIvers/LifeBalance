@@ -28,9 +28,11 @@
  * two differently — `descriptor` is a confident one-tap merge that also teaches
  * the bill the descriptor, `amount-only` is a question that must be confirmed
  * and teaches nothing (see `TransactionReviewForm`). Never collapse the tiers
- * back into a boolean: the alias write is what makes a wrong answer permanent
- * (`pickBillToPay`'s alias tier would auto-settle future occurrences, and no UI
- * anywhere reads or clears `bankDescriptorAliases`).
+ * back into a boolean: the alias write is what makes a wrong answer keep costing
+ * (`pickBillToPay`'s alias tier auto-settles future occurrences of this bill).
+ * A wrong alias is now repairable — the Edit-event drawer's "Learned bank names"
+ * section retracts one via `forgetBillDescriptorAlias` — but only if someone
+ * notices, which is not a reason to write one on thinner evidence.
  *
  * Pure — no Firestore, no React (which is why `needsReview` was moved to
  * `utils/reviewQueue.ts`). Data in, decision out.

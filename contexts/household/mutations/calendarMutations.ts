@@ -9,6 +9,7 @@ import {
   increment,
   serverTimestamp,
   arrayUnion,
+  arrayRemove,
   type Firestore,
   type WriteBatch,
 } from 'firebase/firestore';
@@ -930,6 +931,61 @@ export function makeSettleBillWithTransaction(deps: {
   };
 
   return { settleBillWithTransaction };
+}
+
+/**
+ * forgetBillDescriptorAlias — the READ/RETRACT half of alias learning.
+ *
+ * Five paths WRITE `bankDescriptorAliases` (linkBankTransactionToBill,
+ * settleBillWithTransaction, the review-form merge in transactionMutations, and
+ * the nightly `bankEmailSync` on the server). Nothing removed one. A single
+ * wrong alias is not a cosmetic mistake: `matchesAlias` is the top tier of
+ * `pickBillToPay`, so the nightly bank-email sync auto-marks that bill PAID
+ * every future period off an unrelated charge, and Safe-to-Spend stays
+ * overstated forever. This is the repair.
+ *
+ * WHY ITS OWN MUTATION rather than a field on the Edit-drawer Save:
+ * `makeUpdateCalendarItem` builds an EXPLICIT allowlist of the fields the form
+ * owns and deliberately omits this one. Folding aliases into that payload would
+ * let an ordinary title/amount edit write back a whole array read from a
+ * possibly-stale snapshot — the exact shape of the habit-history clobber, where
+ * the nightly sync's freshly-learned alias (or the partner's) is silently
+ * dropped. Removal is therefore a standalone, immediate write.
+ *
+ * WHY `arrayRemove` IS SAFE HERE even though `merchantRuleMutations.ts` argues
+ * against array operators: that objection is about OBJECTS matched by deep
+ * equality, whose bookkeeping fields (`matchCount`, `lastMatchedAt`) drift under
+ * you so a remove silently no-ops. Aliases are plain STRINGS that no writer ever
+ * mutates in place — they are only ever appended via `arrayUnion` or removed
+ * here — so exact equality is exactly the right matcher, and a concurrent append
+ * by the other device survives untouched.
+ *
+ * `alias` MUST be the exact stored string (whatever the UI read out of the
+ * array), NOT a normalized form: `arrayRemove` matches byte-for-byte, and
+ * stored aliases are raw bank descriptors.
+ */
+export function makeForgetBillDescriptorAlias(deps: {
+  db: Firestore;
+  householdId: string | null;
+}) {
+  const { db, householdId } = deps;
+
+  const forgetBillDescriptorAlias = async (calendarItemId: string, alias: string): Promise<void> => {
+    if (!householdId) return;
+
+    try {
+      await updateDoc(doc(db, `households/${householdId}/calendarItems`, calendarItemId), {
+        bankDescriptorAliases: arrayRemove(alias),
+      });
+      toast.success('Forgotten — future syncs won’t match that name');
+    } catch (error) {
+      console.error('[forgetBillDescriptorAlias] Failed:', error);
+      toast.error(describeError(error, 'forget that bank name'));
+      throw error;
+    }
+  };
+
+  return { forgetBillDescriptorAlias };
 }
 
 /**

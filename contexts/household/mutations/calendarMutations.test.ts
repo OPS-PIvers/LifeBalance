@@ -34,6 +34,7 @@ vi.mock('firebase/firestore', () => {
     serverTimestamp: () => ({ __serverTimestamp: true }),
     deleteField: () => ({ __deleteField: true }),
     arrayUnion: (...vals: unknown[]) => ({ __arrayUnion: vals }),
+    arrayRemove: (...vals: unknown[]) => ({ __arrayRemove: vals }),
     updateDoc: vi.fn(),
     deleteDoc: vi.fn(),
     addDoc: vi.fn(),
@@ -60,7 +61,13 @@ vi.mock('@/utils/firestoreSanitizer', () => ({
   sanitizeFirestoreData: (d: Record<string, unknown>) => d,
 }));
 
-import { makeLinkBankTransactionToBill, makePayCalendarItem, makeSettleBillWithTransaction } from './calendarMutations';
+import { updateDoc } from 'firebase/firestore';
+import {
+  makeForgetBillDescriptorAlias,
+  makeLinkBankTransactionToBill,
+  makePayCalendarItem,
+  makeSettleBillWithTransaction,
+} from './calendarMutations';
 import type { Account, CalendarItem, Transaction } from '@/types/schema';
 
 const HOUSEHOLD_ID = 'house1';
@@ -549,5 +556,72 @@ describe('makePayCalendarItem — paidCalendarItemId stamp', () => {
 
     const txSet = capturedSets.find(s => s.ref.__path.startsWith(`households/${HOUSEHOLD_ID}/transactions`));
     expect(txSet?.data).not.toHaveProperty('paidCalendarItemId');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// forgetBillDescriptorAlias — the retract half of alias learning. A wrong alias
+// makes the nightly sync auto-mark this bill paid off an unrelated charge every
+// period; these pin the ONE write that undoes it.
+// ---------------------------------------------------------------------------
+describe('makeForgetBillDescriptorAlias', () => {
+  beforeEach(() => {
+    capturedSets = [];
+    capturedUpdates = [];
+    commitCount = 0;
+    vi.clearAllMocks();
+  });
+
+  it('removes the EXACT stored descriptor with arrayRemove, and touches nothing else', async () => {
+    const { forgetBillDescriptorAlias } = makeForgetBillDescriptorAlias({
+      db,
+      householdId: HOUSEHOLD_ID,
+    });
+    await forgetBillDescriptorAlias('bill-1', 'CPENERGY MNGCO 4471');
+
+    expect(updateDoc).toHaveBeenCalledTimes(1);
+    const [ref, payload] = vi.mocked(updateDoc).mock.calls[0] as unknown as [
+      { __path: string },
+      Record<string, unknown>,
+    ];
+    expect(ref.__path).toBe(calPath('bill-1'));
+    // Exactly one field, and it is the arrayRemove sentinel — a whole-array
+    // write here would drop an alias the nightly sync learned concurrently.
+    expect(payload).toEqual({
+      bankDescriptorAliases: { __arrayRemove: ['CPENERGY MNGCO 4471'] },
+    });
+    // Nothing is batched: this is a standalone, immediate write.
+    expect(commitCount).toBe(0);
+  });
+
+  it('passes the raw descriptor through UNNORMALIZED — arrayRemove matches by exact equality', async () => {
+    const { forgetBillDescriptorAlias } = makeForgetBillDescriptorAlias({
+      db,
+      householdId: HOUSEHOLD_ID,
+    });
+    // Mixed case and doubled inner whitespace: `matchesAlias` would normalize
+    // both away, but the STORED string is what has to be removed.
+    await forgetBillDescriptorAlias('bill-1', 'Cpenergy  Mngco');
+
+    const [, payload] = vi.mocked(updateDoc).mock.calls[0] as unknown as [
+      unknown,
+      Record<string, unknown>,
+    ];
+    expect(payload).toEqual({ bankDescriptorAliases: { __arrayRemove: ['Cpenergy  Mngco'] } });
+  });
+
+  it('no-ops without a household — writes nothing', async () => {
+    const { forgetBillDescriptorAlias } = makeForgetBillDescriptorAlias({ db, householdId: null });
+    await forgetBillDescriptorAlias('bill-1', 'CPENERGY MNGCO');
+    expect(updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('rethrows so the caller can leave the row in place when the write fails', async () => {
+    vi.mocked(updateDoc).mockRejectedValueOnce(new Error('permission-denied'));
+    const { forgetBillDescriptorAlias } = makeForgetBillDescriptorAlias({
+      db,
+      householdId: HOUSEHOLD_ID,
+    });
+    await expect(forgetBillDescriptorAlias('bill-1', 'CPENERGY MNGCO')).rejects.toThrow();
   });
 });

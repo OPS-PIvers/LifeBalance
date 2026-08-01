@@ -2785,6 +2785,16 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     return true;
   }, [transactions, calendarItems]);
 
+  // Mirrors makeForgetBillDescriptorAlias in calendarMutations.ts — the retract
+  // half of alias learning. Exact-string removal (the real one uses
+  // `arrayRemove`, which matches by equality), never a normalized compare.
+  const forgetBillDescriptorAlias = useCallback(async (calendarItemId: string, alias: string) => {
+    setCalendarItems(prev => prev.map(i => i.id === calendarItemId
+      ? { ...i, bankDescriptorAliases: (i.bankDescriptorAliases ?? []).filter(a => a !== alias) }
+      : i));
+    toast.success('Forgotten — future syncs won’t match that name');
+  }, []);
+
   // Mirrors makeSettleBillWithTransaction in calendarMutations.ts (TODO.md
   // 2H(a)) — "this charge IS that planned bill". Unlike the mock above it DOES
   // move the balance: a pending_review row has not touched any account yet.
@@ -3766,6 +3776,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     deferCalendarItem: noOp,
     linkBankTransactionToBill,
     settleBillWithTransaction,
+    forgetBillDescriptorAlias,
     addHabit,
     updateHabit,
     deleteHabit,
