@@ -966,8 +966,15 @@ const BudgetCalendar: React.FC = () => {
                  </p>
                  <ul className="mt-2 space-y-1">
                    {editingItem.bankDescriptorAliases?.map(alias => (
-                     <li key={alias} className="flex items-center justify-between gap-2">
-                       <span className="min-w-0 flex-1 truncate font-mono text-xs text-brand-500 dark:text-brand-400">
+                     <li key={alias} className="flex items-start justify-between gap-2">
+                       {/* WRAPS, never truncates. Every other raw-string row in the
+                           app clips with `truncate`, but here the string IS the
+                           decision — "does this belong to this bill?" — and real
+                           bank descriptors run 40+ chars with the distinguishing
+                           part (a card tail, a division name) at the END. Two
+                           aliases can be identical until the last token. Clipping
+                           the tail would hide exactly what the user is judging. */}
+                       <span className="min-w-0 flex-1 break-all font-mono text-xs leading-snug text-brand-500 dark:text-brand-400">
                          {alias}
                        </span>
                        <Button
