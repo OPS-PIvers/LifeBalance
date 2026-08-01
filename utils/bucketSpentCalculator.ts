@@ -128,6 +128,10 @@ export function getTransactionsForBucket(
  *
  * Like the spent math, duplicate-named buckets share one list — a transaction
  * links to a bucket only by category NAME, so the two cannot be told apart.
+ *
+ * The newest-first order is INHERITED from {@link getTransactionsForBucket}'s
+ * sort (`.filter` preserves it) rather than re-established here — so if that
+ * sort ever changes, this contract changes with it.
  */
 export function getBucketSpendTransactions(
   bucketName: string,
