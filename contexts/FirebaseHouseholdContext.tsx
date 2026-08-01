@@ -126,6 +126,7 @@ import {
   makeDeleteCalendarItem,
   makePayCalendarItem,
   makeDeferCalendarItem,
+  makeForgetBillDescriptorAlias,
   makeLinkBankTransactionToBill,
   makeSettleBillWithTransaction,
 } from '@/contexts/household/mutations/calendarMutations';
@@ -1926,6 +1927,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }).linkBankTransactionToBill(transactionId, calendarItemId);
   }, [householdId, user, currentUser, transactions, calendarItems]);
 
+  const forgetBillDescriptorAlias = useCallback(async (calendarItemId: string, alias: string) => {
+    await makeForgetBillDescriptorAlias({ db, householdId }).forgetBillDescriptorAlias(calendarItemId, alias);
+  }, [householdId]);
+
   const settleBillWithTransaction = useCallback(async (
     transactionId: string,
     calendarItemId: string,
@@ -2647,6 +2652,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     deferCalendarItem,
     linkBankTransactionToBill,
     settleBillWithTransaction,
+    forgetBillDescriptorAlias,
     addTransaction,
     addTransactions,
     updateTransactionCategory,
@@ -2668,7 +2674,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, setAccountCardDetails, deleteAccount, archiveAccount, unarchiveAccount, updateAccountOrder, reorderAccounts,
     addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, setBucketLimits, saveCeremonyChanges, reallocateBucket,
-    addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem, linkBankTransactionToBill, settleBillWithTransaction,
+    addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem, linkBankTransactionToBill, settleBillWithTransaction, forgetBillDescriptorAlias,
     addTransaction, addTransactions, updateTransactionCategory, reverseTransactionApproval, updateTransaction, deleteTransaction, splitTransaction,
     setTransactionSplit, markSplitSettled,
     mergeTransactions, keepBothTransactions, getTransactionComments, addTransactionComment, deleteTransactionComment,

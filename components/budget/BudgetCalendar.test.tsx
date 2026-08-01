@@ -564,6 +564,85 @@ describe('BudgetCalendar', () => {
     expect(screen.getByText('Recurring Manager')).toBeInTheDocument();
   });
 
+  // The read/delete half of `bankDescriptorAliases`. Five paths write it and,
+  // until this section existed, nothing showed or cleared it — so one wrong
+  // alias let the nightly bank sync mark this bill paid off an unrelated charge
+  // every period, with no way out of the app.
+  describe('Learned bank names', () => {
+    const billWithAliases = (aliases?: string[]) => ({
+      id: 'item-gas',
+      title: 'Natural Gas',
+      amount: 142,
+      date: format(new Date(), 'yyyy-MM-dd'),
+      type: 'expense',
+      isPaid: false,
+      ...(aliases ? { bankDescriptorAliases: aliases } : {}),
+    });
+
+    const mountWith = (item: ReturnType<typeof billWithAliases>, forgetFn = vi.fn()) => {
+      (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        calendarItems: [item],
+        addCalendarItem: mockAddCalendarItem,
+        updateCalendarItem: mockUpdateCalendarItem,
+        deleteCalendarItem: mockDeleteCalendarItem,
+        forgetBillDescriptorAlias: forgetFn,
+        todos: [],
+        completeToDo: vi.fn(),
+        accounts: [],
+        transactions: [],
+      });
+      render(<BudgetCalendar />);
+      fireEvent.click(screen.getByLabelText(`Edit ${item.title}`));
+      return forgetFn;
+    };
+
+    it('renders nothing when the bill has learned no bank names', () => {
+      mountWith(billWithAliases());
+      expect(screen.queryByText('Learned bank names')).not.toBeInTheDocument();
+    });
+
+    it('lists the raw stored descriptors when the bill has learned some', () => {
+      mountWith(billWithAliases(['CPENERGY MNGCO 4471', 'CENTERPOINT ENERGY']));
+      expect(screen.getByText('Learned bank names')).toBeInTheDocument();
+      expect(screen.getByText('CPENERGY MNGCO 4471')).toBeInTheDocument();
+      expect(screen.getByText('CENTERPOINT ENERGY')).toBeInTheDocument();
+    });
+
+    it('forgets the EXACT stored string with no confirmation, and drops the row immediately', async () => {
+      const forget = mountWith(
+        billWithAliases(['CPENERGY MNGCO 4471', 'CENTERPOINT ENERGY']),
+        vi.fn().mockResolvedValue(undefined),
+      );
+
+      fireEvent.click(screen.getByLabelText('Forget the bank name CPENERGY MNGCO 4471'));
+
+      // Straight to the mutation — a repair must not be heavier than the damage.
+      expect(forget).toHaveBeenCalledWith('item-gas', 'CPENERGY MNGCO 4471');
+
+      // `editingItem` is a snapshot the listener never re-seeds, so the row only
+      // disappears because local state is patched too.
+      await waitFor(() => {
+        expect(screen.queryByText('CPENERGY MNGCO 4471')).not.toBeInTheDocument();
+      });
+      expect(screen.getByText('CENTERPOINT ENERGY')).toBeInTheDocument();
+      // Removal is its own write — Save is never involved.
+      expect(mockUpdateCalendarItem).not.toHaveBeenCalled();
+    });
+
+    it('keeps the row when the write fails, so the list still tells the truth', async () => {
+      mountWith(
+        billWithAliases(['CPENERGY MNGCO 4471']),
+        vi.fn().mockRejectedValue(new Error('permission-denied')),
+      );
+
+      fireEvent.click(screen.getByLabelText('Forget the bank name CPENERGY MNGCO 4471'));
+
+      await waitFor(() => {
+        expect(screen.getByText('CPENERGY MNGCO 4471')).toBeInTheDocument();
+      });
+    });
+  });
+
   it('exports the month to CSV via the overflow menu', () => {
     render(<BudgetCalendar />);
 

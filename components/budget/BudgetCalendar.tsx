@@ -36,7 +36,7 @@ const STRIP_WEEKS_BACK = 8;
 const STRIP_WEEKS_FORWARD = 12;
 
 const BudgetCalendar: React.FC = () => {
-  const { calendarItems, addCalendarItem, updateCalendarItem, deleteCalendarItem, accounts } = useFinance();
+  const { calendarItems, addCalendarItem, updateCalendarItem, deleteCalendarItem, forgetBillDescriptorAlias, accounts } = useFinance();
   const { todos, completeToDo } = useTodos();
   const fmt = useFormatCurrency();
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -346,6 +346,31 @@ const BudgetCalendar: React.FC = () => {
     } catch (error) {
       console.error("Failed to save calendar item:", error);
       toast.error("Failed to save event");
+    }
+  };
+
+  // Drop ONE learned bank descriptor from this bill. Standalone and immediate —
+  // deliberately NOT folded into handleSave, whose payload allowlist omits
+  // `bankDescriptorAliases` so an ordinary edit can't clobber the array.
+  //
+  // `editingItem` is a SNAPSHOT taken in openEditModal; nothing re-seeds it from
+  // the `calendarItems` listener while the drawer is open, so the row would sit
+  // there looking un-removed until the drawer is reopened. Patch local state too.
+  // No confirmation dialog: removing is itself the undo for a damaging state,
+  // and the repair must not be heavier than the damage.
+  const handleForgetAlias = async (alias: string) => {
+    if (!editingItem) return;
+    const targetId = editingItem.id;
+    try {
+      await forgetBillDescriptorAlias(targetId, alias);
+      setEditingItem(prev =>
+        prev && prev.id === targetId
+          ? { ...prev, bankDescriptorAliases: (prev.bankDescriptorAliases ?? []).filter(a => a !== alias) }
+          : prev,
+      );
+    } catch {
+      // The mutation already toasted the cause; leave the row in place so the
+      // list keeps telling the truth about what is still stored.
     }
   };
 
@@ -918,6 +943,44 @@ const BudgetCalendar: React.FC = () => {
                    onCheckedChange={setIsSubscription}
                    aria-label="Subscription?"
                  />
+               </div>
+             )}
+
+             {/* The learned bank wording for this bill, and the only way to take
+                 one back. Five paths write `bankDescriptorAliases`; until this
+                 existed, nothing read or cleared it — so one wrong entry let the
+                 nightly sync mark this bill paid off an unrelated charge every
+                 period, overstating Safe-to-Spend with no way out of the app.
+                 `editingItem.id` is already the alias-bearing doc (openEditModal
+                 swaps a recurring occurrence for its template). Renders nothing
+                 when the list is empty: this is a rare repair affordance, not a
+                 standard field, so it earns no empty state. */}
+             {editingItem && type === 'expense' && (editingItem.bankDescriptorAliases?.length ?? 0) > 0 && (
+               <div className="pt-3 border-t border-brand-200 dark:border-brand-700">
+                 <label className="text-sm font-semibold text-brand-700 dark:text-brand-200">
+                   Learned bank names
+                 </label>
+                 <p className="mt-0.5 text-xs text-brand-450 dark:text-brand-400">
+                   The wording your bank uses for this bill. A charge matching any of these marks
+                   it paid on its own — so remove any that don’t belong to it.
+                 </p>
+                 <ul className="mt-2 space-y-1">
+                   {editingItem.bankDescriptorAliases?.map(alias => (
+                     <li key={alias} className="flex items-center justify-between gap-2">
+                       <span className="min-w-0 flex-1 truncate font-mono text-xs text-brand-500 dark:text-brand-400">
+                         {alias}
+                       </span>
+                       <Button
+                         variant="ghost-destructive"
+                         size="icon-sm"
+                         onClick={() => handleForgetAlias(alias)}
+                         aria-label={`Forget the bank name ${alias}`}
+                       >
+                         <Trash2 size={14} />
+                       </Button>
+                     </li>
+                   ))}
+                 </ul>
                </div>
              )}
 
