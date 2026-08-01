@@ -536,4 +536,121 @@ describe('ScoreboardWidget', () => {
       });
     });
   });
+
+  describe('row disclosure (itemized breakdown)', () => {
+    const ledgerHabits = [
+      makeHabit({
+        id: 'h-run',
+        title: 'Morning run',
+        completedDates: ['2026-07-28', '2026-07-29'],
+        completedBy: { '2026-07-28': { paul: 1 }, '2026-07-29': { jen: 1 } },
+      }),
+      // No completedBy — belongs to nobody, so it lands on the Shared row.
+      makeHabit({ id: 'h-dishes', title: 'Dishes', basePoints: 8, completedDates: ['2026-07-29'] }),
+    ];
+
+    beforeEach(() => {
+      mockMembers.mockReturnValue([
+        makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 0, weekly: 10, total: 10 } }),
+        makeMember({ uid: 'jen', displayName: 'Jen', points: { daily: 0, weekly: 10, total: 10 } }),
+      ]);
+      mockHabits.mockReturnValue(ledgerHabits);
+      mockWeeklyPoints.mockReturnValue(28);
+    });
+
+    it('expands a member row into the habits and dates behind their total', () => {
+      render(<ScoreboardWidget />);
+
+      const row = screen.getByTestId('scoreboard-row-paul');
+      expect(row).toHaveAttribute('aria-expanded', 'false');
+
+      fireEvent.click(row);
+
+      expect(row).toHaveAttribute('aria-expanded', 'true');
+      const detail = document.getElementById('scoreboard-ledger-paul');
+      expect(detail).not.toBeNull();
+      expect(detail).toHaveTextContent('Morning run');
+      expect(detail).toHaveTextContent('Tue, Jul 28');
+      expect(detail).toHaveTextContent('+10');
+      // Jen's completion of the same habit belongs on HER row, not Paul's.
+      expect(detail).not.toHaveTextContent('Wed, Jul 29');
+      // Nor does an unattributed completion, which belongs to nobody.
+      expect(detail).not.toHaveTextContent('Dishes');
+    });
+
+    it('expands the Shared habits row into the completions that belong to nobody', async () => {
+      render(<ScoreboardWidget />);
+
+      fireEvent.click(await screen.findByTestId('scoreboard-row-shared'));
+
+      const detail = document.getElementById('scoreboard-ledger-shared');
+      expect(detail).toHaveTextContent('Dishes');
+      expect(detail).toHaveTextContent('Wed, Jul 29');
+      // The attributed habit is on the members' rows, not here.
+      expect(detail).not.toHaveTextContent('Morning run');
+    });
+
+    it('keeps one row open at a time', () => {
+      render(<ScoreboardWidget />);
+
+      fireEvent.click(screen.getByTestId('scoreboard-row-paul'));
+      fireEvent.click(screen.getByTestId('scoreboard-row-jen'));
+
+      expect(screen.getByTestId('scoreboard-row-paul')).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.getByTestId('scoreboard-row-jen')).toHaveAttribute('aria-expanded', 'true');
+      expect(document.getElementById('scoreboard-ledger-paul')).toBeNull();
+    });
+
+    it('collapses again when the same row is tapped twice', () => {
+      render(<ScoreboardWidget />);
+
+      fireEvent.click(screen.getByTestId('scoreboard-row-paul'));
+      fireEvent.click(screen.getByTestId('scoreboard-row-paul'));
+
+      expect(screen.getByTestId('scoreboard-row-paul')).toHaveAttribute('aria-expanded', 'false');
+      expect(document.getElementById('scoreboard-ledger-paul')).toBeNull();
+    });
+
+    it('collapses when a different week is selected, so a receipt can never outlive its week', async () => {
+      // The week selector only offers a past week that actually holds a
+      // completion, so give it one.
+      mockHabits.mockReturnValue([
+        ...ledgerHabits,
+        makeHabit({
+          id: 'h-past',
+          title: 'Stretch',
+          completedDates: ['2026-07-22'],
+          completedBy: { '2026-07-22': { paul: 1 } },
+        }),
+      ]);
+
+      render(<ScoreboardWidget />);
+      fireEvent.click(screen.getByTestId('scoreboard-row-paul'));
+      expect(document.getElementById('scoreboard-ledger-paul')).not.toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: /Select week/ }));
+      fireEvent.click(screen.getByRole('menuitemradio', { name: 'Jul 20 – Jul 26' }));
+      await act(async () => {});
+
+      expect(document.getElementById('scoreboard-ledger-paul')).toBeNull();
+    });
+
+    it('tells a member with nothing logged that the period is empty, rather than showing a blank panel', () => {
+      mockHabits.mockReturnValue([
+        makeHabit({
+          id: 'h-run',
+          title: 'Morning run',
+          completedDates: ['2026-07-28'],
+          completedBy: { '2026-07-28': { jen: 1 } },
+        }),
+      ]);
+
+      render(<ScoreboardWidget />);
+      fireEvent.click(screen.getByTestId('scoreboard-row-paul'));
+
+      expect(document.getElementById('scoreboard-ledger-paul')).toHaveTextContent(
+        "Paul hasn't logged a habit this week."
+      );
+    });
+  });
 });
