@@ -458,6 +458,10 @@ describe('ScoreboardWidget', () => {
       // here would mean the row is asserting a number the fetch hasn't
       // produced yet.
       expect(householdRow.textContent).not.toMatch(/\d/);
+      // The meter is the same claim in another form — a filled bar states a
+      // proportion the fetch hasn't produced either. The empty TRACK stays
+      // (that's what holds the row's height), only the fill waits.
+      expect(within(householdRow).queryByTestId('scoreboard-shared-bar')).not.toBeInTheDocument();
 
       // Once the fetch lands the real figure takes the placeholder's place —
       // including a legitimately-resolved 0, which must still render.
@@ -523,6 +527,94 @@ describe('ScoreboardWidget', () => {
       // to the displayed total, which is the invariant this feature exists
       // to guarantee.
       expect(44 + 17 + -20).toBe(total);
+    });
+
+    describe('meter and "N today" (row parity with the member rows)', () => {
+      it('carries a points meter and a "N today" figure, both derived the same way its week figure is', async () => {
+        // Two unattributed completions — one earlier in the week, one today —
+        // so the week share and the today share are provably DIFFERENT numbers
+        // and neither assertion can pass off the other's value. Today's habit
+        // needs a live `count`: for the CURRENT day the scorers read the
+        // counter, not `completedDates` (see `unattributedUnitsOnDate`), which
+        // is exactly why a stored `points.daily` couldn't have served here.
+        const habits = [
+          makeHabit({ id: 'h-earlier', completedDates: ['2026-07-28'] }),
+          makeHabit({ id: 'h-today', completedDates: ['2026-07-30'], count: 1 }),
+        ];
+        mockHabits.mockReturnValue(habits);
+        const expectedWeek = calculateHouseholdShareForDateRange(habits, '2026-07-27', '2026-07-30', '2026-07-30');
+        const expectedToday = calculateHouseholdShareForDateRange(habits, '2026-07-30', '2026-07-30', '2026-07-30');
+        expect(expectedToday).toBeGreaterThan(0);
+        expect(expectedWeek).toBeGreaterThan(expectedToday);
+
+        // Paul leads on 40 — the denominator every bar on the board is
+        // measured against, member and shared alike.
+        mockMembers.mockReturnValue([
+          makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 5, weekly: 40, total: 40 } }),
+          makeMember({ uid: 'jen', displayName: 'Jen', points: { daily: 0, weekly: 10, total: 10 } }),
+        ]);
+        mockWeeklyPoints.mockReturnValue(40 + 10 + expectedWeek);
+
+        render(<ScoreboardWidget />);
+
+        const householdRow = screen.getByTestId('scoreboard-household-row');
+        await waitFor(() =>
+          expect(within(householdRow).getByText(`${expectedToday} today`)).toBeInTheDocument()
+        );
+        const bar = within(householdRow).getByTestId('scoreboard-shared-bar');
+        expect(bar.style.width).toBe(`${Math.round((expectedWeek / 40) * 100)}%`);
+        // Neutral house colour, never a member's identity colour — a shared
+        // row wearing Paul's evergreen would read as Paul's points.
+        expect(bar.style.backgroundColor).toBe('var(--color-brand-400)');
+        expect(bar.style.backgroundColor).not.toBe(memberColorFor(buildMemberColorMap(mockMembers()), 'paul'));
+      });
+
+      it('clamps the meter at 100% when the shared share outruns the leader', async () => {
+        // A household-credit habit pays this row and no member, so it can
+        // legitimately exceed the leader it is measured against — unlike a
+        // member row, which is measured against the largest of its own kind.
+        const habits = [makeHabit({ id: 'h-shared', completedDates: ['2026-07-28'] })];
+        mockHabits.mockReturnValue(habits);
+        const expectedWeek = calculateHouseholdShareForDateRange(habits, '2026-07-27', '2026-07-30', '2026-07-30');
+        mockMembers.mockReturnValue([
+          makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 0, weekly: 2, total: 2 } }),
+        ]);
+        expect(expectedWeek).toBeGreaterThan(2);
+        mockWeeklyPoints.mockReturnValue(2 + expectedWeek);
+
+        render(<ScoreboardWidget />);
+
+        const householdRow = screen.getByTestId('scoreboard-household-row');
+        // Unclamped this would be 500% — a width the track would clip into
+        // looking identical, but which no other bar on the board can produce.
+        await waitFor(() =>
+          expect(within(householdRow).getByTestId('scoreboard-shared-bar').style.width).toBe('100%')
+        );
+      });
+
+      it('keeps the meter but drops "N today" for a past week, matching the member rows', async () => {
+        const habits = [
+          makeHabit({ id: 'h-attributed', completedDates: ['2026-07-21'], completedBy: { '2026-07-21': { paul: 1 } } }),
+          makeHabit({ id: 'h-shared', completedDates: ['2026-07-22'] }),
+        ];
+        mockHabits.mockReturnValue(habits);
+        mockMembers.mockReturnValue([
+          makeMember({ uid: 'paul', displayName: 'Paul' }),
+          makeMember({ uid: 'jen', displayName: 'Jen' }),
+        ]);
+
+        render(<ScoreboardWidget />);
+        fireEvent.click(screen.getByRole('button', { name: /Select week/ }));
+        fireEvent.click(screen.getByRole('menuitemradio', { name: 'Jul 20 – Jul 26' }));
+
+        const householdRow = await screen.findByTestId('scoreboard-household-row');
+        await waitFor(() =>
+          expect(within(householdRow).getByTestId('scoreboard-shared-bar')).toBeInTheDocument()
+        );
+        // "Today" isn't a concept inside a week that already ended — the
+        // member rows drop the sub-label there and so must this one.
+        expect(within(householdRow).queryByText(/\d+ today/)).not.toBeInTheDocument();
+      });
     });
 
     describe('submission fetch caching (perf: avoid re-fetch on every habit toggle)', () => {
