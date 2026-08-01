@@ -547,13 +547,12 @@ describe('ScoreboardWidget', () => {
         expect(expectedToday).toBeGreaterThan(0);
         expect(expectedWeek).toBeGreaterThan(expectedToday);
 
-        // Paul leads on 40 — the denominator every bar on the board is
-        // measured against, member and shared alike.
         mockMembers.mockReturnValue([
           makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 5, weekly: 40, total: 40 } }),
           makeMember({ uid: 'jen', displayName: 'Jen', points: { daily: 0, weekly: 10, total: 10 } }),
         ]);
-        mockWeeklyPoints.mockReturnValue(40 + 10 + expectedWeek);
+        const total = 40 + 10 + expectedWeek;
+        mockWeeklyPoints.mockReturnValue(total);
 
         render(<ScoreboardWidget />);
 
@@ -562,45 +561,44 @@ describe('ScoreboardWidget', () => {
           expect(within(householdRow).getByText(`${expectedToday} today`)).toBeInTheDocument()
         );
         const bar = within(householdRow).getByTestId('scoreboard-shared-bar');
-        expect(bar.style.width).toBe(`${Math.round((expectedWeek / 40) * 100)}%`);
+        // Its share of the WEEK TOTAL, the same denominator every other bar
+        // uses — not of the leader.
+        expect(bar.style.width).toBe(`${Math.round((expectedWeek / total) * 100)}%`);
         // Neutral house colour, never a member's identity colour — a shared
         // row wearing Paul's evergreen would read as Paul's points.
         expect(bar.style.backgroundColor).toBe('var(--color-brand-400)');
         expect(bar.style.backgroundColor).not.toBe(memberColorFor(buildMemberColorMap(mockMembers()), 'paul'));
       });
 
-      it('takes the whole board with it when the shared share outruns the leader — the member bars shrink rather than the shared one being clamped', async () => {
-        // A household-credit habit pays this row and no member, so it can
-        // legitimately outrun every member — this row is not part of the
-        // population the leader was picked from. Scaling it to the LEADER
-        // would peg it at a full bar next to a leader that is genuinely
-        // smaller: two identical bars for two different numbers, and the
-        // track's overflow-hidden would hide the overflow that gave it away.
-        const habits = [makeHabit({ id: 'h-shared', completedDates: ['2026-07-28'] })];
+      it('measures every bar against the WEEK TOTAL, leaving even the leader short of a full track', async () => {
+        // The exact shape on the Dashboard: Jen 9, Paul 5, Shared 5, total 19.
+        // Leader-relative this drew 100/56/56 — Jen pinned full, saying
+        // nothing about how much of the week she actually holds, and the whole
+        // board silently re-based whenever the lead changed hands.
+        const habits = [makeHabit({ id: 'h-shared', basePoints: 5, completedDates: ['2026-07-28'] })];
         mockHabits.mockReturnValue(habits);
-        const expectedWeek = calculateHouseholdShareForDateRange(habits, '2026-07-27', '2026-07-30', '2026-07-30');
+        const sharedWeek = calculateHouseholdShareForDateRange(habits, '2026-07-27', '2026-07-30', '2026-07-30');
+        expect(sharedWeek).toBe(5);
         mockMembers.mockReturnValue([
-          makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 0, weekly: 2, total: 2 } }),
+          makeMember({ uid: 'jen', displayName: 'Jen', points: { daily: 0, weekly: 9, total: 9 } }),
+          makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 0, weekly: 5, total: 5 } }),
         ]);
-        expect(expectedWeek).toBeGreaterThan(2);
-        mockWeeklyPoints.mockReturnValue(2 + expectedWeek);
+        mockWeeklyPoints.mockReturnValue(19);
 
         render(<ScoreboardWidget />);
 
-        // Before the fetch lands the shared value is unknown, so the scale is
-        // the leader's and Paul holds a full bar — unchanged from every other
-        // week. This is what makes the re-scale below cost nothing in the
-        // ordinary case, where the shared row does NOT top the board.
-        expect(screen.getByTestId('scoreboard-bar-paul').style.width).toBe('100%');
+        // Synchronous — `weeklyPoints` is context state, so unlike the old
+        // leader-derived scale the member bars are at their FINAL width on
+        // first paint and never re-scale when the submissions fetch lands.
+        expect(screen.getByTestId('scoreboard-bar-jen').style.width).toBe('47%'); // 9/19
+        expect(screen.getByTestId('scoreboard-bar-paul').style.width).toBe('26%'); // 5/19
+        // The leader fills the track only when she IS the whole week.
+        expect(screen.getByTestId('scoreboard-bar-jen').style.width).not.toBe('100%');
 
         const householdRow = screen.getByTestId('scoreboard-household-row');
         await waitFor(() =>
-          expect(within(householdRow).getByTestId('scoreboard-shared-bar').style.width).toBe('100%')
+          expect(within(householdRow).getByTestId('scoreboard-shared-bar').style.width).toBe('26%')
         );
-        // …and Paul, now measured against a board the shared row tops, reads
-        // as the fraction he actually is.
-        expect(screen.getByTestId('scoreboard-bar-paul').style.width)
-          .toBe(`${Math.round((2 / expectedWeek) * 100)}%`);
       });
 
       it('keeps the meter but drops "N today" for a past week, matching the member rows', async () => {
