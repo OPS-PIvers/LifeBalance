@@ -79,6 +79,20 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
 
   const togglePanel = (key: string) => setOpenPanel(current => (current === key ? null : key));
 
+  // `LazyMount` keeps this component mounted after its first open (so the
+  // sheet's exit animation can play), so `openPanel` would otherwise survive a
+  // close → reopen and greet the user with a panel they expanded last time.
+  // This is React's documented "adjust state when a prop changes" pattern
+  // rather than a reset effect: no extra render pass, and no
+  // `react-hooks/set-state-in-effect` suppression. Resetting on the OPEN edge
+  // (not the close one) keeps the panel from collapsing mid-exit-animation.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (open) setOpenPanel(null);
+  }
+  const activePanel = open ? openPanel : null;
+
   const distribution = useMemo(
     () => (breakdown ? computeSafeToSpendDistribution(breakdown, buckets, bucketSpentMap) : null),
     [breakdown, buckets, bucketSpentMap]
@@ -186,7 +200,7 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
 
             <LedgerRow
               panelKey="bills"
-              openPanel={openPanel}
+              openPanel={activePanel}
               onToggle={togglePanel}
               itemCount={billItems.length}
               label="Unpaid bills this period"
@@ -225,7 +239,7 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
 
             <LedgerRow
               panelKey="pending"
-              openPanel={openPanel}
+              openPanel={activePanel}
               onToggle={togglePanel}
               itemCount={pendingItems.length}
               label="Pending transactions"
@@ -267,7 +281,7 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
               const bucketPace = calculateBucketDailyPace(row.remaining, daysLeft);
               const txs = bucketTransactions.get(row.id) ?? [];
               const panelKey = `bucket:${row.id}`;
-              const expanded = openPanel === panelKey;
+              const expanded = activePanel === panelKey;
               const panelId = `sts-panel-${panelKey}`;
 
               const body = (
@@ -362,7 +376,7 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
             {/* Leftover / over-allocated row — the ledger's closing line. */}
             <LedgerRow
               panelKey="leftover"
-              openPanel={openPanel}
+              openPanel={activePanel}
               onToggle={togglePanel}
               // Always expandable: the closing line is an explanation, not a
               // list, so it has something to say even with no buckets at all.

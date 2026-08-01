@@ -369,5 +369,31 @@ describe('SafeToSpendBreakdownDrawer', () => {
       await user.click(pending);
       expect(screen.queryByText('Cub Foods')).not.toBeInTheDocument();
     });
+
+    it('reopens collapsed — the drawer stays mounted (LazyMount), so panel state must not survive a close', async () => {
+      const user = userEvent.setup();
+      setFinance({
+        safeToSpendBreakdown: {
+          checkingBalance: 2000, unpaidBills: 350, pendingSpend: 0, safeToSpend: 1650,
+          nextPaycheckDate: null,
+          unpaidBillItems: [bill({ id: 'b1', title: 'Rent', amount: 350 })],
+          pendingTransactions: [],
+        },
+      });
+      const { rerender } = render(<SafeToSpendBreakdownDrawer open={true} onClose={() => {}} />);
+
+      await user.click(screen.getByRole('button', { name: /Unpaid bills this period/ }));
+      expect(screen.getByText('Rent')).toBeInTheDocument();
+
+      // Close and reopen WITHOUT unmounting, exactly as LazyMount does.
+      rerender(<SafeToSpendBreakdownDrawer open={false} onClose={() => {}} />);
+      rerender(<SafeToSpendBreakdownDrawer open={true} onClose={() => {}} />);
+
+      expect(screen.queryByText('Rent')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Unpaid bills this period/ })).toHaveAttribute(
+        'aria-expanded',
+        'false'
+      );
+    });
   });
 });
