@@ -16,6 +16,7 @@ const {
   mockLinkBankTransactionToBill,
   mockOnDone,
   mockToast,
+  mockRequestDeleteConfirmation,
 } = vi.hoisted(() => ({
   mockUpdateTransactionCategory: vi.fn((..._args: unknown[]) => Promise.resolve()),
   mockDeleteTransaction: vi.fn((..._args: unknown[]) => Promise.resolve()),
@@ -25,6 +26,13 @@ const {
   mockLinkBankTransactionToBill: vi.fn((..._args: unknown[]) => Promise.resolve()),
   mockOnDone: vi.fn(),
   mockToast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
+  mockRequestDeleteConfirmation: vi.fn(),
+}));
+
+// Only `utils/toastHelpers` imports this store, so stubbing it here intercepts
+// the confirmation without disturbing anything else the form does.
+vi.mock('@/components/ui/confirmDialogStore', () => ({
+  requestDeleteConfirmation: mockRequestDeleteConfirmation,
 }));
 
 // Transactions the form's `useFinance().transactions` should resolve
@@ -127,7 +135,7 @@ describe('TransactionReviewForm', () => {
       />
     );
 
-    await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+    await user.click(screen.getByRole('button', { name: /^approve$/i }));
 
     expect(mockUpdateTransactionCategory).toHaveBeenCalledTimes(1);
     const call = mockUpdateTransactionCategory.mock.calls[0]!;
@@ -145,18 +153,18 @@ describe('TransactionReviewForm', () => {
       />
     );
 
-    const approve = screen.getByRole('button', { name: /add amount & approve/i });
+    const approve = screen.getByRole('button', { name: /^add amount$/i });
     expect(approve).toBeDisabled();
 
     // A sub-cent entry rounds to $0 and must stay rejected.
     const amountInput = screen.getByLabelText(/amount/i);
     await user.type(amountInput, '0.004');
-    expect(screen.getByRole('button', { name: /approve/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^approve$/i })).toBeDisabled();
 
     // A real amount unlocks it.
     await user.clear(amountInput);
     await user.type(amountInput, '12.50');
-    expect(screen.getByRole('button', { name: /approve transaction/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /^approve$/i })).toBeEnabled();
   });
 
   it('passes the entered amount as an override when approving a stub', async () => {
@@ -170,7 +178,7 @@ describe('TransactionReviewForm', () => {
 
     const amountInput = screen.getByLabelText(/amount/i);
     await user.type(amountInput, '12.50');
-    await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+    await user.click(screen.getByRole('button', { name: /^approve$/i }));
 
     const call = mockUpdateTransactionCategory.mock.calls[0]!;
     expect(call[4]).toMatchObject({ amount: 12.5, clearNeedsAmount: true });
@@ -221,7 +229,7 @@ describe('TransactionReviewForm', () => {
         />
       );
 
-      const approve = screen.getByRole('button', { name: /approve transaction/i });
+      const approve = screen.getByRole('button', { name: /^approve$/i });
       expect(approve).toBeEnabled();
       await user.click(approve);
 
@@ -243,7 +251,7 @@ describe('TransactionReviewForm', () => {
 
       await user.click(screen.getByRole('radio', { name: 'Payment' }));
       expect(screen.getByRole('radio', { name: 'Payment' })).toHaveAttribute('aria-checked', 'true');
-      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      await user.click(screen.getByRole('button', { name: /^approve$/i }));
 
       const call = mockUpdateTransactionCategory.mock.calls[0]!;
       expect(call[4]).toMatchObject({ creditPayment: true });
@@ -262,7 +270,7 @@ describe('TransactionReviewForm', () => {
       await user.selectOptions(screen.getByLabelText(/account/i), 'chk');
       // The category dropdown is back and required.
       await user.selectOptions(screen.getByLabelText(/budget category/i), 'Gas');
-      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      await user.click(screen.getByRole('button', { name: /^approve$/i }));
 
       const call = mockUpdateTransactionCategory.mock.calls[0]!;
       expect(call[1]).toBe('Gas');
@@ -405,7 +413,7 @@ describe('TransactionReviewForm', () => {
 
       render(<TransactionReviewForm transaction={recentAmazonTx} onDone={mockOnDone} />);
 
-      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      await user.click(screen.getByRole('button', { name: /^approve$/i }));
       expect(mockUpdateTransactionCategory.mock.calls[0]![2]).toEqual(['h-amazon']);
     });
 
@@ -418,7 +426,7 @@ describe('TransactionReviewForm', () => {
       render(<TransactionReviewForm transaction={recentAmazonTx} onDone={mockOnDone} />);
 
       expect(screen.getByText(/already logged/i)).toBeInTheDocument();
-      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      await user.click(screen.getByRole('button', { name: /^approve$/i }));
       expect(mockUpdateTransactionCategory.mock.calls[0]![2]).toEqual([]);
     });
 
@@ -432,7 +440,7 @@ describe('TransactionReviewForm', () => {
       // in the picker, so ticking it forces the second log.
       await user.click(screen.getByRole('button', { name: /none — tap to connect/i }));
       await user.click(screen.getByRole('checkbox', { name: /order from amazon/i }));
-      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      await user.click(screen.getByRole('button', { name: /^approve$/i }));
       expect(mockUpdateTransactionCategory.mock.calls[0]![2]).toEqual(['h-amazon']);
     });
 
@@ -493,7 +501,7 @@ describe('TransactionReviewForm', () => {
       // The pre-selection hint is visible, and approving without touching the
       // chips carries the auto-selected habit through.
       expect(screen.getByText(/pre-selected from your history/i)).toBeInTheDocument();
-      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      await user.click(screen.getByRole('button', { name: /^approve$/i }));
 
       const call = mockUpdateTransactionCategory.mock.calls[0]!;
       expect(call[2]).toEqual(['h-coffee']);
@@ -513,7 +521,7 @@ describe('TransactionReviewForm', () => {
 
       await user.click(screen.getByRole('button', { name: /coffee out/i }));
       expect(screen.queryByText(/pre-selected from your history/i)).not.toBeInTheDocument();
-      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      await user.click(screen.getByRole('button', { name: /^approve$/i }));
 
       const call = mockUpdateTransactionCategory.mock.calls[0]!;
       expect(call[2]).toEqual([]);
@@ -533,7 +541,7 @@ describe('TransactionReviewForm', () => {
       );
 
       expect(screen.queryByText(/pre-selected from your history/i)).not.toBeInTheDocument();
-      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      await user.click(screen.getByRole('button', { name: /^approve$/i }));
 
       const call = mockUpdateTransactionCategory.mock.calls[0]!;
       expect(call[2]).toEqual(['h-other']);
@@ -559,7 +567,7 @@ describe('TransactionReviewForm', () => {
       await user.type(merchantInput, 'Starbucks');
       expect(screen.getByText(/pre-selected from your history/i)).toBeInTheDocument();
 
-      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      await user.click(screen.getByRole('button', { name: /^approve$/i }));
       const call = mockUpdateTransactionCategory.mock.calls[0]!;
       expect(call[2]).toEqual(['h-coffee']);
     });
@@ -583,7 +591,7 @@ describe('TransactionReviewForm', () => {
       await user.clear(merchantInput);
       await user.type(merchantInput, 'Starbucks');
 
-      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      await user.click(screen.getByRole('button', { name: /^approve$/i }));
       const call = mockUpdateTransactionCategory.mock.calls[0]!;
       expect(call[2]).toEqual([]);
     });
@@ -612,9 +620,29 @@ describe('TransactionReviewForm', () => {
       const { container } = render(<TransactionReviewForm transaction={baseTx} onDone={mockOnDone} />);
 
       expect(
-        within(container).getByRole('button', { name: /approve transaction/i }),
+        within(container).getByRole('button', { name: /^approve$/i }),
       ).toBeInTheDocument();
-      expect(within(container).getByRole('button', { name: /delete/i })).toBeInTheDocument();
+      // Delete carries a VISIBLE word (not just an aria-label): its accessible
+      // name must come from its own text content, so an accidental return to an
+      // icon-only button fails here rather than silently shipping.
+      const del = within(container).getByRole('button', { name: /delete/i });
+      expect(del).toHaveTextContent('Delete');
+      expect(del).not.toHaveAttribute('aria-label');
+    });
+
+    it('names a transaction, not a "task", in the delete confirmation', async () => {
+      // `showDeleteConfirmation`'s itemName defaults to "task", so this dialog
+      // used to read "Delete this task?" over a transaction. It mattered little
+      // while Delete was an unlabelled glyph; it matters now that the button
+      // carries its own word and invites the press.
+      const user = userEvent.setup();
+      const { container } = render(<TransactionReviewForm transaction={baseTx} onDone={mockOnDone} />);
+
+      await user.click(within(container).getByRole('button', { name: /delete/i }));
+
+      expect(mockRequestDeleteConfirmation).toHaveBeenCalledWith(
+        expect.objectContaining({ itemName: 'transaction' }),
+      );
     });
 
     it('renders the actions into the host node instead, with approve still fully wired', async () => {
@@ -627,11 +655,11 @@ describe('TransactionReviewForm', () => {
       );
 
       // Moved OUT of the form body...
-      expect(within(container).queryByRole('button', { name: /approve transaction/i })).toBeNull();
+      expect(within(container).queryByRole('button', { name: /^approve$/i })).toBeNull();
       expect(within(container).queryByRole('button', { name: /delete/i })).toBeNull();
 
       // ...and into the host's footer, still driving the same approve call.
-      await user.click(within(host).getByRole('button', { name: /approve transaction/i }));
+      await user.click(within(host).getByRole('button', { name: /^approve$/i }));
 
       expect(mockUpdateTransactionCategory).toHaveBeenCalledTimes(1);
       const call = mockUpdateTransactionCategory.mock.calls[0]!;
@@ -655,10 +683,10 @@ describe('TransactionReviewForm', () => {
         />,
       );
 
-      expect(within(host).getByRole('button', { name: /add amount & approve/i })).toBeDisabled();
+      expect(within(host).getByRole('button', { name: /^add amount$/i })).toBeDisabled();
 
       await user.type(screen.getByLabelText(/amount/i), '12.50');
-      expect(within(host).getByRole('button', { name: /approve transaction/i })).toBeEnabled();
+      expect(within(host).getByRole('button', { name: /^approve$/i })).toBeEnabled();
 
       host.remove();
     });
@@ -670,7 +698,7 @@ describe('TransactionReviewForm', () => {
       render(<TransactionReviewForm transaction={baseTx} onDone={mockOnDone} />);
 
       await user.type(screen.getByLabelText(/what was it/i), 'Minecraft');
-      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      await user.click(screen.getByRole('button', { name: /^approve$/i }));
 
       const call = mockUpdateTransactionCategory.mock.calls[0]!;
       expect(call[4]).toMatchObject({ notes: 'Minecraft' });
@@ -686,7 +714,7 @@ describe('TransactionReviewForm', () => {
       );
 
       expect(screen.getByLabelText(/what was it/i)).toHaveValue('dog food');
-      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      await user.click(screen.getByRole('button', { name: /^approve$/i }));
 
       const call = mockUpdateTransactionCategory.mock.calls[0]!;
       expect(call[4]).toBeUndefined();
@@ -702,7 +730,7 @@ describe('TransactionReviewForm', () => {
       );
 
       await user.clear(screen.getByLabelText(/what was it/i));
-      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      await user.click(screen.getByRole('button', { name: /^approve$/i }));
 
       const call = mockUpdateTransactionCategory.mock.calls[0]!;
       expect(call[4]).toMatchObject({ notes: '' });
@@ -718,7 +746,7 @@ describe('TransactionReviewForm', () => {
       expect(toggle).not.toBeChecked();
       expect(screen.getByText(/creates a monthly entry under subscriptions/i)).toBeInTheDocument();
 
-      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      await user.click(screen.getByRole('button', { name: /^approve$/i }));
       const call = mockUpdateTransactionCategory.mock.calls[0]!;
       expect(call[4]).toBeUndefined();
       expect(mockAddCalendarItem).not.toHaveBeenCalled();
@@ -735,7 +763,7 @@ describe('TransactionReviewForm', () => {
       await user.type(merchantInput, 'Peacock Premium');
 
       await user.click(screen.getByRole('checkbox', { name: /recurring transaction/i }));
-      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      await user.click(screen.getByRole('button', { name: /^approve$/i }));
 
       const call = mockUpdateTransactionCategory.mock.calls[0]!;
       expect(call[4]).toMatchObject({ isRecurring: true, merchant: 'Peacock Premium' });
@@ -768,7 +796,7 @@ describe('TransactionReviewForm', () => {
       // Turning it OFF flips the helper copy and the created item's flag.
       await user.click(subToggle);
       expect(screen.getByText(/creates a monthly bill on your calendar/i)).toBeInTheDocument();
-      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      await user.click(screen.getByRole('button', { name: /^approve$/i }));
 
       expect(mockAddCalendarItem).toHaveBeenCalledTimes(1);
       expect(mockAddCalendarItem.mock.calls[0]![0]).toMatchObject({
@@ -784,7 +812,7 @@ describe('TransactionReviewForm', () => {
       render(<TransactionReviewForm transaction={baseTx} onDone={mockOnDone} />);
 
       await user.click(screen.getByRole('checkbox', { name: /recurring transaction/i }));
-      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      await user.click(screen.getByRole('button', { name: /^approve$/i }));
 
       expect(mockUpdateTransactionCategory).toHaveBeenCalledTimes(1);
       expect(mockToast.error).toHaveBeenCalledWith('Approved, but the recurring subscription entry failed.');
@@ -809,7 +837,7 @@ describe('TransactionReviewForm', () => {
       await user.click(screen.getByRole('radio', { name: 'Payment' }));
       expect(screen.queryByRole('checkbox', { name: /recurring transaction/i })).not.toBeInTheDocument();
 
-      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      await user.click(screen.getByRole('button', { name: /^approve$/i }));
       const call = mockUpdateTransactionCategory.mock.calls[0]!;
       expect((call[4] as { isRecurring?: boolean } | undefined)?.isRecurring).toBeUndefined();
       expect(mockAddCalendarItem).not.toHaveBeenCalled();
@@ -902,7 +930,7 @@ describe('TransactionReviewForm', () => {
         />
       );
 
-      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      await user.click(screen.getByRole('button', { name: /^approve$/i }));
       expect(mockUpdateTransactionCategory.mock.calls[0]![2]).toEqual(['h-icloud']);
     });
 

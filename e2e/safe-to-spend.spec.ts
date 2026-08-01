@@ -63,7 +63,7 @@ test.describe('Safe to Spend (Test Mode)', () => {
     // the manual form, so the CTA is immediately enabled).
     const drawer = reviewDrawer(page);
     await expect(drawer).toBeVisible();
-    await drawer.getByRole('button', { name: 'Approve Transaction' }).click();
+    await drawer.getByRole('button', { name: 'Approve', exact: true }).click();
     await expect(drawer).not.toBeVisible();
 
     // Verified-only balance model: the headline stays at seed − expense (the

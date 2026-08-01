@@ -46,7 +46,7 @@ vi.mock('@/components/transactions/TransactionReviewForm', () => ({
   default: ({ actionsContainer }: { actionsContainer?: HTMLElement | null }) => (
     <div data-testid="transaction-review-form">
       {actionsContainer
-        ? createPortal(<button type="button">Approve Transaction</button>, actionsContainer)
+        ? createPortal(<button type="button">Approve</button>, actionsContainer)
         : null}
     </div>
   ),
@@ -374,7 +374,7 @@ describe('ActionQueueItemCard delete confirmation', () => {
       // The slot lives in the Drawer's fixed footer, OUTSIDE the scrollable
       // body — that's the whole point: the approve CTA can't be scrolled past.
       const slot = await within(drawer).findByTestId('transaction-review-actions');
-      expect(within(slot).getByRole('button', { name: 'Approve Transaction' })).toBeInTheDocument();
+      expect(within(slot).getByRole('button', { name: 'Approve' })).toBeInTheDocument();
       // ...and it is NOT left sitting at the bottom of the form body.
       expect(
         within(within(drawer).getByTestId('transaction-review-form')).queryByRole('button'),
