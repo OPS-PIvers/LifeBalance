@@ -136,6 +136,21 @@ export interface BackdatedHabitFireDelta {
  * @returns the delta, or `null` when the fire is a no-op: an archived habit, or
  *   a date outside the back-date window (re-checked here as defense in depth —
  *   a FUTURE completion would corrupt the streak chain, not merely misdate it).
+ *
+ * ⚠️ DELIBERATE DIVERGENCE FROM THE CLIENT TWIN (utils/habitTriggerFire.ts).
+ * The client version takes an optional acting `memberId` + freeze mode and, under
+ * `Household.freezeMode: 'per_member'`, un-freezes `Habit.frozenDatesBy[date]`
+ * for that uid, refunds that member's own bank, and bridges their personal
+ * frozen dates into the multiplier. This one deliberately does NOT: its trigger
+ * is the no-spend-day evaluation, which has no acting user at all — nobody
+ * "did" it, so there is no member whose token could be the one to refund, and
+ * guessing one would debit/credit a bank at random. It therefore stays
+ * per-member-blind and reads only the shared `frozenDates`. Under
+ * `'per_member'` that means a server-side no-spend fire neither un-freezes nor
+ * refunds; the day is still credited and the household flame still updates.
+ * If this ever needs to become per-member aware, the trigger has to carry an
+ * intended member first — do not copy the client's `createdByUid` heuristic
+ * here, because there isn't one.
  */
 export function computeBackdatedHabitFire(
   habit: BackdatableHabit,

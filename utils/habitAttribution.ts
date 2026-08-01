@@ -447,6 +447,36 @@ export const streakForMemberDates = (
 };
 
 /**
+ * `streakEndingOnForMember` against an explicit (e.g. PROSPECTIVE) date set —
+ * the historical twin of `streakForMemberDates`, and the only shape a path that
+ * is ABOUT to add a completion can use.
+ *
+ * `streakEndingOnForMember` reads the member's stored `completedBy` dates, which
+ * by definition do not yet contain the completion being written (and, on a path
+ * that records no attribution at all, never will). Handing the date set in
+ * explicitly keeps the member's own freeze BRIDGE — the thing that makes a
+ * per-member streak longer than the raw gaps suggest — without inventing a
+ * second streak walk: the bridge and the primitives are the same ones
+ * `streakEndingOnForMember` uses.
+ *
+ * @param dates - the completion-date set to walk
+ * @param memberFrozen - that member's own per-member freeze dates. Omit for a
+ *   member with none (the shared-bank case), which is the pre-stage-6 walk.
+ */
+export const streakEndingOnForMemberDates = (
+  habit: Habit,
+  dates: string[],
+  date: string,
+  today: string = getLocalDateString(),
+  memberFrozen: string[] = [],
+): number => {
+  const bridged = bridgeFor(habit, dates, today, memberFrozen);
+  return habit.period === 'weekly'
+    ? streakEndingOnWeek(dates, date, bridged)
+    : streakEndingOn(dates, date, bridged);
+};
+
+/**
  * The streak `memberId` had ENDING ON `date` — the historical multiplier source,
  * so reversing an old completion undoes exactly what it earned rather than what
  * today's streak would earn.
@@ -456,13 +486,14 @@ export const streakEndingOnForMember = (
   memberId: string,
   date: string,
   today: string = getLocalDateString(),
-): number => {
-  const dates = memberCompletionDates(habit, memberId);
-  const bridged = bridgeFor(habit, dates, today, memberFrozenDates(habit, memberId));
-  return habit.period === 'weekly'
-    ? streakEndingOnWeek(dates, date, bridged)
-    : streakEndingOn(dates, date, bridged);
-};
+): number =>
+  streakEndingOnForMemberDates(
+    habit,
+    memberCompletionDates(habit, memberId),
+    date,
+    today,
+    memberFrozenDates(habit, memberId),
+  );
 
 /**
  * The multiplier a member's NEXT completion on `date` would earn — their own

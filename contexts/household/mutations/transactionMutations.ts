@@ -25,6 +25,7 @@ import {
   CalendarItem,
   FreezeBank,
   FreezeBankHistoryEntry,
+  FreezeMode,
   Habit,
   HabitSubmission,
   Household,
@@ -39,6 +40,12 @@ import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge
 import { processToggleHabit, habitPeriodStart, streakForHabit } from '@/utils/habitLogic';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { FREEZE_MAX_TOKENS } from '@/utils/freezeBank';
+import {
+  memberFreezeBank,
+  memberFreezeBankPatch,
+  resolveFreezeMode,
+} from '@/utils/freezeSettings';
+import { frozenDatesByPath } from '@/utils/habitAttribution';
 import { computeBackdatedHabitFire } from '@/utils/habitTriggerFire';
 import {
   isWithinBackdateWindow,
@@ -120,10 +127,15 @@ async function readPriorPeriodCounts(deps: {
   const { db, householdId, habits, habitIdsToFire, fireDate, today, logLabel } = deps;
 
   const priorPeriodCounts = new Map<string, number>();
+  // Loop-INVARIANT: the window depends only on the transaction's own date, so
+  // an out-of-window row has nothing to read for ANY habit. Checked once here
+  // rather than per-iteration (where it read as a per-habit rule, which it
+  // never was); `computeBackdatedHabitFire` re-checks it per habit anyway, so
+  // an out-of-window row still fires nothing.
+  if (!isWithinBackdateWindow(fireDate, today)) return priorPeriodCounts;
   for (const habitId of habitIdsToFire) {
     const habit = habits.find(h => h.id === habitId);
     if (!habit || habit.archivedAt || habit.scoringType === 'incremental') continue;
-    if (!isWithinBackdateWindow(fireDate, today)) continue;
     const periodStart = habitPeriodStart(habit.period, fireDate);
     if (periodStart === habitPeriodStart(habit.period, today)) continue;
     const periodEnd = habit.period === 'weekly'
@@ -165,6 +177,13 @@ interface HabitFireBatchResult {
   freezeTokensRefunded: number;
   /** The history entries for those refunds. */
   freezeRefundEntries: FreezeBankHistoryEntry[];
+  /**
+   * Set only under `freezeMode: 'per_member'`: the uid whose OWN bank
+   * (`freezeBanksByMember.<uid>`) is owed the refunds above. Absent means the
+   * shared household `freezeBank` — the pre-stage-6 shape. `freezeRefundPatch`
+   * is the single place that branches on it.
+   */
+  freezeRefundMemberId?: string;
   /** Signed sum of the points credited — drives the toast, not the writes. */
   totalPointsChange: number;
   /** How many habits actually fired — drives the toast, not the writes. */
@@ -184,6 +203,13 @@ interface HabitFireBatchResult {
  * path (`makeUpdateTransactionCategory`) and the manual-entry create path
  * (`makeAddTransaction`), so a habit attached at entry scores exactly as one
  * attached at approval.
+ *
+ * FREEZE MODE. `createdByUid` — the person hand-entering or approving the row,
+ * which is who this path always runs as — is ALSO the member whose freeze token
+ * a fire un-freezes and refunds under `freezeMode: 'per_member'`. In the shared
+ * modes (including an absent setting) `freezeMode` changes nothing here: the
+ * uid is used for `HabitSubmission.createdBy` exactly as before, the un-freeze
+ * reads `frozenDates`, and the refund lands on the shared household bank.
  */
 function fireHabitsIntoBatch(
   batch: WriteBatch,
@@ -197,17 +223,20 @@ function fireHabitsIntoBatch(
     priorPeriodCounts: Map<string, number>;
     createdByUid: string;
     sourceTransactionId: string;
+    /** RESOLVED via `resolveFreezeMode` — never the raw stored field. */
+    freezeMode: FreezeMode;
   },
 ): HabitFireBatchResult {
   const {
     db, householdId, habits, habitIdsToFire, fireDate, today,
-    priorPeriodCounts, createdByUid, sourceTransactionId,
+    priorPeriodCounts, createdByUid, sourceTransactionId, freezeMode,
   } = deps;
 
   const newlyFiredHabitIds: string[] = [];
   const pointsDelta = { daily: 0, weekly: 0, total: 0 };
   const freezeRefundEntries: FreezeBankHistoryEntry[] = [];
   let freezeTokensRefunded = 0;
+  let freezeRefundMemberId: string | undefined;
   let totalPointsChange = 0;
   let successfulHabitsCount = 0;
 
@@ -234,6 +263,9 @@ function fireHabitsIntoBatch(
       fireDate,
       today,
       priorPeriodCounts.get(habitId) ?? 0,
+      // Per-member freeze awareness. Inert in every shared mode — the delta is
+      // then bit-for-bit what it was before this argument existed.
+      { memberId: createdByUid, freezeMode },
     );
     if (!fire) continue;
 
@@ -251,6 +283,17 @@ function fireHabitsIntoBatch(
       totalCount: increment(fire.totalCountDelta),
       ...(fire.addedDate !== undefined ? { completedDates: arrayUnion(fire.addedDate) } : {}),
       ...(fire.unfrozenDate !== undefined ? { frozenDates: arrayRemove(fire.unfrozenDate) } : {}),
+      // PER-MEMBER un-freeze: a DOT PATH arrayRemove of just this uid, so the
+      // other members frozen on the same date keep their protection and no
+      // whole-map write can clobber them (same discipline as `completedBy`).
+      // Mutually exclusive with `frozenDates` above — the mode picks one.
+      ...(fire.unfrozenDateFor !== undefined
+        ? {
+            [frozenDatesByPath(fire.unfrozenDateFor.date)]: arrayRemove(
+              fire.unfrozenDateFor.memberId,
+            ),
+          }
+        : {}),
       streakDays: fire.streakDays,
       // Every transaction fire is a submission, so the calendar/insight paths
       // know to read this habit's stored per-date units rather than inferring
@@ -292,16 +335,23 @@ function fireHabitsIntoBatch(
     // the token spent protecting that "miss" is owed back. Collected here and
     // written once by the caller so one batch never writes the household doc
     // twice.
-    if (fire.unfrozenDate !== undefined) {
+    // One accumulator for BOTH modes — the date and the entry are identical;
+    // only which bank receives them differs, and `freezeRefundMemberId` (set
+    // only on the per-member arm) is what tells the caller which.
+    const unfrozen = fire.unfrozenDate ?? fire.unfrozenDateFor?.date;
+    if (unfrozen !== undefined) {
       freezeTokensRefunded++;
+      if (fire.unfrozenDateFor !== undefined) {
+        freezeRefundMemberId = fire.unfrozenDateFor.memberId;
+      }
       freezeRefundEntries.push({
         id: crypto.randomUUID(),
         type: 'earned',
         amount: 1,
         date: today,
         habitId,
-        habitDate: fire.unfrozenDate,
-        notes: `Freeze refunded: ${habit.title} was completed on ${fire.unfrozenDate} after all (logged from a transaction)`,
+        habitDate: unfrozen,
+        notes: `Freeze refunded: ${habit.title} was completed on ${unfrozen} after all (logged from a transaction)`,
         createdAt: new Date().toISOString(),
       });
     }
@@ -319,8 +369,71 @@ function fireHabitsIntoBatch(
     pointsDelta,
     freezeTokensRefunded,
     freezeRefundEntries,
+    ...(freezeRefundMemberId !== undefined ? { freezeRefundMemberId } : {}),
     totalPointsChange,
     successfulHabitsCount,
+  };
+}
+
+/**
+ * The household-doc patch that refunds the freeze tokens `fireHabitsIntoBatch`
+ * collected — one shape per freeze mode, both destined to be MERGED into the
+ * caller's single `householdUpdates` object (a batch may not write the same
+ * document twice, and points already live in that object).
+ *
+ *  - shared / freeze_both: the pre-existing whole-object `freezeBank` write,
+ *    unchanged. `freezeBank` is a nested map, not a counter, and every existing
+ *    writer treats it as last-writer-wins. Capped at the max so a refund can't
+ *    push the bank above its ceiling.
+ *  - per_member: DOT PATHS under `freezeBanksByMember.<uid>` via
+ *    `memberFreezeBankPatch`, with the history entries riding an `arrayUnion`.
+ *    Never a whole-map write, so one member's refund cannot clobber another's
+ *    node — the inverse of `autoApplyFreezes`' `applyPerMember` spend, and
+ *    capped at that member's own max exactly as the shared arm caps.
+ *
+ * Returns `{}` when nothing is owed (or when the shared bank hasn't loaded),
+ * so the caller's household write is untouched — including the "no habits fired
+ * ⇒ no household write at all" invariant in `addTransaction`.
+ */
+function freezeRefundPatch(args: {
+  fired: Pick<
+    HabitFireBatchResult,
+    'freezeTokensRefunded' | 'freezeRefundEntries' | 'freezeRefundMemberId'
+  >;
+  householdSettings: Household | null;
+  freezeBank: FreezeBank | null;
+}): Record<string, unknown> {
+  const { fired, householdSettings, freezeBank } = args;
+  if (fired.freezeTokensRefunded <= 0) return {};
+
+  const memberId = fired.freezeRefundMemberId;
+  if (memberId !== undefined) {
+    // Seeded read-side when the member has never spent a freeze, so no
+    // migration write is needed when an admin flips the mode on.
+    const bank = memberFreezeBank(householdSettings, memberId);
+    return memberFreezeBankPatch(
+      memberId,
+      {
+        ...bank,
+        tokens: Math.min(
+          bank.maxTokens ?? FREEZE_MAX_TOKENS,
+          bank.tokens + fired.freezeTokensRefunded,
+        ),
+      },
+      arrayUnion(...fired.freezeRefundEntries),
+    );
+  }
+
+  if (!freezeBank) return {};
+  return {
+    freezeBank: {
+      ...freezeBank,
+      tokens: Math.min(
+        freezeBank.maxTokens ?? FREEZE_MAX_TOKENS,
+        freezeBank.tokens + fired.freezeTokensRefunded,
+      ),
+      history: [...freezeBank.history, ...fired.freezeRefundEntries],
+    } satisfies FreezeBank,
   };
 }
 
@@ -562,6 +675,9 @@ export function makeAddTransaction(deps: {
             db, householdId, habits, habitIdsToFire, fireDate, today, priorPeriodCounts,
             createdByUid: user.uid,
             sourceTransactionId: txRef.id,
+            // Resolved (never the raw field) so an absent/unknown setting maps
+            // onto today's shared-bank behaviour.
+            freezeMode: resolveFreezeMode(householdSettings),
           })
         : null;
       // A plain ARRAY, not arrayUnion: this is a `set` on a brand-new document,
@@ -619,20 +735,9 @@ export function makeAddTransaction(deps: {
         if (fired.pointsDelta.daily !== 0) householdUpdates['points.daily'] = increment(fired.pointsDelta.daily);
         if (fired.pointsDelta.weekly !== 0) householdUpdates['points.weekly'] = increment(fired.pointsDelta.weekly);
         if (fired.pointsDelta.total !== 0) householdUpdates['points.total'] = increment(fired.pointsDelta.total);
-        if (fired.freezeTokensRefunded > 0 && freezeBank) {
-          // Whole-object write, matching autoApplyFreezes/rolloverFreezeBankTokens —
-          // freezeBank is a nested map, not a counter, and every existing writer
-          // treats it as last-writer-wins. Capped at the max so a refund can't push
-          // the bank above its ceiling.
-          householdUpdates['freezeBank'] = {
-            ...freezeBank,
-            tokens: Math.min(
-              freezeBank.maxTokens ?? FREEZE_MAX_TOKENS,
-              freezeBank.tokens + fired.freezeTokensRefunded,
-            ),
-            history: [...freezeBank.history, ...fired.freezeRefundEntries],
-          } satisfies FreezeBank;
-        }
+        // Merged into the SAME object as the points above — shared bank or the
+        // acting member's own, depending on the freeze mode (freezeRefundPatch).
+        Object.assign(householdUpdates, freezeRefundPatch({ fired, householdSettings, freezeBank }));
         if (Object.keys(householdUpdates).length > 0) {
           batch.update(doc(db, `households/${householdId}`), householdUpdates);
         }
@@ -925,18 +1030,15 @@ export function makeUpdateTransactionCategory(deps: {
 
     // 2. Fire the to-fire habits FIRST so the transaction write below can
     // co-commit the fired-ledger update (firedHabitIds) in the SAME op.
-    const {
-      newlyFiredHabitIds,
-      pointsDelta,
-      freezeTokensRefunded,
-      freezeRefundEntries,
-      totalPointsChange,
-      successfulHabitsCount,
-    } = fireHabitsIntoBatch(batch, {
+    const fired = fireHabitsIntoBatch(batch, {
       db, householdId, habits, habitIdsToFire, fireDate, today, priorPeriodCounts,
       createdByUid: currentUser.uid,
       sourceTransactionId: id,
+      // Resolved (never the raw field) so an absent/unknown setting maps onto
+      // today's shared-bank behaviour.
+      freezeMode: resolveFreezeMode(householdSettings),
     });
+    const { newlyFiredHabitIds, pointsDelta, totalPointsChange, successfulHabitsCount } = fired;
 
     // 1. Update Transaction. Verifying resolves any Action-Queue snooze, so the
     // stale marker doesn't linger on the doc. Inline edits (amount/merchant/date)
@@ -1004,20 +1106,9 @@ export function makeUpdateTransactionCategory(deps: {
     if (pointsDelta.daily !== 0) householdUpdates['points.daily'] = increment(pointsDelta.daily);
     if (pointsDelta.weekly !== 0) householdUpdates['points.weekly'] = increment(pointsDelta.weekly);
     if (pointsDelta.total !== 0) householdUpdates['points.total'] = increment(pointsDelta.total);
-    if (freezeTokensRefunded > 0 && freezeBank) {
-      // Whole-object write, matching autoApplyFreezes/rolloverFreezeBankTokens —
-      // freezeBank is a nested map, not a counter, and every existing writer
-      // treats it as last-writer-wins. Capped at the max so a refund can't push
-      // the bank above its ceiling.
-      householdUpdates['freezeBank'] = {
-        ...freezeBank,
-        tokens: Math.min(
-          freezeBank.maxTokens ?? FREEZE_MAX_TOKENS,
-          freezeBank.tokens + freezeTokensRefunded,
-        ),
-        history: [...freezeBank.history, ...freezeRefundEntries],
-      } satisfies FreezeBank;
-    }
+    // Merged into the SAME object as the points above — shared bank or the
+    // acting member's own, depending on the freeze mode (freezeRefundPatch).
+    Object.assign(householdUpdates, freezeRefundPatch({ fired, householdSettings, freezeBank }));
     if (Object.keys(householdUpdates).length > 0) {
       batch.update(doc(db, `households/${householdId}`), householdUpdates);
     }

@@ -311,3 +311,132 @@ describe('computeBackdatedHabitFire', () => {
     expect(delta.countDelta).toBe(1);
   });
 });
+
+// Stage 6 — `Household.freezeMode: 'per_member'`: each adult holds their own
+// token bank (`freezeBanksByMember`) and their own frozen dates
+// (`Habit.frozenDatesBy`, date → uid[]). The shared `frozenDates` is not in use.
+describe('computeBackdatedHabitFire — per-member freeze mode', () => {
+  const fourDaysAgo = getLocalDateString(new Date(Date.now() - 4 * 86400000));
+  const ALICE = 'uid-alice';
+  const BOB = 'uid-bob';
+  const perMember = (memberId: string) => ({ memberId, freezeMode: 'per_member' as const });
+
+  it('reports the un-freeze as unfrozenDateFor, naming the ACTING member', () => {
+    const habit = makeHabit({ frozenDatesBy: { [fourDaysAgo]: [ALICE] } });
+    const delta = computeBackdatedHabitFire(habit, fourDaysAgo, today, 0, perMember(ALICE))!;
+    expect(delta.unfrozenDateFor).toEqual({ date: fourDaysAgo, memberId: ALICE });
+    expect(delta.addedDate).toBe(fourDaysAgo);
+    // NEVER the shared field: that would send the caller to `frozenDates` and
+    // the shared bank, which this mode does not use.
+    expect(delta.unfrozenDate).toBeUndefined();
+  });
+
+  it('does NOT un-freeze when a DIFFERENT member holds the frozen date', () => {
+    const habit = makeHabit({ frozenDatesBy: { [fourDaysAgo]: [BOB] } });
+    const delta = computeBackdatedHabitFire(habit, fourDaysAgo, today, 0, perMember(ALICE))!;
+    expect(delta.unfrozenDateFor).toBeUndefined();
+    expect(delta.unfrozenDate).toBeUndefined();
+    // The completion still lands — only the freeze is someone else's business.
+    expect(delta.addedDate).toBe(fourDaysAgo);
+  });
+
+  it('ignores the SHARED frozenDates in per-member mode', () => {
+    // A legacy shared freeze left over from before the mode was flipped. The
+    // shared bank is not in use, so nothing is un-frozen or refunded from it.
+    const habit = makeHabit({ frozenDates: [fourDaysAgo] });
+    const delta = computeBackdatedHabitFire(habit, fourDaysAgo, today, 0, perMember(ALICE))!;
+    expect(delta.unfrozenDate).toBeUndefined();
+    expect(delta.unfrozenDateFor).toBeUndefined();
+  });
+
+  it('scores the multiplier off the MEMBER’s own frozen bridge, not the habit-level one', () => {
+    // Alice completed 6/5/4 days ago, MISSED 3 days ago (her own token froze
+    // it), and completed 2 days ago and yesterday. Firing 3 days ago... no —
+    // the interesting case is firing a date whose backward walk CROSSES her
+    // personal freeze.
+    //
+    // Layout (oldest → newest), firing `fourDaysAgo`:
+    //   6d ago: completed
+    //   5d ago: MISSED, frozen for Alice only (frozenDatesBy)
+    //   4d ago: the fire date
+    // Habit-level: the 5-day gap is not bridged → streak ending on 4d ago = 1
+    //   → multiplier 1.0 → 10 pts.
+    // Alice-bridged: 6d ago + [bridge] + 4d ago → streak 2... still 1.0x, so
+    // stretch it one further back to cross the 3-day threshold.
+    const d5 = getLocalDateString(new Date(Date.now() - 5 * 86400000));
+    const d6 = getLocalDateString(new Date(Date.now() - 6 * 86400000));
+    const d7 = getLocalDateString(new Date(Date.now() - 7 * 86400000));
+    const habit = makeHabit({
+      completedDates: [d7, d6],
+      frozenDatesBy: { [d5]: [ALICE] },
+    });
+
+    // Habit-level (today's blind behaviour): d5 breaks the chain, so the fire
+    // sees a streak of 1 and pays 10.
+    const blind = computeBackdatedHabitFire(habit, fourDaysAgo, today)!;
+    expect(blind.streakAtFireDate).toBe(1);
+    expect(blind.multiplier).toBe(1.0);
+    expect(blind.pointsEarned).toBe(10);
+
+    // Alice's own token bridges d5: d7 + d6 + (frozen d5) + the fire = 3 → 1.5x.
+    const aware = computeBackdatedHabitFire(habit, fourDaysAgo, today, 0, perMember(ALICE))!;
+    expect(aware.streakAtFireDate).toBe(3);
+    expect(aware.multiplier).toBe(1.5);
+    expect(aware.pointsEarned).toBe(15);
+
+    // ...and NOT for Bob, who never spent a token on d5.
+    const bob = computeBackdatedHabitFire(habit, fourDaysAgo, today, 0, perMember(BOB))!;
+    expect(bob.streakAtFireDate).toBe(1);
+    expect(bob.pointsEarned).toBe(10);
+  });
+
+  it('leaves streakDays HABIT-LEVEL — a personal token never inflates the flame', () => {
+    // Same layout as above, fired onto TODAY so the current streak is live.
+    const yesterdayD = getLocalDateString(new Date(Date.now() - 86400000));
+    const habit = makeHabit({
+      completedDates: [threeDaysAgo],
+      frozenDatesBy: { [twoDaysAgo]: [ALICE], [yesterdayD]: [ALICE] },
+    });
+    const blind = computeBackdatedHabitFire(habit, today, today)!;
+    const aware = computeBackdatedHabitFire(habit, today, today, 0, perMember(ALICE))!;
+    // The multiplier IS member-aware...
+    expect(aware.streakAtFireDate).toBeGreaterThan(blind.streakAtFireDate);
+    // ...but the habit doc's flame is not (matching applyPerMember, which
+    // deliberately never writes streakDays).
+    expect(aware.streakDays).toBe(blind.streakDays);
+  });
+
+  it('a shared mode with a memberId is byte-identical to passing no options at all', () => {
+    // The regression fence: `freezeMode` absent, 'shared' and 'freeze_both' must
+    // every one of them produce the exact pre-stage-6 delta.
+    const habit = makeHabit({
+      frozenDates: [fourDaysAgo],
+      frozenDatesBy: { [fourDaysAgo]: [ALICE] },
+      completedDates: [threeDaysAgo],
+    });
+    const baseline = computeBackdatedHabitFire(habit, fourDaysAgo, today)!;
+    expect(baseline.unfrozenDate).toBe(fourDaysAgo);
+    expect(baseline.unfrozenDateFor).toBeUndefined();
+
+    for (const freezeMode of ['shared', 'freeze_both'] as const) {
+      expect(computeBackdatedHabitFire(habit, fourDaysAgo, today, 0, { memberId: ALICE, freezeMode }))
+        .toEqual(baseline);
+    }
+    // A memberId with no mode, and a mode with no memberId, both stay shared.
+    expect(computeBackdatedHabitFire(habit, fourDaysAgo, today, 0, { memberId: ALICE })).toEqual(baseline);
+    expect(computeBackdatedHabitFire(habit, fourDaysAgo, today, 0, { freezeMode: 'per_member' })).toEqual(baseline);
+    expect(computeBackdatedHabitFire(habit, fourDaysAgo, today, 0, {})).toEqual(baseline);
+  });
+
+  it('never sets unfrozenDateFor when the fire does not newly complete the date', () => {
+    // Already completed → no new completion, so nothing to un-freeze (the same
+    // gate the shared path uses).
+    const habit = makeHabit({
+      completedDates: [fourDaysAgo],
+      frozenDatesBy: { [fourDaysAgo]: [ALICE] },
+    });
+    const delta = computeBackdatedHabitFire(habit, fourDaysAgo, today, 0, perMember(ALICE))!;
+    expect(delta.addedDate).toBeUndefined();
+    expect(delta.unfrozenDateFor).toBeUndefined();
+  });
+});

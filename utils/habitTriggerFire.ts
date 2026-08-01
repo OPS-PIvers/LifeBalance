@@ -1,5 +1,7 @@
 import { parseISO, isSameWeek, format, startOfWeek } from 'date-fns';
-import { Habit } from '@/types/schema';
+import { FreezeMode, Habit } from '@/types/schema';
+import { memberFrozenDates, streakEndingOnForMemberDates } from '@/utils/habitAttribution';
+import { DEFAULT_FREEZE_MODE, isPerMemberFreeze } from '@/utils/freezeSettings';
 import {
   processToggleHabit,
   isHabitStale,
@@ -96,10 +98,28 @@ export interface BackdatedHabitFireDelta {
   /**
    * Date to arrayRemove from `frozenDates` — set when the fire completes a day a
    * freeze token had been spent protecting. The caller must ALSO refund the
-   * token, in the same batch.
+   * token (from the SHARED household bank), in the same batch.
+   *
+   * Only ever set in the shared freeze modes. See `unfrozenDateFor`.
    */
   unfrozenDate?: string;
-  /** Recomputed period-aware streak for the habit doc. */
+  /**
+   * The PER-MEMBER un-freeze (`freezeMode: 'per_member'`): arrayRemove
+   * `memberId` from the `frozenDatesBy.<date>` DOT PATH, and refund the token to
+   * THAT member's own bank (`freezeBanksByMember.<uid>`), in the same batch.
+   *
+   * Deliberately a DISTINCT field rather than a re-used `unfrozenDate`: the two
+   * are written to different paths and refunded from different banks, so a
+   * caller that only knows about `unfrozenDate` writes NOTHING here rather than
+   * silently writing the wrong shape. The two are mutually exclusive by
+   * construction — the freeze mode picks exactly one.
+   */
+  unfrozenDateFor?: { date: string; memberId: string };
+  /**
+   * Recomputed period-aware streak for the habit doc — the HABIT-LEVEL flame,
+   * in every freeze mode. A per-member token deliberately does not bridge it
+   * (the same reason `autoApplyFreezes`' `applyPerMember` never writes it).
+   */
   streakDays: number;
   /** Signed points this fire credits (may be 0). Stored on the submission doc. */
   pointsEarned: number;
@@ -165,6 +185,27 @@ export function computeHabitTriggerFire(
 }
 
 /**
+ * Per-member freeze awareness for `computeBackdatedHabitFire`. Every field is
+ * optional and an omitted `options` argument is exactly today's behaviour.
+ */
+export interface BackdatedFireOptions {
+  /**
+   * The ACTING member's uid — the person entering or approving the transaction.
+   * Well-founded as the credit target because this path only ever fires on a
+   * `verified` row, i.e. one a human hand-entered or approved.
+   *
+   * Consulted ONLY under `freezeMode: 'per_member'`; ignored otherwise.
+   */
+  memberId?: string;
+  /**
+   * The household's RESOLVED freeze mode — always via
+   * `resolveFreezeMode(householdSettings)`, never the raw stored field. Absent
+   * means `DEFAULT_FREEZE_MODE` ('shared'), i.e. today's behaviour.
+   */
+  freezeMode?: FreezeMode;
+}
+
+/**
  * The delta for firing a habit on a date that is NOT necessarily today — the
  * transaction-keyword path (PRD #1065).
  *
@@ -188,19 +229,60 @@ export function computeHabitTriggerFire(
  *   live counter says nothing about a past day/week. Ignored for a
  *   current-period fire (the live counter is authoritative) and for incremental
  *   habits (scoring is per-action), so callers may pass 0 in those cases.
+ * @param options   Per-member freeze awareness (see `BackdatedFireOptions`).
+ *   OMIT IT and every field returned is bit-for-bit the pre-stage-6 value.
  * @returns the delta, or `null` when the fire is a no-op: an archived habit, or
  *   a date outside the back-date window. The window is re-checked here as
  *   defense in depth — writing a FUTURE completion would corrupt the streak
  *   chain rather than merely misdate it, so no caller may bypass it.
+ *
+ * ── THE PER-MEMBER BRANCH (`freezeMode: 'per_member'`) ──────────────────────
+ *
+ * Under that mode the shared `Habit.frozenDates` / `Household.freezeBank` are
+ * not in use: each adult holds their own token bank and their own frozen dates
+ * (`Habit.frozenDatesBy`, date → uid[]). A fire that is blind to that is wrong
+ * twice — it never un-freezes or refunds the acting member's token, and it
+ * scores the multiplier off a streak that ignores their own frozen bridge, so
+ * the fire credits fewer points than were earned.
+ *
+ * Passing `{ memberId, freezeMode: 'per_member' }` switches exactly two things
+ * and nothing else:
+ *
+ *   1. the un-freeze decision reads `frozenDatesBy[fireDate]` for THAT uid, and
+ *      is reported as `unfrozenDateFor` (never as `unfrozenDate`, which means
+ *      the shared bank);
+ *   2. `streakAtFireDate` — and therefore `multiplier` and `pointsEarned` —
+ *      walks with that member's own freeze dates added to the bridge.
+ *
+ * `streakDays` is deliberately NOT member-bridged: it is the habit-level flame,
+ * household-wide, and a personal token must not inflate it (the same rule
+ * `autoApplyFreezes`' `applyPerMember` follows by never writing it).
+ *
+ * KNOWN NARROWING: a household that ran in a shared mode before switching can
+ * still carry legacy dates in `Habit.frozenDates`. Under `'per_member'` those
+ * are not un-frozen here (the mode says the shared bank is not in use, and
+ * refunding a shared token would credit a bank nobody can see). They keep
+ * bridging every member's chain, and a stale entry on a now-completed date is
+ * inert for points and streaks alike — `calculateStreak` counts a date that is
+ * both completed and frozen exactly once, and every points path scores from
+ * `completedDates` only.
  */
 export function computeBackdatedHabitFire(
   habit: Habit,
   fireDate: string,
   today: string = getLocalDateString(),
   priorPeriodCount = 0,
+  options: BackdatedFireOptions = {},
 ): BackdatedHabitFireDelta | null {
   if (habit.archivedAt) return null;
   if (!isWithinBackdateWindow(fireDate, today)) return null;
+
+  // The acting member, but ONLY under per-member freeze mode — `undefined` in
+  // every shared mode and for every caller that passes no options, which is
+  // what collapses each branch below onto the pre-stage-6 code path.
+  const freezeMemberId = isPerMemberFreeze(options.freezeMode ?? DEFAULT_FREEZE_MODE)
+    ? options.memberId
+    : undefined;
 
   const inCurrentPeriod =
     habitPeriodStart(habit.period, fireDate) === habitPeriodStart(habit.period, today);
@@ -231,21 +313,51 @@ export function computeBackdatedHabitFire(
   // schema's invariant is that a frozen date NEVER appears in completedDates,
   // and the token it cost was spent protecting a miss that didn't happen. The
   // caller arrayRemoves this date and refunds the token in the same batch.
+  //
+  // SHARED modes only — `freezeMemberId` is undefined there, so this is the
+  // unchanged pre-stage-6 decision.
   const unfrozenDate =
-    dateNewlyCompleted && (habit.frozenDates ?? []).includes(fireDate) ? fireDate : undefined;
+    freezeMemberId === undefined &&
+    dateNewlyCompleted &&
+    (habit.frozenDates ?? []).includes(fireDate)
+      ? fireDate
+      : undefined;
   const nextFrozenDates = (habit.frozenDates ?? []).filter(d => d !== unfrozenDate);
 
+  // PER-MEMBER mode: the same decision, one level down — was THIS member's own
+  // token spent on `fireDate`? `frozenDatesBy[date]` is `string[] | undefined`.
+  const unfrozenDateFor =
+    freezeMemberId !== undefined &&
+    dateNewlyCompleted &&
+    (habit.frozenDatesBy?.[fireDate] ?? []).includes(freezeMemberId)
+      ? { date: fireDate, memberId: freezeMemberId }
+      : undefined;
+
+  // The member's own freeze bridge, with the date this fire just un-froze
+  // dropped (mirroring `nextFrozenDates` on the shared side). Empty — and
+  // therefore inert — in every shared mode.
+  const memberFrozen =
+    freezeMemberId === undefined
+      ? []
+      : memberFrozenDates(habit, freezeMemberId).filter(d => d !== unfrozenDateFor?.date);
+
   // Multiplier from the streak ending ON fireDate — never the habit's CURRENT
-  // streak, which would retro-apply today's multiplier to a past day.
-  const streakAtFireDate = streakEndingOnForHabit(
-    {
-      period: habit.period,
-      completedDates: nextCompletedDates,
-      frozenDates: nextFrozenDates,
-      pausedUntil: habit.pausedUntil,
-    },
-    fireDate,
-  );
+  // streak, which would retro-apply today's multiplier to a past day. In
+  // per-member mode the walk additionally bridges this member's OWN frozen
+  // dates; without that the streak comes out shorter than it really was and the
+  // fire underpays.
+  const streakAtFireDate =
+    freezeMemberId === undefined
+      ? streakEndingOnForHabit(
+          {
+            period: habit.period,
+            completedDates: nextCompletedDates,
+            frozenDates: nextFrozenDates,
+            pausedUntil: habit.pausedUntil,
+          },
+          fireDate,
+        )
+      : streakEndingOnForMemberDates(habit, nextCompletedDates, fireDate, today, memberFrozen);
   const multiplier = getMultiplier(streakAtFireDate, habit.type === 'positive', habit.period);
 
   // Mirrors addHabitSubmission: incremental scores every action; threshold
@@ -282,6 +394,9 @@ export function computeBackdatedHabitFire(
     totalCountDelta: 1,
     ...(dateNewlyCompleted ? { addedDate: fireDate } : {}),
     ...(unfrozenDate !== undefined ? { unfrozenDate } : {}),
+    ...(unfrozenDateFor !== undefined ? { unfrozenDateFor } : {}),
+    // HABIT-LEVEL in every mode (see the field's docblock): a personal freeze
+    // token bridges its owner's chain, never the household flame.
     streakDays: streakForHabit({
       period: habit.period,
       completedDates: nextCompletedDates,

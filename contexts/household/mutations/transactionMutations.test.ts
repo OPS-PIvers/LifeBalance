@@ -105,7 +105,7 @@ import { updateDoc } from 'firebase/firestore';
 import { makeAddTransaction, makeDeleteTransaction, makeKeepBothTransactions, makeMergeTransactions, makeSplitTransaction, makeUpdateTransaction, makeUpdateTransactionCategory, makeReverseTransactionApproval } from './transactionMutations';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { addDays, format, parseISO, subDays } from 'date-fns';
-import type { Account, CalendarItem, FreezeBank, Habit, Transaction } from '@/types/schema';
+import type { Account, CalendarItem, FreezeBank, Habit, Household, Transaction } from '@/types/schema';
 
 const HOUSEHOLD_ID = 'house1';
 const db = {} as never;
@@ -1676,5 +1676,280 @@ describe('makeKeepBothTransactions — the dismissal is scoped to the arm that a
       possibleDuplicateOf: { __deleteField: true },
       duplicateDismissedFor: 'tx-manual',
     });
+  });
+});
+
+// Stage 6 — `Household.freezeMode: 'per_member'`. Each adult holds their OWN
+// token bank (`freezeBanksByMember.<uid>`) and their OWN frozen dates
+// (`Habit.frozenDatesBy`, date → uid[]); the shared `freezeBank` /
+// `Habit.frozenDates` are not in use. A transaction fire that completes a day
+// the ACTING member's token was protecting has to un-freeze that member and
+// refund THAT bank — and must leave every other member alone.
+describe('transaction habit fires under freezeMode: per_member', () => {
+  const ALICE = 'user-1'; // the acting uid both makers run as
+  const BOB = 'user-2';
+  const habitPath = (id: string) => `households/${HOUSEHOLD_ID}/habits/${id}`;
+  const submissionsPath = (id: string) => `${habitPath(id)}/submissions`;
+  const householdPath = `households/${HOUSEHOLD_ID}`;
+  const today = getLocalDateString();
+  const backDate = format(subDays(parseISO(today), 4), 'yyyy-MM-dd');
+  const dayBefore = (n: number) => format(subDays(parseISO(today), n), 'yyyy-MM-dd');
+
+  const bank = (tokens: number): FreezeBank => ({
+    tokens,
+    maxTokens: 2,
+    lastRolloverDate: today,
+    lastRolloverMonth: today.slice(0, 7),
+    history: [],
+  });
+
+  /** A Household carrying only what these paths read: the mode + the banks. */
+  const household = (
+    freezeMode: Household['freezeMode'],
+    freezeBanksByMember?: Record<string, FreezeBank>,
+  ): Household => ({
+    id: HOUSEHOLD_ID,
+    name: 'Test household',
+    inviteCode: 'ABC123',
+    members: [],
+    freezeBank: bank(0),
+    accounts: [],
+    rewardsInventory: [],
+    coreTemplates: { expenses: [], buckets: [] },
+    ...(freezeMode ? { freezeMode } : {}),
+    ...(freezeBanksByMember ? { freezeBanksByMember } : {}),
+  });
+
+  const threshHabit: Habit = {
+    id: 'h1',
+    title: 'Groceries under budget',
+    category: 'Finance',
+    type: 'positive',
+    scoringType: 'threshold',
+    period: 'daily',
+    basePoints: 10,
+    targetCount: 1,
+    count: 0,
+    totalCount: 4,
+    completedDates: [],
+    streakDays: 0,
+    lastUpdated: new Date().toISOString(),
+  };
+
+  const pendingTx: Transaction = {
+    id: 'tx-9',
+    amount: 30,
+    merchant: 'Whole Foods',
+    category: 'Groceries',
+    date: backDate,
+    status: 'pending_review',
+    isRecurring: false,
+    source: 'manual',
+    autoCategorized: false,
+    accountId: 'acc-check',
+  };
+
+  const catDeps = (
+    habits: Habit[],
+    householdSettings: Household | null,
+    freezeBank: FreezeBank | null,
+  ) => ({
+    db,
+    householdId: HOUSEHOLD_ID,
+    currentUser: { uid: ALICE },
+    habits,
+    transactions: [pendingTx],
+    accounts,
+    householdSettings,
+    freezeBank,
+  });
+
+  const habitData = () => capturedUpdates.find(u => u.ref.__path === habitPath('h1'))!.data!;
+  const householdWrites = () => capturedUpdates.filter(u => u.ref.__path === householdPath);
+
+  beforeEach(() => {
+    capturedSets = [];
+    capturedUpdates = [];
+    capturedDeletes = [];
+    commitCount = 0;
+    commitErrors = [];
+    submissionDocs = {};
+    vi.clearAllMocks();
+  });
+
+  it('un-freezes ONLY the acting member at the frozenDatesBy DOT PATH and refunds only their bank', async () => {
+    const frozenHabit: Habit = { ...threshHabit, frozenDatesBy: { [backDate]: [ALICE, BOB] } };
+    const settings = household('per_member', { [ALICE]: bank(0), [BOB]: bank(1) });
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(
+      catDeps([frozenHabit], settings, null),
+    );
+    await updateTransactionCategory('tx-9', 'Groceries', ['h1']);
+
+    const data = habitData();
+    // The uid is arrayRemove'd from the DATE's own node — never a whole-map
+    // write, so BOB's entry on the same date survives untouched.
+    expect(data[`frozenDatesBy.${backDate}`]).toEqual({ __arrayRemove: [ALICE] });
+    expect(data).not.toHaveProperty('frozenDatesBy');
+    // The shared list is not in use in this mode and must not be touched.
+    expect(data).not.toHaveProperty('frozenDates');
+    expect(data['completedDates']).toEqual({ __arrayUnion: [backDate] });
+
+    // Refund: Alice's own bank, by dot path, capped at her max.
+    const hh = householdWrites();
+    expect(hh).toHaveLength(1);
+    const hhData = hh[0]!.data!;
+    expect(hhData[`freezeBanksByMember.${ALICE}.tokens`]).toBe(1);
+    expect(hhData[`freezeBanksByMember.${ALICE}.maxTokens`]).toBe(2);
+    expect(hhData[`freezeBanksByMember.${ALICE}.history`]).toEqual({
+      __arrayUnion: [expect.objectContaining({ type: 'earned', amount: 1, habitDate: backDate })],
+    });
+    // Nothing whole-map, and nothing of Bob's.
+    expect(hhData).not.toHaveProperty('freezeBanksByMember');
+    expect(hhData).not.toHaveProperty('freezeBank');
+    expect(Object.keys(hhData).some(k => k.includes(BOB))).toBe(false);
+    // Points and the refund merged into that single household write.
+    expect(hhData['points.total']).toEqual({ __increment: 10 });
+    expect(commitCount).toBe(1);
+  });
+
+  it('does NOT un-freeze or refund when a DIFFERENT member holds the frozen date', async () => {
+    const frozenHabit: Habit = { ...threshHabit, frozenDatesBy: { [backDate]: [BOB] } };
+    const settings = household('per_member', { [ALICE]: bank(0), [BOB]: bank(0) });
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(
+      catDeps([frozenHabit], settings, null),
+    );
+    await updateTransactionCategory('tx-9', 'Groceries', ['h1']);
+
+    const data = habitData();
+    expect(data).not.toHaveProperty(`frozenDatesBy.${backDate}`);
+    // The completion still lands — only the freeze belonged to someone else.
+    expect(data['completedDates']).toEqual({ __arrayUnion: [backDate] });
+
+    const hhData = householdWrites()[0]!.data!;
+    expect(Object.keys(hhData).some(k => k.startsWith('freezeBanksByMember'))).toBe(false);
+    expect(hhData).not.toHaveProperty('freezeBank');
+  });
+
+  it('seeds a full bank for a member who has never spent a freeze (no migration write needed)', async () => {
+    const frozenHabit: Habit = { ...threshHabit, frozenDatesBy: { [backDate]: [ALICE] } };
+    // No `freezeBanksByMember` node at all for Alice.
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(
+      catDeps([frozenHabit], household('per_member'), null),
+    );
+    await updateTransactionCategory('tx-9', 'Groceries', ['h1']);
+
+    // Seeded at the max (2), so the refund is capped there rather than 3.
+    const hhData = householdWrites()[0]!.data!;
+    expect(hhData[`freezeBanksByMember.${ALICE}.tokens`]).toBe(2);
+  });
+
+  it('scores the multiplier off the ACTING member’s own frozen bridge', async () => {
+    // Completed 7 and 6 days ago, MISSED 5 days ago (Alice's own token froze
+    // it), firing 4 days ago. Habit-level the gap breaks the chain → streak 1,
+    // 10 pts. Bridged by Alice's token → streak 3 → 1.5x → 15 pts.
+    const habit: Habit = {
+      ...threshHabit,
+      completedDates: [dayBefore(7), dayBefore(6)],
+      frozenDatesBy: { [dayBefore(5)]: [ALICE] },
+    };
+    const settings = household('per_member', { [ALICE]: bank(1) });
+
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(
+      catDeps([habit], settings, null),
+    );
+    await updateTransactionCategory('tx-9', 'Groceries', ['h1']);
+
+    const submission = capturedSets.find(s => s.ref.__path.startsWith(submissionsPath('h1')));
+    expect(submission!.data).toMatchObject({
+      pointsEarned: 15,
+      multiplierApplied: 1.5,
+      streakDaysAtTime: 3,
+    });
+    expect(householdWrites()[0]!.data!['points.total']).toEqual({ __increment: 15 });
+  });
+
+  it('the SAME habit under the shared mode still scores the habit-level streak (the regression fence)', async () => {
+    const habit: Habit = {
+      ...threshHabit,
+      completedDates: [dayBefore(7), dayBefore(6)],
+      frozenDatesBy: { [dayBefore(5)]: [ALICE] },
+    };
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(
+      catDeps([habit], household('shared'), null),
+    );
+    await updateTransactionCategory('tx-9', 'Groceries', ['h1']);
+
+    const submission = capturedSets.find(s => s.ref.__path.startsWith(submissionsPath('h1')));
+    // Alice's personal token does NOT bridge the habit-level walk.
+    expect(submission!.data).toMatchObject({ pointsEarned: 10, multiplierApplied: 1.0 });
+    // ...and nothing per-member is written anywhere.
+    expect(habitData()).not.toHaveProperty(`frozenDatesBy.${dayBefore(5)}`);
+  });
+
+  it('shared mode is unchanged: frozenDates arrayRemove + the whole-object freezeBank refund', async () => {
+    const frozenHabit: Habit = {
+      ...threshHabit,
+      frozenDates: [backDate],
+      // Present but IRRELEVANT in a shared mode — proves the branch is on the
+      // resolved mode, not on the mere presence of per-member data.
+      frozenDatesBy: { [backDate]: [ALICE] },
+    };
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(
+      catDeps([frozenHabit], household('freeze_both'), bank(1)),
+    );
+    await updateTransactionCategory('tx-9', 'Groceries', ['h1']);
+
+    const data = habitData();
+    expect(data['frozenDates']).toEqual({ __arrayRemove: [backDate] });
+    expect(data).not.toHaveProperty(`frozenDatesBy.${backDate}`);
+
+    const hh = householdWrites();
+    expect(hh).toHaveLength(1);
+    expect((hh[0]!.data!['freezeBank'] as FreezeBank).tokens).toBe(2);
+    expect(Object.keys(hh[0]!.data!).some(k => k.startsWith('freezeBanksByMember'))).toBe(false);
+  });
+
+  it('an ABSENT freezeMode behaves exactly as shared (the inertness contract)', async () => {
+    const frozenHabit: Habit = {
+      ...threshHabit,
+      frozenDates: [backDate],
+      frozenDatesBy: { [backDate]: [ALICE] },
+    };
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(
+      catDeps([frozenHabit], household(undefined), bank(1)),
+    );
+    await updateTransactionCategory('tx-9', 'Groceries', ['h1']);
+
+    expect(habitData()['frozenDates']).toEqual({ __arrayRemove: [backDate] });
+    expect((householdWrites()[0]!.data!['freezeBank'] as FreezeBank).tokens).toBe(2);
+  });
+
+  it('makeAddTransaction refunds the acting member too, in the SAME single household write', async () => {
+    const frozenHabit: Habit = { ...threshHabit, frozenDatesBy: { [backDate]: [ALICE] } };
+    const { addTransaction } = makeAddTransaction({
+      ...makeDeps(),
+      householdSettings: household('per_member', { [ALICE]: bank(0) }),
+      habits: [frozenHabit],
+      freezeBank: null,
+    });
+    await addTransaction({
+      amount: 30,
+      merchant: 'Target',
+      category: 'Groceries',
+      date: backDate,
+      status: 'verified',
+      isRecurring: false,
+      source: 'manual',
+      autoCategorized: false,
+      accountId: 'acc-check',
+      relatedHabitIds: ['h1'],
+    });
+
+    expect(habitData()[`frozenDatesBy.${backDate}`]).toEqual({ __arrayRemove: [ALICE] });
+    const hh = householdWrites();
+    expect(hh).toHaveLength(1);
+    expect(hh[0]!.data![`freezeBanksByMember.${ALICE}.tokens`]).toBe(1);
+    expect(hh[0]!.data!['points.total']).toEqual({ __increment: 10 });
+    expect(commitCount).toBe(1);
   });
 });
