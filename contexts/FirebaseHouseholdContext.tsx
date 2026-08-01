@@ -659,6 +659,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const habitsRef = useRef<Habit[]>(habits);
   useEffect(() => { habitsRef.current = habits; }, [habits]);
 
+  // Mirror the freeze bank for the same reason `addTransaction` reads habits
+  // through the ref above: it lives on the FINANCE slice, so keying it on
+  // gamification state would re-create it — and re-render finance consumers —
+  // on every habit toggle. See the deps note at `addTransaction`.
+  const freezeBankRef = useRef<FreezeBank | null>(freezeBank);
+  useEffect(() => { freezeBankRef.current = freezeBank; }, [freezeBank]);
+
   // Mirror members for the points-reset path (Plan 080c-2): checkPointsReset reads
   // the latest members via this ref to roll over each managed kid's balance without
   // keying its callback on `members` (which changes on every points write).
@@ -1952,9 +1959,17 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   const addTransaction = useCallback(async (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => {
     await makeAddTransaction({
-      db, householdId, user, householdSettings, accounts, habits, freezeBank, recentTransactionsRef,
+      db, householdId, user, householdSettings, accounts, recentTransactionsRef,
+      // Habit firing needs these, but they are GAMIFICATION state and this
+      // callback lives on the FINANCE slice — keying it on them would re-create
+      // `addTransaction` on every habit toggle and re-render every finance
+      // consumer, including the always-mounted CaptureModal that was migrated
+      // off the shim to avoid exactly that. Read through refs instead: they are
+      // evaluated when a transaction is actually added, so the fire still sees
+      // fresh values. Same pattern as the midnight scheduler's `habitsRef`.
+      habits: habitsRef.current, freezeBank: freezeBankRef.current,
     }).addTransaction(tx);
-  }, [householdId, user, householdSettings, accounts, habits, freezeBank]);
+  }, [householdId, user, householdSettings, accounts]);
 
   const addTransactions = useCallback(async (
     txs: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[],
