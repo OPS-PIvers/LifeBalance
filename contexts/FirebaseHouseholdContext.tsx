@@ -1952,9 +1952,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   const addTransaction = useCallback(async (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => {
     await makeAddTransaction({
-      db, householdId, user, householdSettings, accounts, recentTransactionsRef,
+      db, householdId, user, householdSettings, accounts, habits, freezeBank, recentTransactionsRef,
     }).addTransaction(tx);
-  }, [householdId, user, householdSettings, accounts]);
+  }, [householdId, user, householdSettings, accounts, habits, freezeBank]);
 
   const addTransactions = useCallback(async (
     txs: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[],

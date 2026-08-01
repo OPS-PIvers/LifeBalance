@@ -24,12 +24,18 @@ let submissionDocs: Record<string, ({ id: string } & Record<string, unknown>)[]>
 
 vi.mock('firebase/firestore', () => {
   return {
+    // `id` is exposed alongside `__path` because makeAddTransaction pre-allocates
+    // the new transaction's ref and stamps `txRef.id` onto every habit
+    // submission it fires (sourceTransactionId) — a real DocumentReference
+    // always carries one.
     doc: vi.fn((first: unknown, path?: string, id?: string) => {
       const firstRef = first as { __path?: string } | undefined;
       if (firstRef?.__path !== undefined && path === undefined) {
-        return { __path: `${firstRef.__path}/__autoId` };
+        return { __path: `${firstRef.__path}/__autoId`, id: '__autoId' };
       }
-      return { __path: id ? `${path}/${id}` : (path ?? '__autoId') };
+      return id
+        ? { __path: `${path}/${id}`, id }
+        : { __path: path ?? '__autoId', id: (path ?? '__autoId').split('/').pop() };
     }),
     collection: vi.fn((_db: unknown, path: string) => {
       const ref: { __path: string; withConverter: () => typeof ref } = {
@@ -117,6 +123,10 @@ function makeDeps() {
     user: { uid: 'user-1' },
     householdSettings: null,
     accounts,
+    // Habit-firing deps (see the manual-entry describe below). Empty here so
+    // these balance/funding cases exercise the no-habit path unchanged.
+    habits: [] as Habit[],
+    freezeBank: null as FreezeBank | null,
     recentTransactionsRef: { current: [{ id: 'existing' } as Transaction] },
   };
 }
@@ -201,6 +211,208 @@ describe('makeAddTransaction — credit-card payment funding transfer', () => {
     expect(capturedUpdates).toHaveLength(1);
     expect(capturedUpdates[0]!.ref.__path).toBe(accountPath('acc-card'));
     expect(capturedUpdates[0]!.data?.['balance']).toEqual({ __increment: 100 });
+  });
+});
+
+// THE MANUAL-ENTRY BUG: the capture modal stamps a hand-entered transaction
+// `verified`, so it never enters the Action Queue and never reaches
+// updateTransactionCategory — the only place that used to fire habits from a
+// transaction. Attaching a habit at entry saved the association and fired
+// nothing at all; the user had to increment the habit by hand.
+describe('makeAddTransaction — fires the habits attached at manual entry', () => {
+  const habitPath = (id: string) => `households/${HOUSEHOLD_ID}/habits/${id}`;
+  const submissionsPath = (id: string) => `${habitPath(id)}/submissions`;
+  const householdPath = `households/${HOUSEHOLD_ID}`;
+  const today = getLocalDateString();
+
+  const threshHabit: Habit = {
+    id: 'h1',
+    title: 'Groceries under budget',
+    category: 'Finance',
+    type: 'positive',
+    scoringType: 'threshold',
+    period: 'daily',
+    basePoints: 10,
+    targetCount: 1,
+    count: 0,
+    totalCount: 4,
+    completedDates: ['2020-01-01'],
+    streakDays: 0,
+    // Non-stale so the fire takes the ordinary increment() path.
+    lastUpdated: new Date().toISOString(),
+  };
+
+  // Exactly what CaptureTransactionManual builds: verified, dated today,
+  // carrying the habit ids the user ticked.
+  const manualTx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'> = {
+    amount: 30,
+    merchant: 'Target',
+    category: 'Groceries',
+    date: today,
+    status: 'verified',
+    isRecurring: false,
+    source: 'manual',
+    autoCategorized: false,
+    accountId: 'acc-check',
+    relatedHabitIds: ['h1'],
+  };
+
+  const addDeps = (habits: Habit[], freezeBank: FreezeBank | null = null) => ({
+    ...makeDeps(),
+    habits,
+    freezeBank,
+  });
+
+  beforeEach(() => {
+    capturedSets = [];
+    capturedUpdates = [];
+    capturedDeletes = [];
+    commitCount = 0;
+    commitErrors = [];
+    submissionDocs = {};
+    vi.clearAllMocks();
+  });
+
+  it('fires the habit, writes a submission and increments household points — all in ONE batch', async () => {
+    const { addTransaction } = makeAddTransaction(addDeps([threshHabit]));
+    await addTransaction(manualTx);
+
+    // Atomicity: transaction + balance + habit + submission + points together.
+    expect(commitCount).toBe(1);
+
+    // Habit doc: DELTA writes only (2026-07-15 clobber incident).
+    const habitUpdate = capturedUpdates.find(u => u.ref.__path === habitPath('h1'));
+    expect(habitUpdate).toBeDefined();
+    const data = habitUpdate!.data!;
+    expect(data['count']).toEqual({ __increment: 1 });
+    expect(data['totalCount']).toEqual({ __increment: 1 });
+    expect(data['completedDates']).toEqual({ __arrayUnion: [today] });
+    expect(Array.isArray(data['completedDates'])).toBe(false);
+    expect(data['hasSubmissionTracking']).toBe(true);
+
+    // Submission doc, stamped with the NEW transaction's own id.
+    const submission = capturedSets.find(s => s.ref.__path.startsWith(submissionsPath('h1')));
+    expect(submission).toBeDefined();
+    expect(submission!.data).toMatchObject({
+      habitId: 'h1',
+      date: today,
+      count: 1,
+      pointsEarned: 10,
+      sourceTransactionId: '__autoId',
+    });
+
+    // Household points: a same-day fire credits all three buckets.
+    const householdUpdate = capturedUpdates.find(u => u.ref.__path === householdPath);
+    expect(householdUpdate!.data!['points.daily']).toEqual({ __increment: 10 });
+    expect(householdUpdate!.data!['points.weekly']).toEqual({ __increment: 10 });
+    expect(householdUpdate!.data!['points.total']).toEqual({ __increment: 10 });
+    // The household doc is written exactly once (a batch may not write a doc twice).
+    expect(capturedUpdates.filter(u => u.ref.__path === householdPath)).toHaveLength(1);
+  });
+
+  it('persists firedHabitIds on the new doc as a PLAIN ARRAY (a set has nothing to union against)', async () => {
+    const { addTransaction } = makeAddTransaction(addDeps([threshHabit]));
+    await addTransaction(manualTx);
+
+    const txSet = capturedSets.find(s => s.ref.__path === `households/${HOUSEHOLD_ID}/transactions/__autoId`);
+    expect(txSet!.data!['firedHabitIds']).toEqual(['h1']);
+    // Association still recorded too.
+    expect(txSet!.data!['relatedHabitIds']).toEqual(['h1']);
+  });
+
+  it('back-dates the fire to the TRANSACTION date, never today', async () => {
+    const backDate = format(subDays(parseISO(today), 4), 'yyyy-MM-dd');
+    const { addTransaction } = makeAddTransaction(addDeps([threshHabit]));
+    await addTransaction({ ...manualTx, date: backDate });
+
+    const data = capturedUpdates.find(u => u.ref.__path === habitPath('h1'))!.data!;
+    expect(data['completedDates']).toEqual({ __arrayUnion: [backDate] });
+    // A past-period fire leaves the live counter alone entirely.
+    expect(data['count']).toBeUndefined();
+    // ...and must not inflate today's daily bucket.
+    const householdUpdate = capturedUpdates.find(u => u.ref.__path === householdPath);
+    expect(householdUpdate!.data!['points.total']).toEqual({ __increment: 10 });
+    expect(householdUpdate!.data!['points.daily']).toBeUndefined();
+  });
+
+  it('never fires an ARCHIVED habit, and keeps it off the fired ledger', async () => {
+    const archived: Habit = { ...threshHabit, archivedAt: '2026-07-21T00:00:00.000Z' };
+    const { addTransaction } = makeAddTransaction(addDeps([archived]));
+    await addTransaction(manualTx);
+
+    expect(capturedUpdates.find(u => u.ref.__path === habitPath('h1'))).toBeUndefined();
+    expect(capturedSets.find(s => s.ref.__path.startsWith(submissionsPath('h1')))).toBeUndefined();
+    expect(capturedUpdates.find(u => u.ref.__path === householdPath)).toBeUndefined();
+    const txSet = capturedSets.find(s => s.ref.__path === `households/${HOUSEHOLD_ID}/transactions/__autoId`);
+    expect(txSet!.data).not.toHaveProperty('firedHabitIds');
+    // The association is still persisted.
+    expect(txSet!.data!['relatedHabitIds']).toEqual(['h1']);
+  });
+
+  // Regression fence for the no-habit path: it must be byte-identical to the
+  // pre-firing behavior — one transaction set, one account delta, and NOTHING
+  // written to the household doc (this mutation never touched it before).
+  it('writes exactly what it always did when no habits are attached', async () => {
+    const { addTransaction } = makeAddTransaction(addDeps([threshHabit]));
+    await addTransaction({ ...manualTx, relatedHabitIds: undefined });
+
+    expect(commitCount).toBe(1);
+    expect(capturedSets).toHaveLength(1);
+    expect(capturedSets[0]!.ref.__path).toBe(`households/${HOUSEHOLD_ID}/transactions/__autoId`);
+    expect(capturedSets[0]!.data).not.toHaveProperty('firedHabitIds');
+    expect(capturedSets[0]!.data).not.toHaveProperty('relatedHabitIds');
+    expect(capturedUpdates).toHaveLength(1);
+    expect(capturedUpdates[0]!.ref.__path).toBe(accountPath('acc-check'));
+    expect(capturedUpdates[0]!.data?.['balance']).toEqual({ __increment: -30 });
+  });
+
+  it('an empty relatedHabitIds array is the same no-op', async () => {
+    const { addTransaction } = makeAddTransaction(addDeps([threshHabit]));
+    await addTransaction({ ...manualTx, relatedHabitIds: [] });
+
+    expect(capturedUpdates.find(u => u.ref.__path === habitPath('h1'))).toBeUndefined();
+    expect(capturedUpdates.find(u => u.ref.__path === householdPath)).toBeUndefined();
+  });
+
+  // DELIBERATE NARROWING: a pending_review capture (receipt / statement scan)
+  // carries AI-SUGGESTED habit ids the review card exists to let the user
+  // confirm or untick, and every such row reaches updateTransactionCategory on
+  // approval. Firing at import time would pre-empt that review and — because a
+  // statement scan writes one row per purchase, each carrying the same
+  // suggestions — log a single habit once per row.
+  it('does NOT fire for a pending_review capture (its habits are AI suggestions awaiting review)', async () => {
+    const { addTransaction } = makeAddTransaction(addDeps([threshHabit]));
+    await addTransaction({ ...manualTx, status: 'pending_review' });
+
+    expect(capturedUpdates.find(u => u.ref.__path === habitPath('h1'))).toBeUndefined();
+    expect(capturedSets.find(s => s.ref.__path.startsWith(submissionsPath('h1')))).toBeUndefined();
+    expect(capturedUpdates.find(u => u.ref.__path === householdPath)).toBeUndefined();
+    // The association still rides along so the review card can pre-check it.
+    const txSet = capturedSets.find(s => s.ref.__path === `households/${HOUSEHOLD_ID}/transactions/__autoId`);
+    expect(txSet!.data!['relatedHabitIds']).toEqual(['h1']);
+    expect(txSet!.data).not.toHaveProperty('firedHabitIds');
+  });
+
+  it('un-freezes and refunds a token in the SAME batch when the fire completes a frozen day', async () => {
+    const backDate = format(subDays(parseISO(today), 4), 'yyyy-MM-dd');
+    const frozenHabit: Habit = { ...threshHabit, frozenDates: [backDate], completedDates: [] };
+    const bank: FreezeBank = {
+      tokens: 1,
+      maxTokens: 2,
+      lastRolloverDate: today,
+      lastRolloverMonth: today.slice(0, 7),
+      history: [],
+    };
+    const { addTransaction } = makeAddTransaction(addDeps([frozenHabit], bank));
+    await addTransaction({ ...manualTx, date: backDate });
+
+    const habitUpdate = capturedUpdates.find(u => u.ref.__path === habitPath('h1'));
+    expect(habitUpdate!.data!['frozenDates']).toEqual({ __arrayRemove: [backDate] });
+    // Points and the refund merge into the SINGLE household write.
+    const householdWrites = capturedUpdates.filter(u => u.ref.__path === householdPath);
+    expect(householdWrites).toHaveLength(1);
+    expect((householdWrites[0]!.data!['freezeBank'] as FreezeBank).tokens).toBe(2);
+    expect(commitCount).toBe(1);
   });
 });
 

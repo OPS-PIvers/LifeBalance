@@ -12,6 +12,7 @@ import {
   arrayUnion,
   arrayRemove,
   type Firestore,
+  type WriteBatch,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 import { addDays, format, parseISO, startOfWeek } from 'date-fns';
@@ -93,6 +94,287 @@ function habitDeltaUpdate(
   };
 }
 
+/**
+ * Prior-period unit counts for the habits a transaction is about to fire.
+ *
+ * A threshold habit fired into a PAST period needs that period's already-
+ * recorded unit count to know whether this fire crosses the target — the live
+ * counter describes a later period and says nothing about it. Read the stored
+ * submissions for exactly those habits, BEFORE opening any writes (Firestore
+ * reads cannot participate in a batch, so every caller must await this before
+ * it calls `writeBatch`). Incremental habits score per-action and
+ * current-period fires use the live counter, so both skip the read.
+ *
+ * `logLabel` names the calling mutation in the fallback warning so the two
+ * callers stay distinguishable in the console.
+ */
+async function readPriorPeriodCounts(deps: {
+  db: Firestore;
+  householdId: string;
+  habits: Habit[];
+  habitIdsToFire: readonly string[];
+  fireDate: string;
+  today: string;
+  logLabel: string;
+}): Promise<Map<string, number>> {
+  const { db, householdId, habits, habitIdsToFire, fireDate, today, logLabel } = deps;
+
+  const priorPeriodCounts = new Map<string, number>();
+  for (const habitId of habitIdsToFire) {
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit || habit.archivedAt || habit.scoringType === 'incremental') continue;
+    if (!isWithinBackdateWindow(fireDate, today)) continue;
+    const periodStart = habitPeriodStart(habit.period, fireDate);
+    if (periodStart === habitPeriodStart(habit.period, today)) continue;
+    const periodEnd = habit.period === 'weekly'
+      ? format(addDays(parseISO(periodStart), 6), 'yyyy-MM-dd')
+      : fireDate;
+    try {
+      const snap = await getDocs(query(
+        collection(db, `households/${householdId}/habits/${habitId}/submissions`),
+        where('date', '>=', periodStart),
+        where('date', '<=', periodEnd),
+      ));
+      priorPeriodCounts.set(
+        habitId,
+        snap.docs.reduce((sum, d) => sum + ((d.data() as HabitSubmission).count ?? 0), 0),
+      );
+    } catch (error) {
+      // A failed read must not block the approval. Fall back to 0, which is
+      // the pre-submissions assumption: the fire is treated as this period's
+      // first unit. Worst case a threshold habit is credited a period early.
+      console.warn(`${logLabel} Prior-period submission read failed:`, error);
+    }
+  }
+  return priorPeriodCounts;
+}
+
+/** What `fireHabitsIntoBatch` accumulated across the habits it fired. */
+interface HabitFireBatchResult {
+  /** The ids that actually fired — the transaction's dedup ledger for them. */
+  newlyFiredHabitIds: string[];
+  /**
+   * Points accumulated PER BUCKET, not as one scalar: a back-dated fire credits
+   * `total` (lifetime) but must not touch today's `daily` or — if it predates
+   * Monday — this week's `weekly`. Mirrors addHabitSubmission's date gating; the
+   * pre-#1065 code incremented all three unconditionally, which was only correct
+   * while every fire landed on today.
+   */
+  pointsDelta: { daily: number; weekly: number; total: number };
+  /** Freeze tokens owed back because a fire completed an auto-frozen day. */
+  freezeTokensRefunded: number;
+  /** The history entries for those refunds. */
+  freezeRefundEntries: FreezeBankHistoryEntry[];
+  /** Signed sum of the points credited — drives the toast, not the writes. */
+  totalPointsChange: number;
+  /** How many habits actually fired — drives the toast, not the writes. */
+  successfulHabitsCount: number;
+}
+
+/**
+ * Fire `habitIdsToFire` onto `batch`, crediting each completion to `fireDate`.
+ *
+ * Adds the habit-doc delta update and the submission `set` for every habit that
+ * fires, and RETURNS everything the caller still has to write itself — the
+ * fired ledger for the transaction doc, and the points/freeze-refund figures for
+ * the household doc (which must be merged into ONE update, since a batch may not
+ * write the same document twice).
+ *
+ * Shared by the two paths that fire habits from a transaction: the review/verify
+ * path (`makeUpdateTransactionCategory`) and the manual-entry create path
+ * (`makeAddTransaction`), so a habit attached at entry scores exactly as one
+ * attached at approval.
+ */
+function fireHabitsIntoBatch(
+  batch: WriteBatch,
+  deps: {
+    db: Firestore;
+    householdId: string;
+    habits: Habit[];
+    habitIdsToFire: readonly string[];
+    fireDate: string;
+    today: string;
+    priorPeriodCounts: Map<string, number>;
+    createdByUid: string;
+    sourceTransactionId: string;
+  },
+): HabitFireBatchResult {
+  const {
+    db, householdId, habits, habitIdsToFire, fireDate, today,
+    priorPeriodCounts, createdByUid, sourceTransactionId,
+  } = deps;
+
+  const newlyFiredHabitIds: string[] = [];
+  const pointsDelta = { daily: 0, weekly: 0, total: 0 };
+  const freezeRefundEntries: FreezeBankHistoryEntry[] = [];
+  let freezeTokensRefunded = 0;
+  let totalPointsChange = 0;
+  let successfulHabitsCount = 0;
+
+  for (const habitId of habitIdsToFire) {
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) {
+      console.warn(`Habit ID ${habitId} not found in habits array. Skipping habit increment.`);
+      continue;
+    }
+    // An ARCHIVED habit must never fire (PRD #1065): a transaction's
+    // relatedHabitIds may reference a habit archived after the tag was made
+    // (keywordMatchedHabitIds already filters archived at suggestion time —
+    // this is the defense for a persisted stale reference). Skip firing; the
+    // approval completes normally with no points/streak side effect.
+    // computeBackdatedHabitFire re-checks this; the explicit skip keeps the
+    // habit out of firedHabitIds so a later un-archive can still fire it.
+    if (habit.archivedAt) continue;
+
+    // Out-of-window rows (older than HABIT_BACKDATE_MAX_DAYS, or future-dated)
+    // record the association via relatedHabitIds but fire nothing — see
+    // isWithinBackdateWindow for why an unbounded window is unsafe.
+    const fire = computeBackdatedHabitFire(
+      habit,
+      fireDate,
+      today,
+      priorPeriodCounts.get(habitId) ?? 0,
+    );
+    if (!fire) continue;
+
+    // DELTA WRITE (never whole client-computed values): increment() counters +
+    // arrayUnion/arrayRemove completion history, so a stale-cache device can't
+    // clobber another device's completions (2026-07-15 incident).
+    batch.update(doc(db, `households/${householdId}/habits`, habitId), {
+      // A past-period fire leaves the live counter alone entirely; a stale
+      // current-period one writes it absolutely (see BackdatedHabitFireDelta).
+      ...(fire.resetCount
+        ? { count: fire.count }
+        : fire.countDelta !== 0
+          ? { count: increment(fire.countDelta) }
+          : {}),
+      totalCount: increment(fire.totalCountDelta),
+      ...(fire.addedDate !== undefined ? { completedDates: arrayUnion(fire.addedDate) } : {}),
+      ...(fire.unfrozenDate !== undefined ? { frozenDates: arrayRemove(fire.unfrozenDate) } : {}),
+      streakDays: fire.streakDays,
+      // Every transaction fire is a submission, so the calendar/insight paths
+      // know to read this habit's stored per-date units rather than inferring
+      // one completion per date.
+      hasSubmissionTracking: true,
+      lastUpdated: serverTimestamp(),
+    });
+
+    // The submission doc IS the back-dated record: it carries the date the
+    // completion belongs to, the points actually credited, and the source
+    // transaction — which is what makes the undo exact rather than a
+    // recomputation. Same subcollection addHabitSubmission writes to.
+    const submission: Omit<HabitSubmission, 'id'> = {
+      habitId,
+      habitTitle: habit.title,
+      // A transaction carries a DATE but no time of day, so there is no true
+      // timestamp to record. Noon LOCAL on the fire date is the deliberate
+      // placeholder: HabitSubmissionLogModal renders this as a clock time and
+      // bins it by hour, and midday reads as "time unknown" rather than
+      // implying a precise moment. Local (not noon UTC) so the timestamp's
+      // calendar day always equals `date` in the user's own timezone — the
+      // app's date convention — instead of rolling over for UTC+13/+14.
+      timestamp: new Date(`${fireDate}T12:00:00`).toISOString(),
+      date: fireDate,
+      count: 1,
+      pointsEarned: fire.pointsEarned,
+      streakDaysAtTime: fire.streakAtFireDate,
+      multiplierApplied: fire.multiplier,
+      createdBy: createdByUid,
+      createdAt: new Date().toISOString(),
+      sourceTransactionId,
+    };
+    batch.set(
+      doc(collection(db, `households/${householdId}/habits/${habitId}/submissions`)),
+      submission,
+    );
+
+    // A day that turns out to have been completed must not stay frozen, and
+    // the token spent protecting that "miss" is owed back. Collected here and
+    // written once by the caller so one batch never writes the household doc
+    // twice.
+    if (fire.unfrozenDate !== undefined) {
+      freezeTokensRefunded++;
+      freezeRefundEntries.push({
+        id: crypto.randomUUID(),
+        type: 'earned',
+        amount: 1,
+        date: today,
+        habitId,
+        habitDate: fire.unfrozenDate,
+        notes: `Freeze refunded: ${habit.title} was completed on ${fire.unfrozenDate} after all (logged from a transaction)`,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    pointsDelta.daily += fire.pointsDelta.daily;
+    pointsDelta.weekly += fire.pointsDelta.weekly;
+    pointsDelta.total += fire.pointsDelta.total;
+    totalPointsChange += fire.pointsEarned;
+    successfulHabitsCount++;
+    newlyFiredHabitIds.push(habitId);
+  }
+
+  return {
+    newlyFiredHabitIds,
+    pointsDelta,
+    freezeTokensRefunded,
+    freezeRefundEntries,
+    totalPointsChange,
+    successfulHabitsCount,
+  };
+}
+
+/**
+ * Toast feedback for habits fired by a transaction (call only after a
+ * successful commit). The attribution names the source ("via transaction:
+ * <merchant>") so the user can always answer "why did my points change?"
+ * (PRD #1065 story 19). A zero net change shows nothing.
+ */
+function showTransactionHabitPointsToast(args: {
+  totalPointsChange: number;
+  successfulHabitsCount: number;
+  merchant: string | undefined;
+  fireDate: string;
+  today: string;
+}) {
+  const { totalPointsChange, successfulHabitsCount, merchant, fireDate, today } = args;
+  if (totalPointsChange === 0) return;
+
+  const sign = totalPointsChange > 0 ? '+' : '';
+  toast(
+    React.createElement(
+      'div',
+      { className: 'flex flex-col' },
+      React.createElement(
+        'div',
+        { className: 'flex items-center gap-2' },
+        React.createElement('span', { className: 'font-bold' }, `${sign}${totalPointsChange} pts`),
+        React.createElement('span', { className: 'text-sm opacity-80' }, `from ${successfulHabitsCount} habit(s)`),
+      ),
+      React.createElement(
+        'span',
+        { className: 'text-xs opacity-70' },
+        // Name the DATE too whenever the fire was back-dated. Otherwise a
+        // Tuesday approval silently credits Monday and the points move with
+        // no visible cause — the same "why did my points change?" gap the
+        // attribution string exists to close (PRD #1065 story 19).
+        fireDate === today
+          ? transactionAttribution(merchant)
+          : `${transactionAttribution(merchant)} · logged ${format(parseISO(fireDate), 'EEE MMM d')}`,
+      ),
+    ),
+    {
+      duration: 2000,
+      icon: toastIcon(Star, 'text-accent-600'),
+      style: {
+        background: '#ECFDF5',
+        color: '#065F46',
+        border: '1px solid #A7F3D0',
+      },
+    }
+  );
+}
+
 // Pure-ish factories for the TRANSACTION mutation family — the writeBatch
 // atomicity paths documented in CLAUDE.md (checking-balance delta + habits +
 // points co-committed with the transaction write). Moved verbatim out of
@@ -109,7 +391,10 @@ function habitDeltaUpdate(
 /**
  * addTransaction — original closure captured `householdId`, `user`,
  * `householdSettings`, `accounts`, plus the `recentTransactionsRef` read
- * (for the first-transaction analytics flag).
+ * (for the first-transaction analytics flag). `habits` + `freezeBank` were
+ * added so a hand-entered transaction can fire the habits attached to it (see
+ * the HABIT AUTOMATIONS block below), exactly as `updateTransactionCategory`
+ * does on approval.
  */
 export function makeAddTransaction(deps: {
   db: Firestore;
@@ -117,9 +402,11 @@ export function makeAddTransaction(deps: {
   user: { uid: string } | null;
   householdSettings: Household | null;
   accounts: Account[];
+  habits: Habit[];
+  freezeBank: FreezeBank | null;
   recentTransactionsRef: { current: Transaction[] };
 }) {
-  const { db, householdId, user, householdSettings, accounts, recentTransactionsRef } = deps;
+  const { db, householdId, user, householdSettings, accounts, habits, freezeBank, recentTransactionsRef } = deps;
 
   const addTransaction = async (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => {
     if (!householdId) {
@@ -224,11 +511,66 @@ export function makeAddTransaction(deps: {
         target
       );
 
+      // HABIT AUTOMATIONS (PRD #1065) — fire the habits attached to this entry.
+      //
+      // A hand-entered transaction is stamped `verified` by the capture modal,
+      // so it never enters the Action Queue and never reaches
+      // `updateTransactionCategory` — until this block, the ONLY code that fires
+      // a habit from a transaction. Attaching a habit at entry therefore saved
+      // the association (`relatedHabitIds`, above) and fired nothing at all.
+      //
+      // Deliberately VERIFIED-ONLY. A `pending_review` capture (receipt scan,
+      // statement scan, Apple Pay stub) carries AI-SUGGESTED habit ids that the
+      // review card exists to let the user confirm or untick, and every one of
+      // those rows does reach `updateTransactionCategory` on approval. Firing at
+      // import time would both pre-empt that review and — because a statement
+      // scan writes one row per purchase, each carrying the same suggestions —
+      // log a single habit once per row.
+      const today = getLocalDateString();
+      // The transaction's OWN date, never today: a row is dated to when the
+      // money moved, and the fire belongs to that day (same rule as the verify
+      // path). Out-of-window/future dates fire nothing (isWithinBackdateWindow).
+      const fireDate = tx.date;
+      // A brand-new doc has fired nothing, so there is no ledger to dedup
+      // against — routed through the shared selector anyway so both paths agree
+      // on ordering and on repeats within the requested list.
+      const { toFire: habitIdsToFire } = selectHabitsToFire(
+        tx.status === 'verified' ? (tx.relatedHabitIds ?? []) : [],
+        [],
+      );
+      // Reads cannot participate in a batch, so this must precede writeBatch().
+      // Skipped entirely when nothing will fire, so a transaction with no
+      // habits issues no extra reads and behaves exactly as it did before.
+      const priorPeriodCounts = habitIdsToFire.length > 0
+        ? await readPriorPeriodCounts({
+            db, householdId, habits, habitIdsToFire, fireDate, today,
+            logLabel: '[addTransaction]',
+          })
+        : new Map<string, number>();
+
       // Commit the new transaction and the account-balance delta in a SINGLE
       // writeBatch so they can never partially apply. Pre-allocate the
       // transaction ref so it participates in the batch.
       const batch = writeBatch(db);
       const txRef = doc(collection(db, `households/${householdId}/transactions`));
+
+      // Fire BEFORE the transaction `set`: the fired-ledger has to be in
+      // `docData` by the time it is written (a batch never writes one doc
+      // twice), and `batch.set` serializes its data at call time.
+      const fired = habitIdsToFire.length > 0
+        ? fireHabitsIntoBatch(batch, {
+            db, householdId, habits, habitIdsToFire, fireDate, today, priorPeriodCounts,
+            createdByUid: user.uid,
+            sourceTransactionId: txRef.id,
+          })
+        : null;
+      // A plain ARRAY, not arrayUnion: this is a `set` on a brand-new document,
+      // so there is nothing to union against. Persist-only-when-present,
+      // matching the optional-field convention above.
+      if (fired && fired.newlyFiredHabitIds.length > 0) {
+        docData.firedHabitIds = fired.newlyFiredHabitIds;
+      }
+
       batch.set(txRef, docData);
 
       // Update the target account balance only when the (verified) impact is
@@ -267,6 +609,35 @@ export function makeAddTransaction(deps: {
         });
       }
 
+      // Household points for the habits fired above, plus any freeze token owed
+      // back. Both live on the household doc, so they are merged into a SINGLE
+      // update — a batch may not write the same document twice. When nothing
+      // fired, the household doc is not written at all (this mutation wrote
+      // nothing to it before habit firing existed, and still must not).
+      if (fired) {
+        const householdUpdates: Record<string, unknown> = {};
+        if (fired.pointsDelta.daily !== 0) householdUpdates['points.daily'] = increment(fired.pointsDelta.daily);
+        if (fired.pointsDelta.weekly !== 0) householdUpdates['points.weekly'] = increment(fired.pointsDelta.weekly);
+        if (fired.pointsDelta.total !== 0) householdUpdates['points.total'] = increment(fired.pointsDelta.total);
+        if (fired.freezeTokensRefunded > 0 && freezeBank) {
+          // Whole-object write, matching autoApplyFreezes/rolloverFreezeBankTokens —
+          // freezeBank is a nested map, not a counter, and every existing writer
+          // treats it as last-writer-wins. Capped at the max so a refund can't push
+          // the bank above its ceiling.
+          householdUpdates['freezeBank'] = {
+            ...freezeBank,
+            tokens: Math.min(
+              freezeBank.maxTokens ?? FREEZE_MAX_TOKENS,
+              freezeBank.tokens + fired.freezeTokensRefunded,
+            ),
+            history: [...freezeBank.history, ...fired.freezeRefundEntries],
+          } satisfies FreezeBank;
+        }
+        if (Object.keys(householdUpdates).length > 0) {
+          batch.update(doc(db, `households/${householdId}`), householdUpdates);
+        }
+      }
+
       // Read the live window BEFORE the commit so latency-compensated listeners
       // can't already include this write (ref, not `transactions`, to keep the
       // callback's deps free of per-transaction churn).
@@ -276,6 +647,19 @@ export function makeAddTransaction(deps: {
 
       track('transaction_added', { source: tx.source || 'manual' });
       if (shouldTrackFirstTime(FIRST_TRANSACTION_FLAG, wasFirstTransaction)) track('first_transaction_added');
+
+      // Same points toast the verify path shows (only after a successful
+      // commit), including the "via transaction: <merchant>" attribution and the
+      // back-dated `· logged <date>` suffix.
+      if (fired) {
+        showTransactionHabitPointsToast({
+          totalPointsChange: fired.totalPointsChange,
+          successfulHabitsCount: fired.successfulHabitsCount,
+          merchant: tx.merchant.trim(),
+          fireDate,
+          today,
+        });
+      }
 
       // DO NOT update bucket.spent - it's now calculated in real-time from transactions
       // The bucketSpentMap effect will automatically recalculate when transactions change
@@ -295,6 +679,13 @@ export function makeAddTransaction(deps: {
  * keep the atomic-batch convention). Mirrors `makeAddTransaction`'s field
  * building and verified-only balance routing, accumulated per-account (a batch
  * must not write the same account doc twice). An empty list is a no-op.
+ *
+ * DELIBERATELY DOES NOT FIRE HABITS, unlike `makeAddTransaction`. Its only
+ * caller is the receipt SPLIT (CaptureModal), which copies the receipt-level
+ * suggested habits onto EVERY category row — so firing per row would log one
+ * grocery trip three times. Deduping that needs a decision this path hasn't
+ * made yet; the rows are `pending_review`, so each still fires normally (and
+ * once) when it is approved through `updateTransactionCategory`.
  */
 export function makeAddTransactions(deps: {
   db: Firestore;
@@ -423,14 +814,6 @@ export function makeUpdateTransactionCategory(deps: {
     // so they can never diverge (a partial failure previously left habits/points
     // inconsistent).
     const batch = writeBatch(db);
-    let totalPointsChange = 0;
-    let successfulHabitsCount = 0;
-    // Points are accumulated PER BUCKET, not as one scalar: a back-dated fire
-    // credits `total` (lifetime) but must not touch today's `daily` or — if it
-    // predates Monday — this week's `weekly`. Mirrors addHabitSubmission's date
-    // gating; the pre-#1065 code incremented all three unconditionally, which
-    // was only correct while every fire landed on today.
-    const pointsDelta = { daily: 0, weekly: 0, total: 0 };
 
     // VERIFIED-ONLY BALANCE (Plan 015): this is the primary "verify" action — it
     // sets status to `verified` and may change the category. A pending_review
@@ -521,7 +904,6 @@ export function makeUpdateTransactionCategory(deps: {
       relatedHabitIds ?? [],
       existingTx.firedHabitIds ?? [],
     );
-    const newlyFiredHabitIds: string[] = [];
 
     // The date the fired habits are credited to. A transaction is dated to when
     // the money actually MOVED, and the nightly bankEmailSync delivers it the
@@ -534,145 +916,27 @@ export function makeUpdateTransactionCategory(deps: {
     const today = getLocalDateString();
     const fireDate = overrides?.date ?? existingTx.date ?? today;
 
-    // A threshold habit fired into a PAST period needs that period's already-
-    // recorded unit count to know whether this fire crosses the target — the
-    // live counter describes a later period and says nothing about it. Read the
-    // stored submissions for exactly those habits, before opening any writes
-    // (reads can't participate in a batch). Incremental habits score per-action
-    // and current-period fires use the live counter, so both skip the read.
-    const priorPeriodCounts = new Map<string, number>();
-    for (const habitId of habitIdsToFire) {
-      const habit = habits.find(h => h.id === habitId);
-      if (!habit || habit.archivedAt || habit.scoringType === 'incremental') continue;
-      if (!isWithinBackdateWindow(fireDate, today)) continue;
-      const periodStart = habitPeriodStart(habit.period, fireDate);
-      if (periodStart === habitPeriodStart(habit.period, today)) continue;
-      const periodEnd = habit.period === 'weekly'
-        ? format(addDays(parseISO(periodStart), 6), 'yyyy-MM-dd')
-        : fireDate;
-      try {
-        const snap = await getDocs(query(
-          collection(db, `households/${householdId}/habits/${habitId}/submissions`),
-          where('date', '>=', periodStart),
-          where('date', '<=', periodEnd),
-        ));
-        priorPeriodCounts.set(
-          habitId,
-          snap.docs.reduce((sum, d) => sum + ((d.data() as HabitSubmission).count ?? 0), 0),
-        );
-      } catch (error) {
-        // A failed read must not block the approval. Fall back to 0, which is
-        // the pre-submissions assumption: the fire is treated as this period's
-        // first unit. Worst case a threshold habit is credited a period early.
-        console.warn('[updateTransactionCategory] Prior-period submission read failed:', error);
-      }
-    }
+    // Reads cannot participate in a batch, so the prior-period submission read
+    // happens before any write is queued (see readPriorPeriodCounts).
+    const priorPeriodCounts = await readPriorPeriodCounts({
+      db, householdId, habits, habitIdsToFire, fireDate, today,
+      logLabel: '[updateTransactionCategory]',
+    });
 
     // 2. Fire the to-fire habits FIRST so the transaction write below can
     // co-commit the fired-ledger update (firedHabitIds) in the SAME op.
-    let freezeTokensRefunded = 0;
-    const freezeRefundEntries: FreezeBankHistoryEntry[] = [];
-    for (const habitId of habitIdsToFire) {
-      const habit = habits.find(h => h.id === habitId);
-      if (!habit) {
-        console.warn(`Habit ID ${habitId} not found in habits array. Skipping habit increment.`);
-        continue;
-      }
-      // An ARCHIVED habit must never fire (PRD #1065): a transaction's
-      // relatedHabitIds may reference a habit archived after the tag was made
-      // (keywordMatchedHabitIds already filters archived at suggestion time —
-      // this is the defense for a persisted stale reference). Skip firing; the
-      // approval completes normally with no points/streak side effect.
-      // computeBackdatedHabitFire re-checks this; the explicit skip keeps the
-      // habit out of firedHabitIds so a later un-archive can still fire it.
-      if (habit.archivedAt) continue;
-
-      // Out-of-window rows (older than HABIT_BACKDATE_MAX_DAYS, or future-dated)
-      // record the association via relatedHabitIds but fire nothing — see
-      // isWithinBackdateWindow for why an unbounded window is unsafe.
-      const fire = computeBackdatedHabitFire(
-        habit,
-        fireDate,
-        today,
-        priorPeriodCounts.get(habitId) ?? 0,
-      );
-      if (!fire) continue;
-
-      // DELTA WRITE (never whole client-computed values): increment() counters +
-      // arrayUnion/arrayRemove completion history, so a stale-cache device can't
-      // clobber another device's completions (2026-07-15 incident).
-      batch.update(doc(db, `households/${householdId}/habits`, habitId), {
-        // A past-period fire leaves the live counter alone entirely; a stale
-        // current-period one writes it absolutely (see BackdatedHabitFireDelta).
-        ...(fire.resetCount
-          ? { count: fire.count }
-          : fire.countDelta !== 0
-            ? { count: increment(fire.countDelta) }
-            : {}),
-        totalCount: increment(fire.totalCountDelta),
-        ...(fire.addedDate !== undefined ? { completedDates: arrayUnion(fire.addedDate) } : {}),
-        ...(fire.unfrozenDate !== undefined ? { frozenDates: arrayRemove(fire.unfrozenDate) } : {}),
-        streakDays: fire.streakDays,
-        // Every transaction fire is a submission, so the calendar/insight paths
-        // know to read this habit's stored per-date units rather than inferring
-        // one completion per date.
-        hasSubmissionTracking: true,
-        lastUpdated: serverTimestamp(),
-      });
-
-      // The submission doc IS the back-dated record: it carries the date the
-      // completion belongs to, the points actually credited, and the source
-      // transaction — which is what makes the undo below exact rather than a
-      // recomputation. Same subcollection addHabitSubmission writes to.
-      const submission: Omit<HabitSubmission, 'id'> = {
-        habitId,
-        habitTitle: habit.title,
-        // A transaction carries a DATE but no time of day, so there is no true
-        // timestamp to record. Noon LOCAL on the fire date is the deliberate
-        // placeholder: HabitSubmissionLogModal renders this as a clock time and
-        // bins it by hour, and midday reads as "time unknown" rather than
-        // implying a precise moment. Local (not noon UTC) so the timestamp's
-        // calendar day always equals `date` in the user's own timezone — the
-        // app's date convention — instead of rolling over for UTC+13/+14.
-        timestamp: new Date(`${fireDate}T12:00:00`).toISOString(),
-        date: fireDate,
-        count: 1,
-        pointsEarned: fire.pointsEarned,
-        streakDaysAtTime: fire.streakAtFireDate,
-        multiplierApplied: fire.multiplier,
-        createdBy: currentUser.uid,
-        createdAt: new Date().toISOString(),
-        sourceTransactionId: id,
-      };
-      batch.set(
-        doc(collection(db, `households/${householdId}/habits/${habitId}/submissions`)),
-        submission,
-      );
-
-      // A day that turns out to have been completed must not stay frozen, and
-      // the token spent protecting that "miss" is owed back. Collected here and
-      // written once below so one batch never writes the household doc twice.
-      if (fire.unfrozenDate !== undefined) {
-        freezeTokensRefunded++;
-        freezeRefundEntries.push({
-          id: crypto.randomUUID(),
-          type: 'earned',
-          amount: 1,
-          date: today,
-          habitId,
-          habitDate: fire.unfrozenDate,
-          notes: `Freeze refunded: ${habit.title} was completed on ${fire.unfrozenDate} after all (logged from a transaction)`,
-          createdAt: new Date().toISOString(),
-        });
-      }
-
-      pointsDelta.daily += fire.pointsDelta.daily;
-      pointsDelta.weekly += fire.pointsDelta.weekly;
-      pointsDelta.total += fire.pointsDelta.total;
-      totalPointsChange += fire.pointsEarned;
-      successfulHabitsCount++;
-      newlyFiredHabitIds.push(habitId);
-    }
+    const {
+      newlyFiredHabitIds,
+      pointsDelta,
+      freezeTokensRefunded,
+      freezeRefundEntries,
+      totalPointsChange,
+      successfulHabitsCount,
+    } = fireHabitsIntoBatch(batch, {
+      db, householdId, habits, habitIdsToFire, fireDate, today, priorPeriodCounts,
+      createdByUid: currentUser.uid,
+      sourceTransactionId: id,
+    });
 
     // 1. Update Transaction. Verifying resolves any Action-Queue snooze, so the
     // stale marker doesn't linger on the doc. Inline edits (amount/merchant/date)
@@ -768,44 +1032,14 @@ export function makeUpdateTransactionCategory(deps: {
     // DO NOT update bucket.spent - it's now calculated in real-time from transactions
     // The bucketSpentMap effect will automatically recalculate when transactions change
 
-    // Toast feedback for habits (only after a successful commit). The
-    // attribution names the source ("via transaction: <merchant>") so the user
-    // can always answer "why did my points change?" (PRD #1065 story 19).
-    if (totalPointsChange !== 0) {
-      const sign = totalPointsChange > 0 ? '+' : '';
-      toast(
-        React.createElement(
-          'div',
-          { className: 'flex flex-col' },
-          React.createElement(
-            'div',
-            { className: 'flex items-center gap-2' },
-            React.createElement('span', { className: 'font-bold' }, `${sign}${totalPointsChange} pts`),
-            React.createElement('span', { className: 'text-sm opacity-80' }, `from ${successfulHabitsCount} habit(s)`),
-          ),
-          React.createElement(
-            'span',
-            { className: 'text-xs opacity-70' },
-            // Name the DATE too whenever the fire was back-dated. Otherwise a
-            // Tuesday approval silently credits Monday and the points move with
-            // no visible cause — the same "why did my points change?" gap the
-            // attribution string exists to close (PRD #1065 story 19).
-            fireDate === today
-              ? transactionAttribution(overrides?.merchant ?? existingTx.merchant)
-              : `${transactionAttribution(overrides?.merchant ?? existingTx.merchant)} · logged ${format(parseISO(fireDate), 'EEE MMM d')}`,
-          ),
-        ),
-        {
-          duration: 2000,
-          icon: toastIcon(Star, 'text-accent-600'),
-          style: {
-            background: '#ECFDF5',
-            color: '#065F46',
-            border: '1px solid #A7F3D0',
-          },
-        }
-      );
-    }
+    // Toast feedback for habits (only after a successful commit).
+    showTransactionHabitPointsToast({
+      totalPointsChange,
+      successfulHabitsCount,
+      merchant: overrides?.merchant ?? existingTx.merchant,
+      fireDate,
+      today,
+    });
 
     toast.success('Verified & Categorized!');
   };
