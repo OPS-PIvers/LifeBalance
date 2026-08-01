@@ -12,6 +12,7 @@ import {
   INCOME_CATEGORY,
 } from '@/types/schema';
 import { getTransactionWindowStart } from './listenerWindows';
+import { sumMoney } from '@/utils/money';
 
 const bucket = (id: string, name: string): BudgetBucket =>
   ({ id, name } as BudgetBucket);
@@ -195,9 +196,12 @@ describe('getBucketSpendTransactions', () => {
   ): Transaction => ({ id, category, amount, status, date, payPeriodId } as Transaction);
 
   it('returns the rows behind a bucket\'s spend, newest first', () => {
+    // Decimal amounts on purpose: 10.10 + 5.20 is 15.299999999999999 in raw
+    // IEEE 754, so summing either side with plain `+` would fail this parity
+    // check even though the feature is correct.
     const transactions = [
-      row('t1', 'Groceries', 10, 'verified', '2026-07-16'),
-      row('t2', 'groceries', 5, 'pending_review', '2026-07-18'),
+      row('t1', 'Groceries', 10.1, 'verified', '2026-07-16'),
+      row('t2', 'groceries', 5.2, 'pending_review', '2026-07-18'),
       row('t3', 'Gas', 40, 'verified', '2026-07-17'),
     ];
 
@@ -207,7 +211,8 @@ describe('getBucketSpendTransactions', () => {
     // Sums back to what calculateBucketSpent reports for the same bucket.
     const map = calculateBucketSpent([bucket('b1', 'Groceries')], transactions, '');
     const spent = map.get('b1')!;
-    expect(result.reduce((sum, t) => sum + t.amount, 0)).toBe(spent.verified + spent.pending);
+    expect(sumMoney(result.map(t => t.amount))).toBe(sumMoney([spent.verified, spent.pending]));
+    expect(sumMoney(result.map(t => t.amount))).toBe(15.3);
   });
 
   it('scopes to the pay period when one is tracked', () => {

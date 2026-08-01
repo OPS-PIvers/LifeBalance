@@ -6,6 +6,7 @@ import {
   sumPendingSpend,
 } from './safeToSpendCalculator';
 import { Account, CalendarItem, Transaction, INCOME_CATEGORY } from '@/types/schema';
+import { sumMoney } from '@/utils/money';
 import { addDays, format, subDays } from 'date-fns';
 
 describe('findNextPaycheckDate', () => {
@@ -1193,10 +1194,14 @@ describe('breakdown itemization — the lists behind the totals', () => {
     ...overrides,
   });
 
+  // Amounts are deliberately DECIMAL: 40.10 + 900.20 is 940.3000000000001 in
+  // raw IEEE 754 but 940.30 through the cent-safe `sumMoney` the formula uses,
+  // so these fixtures actually exercise the money math rather than letting
+  // integer amounts hide it.
   const items: CalendarItem[] = [
     // Overdue carry-over from the previous period (inside the 1-month lookback).
-    { id: 'b0', title: 'Water', amount: 40, date: '2026-05-20', type: 'expense', isPaid: false },
-    { id: 'b1', title: 'Rent', amount: 900, date: '2026-06-05', type: 'expense', isPaid: false },
+    { id: 'b0', title: 'Water', amount: 40.1, date: '2026-05-20', type: 'expense', isPaid: false },
+    { id: 'b1', title: 'Rent', amount: 900.2, date: '2026-06-05', type: 'expense', isPaid: false },
     { id: 'b2', title: 'Paid already', amount: 60, date: '2026-06-06', type: 'expense', isPaid: true },
     // Dated ON the next paycheck → belongs to the NEXT period, not this one.
     { id: 'b3', title: 'Next period bill', amount: 500, date: '2026-06-15', type: 'expense', isPaid: false },
@@ -1207,14 +1212,16 @@ describe('breakdown itemization — the lists behind the totals', () => {
     const b = calculateSafeToSpendBreakdown(accounts, items, '2026-06-01', []);
 
     expect(b.unpaidBillItems.map(i => i.id)).toEqual(['b0', 'b1']);
-    expect(b.unpaidBillItems.reduce((sum, i) => sum + i.amount, 0)).toBe(b.unpaidBills);
-    expect(b.unpaidBills).toBe(940);
+    // Summed the way the app sums money — a raw float `reduce` would report
+    // 940.3000000000001 here and fail against the cent-safe total.
+    expect(sumMoney(b.unpaidBillItems.map(i => i.amount))).toBe(b.unpaidBills);
+    expect(b.unpaidBills).toBe(940.3);
   });
 
   it('pendingTransactions are exactly the rows summed into pendingSpend, newest first', () => {
     const transactions = [
-      tx({ id: 't1', amount: 50, date: '2026-06-10' }),
-      tx({ id: 't2', amount: 25, date: '2026-06-12' }),
+      tx({ id: 't1', amount: 50.1, date: '2026-06-10' }),
+      tx({ id: 't2', amount: 25.2, date: '2026-06-12' }),
       tx({ id: 't3', amount: 999, status: 'verified' }),                 // not pending
       tx({ id: 't4', amount: 999, category: INCOME_CATEGORY }),          // income
       tx({ id: 't5', amount: 999, accountId: 'cc' }),                    // not checking
@@ -1224,8 +1231,8 @@ describe('breakdown itemization — the lists behind the totals', () => {
     const b = calculateSafeToSpendBreakdown(accounts, items, '2026-06-01', transactions);
 
     expect(b.pendingTransactions.map(t => t.id)).toEqual(['t2', 't1']);
-    expect(b.pendingTransactions.reduce((sum, t) => sum + t.amount, 0)).toBe(b.pendingSpend);
-    expect(b.pendingSpend).toBe(75);
+    expect(sumMoney(b.pendingTransactions.map(t => t.amount))).toBe(b.pendingSpend);
+    expect(b.pendingSpend).toBe(75.3);
   });
 
   it('itemizes pending spend even with no period tracking, where there are no bills to reserve', () => {
