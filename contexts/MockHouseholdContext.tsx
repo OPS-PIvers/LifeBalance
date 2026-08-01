@@ -1424,7 +1424,34 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const addTransaction = useCallback(async (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => {
     // Assign the mock pay period (the real context derives one via
     // getPayPeriodForTransaction) so pending spend / bucket progress see the tx.
-    const newTx = { ...tx, id: generateId(), payPeriodId: MOCK_PAY_PERIOD_ID } as Transaction;
+    // HABIT AUTOMATIONS parity with makeAddTransaction: a hand-entered
+    // transaction is stamped `verified`, so it never reaches
+    // updateTransactionCategory and has to fire its attached habits here.
+    // VERIFIED-ONLY for the same reason as production — a pending_review
+    // capture's habit ids are AI suggestions the review card exists to confirm.
+    // A brand-new row has fired nothing, so the dedup ledger starts empty.
+    // The fire is BACK-DATED to the transaction's own date; archived habits and
+    // out-of-window dates return null and never fire (so they never reach
+    // `firedHabitIds` either). Resolved OUTSIDE the setState updaters, which
+    // StrictMode double-invokes.
+    const { toFire: habitIdsToFire } = selectHabitsToFire(
+      tx.status === 'verified' ? (tx.relatedHabitIds ?? []) : [],
+      [],
+    );
+    const addToday = getLocalDateString();
+    const addFires = new Map<string, NonNullable<ReturnType<typeof computeBackdatedHabitFire>>>();
+    for (const habitId of habitIdsToFire) {
+      const habit = habits.find(h => h.id === habitId);
+      if (!habit) continue;
+      const fire = computeBackdatedHabitFire(habit, tx.date, addToday);
+      if (fire) addFires.set(habitId, fire);
+    }
+    const newTx = {
+      ...tx,
+      id: generateId(),
+      payPeriodId: MOCK_PAY_PERIOD_ID,
+      ...(addFires.size > 0 ? { firedHabitIds: [...addFires.keys()] } : {}),
+    } as Transaction;
     // Verified-only, account-routed balance parity with the real context: a
     // transaction created `verified` moves its tagged account's balance
     // (falling back to checking); a `pending_review` capture moves nothing —
@@ -1456,8 +1483,31 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
           : a;
       }));
     }
+    if (addFires.size > 0) {
+      setHabits(prev => prev.map(h => {
+        const fire = addFires.get(h.id);
+        if (!fire) return h;
+        return {
+          ...h,
+          count: fire.resetCount ? fire.count : h.count + fire.countDelta,
+          totalCount: h.totalCount + fire.totalCountDelta,
+          ...(fire.addedDate ? { completedDates: [...h.completedDates, fire.addedDate] } : {}),
+          ...(fire.unfrozenDate
+            ? { frozenDates: (h.frozenDates ?? []).filter(d => d !== fire.unfrozenDate) }
+            : {}),
+          streakDays: fire.streakDays,
+          hasSubmissionTracking: true,
+          lastUpdated: new Date().toISOString(),
+        };
+      }));
+      // Only the lifetime total is mirrored (same simplification the mock's
+      // updateTransactionCategory makes): pointsDelta.total is the bucket every
+      // fire credits, while daily/weekly are date-gated.
+      const pointsChange = [...addFires.values()].reduce((sum, f) => sum + f.pointsDelta.total, 0);
+      if (pointsChange !== 0) setTotalPoints(prev => prev + pointsChange);
+    }
     toast.success('Mock: Transaction added');
-  }, [accounts]);
+  }, [accounts, habits]);
 
   // F-DASH-04 parity: add several transactions (e.g. a receipt split into
   // category transactions) with their combined verified-only balance effects.
