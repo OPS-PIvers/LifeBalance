@@ -592,10 +592,13 @@ Per-member habit points follow-ups (from the 2026-07-30 six-stage ship, PRs #115
   gating reads are kid-only (`KidDashboard.tsx`, `gamificationMutations.ts`) with Kid Mode
   dormant. Magnitude is tens of points over a ~1.5-day exposure window, and the bug is frozen. A
   hardened repair tool (TOCTOU transaction guard, `Number.isFinite` guards, blanket
-  threshold-habit exclusion) is PARKED on branch `fix/points-drift-repair`; PR #1168 is closed
-  with the full reasoning, including the correction that the tool writes **upward only** — the
-  earlier "one-way downward write" framing was wrong. Its Scan path is read-only, so a number can
-  be obtained at zero risk if ever wanted. **CORRECTION 2026-07-31: there is no live successor.**
+  threshold-habit exclusion) is ARCHIVED, not on a branch — the 2026-08-01 cleanup took the repo
+  back to `main` only, so recover it with
+  `git bundle unbundle ../LifeBalance-branches-2026-08-01.bundle` (refs `fix/points-drift-repair`
+  = the hardened tool at `510d68c7`, `wip/points-drift-repair` = its unverified draft). PR #1168
+  is closed with the full reasoning, including the correction that the tool writes **upward
+  only** — the earlier "one-way downward write" framing was wrong. Its Scan path is read-only, so
+  a number can be obtained at zero risk if ever wanted. **CORRECTION 2026-07-31: there is no live successor.**
   `PointsBreakdownModal`'s threshold past-date edit (`pointsChange = 0` while `completedDates`
   was still written) carried the same one-award-per-removal inflation — probed at
   `points.total: 0` against a ground truth of `-15` — but it was NOT live and never could fire:
