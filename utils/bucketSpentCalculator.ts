@@ -116,6 +116,37 @@ export function getTransactionsForBucket(
 }
 
 /**
+ * The transactions that actually make up a bucket's `spent` figure — the
+ * itemization behind {@link calculateBucketSpent}, newest first.
+ *
+ * Deliberately narrower than {@link getTransactionsForBucket}: it applies the
+ * SAME two exclusions the spent math applies (income, and the credit-card
+ * sentinel category), so a list rendered from this can be summed back to the
+ * bucket's spent total. `getTransactionsForBucket` keeps its looser
+ * category-only matching for the reallocation flow, which needs every row
+ * carrying the category regardless of how it scores.
+ *
+ * Like the spent math, duplicate-named buckets share one list — a transaction
+ * links to a bucket only by category NAME, so the two cannot be told apart.
+ *
+ * The newest-first sort is re-established here rather than inherited from
+ * {@link getTransactionsForBucket} — that one orders by `new Date(…).getTime()`
+ * while this orders the `yyyy-MM-dd` strings lexicographically (identical
+ * results for the stored format). Owning the sort keeps this function's stated
+ * order true on its own terms, so a change to the upstream sort key can't
+ * silently re-order the drawer's itemization.
+ */
+export function getBucketSpendTransactions(
+  bucketName: string,
+  transactions: Transaction[],
+  periodId: string
+): Transaction[] {
+  return getTransactionsForBucket(bucketName, transactions, periodId)
+    .filter(tx => tx.category !== INCOME_CATEGORY && tx.category !== CREDIT_CARD_CATEGORY)
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+/**
  * Calculate total verified spending across all buckets for a period
  * @param bucketSpentMap - Map from calculateBucketSpent
  * @returns Total verified spending

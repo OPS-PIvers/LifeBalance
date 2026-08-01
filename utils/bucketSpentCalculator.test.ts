@@ -1,11 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import {
   calculateBucketSpent,
+  getBucketSpendTransactions,
   getTotalVerifiedSpending,
   getTotalPendingSpending,
 } from './bucketSpentCalculator';
-import { BudgetBucket, Transaction } from '@/types/schema';
+import {
+  BudgetBucket,
+  Transaction,
+  CREDIT_CARD_CATEGORY,
+  INCOME_CATEGORY,
+} from '@/types/schema';
 import { getTransactionWindowStart } from './listenerWindows';
+import { sumMoney } from '@/utils/money';
 
 const bucket = (id: string, name: string): BudgetBucket =>
   ({ id, name } as BudgetBucket);
@@ -172,6 +179,60 @@ describe('calculateBucketSpent under transaction windowing', () => {
 
     const map = calculateBucketSpent(buckets, windowed, oldPeriodId);
     expect(map.get('b1')!.verified).toBe(50);
+  });
+});
+
+describe('getBucketSpendTransactions', () => {
+  // A row that the Safe-to-Spend drawer lists must be a row the spent total
+  // counted — these assert the two agree, since the itemization exists to
+  // explain the figure.
+  const row = (
+    id: string,
+    category: string,
+    amount: number,
+    status: Transaction['status'],
+    date: string,
+    payPeriodId?: string,
+  ): Transaction => ({ id, category, amount, status, date, payPeriodId } as Transaction);
+
+  it('returns the rows behind a bucket\'s spend, newest first', () => {
+    // Decimal amounts on purpose: 10.10 + 5.20 is 15.299999999999999 in raw
+    // IEEE 754, so summing either side with plain `+` would fail this parity
+    // check even though the feature is correct.
+    const transactions = [
+      row('t1', 'Groceries', 10.1, 'verified', '2026-07-16'),
+      row('t2', 'groceries', 5.2, 'pending_review', '2026-07-18'),
+      row('t3', 'Gas', 40, 'verified', '2026-07-17'),
+    ];
+
+    const result = getBucketSpendTransactions('Groceries', transactions, '');
+
+    expect(result.map(t => t.id)).toEqual(['t2', 't1']);
+    // Sums back to what calculateBucketSpent reports for the same bucket.
+    const map = calculateBucketSpent([bucket('b1', 'Groceries')], transactions, '');
+    const spent = map.get('b1')!;
+    expect(sumMoney(result.map(t => t.amount))).toBe(sumMoney([spent.verified, spent.pending]));
+    expect(sumMoney(result.map(t => t.amount))).toBe(15.3);
+  });
+
+  it('scopes to the pay period when one is tracked', () => {
+    const transactions = [
+      row('t1', 'Groceries', 10, 'verified', '2026-07-16', '2026-07-15'),
+      row('t2', 'Groceries', 99, 'verified', '2026-07-02', '2026-07-01'),
+    ];
+
+    expect(getBucketSpendTransactions('Groceries', transactions, '2026-07-15').map(t => t.id))
+      .toEqual(['t1']);
+  });
+
+  it('applies the same exclusions as the spent math (income, credit-card sentinel)', () => {
+    const transactions = [
+      row('t1', INCOME_CATEGORY, 500, 'verified', '2026-07-16'),
+      row('t2', CREDIT_CARD_CATEGORY, 200, 'verified', '2026-07-16'),
+    ];
+
+    expect(getBucketSpendTransactions(INCOME_CATEGORY, transactions, '')).toEqual([]);
+    expect(getBucketSpendTransactions(CREDIT_CARD_CATEGORY, transactions, '')).toEqual([]);
   });
 });
 

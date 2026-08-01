@@ -21,10 +21,18 @@ export interface BucketDistroRow {
   spent: number;
   remaining: number;
   isOver: boolean;
+  /**
+   * What this bucket claims from the pool: `max(0, remaining)`. An overspent
+   * bucket claims nothing (it can't reclaim cash it already spent), which is
+   * why this is not simply `remaining`.
+   */
+  claim: number;
 }
 
 export interface SafeToSpendDistribution {
   rows: BucketDistroRow[];
+  /** Σ of every row's `claim` — the total the buckets still expect to spend. */
+  claimed: number;
   /** StS − Σ max(0, remaining). May be negative when budgets exceed free cash. */
   leftover: number;
   /** True when leftover < 0 (over-allocated). */
@@ -49,11 +57,19 @@ export function computeSafeToSpendDistribution(
     const s = bucketSpentMap.get(b.id) ?? { verified: 0, pending: 0 };
     const spent = sumMoney([s.verified, s.pending]);
     const remaining = subtractMoney(b.limit, spent);
-    return { id: b.id, name: b.name, limit: b.limit, spent, remaining, isOver: remaining < 0 };
+    return {
+      id: b.id,
+      name: b.name,
+      limit: b.limit,
+      spent,
+      remaining,
+      isOver: remaining < 0,
+      // Overspent buckets contribute 0 (never negative) to the claimed total —
+      // an over-budget bucket doesn't reclaim cash from the pool.
+      claim: remaining > 0 ? remaining : 0,
+    };
   });
-  // Overspent buckets contribute 0 (never negative) to the claimed total — an
-  // over-budget bucket doesn't reclaim cash from the pool.
-  const claimed = sumMoney(rows.map(r => (r.remaining > 0 ? r.remaining : 0)));
+  const claimed = sumMoney(rows.map(r => r.claim));
   const leftover = subtractMoney(breakdown.safeToSpend, claimed);
-  return { rows, leftover, overAllocated: leftover < 0 };
+  return { rows, claimed, leftover, overAllocated: leftover < 0 };
 }

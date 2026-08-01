@@ -57,25 +57,30 @@ function findNextPaycheckFromExpanded(
 }
 
 /**
- * Helper to calculate unpaid bills within a date range.
+ * Select the unpaid bills within a date range — the ITEMS behind the
+ * `unpaidBills` total, sorted soonest-due first.
  *
  * Plan 016: buckets and the calendar are separate domains — buckets are a
  * pure tracking overlay and never reserve against Safe-to-Spend, so EVERY
  * unpaid bill in range subtracts (no bill↔bucket exclusion). See the drawer at
  * components/budget/SafeToSpendBreakdownDrawer.tsx for the pool/overlay model.
  *
+ * Exported so the breakdown drawer can itemize exactly the bills the formula
+ * subtracted — the list and the total come from ONE filter, so they can never
+ * disagree.
+ *
  * @param expandedItems - Pre-expanded calendar items
  * @param startDate - Start of the range (INCLUSIVE)
  * @param endDateExclusive - End of the range (EXCLUSIVE); see the boundary note
  *   on the filter below — callers pass a midnight instant, not an end-of-day one
- * @returns Total amount of unpaid bills in range
+ * @returns The unpaid bills in range, ascending by date
  */
-function calculateUnpaidBillsInRange(
+export function selectUnpaidBillsInRange(
   expandedItems: CalendarItem[],
   startDate: Date,
   endDateExclusive: Date
-): number {
-  const billsInRange = expandedItems.filter(item => {
+): CalendarItem[] {
+  return expandedItems.filter(item => {
     const itemDate = parseISO(item.date);
 
     return (
@@ -95,10 +100,10 @@ function calculateUnpaidBillsInRange(
       // sits inside the new period's window via the INCLUSIVE start above.
       isBefore(itemDate, endDateExclusive)
     );
-  });
-
-  // Sum in integer cents to avoid floating-point drift across many bills.
-  return sumMoney(billsInRange.map(item => item.amount));
+  })
+    // `date` is a zero-padded yyyy-MM-dd string, so lexicographic order IS
+    // chronological order — no parsing needed for the sort.
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 /**
@@ -166,6 +171,18 @@ export interface SafeToSpendBreakdown {
   safeToSpend: number;
   /** Date of the next paycheck bounding the range, or null if none found. */
   nextPaycheckDate: string | null;
+  /**
+   * The individual bills summed into {@link unpaidBills}, ascending by date.
+   * Produced by the SAME filter as the total (see
+   * {@link selectUnpaidBillsInRange}), so the itemization a UI shows can never
+   * disagree with the figure it itemizes. Empty when no period is tracked.
+   */
+  unpaidBillItems: CalendarItem[];
+  /**
+   * The individual transactions summed into {@link pendingSpend}, newest first.
+   * Same one-filter guarantee as `unpaidBillItems` (see {@link selectPendingSpend}).
+   */
+  pendingTransactions: Transaction[];
 }
 
 /**
@@ -194,27 +211,39 @@ export const sumPendingSpend = (
   transactions: Transaction[],
   currentPeriodId: string = '',
   accounts: Account[] = []
-): number => {
+): number => sumMoney(selectPendingSpend(transactions, currentPeriodId, accounts).map(tx => tx.amount));
+
+/**
+ * The transactions {@link sumPendingSpend} sums — same rule, itemized, newest
+ * first. `sumPendingSpend` delegates here, so a display surface listing these
+ * rows is showing exactly what the formula subtracted; there is one filter, not
+ * two that could drift apart.
+ */
+export const selectPendingSpend = (
+  transactions: Transaction[],
+  currentPeriodId: string = '',
+  accounts: Account[] = []
+): Transaction[] => {
   const checkingIds = new Set(
     accounts.filter(a => a.type === 'checking' && !a.archived).map(a => a.id)
   );
-  return sumMoney(
-    transactions
-      .filter(tx => {
-        if (tx.status !== 'pending_review') return false;
-        if (tx.category === INCOME_CATEGORY) return false;
-        // A pending charge on a non-checking account (savings/credit) does not
-        // reduce liquid checking funds, so it must not lower Safe-to-Spend. Only
-        // apply this when accounts are known: if `accounts` is empty (no arg, or
-        // a transient cold-load state where transactions arrived before
-        // accounts) fall back to account-agnostic filtering so tagged spend
-        // isn't wrongly dropped (which would spike Safe-to-Spend).
-        if (accounts.length > 0 && tx.accountId && !checkingIds.has(tx.accountId)) return false;
-        if (currentPeriodId) return tx.payPeriodId === currentPeriodId;
-        return true;
-      })
-      .map(tx => tx.amount)
-  );
+  return transactions
+    .filter(tx => {
+      if (tx.status !== 'pending_review') return false;
+      if (tx.category === INCOME_CATEGORY) return false;
+      // A pending charge on a non-checking account (savings/credit) does not
+      // reduce liquid checking funds, so it must not lower Safe-to-Spend. Only
+      // apply this when accounts are known: if `accounts` is empty (no arg, or
+      // a transient cold-load state where transactions arrived before
+      // accounts) fall back to account-agnostic filtering so tagged spend
+      // isn't wrongly dropped (which would spike Safe-to-Spend).
+      if (accounts.length > 0 && tx.accountId && !checkingIds.has(tx.accountId)) return false;
+      if (currentPeriodId) return tx.payPeriodId === currentPeriodId;
+      return true;
+    })
+    // Newest first, matching every other transaction list in the app. `date` is
+    // a zero-padded yyyy-MM-dd string, so lexicographic order is chronological.
+    .sort((a, b) => b.date.localeCompare(a.date));
 };
 
 /**
@@ -241,8 +270,10 @@ export const calculateSafeToSpendBreakdownFromExpanded = (
   );
 
   // 2. Pending spend: current-period pending_review spend (income excluded,
-  //    non-checking-tagged excluded).
-  const pendingSpend = sumPendingSpend(transactions, currentPeriodId, accounts);
+  //    non-checking-tagged excluded). Itemized once; the total is summed from
+  //    the same list so the two can't diverge.
+  const pendingTransactions = selectPendingSpend(transactions, currentPeriodId, accounts);
+  const pendingSpend = sumMoney(pendingTransactions.map(tx => tx.amount));
 
   // 3. Without paycheck tracking, the full checking balance (minus pending) is available.
   if (!currentPeriodId) {
@@ -252,6 +283,8 @@ export const calculateSafeToSpendBreakdownFromExpanded = (
       pendingSpend,
       safeToSpend: subtractMoney(checkingBalance, pendingSpend),
       nextPaycheckDate: null,
+      unpaidBillItems: [],
+      pendingTransactions,
     };
   }
 
@@ -270,11 +303,13 @@ export const calculateSafeToSpendBreakdownFromExpanded = (
 
   // 5. Unpaid bills in range — from the overdue lookback (bills from the
   //    previous period still owed) up to, but NOT including, the next paycheck.
-  const unpaidBills = calculateUnpaidBillsInRange(
+  const unpaidBillItems = selectUnpaidBillsInRange(
     allExpandedItems,
     calculateSafeToSpendExpansionStart(paycheckA),
     rangeEndExclusive
   );
+  // Sum in integer cents to avoid floating-point drift across many bills.
+  const unpaidBills = sumMoney(unpaidBillItems.map(item => item.amount));
 
   return {
     checkingBalance,
@@ -282,6 +317,8 @@ export const calculateSafeToSpendBreakdownFromExpanded = (
     pendingSpend,
     safeToSpend: subtractMoney(subtractMoney(checkingBalance, unpaidBills), pendingSpend),
     nextPaycheckDate: paycheckBDate,
+    unpaidBillItems,
+    pendingTransactions,
   };
 };
 
