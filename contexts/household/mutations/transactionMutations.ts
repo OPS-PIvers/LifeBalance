@@ -1251,16 +1251,14 @@ export function makeDeleteTransaction(deps: {
         return;
       }
 
-      // SETTLED-BILL GUARD (see utils/settledBillGuard.ts): deleting a row that
-      // paid a bill reverses the balance but leaves the calendar doc marked paid
-      // and orphaned, so that occurrence never returns to unpaid bills and
-      // Safe-to-Spend overstates cash by its amount forever. Refuse (no write) and
-      // point at the calendar, which is where the pair can actually be undone.
+      // SETTLED-BILL AUTO-UNDO (see utils/settledBillGuard.ts): deleting a row
+      // that paid a bill reverses the balance, so leaving the calendar doc
+      // marked paid would orphan it — that occurrence never returns to unpaid
+      // bills and Safe-to-Spend overstates cash by its amount forever. The other
+      // four guarded mutations still refuse; DELETE instead un-settles the bill
+      // in the SAME batch (its callers warn about that before confirming),
+      // inverting exactly what `payCalendarItem` wrote. See the batch below.
       const settledBill = findSettledBill(transaction, calendarItems);
-      if (settledBill) {
-        toast.error(settledBillRefusal('delete', settledBill.title));
-        return;
-      }
 
       // Atomically restore the target account balance, mirror the row into the
       // unified trash (F-XCUT-03 — Recently Deleted parity), and delete the
@@ -1313,14 +1311,36 @@ export function makeDeleteTransaction(deps: {
           });
         }
 
+        // UN-SETTLE the bill this row paid, inverting `payCalendarItem`'s two
+        // shapes. A recurring occurrence was paid by CREATING a paid-instance
+        // doc (`parentRecurringId` set, `isRecurring: false`) whose only job is
+        // to suppress that occurrence in `expandCalendarItems` — deleting it
+        // restores the occurrence as unpaid. A one-off bill's own pre-existing
+        // doc was updated in place, so clear `isPaid` and keep the doc. Its
+        // `amount` deliberately stays at the paid figure: the budgeted amount
+        // that write overwrote is not recoverable, and what actually cleared is
+        // the better estimate for the re-opened bill.
+        if (settledBill) {
+          const billRef = doc(db, `households/${householdId}/calendarItems`, settledBill.id);
+          if (settledBill.parentRecurringId && !settledBill.isRecurring) {
+            deleteBatch.delete(billRef);
+          } else {
+            deleteBatch.update(billRef, { isPaid: false });
+          }
+        }
+
         if (withTrashMirror) {
           // Mirror the full row (minus the synthetic id) so Recently Deleted can
           // restore it verbatim; restore re-applies the balance impact reversed
-          // above (see trashMutations.restoreTrashedItem).
+          // above (see trashMutations.restoreTrashedItem). `paidCalendarItemId`
+          // is dropped when we un-settled: the doc it named is now unpaid (or
+          // gone), so a restore must not resurrect a link claiming otherwise.
           deleteBatch.set(doc(db, `households/${householdId}/trash`, trashDocId('transaction', id)), {
             domain: 'transaction',
             originalId: id,
-            data: sanitizeFirestoreData(transactionTrashData(transaction)),
+            data: sanitizeFirestoreData(
+              transactionTrashData(settledBill ? { ...transaction, paidCalendarItemId: undefined } : transaction)
+            ),
             deletedAt: serverTimestamp(),
             deletedBy: user?.uid ?? null,
           });
@@ -1337,7 +1357,9 @@ export function makeDeleteTransaction(deps: {
         await buildDeleteBatch(false).commit();
       }
 
-      if (!opts?.silent) toast.success('Transaction deleted');
+      if (!opts?.silent) {
+        toast.success(settledBill ? 'Transaction deleted — bill marked unpaid' : 'Transaction deleted');
+      }
     } catch (error) {
       console.error('[deleteTransaction] Failed:', error);
       toast.error(describeError(error, 'delete the transaction'));

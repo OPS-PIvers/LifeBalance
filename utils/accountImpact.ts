@@ -115,19 +115,28 @@ export function shouldSkipBankSyncDelta(
 
 /**
  * Resolve the account a transaction's balance impact lands on: the tagged
- * account when it exists, otherwise the checking account (backward compatible
- * with untagged transactions). When a transaction is tagged to an account that
- * has since been deleted, the impact also falls back to checking so the delta
- * still lands somewhere sane.
+ * account when it exists, otherwise the household's default account, otherwise
+ * the checking account (backward compatible with untagged transactions). When a
+ * transaction is tagged to an account that has since been deleted, the impact
+ * also falls back the same way so the delta still lands somewhere sane.
+ *
+ * `defaultAccountId` is `Household.defaultAccountId` — optional and absent for
+ * every legacy household, in which case this behaves exactly as it always has.
+ * A default pointing at a deleted account is ignored (checking fallback).
  */
 export function resolveTargetAccount(
   accountId: string | undefined,
-  accounts: Account[]
+  accounts: Account[],
+  defaultAccountId?: string
 ): Account | undefined {
   if (accountId) {
     const tagged = accounts.find(a => a.id === accountId);
     if (tagged) return tagged;
-    // Tagged account was deleted: fall through to checking.
+    // Tagged account was deleted: fall through to the default/checking.
+  }
+  if (defaultAccountId) {
+    const preferred = accounts.find(a => a.id === defaultAccountId);
+    if (preferred) return preferred;
   }
   return accounts.find(a => a.type === 'checking');
 }

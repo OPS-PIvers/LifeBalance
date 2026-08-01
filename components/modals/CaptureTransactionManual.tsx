@@ -56,6 +56,9 @@ interface CaptureTransactionManualProps {
   transactions: Transaction[];
   stores: Store[];
   accounts: Account[];
+  /** `Household.defaultAccountId` — pre-populates the Account select when the
+   *  entry carries no account of its own. Omitted ⇒ opens empty, as before. */
+  defaultAccountId?: string;
 }
 
 export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> = ({
@@ -69,7 +72,8 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   habits,
   transactions,
   stores,
-  accounts
+  accounts,
+  defaultAccountId
 }) => {
   // State with lazy initialization
   const [amount, setAmount] = useState(() => initialData?.amount || '');
@@ -87,7 +91,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
     return '';
   });
 
-  const [accountId, setAccountId] = useState(() => initialData?.accountId || '');
+  const [accountId, setAccountId] = useState(() => initialData?.accountId || defaultAccountId || '');
   const [creditPayment, setCreditPayment] = useState(() => initialData?.creditPayment ?? false);
 
   // Datalist id for the Merchant field's store-name autocomplete (see below).

@@ -57,9 +57,15 @@ export const AccountPicker: React.FC<AccountPickerProps> = ({
   description = 'Select which account to deduct this payment from.',
   topAction,
 }) => {
-  const { accounts } = useFinance();
+  const { accounts, defaultAccountId } = useFinance();
   const fmt = useFormatCurrency();
-  const payable = includeCredit ? accounts : accounts.filter(a => a.type !== 'credit');
+  const listed = includeCredit ? accounts : accounts.filter(a => a.type !== 'credit');
+  // The household default is surfaced FIRST (and labelled) so the 90%-of-the-time
+  // choice is the one under the thumb. Nothing is auto-confirmed — this picker
+  // has always required an explicit tap, and a mis-tap here moves real money.
+  const payable = defaultAccountId
+    ? [...listed].sort((a, b) => Number(b.id === defaultAccountId) - Number(a.id === defaultAccountId))
+    : listed;
 
   // Amount is kept as the raw input string so partial entries ("12.") don't
   // fight the user; re-seeded on each open transition (render-time derived
@@ -141,6 +147,11 @@ export const AccountPicker: React.FC<AccountPickerProps> = ({
           >
             <span className="font-semibold text-sm text-brand-700 dark:text-brand-200 group-hover:text-brand-900 dark:group-hover:text-brand-100">
               {acc.name}
+              {acc.id === defaultAccountId && (
+                <span className="ml-2 text-xxs font-bold uppercase tracking-wider text-accent-600 dark:text-accent-300">
+                  Default
+                </span>
+              )}
             </span>
             <span className="font-mono text-xs tabular-nums text-brand-500 dark:text-brand-400">
               {fmt(acc.balance)}

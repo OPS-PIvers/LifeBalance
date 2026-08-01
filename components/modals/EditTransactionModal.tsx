@@ -15,6 +15,7 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { buildTransactionCategoryOptions } from '@/utils/categories';
 import { resolveStoreName } from '@/utils/stores';
+import { findSettledBill } from '@/utils/settledBillGuard';
 import { TransactionCommentThread } from '@/components/transactions/TransactionCommentThread';
 import toast from 'react-hot-toast';
 
@@ -25,7 +26,7 @@ interface EditTransactionModalProps {
 }
 
 const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onClose, transaction }) => {
-  const { updateTransaction, deleteTransaction, addTransaction, buckets, accounts } = useFinance();
+  const { updateTransaction, deleteTransaction, addTransaction, buckets, accounts, defaultAccountId, calendarItems } = useFinance();
   const { members, currentUser } = useHouseholdCore();
   const { stores } = useShopping();
   const { ruleFor } = useMerchantRules();
@@ -41,7 +42,9 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
   // Optional free-text "what was bought" note (Transaction.notes).
   const [notes, setNotes] = useState(() => transaction?.notes ?? '');
   const [category, setCategory] = useState(() => transaction?.category ?? '');
-  const [accountId, setAccountId] = useState(() => transaction?.accountId || '');
+  // The household default only PRE-POPULATES an untagged row; an explicit tag
+  // always wins (and is absent for legacy households, which open at '(None)').
+  const [accountId, setAccountId] = useState(() => transaction?.accountId || defaultAccountId || '');
   const [creditPayment, setCreditPayment] = useState(() => transaction?.creditPayment ?? false);
   const [date, setDate] = useState(() => transaction?.date ?? '');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -97,7 +100,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       setMerchant(transaction.merchant);
       setNotes(transaction.notes ?? '');
       setCategory(transaction.category);
-      setAccountId(transaction.accountId || '');
+      setAccountId(transaction.accountId || defaultAccountId || '');
       setCreditPayment(transaction.creditPayment ?? false);
       setDate(transaction.date);
       setStoreCleared(false);
@@ -491,7 +494,15 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={handleDelete}
         title="Delete transaction?"
-        message="Are you sure? This cannot be undone."
+        message={(() => {
+          // Same disclosure as the transaction list's delete dialog: deleting a
+          // row that settled a bill now un-pays that bill in the same batch, so
+          // the side effect is stated before the user confirms.
+          const settledBill = transaction ? findSettledBill(transaction, calendarItems) : undefined;
+          return settledBill
+            ? `Are you sure? This cannot be undone. This also marks "${settledBill.title}" unpaid on the calendar.`
+            : 'Are you sure? This cannot be undone.';
+        })()}
         confirmLabel="Delete"
         confirmVariant="destructive"
         isConfirming={isSaving}

@@ -1118,14 +1118,50 @@ describe('settled-bill guard across every mutation that could orphan the bill', 
     calendarItems,
   });
 
-  it('deleteTransaction refuses — no balance credit, no delete, no trash mirror', async () => {
+  // DELETE is the ONE guarded mutation that un-settles instead of refusing (the
+  // caller confirms the extra effect first): the row is destroyed, which has
+  // exactly one coherent counterpart on the calendar.
+  it('deleteTransaction UN-SETTLES a one-off bill and deletes the row in ONE batch', async () => {
     const { deleteTransaction } = makeDeleteTransaction(deleteGuardDeps([paidBill]));
     await deleteTransaction('tx-1');
 
-    expect(commitCount).toBe(0);
-    expect(capturedDeletes).toHaveLength(0);
-    expect(capturedSets).toHaveLength(0);
-    expect(capturedUpdates).toHaveLength(0);
+    expect(commitCount).toBe(1);
+    expect(capturedDeletes.some(d => d.ref.__path === `households/${HOUSEHOLD_ID}/transactions/tx-1`)).toBe(true);
+
+    // The bill's own doc pre-existed, so it goes back to unpaid in place.
+    const billUpdate = capturedUpdates.find(u => u.ref.__path === `households/${HOUSEHOLD_ID}/calendarItems/bill-1`);
+    expect(billUpdate?.data).toEqual({ isPaid: false });
+    // The doc survives — deleting a one-off bill's own record would lose the bill.
+    expect(capturedDeletes.some(d => d.ref.__path === `households/${HOUSEHOLD_ID}/calendarItems/bill-1`)).toBe(false);
+
+    // Balance still reversed exactly as for an unsettled row.
+    const balanceUpdate = capturedUpdates.find(u => u.ref.__path === `households/${HOUSEHOLD_ID}/accounts/acc-check`);
+    expect(balanceUpdate?.data?.['balance']).toEqual({ __increment: 153.95 });
+
+    // A restore must not resurrect a link to a bill that is now unpaid.
+    const mirror = capturedSets.find(s => s.ref.__path.startsWith(`households/${HOUSEHOLD_ID}/trash/`));
+    expect(mirror?.data?.['data']).not.toHaveProperty('paidCalendarItemId');
+  });
+
+  it('deleteTransaction DELETES the paid-instance doc a recurring occurrence created', async () => {
+    // payCalendarItem pays a recurring occurrence by CREATING this doc; its only
+    // job is to suppress the occurrence in expandCalendarItems, so un-settling
+    // means removing it — clearing isPaid would leave a phantom bill behind.
+    const paidInstance: CalendarItem = {
+      ...paidBill,
+      id: 'bill-inst',
+      isRecurring: false,
+      parentRecurringId: 'bill-tmpl',
+    };
+    const { deleteTransaction } = makeDeleteTransaction({
+      ...deleteGuardDeps([paidInstance]),
+      transactions: [{ ...settledTx, paidCalendarItemId: 'bill-inst' }],
+    });
+    await deleteTransaction('tx-1');
+
+    expect(commitCount).toBe(1);
+    expect(capturedDeletes.some(d => d.ref.__path === `households/${HOUSEHOLD_ID}/calendarItems/bill-inst`)).toBe(true);
+    expect(capturedUpdates.some(u => u.ref.__path === `households/${HOUSEHOLD_ID}/calendarItems/bill-inst`)).toBe(false);
   });
 
   it('deleteTransaction ALLOWS the delete once the bill it settled is gone (no dead end)', async () => {

@@ -25,7 +25,7 @@ import Eyebrow from '@/components/ui/Eyebrow';
 import SavingsGoals from '@/components/budget/SavingsGoals';
 
 const BudgetAccounts: React.FC = () => {
-  const { accounts, updateAccountBalance, addAccount, setAccountGoal, setAccountCardDetails, deleteAccount, archiveAccount, unarchiveAccount, reorderAccounts } = useFinance();
+  const { accounts, updateAccountBalance, addAccount, setAccountGoal, setAccountCardDetails, deleteAccount, archiveAccount, unarchiveAccount, reorderAccounts, defaultAccountId, setDefaultAccountId } = useFinance();
   const [showArchived, setShowArchived] = useState(false);
   const fmt = useFormatCurrency();
 
@@ -406,6 +406,11 @@ const BudgetAccounts: React.FC = () => {
                 <Badge variant={isLiability ? 'danger' : 'success'} size="sm" className="uppercase shrink-0">
                   {account.type}
                 </Badge>
+                {account.id === defaultAccountId && (
+                  <Badge variant="brand" size="sm" className="uppercase shrink-0">
+                    Default
+                  </Badge>
+                )}
                 {/* All last-4s collapse into ONE inline control so the row
                     never wraps to a second line. A lone value reads inline;
                     two or more become a card glyph + count that opens a
@@ -992,6 +997,24 @@ const BudgetAccounts: React.FC = () => {
                 }}
               >
                 Account Number & Cards
+              </Button>
+
+              {/* Default account: pre-fills every account picker when a
+                  transaction arrives without one of its own. Tapping the
+                  current default clears it (back to the checking fallback). */}
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Star className={actionAccount.id === defaultAccountId ? 'text-warm-500' : 'text-brand-500'} />}
+                onClick={() => {
+                  const isDefault = actionAccount.id === defaultAccountId;
+                  void setDefaultAccountId(isDefault ? null : actionAccount.id)
+                    .then(() => toast.success(isDefault ? 'Default account cleared' : `${actionAccount.name} is now the default account`))
+                    .catch(() => toast.error('Could not update the default account'));
+                  setActionAccount(null);
+                }}
+              >
+                {actionAccount.id === defaultAccountId ? 'Remove as Default Account' : 'Set as Default Account'}
               </Button>
 
               <div className="h-px bg-brand-200 dark:bg-brand-700 my-2" />

@@ -83,6 +83,7 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     accounts, buckets, transactions, calendarItems,
     updateTransactionCategory, deleteTransaction, addCalendarItem,
     mergeTransactions, keepBothTransactions, linkBankTransactionToBill,
+    defaultAccountId,
   } = useFinance();
   const { habits } = useGamification();
   const { displayNameFor, ruleFor, rules: merchantRules } = useMerchantRules();
@@ -189,8 +190,11 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   // (the approve CTA stays disabled until amount > 0); everything else prefills.
   const [amount, setAmount] = useState(() => (transaction.needsAmount ? '' : String(transaction.amount)));
   const [date, setDate] = useState(() => transaction.date);
+  // Explicit tag → merchant history → the household default account. The
+  // default is the LAST fallback so it only fills a row nothing else could
+  // explain (absent for legacy households ⇒ opens empty, as before).
   const [accountId, setAccountId] = useState(
-    () => transaction.accountId ?? suggestAccountIdForTransaction(transaction, accounts, transactions) ?? ''
+    () => transaction.accountId ?? suggestAccountIdForTransaction(transaction, accounts, transactions, defaultAccountId) ?? ''
   );
   const [selectedCategory, setSelectedCategory] = useState(() => {
     // Never consult the expense-biased suggester for an income transaction —

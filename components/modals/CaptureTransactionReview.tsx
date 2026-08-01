@@ -13,6 +13,10 @@ interface CaptureTransactionReviewProps {
   dynamicCategories: string[];
   stores: Store[];
   accounts: Account[];
+  /** `Household.defaultAccountId` — shown as each untagged row's account, which
+   *  is where its impact lands anyway (`resolveTargetAccount`). Omitted ⇒ the
+   *  row reads "Account…" exactly as before. */
+  defaultAccountId?: string;
 }
 
 export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> = ({
@@ -22,7 +26,8 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
   onToggleAll,
   dynamicCategories,
   stores,
-  accounts
+  accounts,
+  defaultAccountId
 }) => {
   const fmt = useFormatCurrency();
   const selectedCount = parsedTransactions.filter(t => t.selected).length;
@@ -115,7 +120,7 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
                   {/* Account Select */}
                   <div>
                     <CompactSelect
-                      value={tx.accountId || ''}
+                      value={tx.accountId || defaultAccountId || ''}
                       onChange={(value) => onUpdateTransaction(tx.id, { accountId: value || undefined, creditPayment: undefined })}
                       options={accounts.map(a => ({ id: a.id, label: a.name }))}
                       placeholder="Account..."

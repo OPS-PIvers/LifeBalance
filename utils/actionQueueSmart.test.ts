@@ -84,6 +84,29 @@ describe('suggestAccountForCalendarItem', () => {
     expect(suggestAccountForCalendarItem({ title: 'Rent' }, accounts, [])?.id).toBe('acc-checking');
     expect(suggestAccountForCalendarItem({ title: 'Rent' }, [credit], [])).toBeUndefined();
   });
+
+  // Household default account (`Household.defaultAccountId`).
+  it('prefers the household default over the checking fallback', () => {
+    expect(suggestAccountForCalendarItem({ title: 'Rent' }, accounts, [], 'acc-savings')?.id).toBe('acc-savings');
+  });
+
+  it('lets an explicit tag and history outrank the household default', () => {
+    expect(
+      suggestAccountForCalendarItem({ title: 'Rent', accountId: 'acc-checking' }, accounts, [], 'acc-savings')?.id
+    ).toBe('acc-checking');
+    const history = [makeTx({ merchant: 'Rent', accountId: 'acc-checking' })];
+    expect(suggestAccountForCalendarItem({ title: 'Rent' }, accounts, history, 'acc-savings')?.id).toBe('acc-checking');
+  });
+
+  it('ignores a default that is a credit card or a deleted account', () => {
+    expect(suggestAccountForCalendarItem({ title: 'Rent' }, accounts, [], 'acc-credit')?.id).toBe('acc-checking');
+    expect(suggestAccountForCalendarItem({ title: 'Rent' }, accounts, [], 'acc-gone')?.id).toBe('acc-checking');
+  });
+
+  it('behaves identically to today when no default is set', () => {
+    expect(suggestAccountForCalendarItem({ title: 'Rent' }, accounts, [], undefined)?.id).toBe('acc-checking');
+    expect(suggestAccountForCalendarItem({ title: 'Rent' }, [credit], [], undefined)).toBeUndefined();
+  });
 });
 
 describe('suggestAccountIdForTransaction', () => {
@@ -116,6 +139,27 @@ describe('suggestAccountIdForTransaction', () => {
 
   it('returns undefined with no usable history (implicit checking fallback)', () => {
     expect(suggestAccountIdForTransaction({ merchant: 'Target' }, accounts, [])).toBeUndefined();
+  });
+
+  // Household default account (`Household.defaultAccountId`).
+  it('suggests the household default when there is no usable history', () => {
+    expect(suggestAccountIdForTransaction({ merchant: 'Target' }, accounts, [], 'acc-savings')).toBe('acc-savings');
+  });
+
+  it('lets an explicit tag and history outrank the household default', () => {
+    expect(
+      suggestAccountIdForTransaction({ merchant: 'Target', accountId: 'acc-credit' }, accounts, [], 'acc-savings')
+    ).toBeUndefined();
+    const history = [makeTx({ merchant: 'Target', accountId: 'acc-checking' })];
+    expect(suggestAccountIdForTransaction({ merchant: 'Target' }, accounts, history, 'acc-savings')).toBe('acc-checking');
+  });
+
+  it('ignores a default pointing at a deleted account', () => {
+    expect(suggestAccountIdForTransaction({ merchant: 'Target' }, accounts, [], 'acc-gone')).toBeUndefined();
+  });
+
+  it('behaves identically to today when no default is set', () => {
+    expect(suggestAccountIdForTransaction({ merchant: 'Target' }, accounts, [], undefined)).toBeUndefined();
   });
 });
 

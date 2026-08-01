@@ -94,7 +94,7 @@ interface ManualInitialData {
 }
 
 const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialManualData }) => {
-  const { addTransaction, addTransactions, updateTransaction, addCalendarItem, buckets, transactions, accounts } = useFinance();
+  const { addTransaction, addTransactions, updateTransaction, addCalendarItem, buckets, transactions, accounts, defaultAccountId } = useFinance();
   const { habits } = useGamification();
   const { currentUser, members, householdId } = useHouseholdCore();
   const { addToDo, todoCategories, updateTodoCategories } = useTodos();
@@ -888,6 +888,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
                   dynamicCategories={dynamicCategories}
                   stores={stores}
                   accounts={accounts}
+                  defaultAccountId={defaultAccountId}
                 />
               )}
 
@@ -920,6 +921,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
                     transactions={transactions}
                     stores={stores}
                     accounts={accounts}
+                    defaultAccountId={defaultAccountId}
                   />
                 </div>
               )}

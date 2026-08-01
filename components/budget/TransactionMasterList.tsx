@@ -3,7 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useFinance, useGamification, useHouseholdCore, useShopping } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { useMerchantRules } from '@/hooks/useMerchantRules';
-import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check, Edit, Copy, Scissors, Receipt, PlusCircle } from 'lucide-react';
+import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check, Edit, Copy, Scissors, Receipt, PlusCircle, GitMerge } from 'lucide-react';
 import { Transaction, INCOME_CATEGORY } from '@/types/schema';
 import EditTransactionModal from '@/components/modals/EditTransactionModal';
 import SplitTransactionModal from '@/components/modals/SplitTransactionModal';
@@ -21,6 +21,8 @@ import toast from 'react-hot-toast';
 import { generateCsvExport, buildTransactionExportRows } from '@/utils/exportUtils';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { roundMoney } from '@/utils/money';
+import { pickKeeper } from '@/utils/transactionMerge';
+import { findSettledBill } from '@/utils/settledBillGuard';
 import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
 import { useScrollToHighlight } from '@/hooks/useScrollToHighlight';
 import { TransactionItem } from './TransactionItem';
@@ -39,6 +41,23 @@ interface TransactionMasterListProps {
 /** Form id linking the "add your first transaction" form to its footer Save. */
 const ADD_FIRST_FORM_ID = 'add-first-transaction-form';
 
+/**
+ * Keeper rule for a hand-picked merge started from the row kebab.
+ *
+ * `pickKeeper` knows nothing about bills, so the calendar-linked row is chosen
+ * HERE (same reasoning as `TransactionReviewForm`'s settled-bill arm): the row
+ * carrying `paidCalendarItemId` is wired to a paid calendar doc, deleting it
+ * would orphan that bill, and `mergeTransactions` refuses outright when the
+ * DUPE settled a bill. Only when both rows (or neither) settled one does the
+ * shared `pickKeeper` precedence decide.
+ */
+const pickMergeKeeper = (a: Transaction, b: Transaction) => {
+  if (!!a.paidCalendarItemId !== !!b.paidCalendarItemId) {
+    return a.paidCalendarItemId ? { keeper: a, dupe: b } : { keeper: b, dupe: a };
+  }
+  return pickKeeper(a, b);
+};
+
 // --- Main Component ---
 
 const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlightId = null }) => {
@@ -47,6 +66,7 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
     deleteTransaction,
     updateTransaction,
     addTransaction,
+    mergeTransactions,
     accounts,
     buckets: financeBuckets,
     hasMoreTransactions,
@@ -54,6 +74,8 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
     loadOlderTransactions,
     loadAllTransactions,
     transactionWindowStart,
+    calendarItems,
+    defaultAccountId,
   } = useFinance();
   const { householdId, household } = useHouseholdCore();
   const { stores } = useShopping();
@@ -94,6 +116,13 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
   // Delete Confirmation State
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Merge-selection State ("Merge with recent", from the row kebab). Lives HERE
+  // and not in the row: the list is windowed, so row-local state is destroyed
+  // the moment the virtualizer recycles a row out of the viewport.
+  const [mergeSourceId, setMergeSourceId] = useState<string | null>(null);
+  const [mergePartner, setMergePartner] = useState<Transaction | null>(null);
+  const [isMerging, setIsMerging] = useState(false);
 
   // Mobile Action Drawer State
   const [actionTransaction, setActionTransaction] = useState<Transaction | null>(null);
@@ -218,6 +247,53 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
   const handleMoreClick = useCallback((tx: Transaction) => {
     setActionTransaction(tx);
   }, []);
+
+  // Resolved from the live `transactions` list (not the filtered one) so the
+  // source survives a filter/search change while merge mode is active.
+  const mergeSource = useMemo(
+    () => (mergeSourceId ? transactions.find(t => t.id === mergeSourceId) ?? null : null),
+    [transactions, mergeSourceId]
+  );
+
+  const cancelMerge = useCallback(() => {
+    setMergeSourceId(null);
+    setMergePartner(null);
+  }, []);
+
+  const handleMergeStart = useCallback((tx: Transaction) => {
+    setIsSelectionMode(false);
+    setMergePartner(null);
+    setMergeSourceId(tx.id);
+  }, []);
+
+  const handleMergeSelect = useCallback((tx: Transaction) => {
+    setMergePartner(tx);
+  }, []);
+
+  const confirmMerge = async () => {
+    if (!mergeSource || !mergePartner || isMerging) return;
+    setIsMerging(true);
+    try {
+      const { keeper, dupe } = pickMergeKeeper(mergeSource, mergePartner);
+      const merged = await mergeTransactions(keeper.id, dupe.id);
+      // A refusal (e.g. the mutation's settled-bill guard) writes nothing and
+      // toasts its own reason — stay in merge mode so another pick is possible.
+      setMergePartner(null);
+      if (merged) setMergeSourceId(null);
+    } catch (error) {
+      console.error('Failed to merge transactions:', error);
+      toast.error('Failed to merge transactions');
+    } finally {
+      setIsMerging(false);
+    }
+  };
+
+  // Entering selection mode leaves merge mode (and vice versa) — the two modes
+  // recolor the same rows and must never be active at once.
+  const toggleSelectionMode = useCallback(() => {
+    cancelMerge();
+    setIsSelectionMode(prev => !prev);
+  }, [cancelMerge]);
 
   const handleDuplicate = useCallback(async (tx: Transaction) => {
     try {
@@ -523,7 +599,7 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
               placeholder="Search transactions"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pr-10 truncate"
+              className="h-11 pr-10 truncate"
             />
             {searchTerm && (
               <Button
@@ -551,7 +627,7 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
              </Button>
 
              <Button
-              onClick={() => setIsSelectionMode(!isSelectionMode)}
+              onClick={toggleSelectionMode}
               variant={isSelectionMode ? 'primary' : 'subtle'}
               size="icon"
               aria-label="Toggle selection mode"
@@ -597,7 +673,7 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
           <Button
             variant={isSelectionMode ? 'primary' : 'subtle'}
             size="sm"
-            onClick={() => setIsSelectionMode(!isSelectionMode)}
+            onClick={toggleSelectionMode}
             leftIcon={<Layers size={16} />}
             title="Toggle selection mode"
             aria-label="Toggle selection mode"
@@ -649,6 +725,20 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
             Select All ({filteredTransactions.length})
           </Button>
           <span className="text-xs">{selectedIds.size} selected</span>
+        </div>
+      )}
+
+      {/* Merge-selection banner — makes the active mode obvious and carries the
+          only way out of it besides completing the merge. */}
+      {mergeSource && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 rounded-card bg-accent-50 dark:bg-accent-900/30 border border-accent-200 dark:border-accent-700 text-sm text-accent-800 dark:text-accent-100">
+          <span>
+            Pick the transaction to merge with{' '}
+            <strong>{displayNameFor({ merchant: mergeSource.merchant, amount: mergeSource.amount })}</strong>.
+          </span>
+          <Button variant="secondary" size="sm" onClick={cancelMerge} className="shrink-0">
+            Cancel merge
+          </Button>
         </div>
       )}
 
@@ -754,6 +844,9 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
                     isSelectionMode={isSelectionMode}
                     isSelected={selectedIds.has(tx.id)}
                     onToggleSelection={toggleSelection}
+                    isMergeMode={!!mergeSource}
+                    isMergeSource={tx.id === mergeSourceId}
+                    onMergeSelect={handleMergeSelect}
                   />
                 </div>
               );
@@ -883,15 +976,52 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
         onConfirm={confirmDelete}
         title="Confirm Delete"
         message={
-          transactionToDelete ? (
-            <>
-              Are you sure you want to delete the transaction from <strong>{displayNameFor({ merchant: transactionToDelete.merchant, amount: transactionToDelete.amount })}</strong> for <strong>{fmt(transactionToDelete.amount)}</strong>? This action cannot be undone.
-            </>
-          ) : null
+          transactionToDelete ? (() => {
+            // Deleting a row that settled a bill now ALSO un-pays that bill in
+            // the same batch (see makeDeleteTransaction). That reopens it in
+            // unpaid bills and moves Safe-to-Spend, so it has to be said before
+            // the user confirms — not discovered afterwards in a toast.
+            const settledBill = findSettledBill(transactionToDelete, calendarItems);
+            return (
+              <>
+                Are you sure you want to delete the transaction from <strong>{displayNameFor({ merchant: transactionToDelete.merchant, amount: transactionToDelete.amount })}</strong> for <strong>{fmt(transactionToDelete.amount)}</strong>? This action cannot be undone.
+                {settledBill && (
+                  <> This also marks <strong>{settledBill.title}</strong> unpaid on the calendar.</>
+                )}
+              </>
+            );
+          })() : null
         }
         confirmLabel="Delete"
         confirmVariant="destructive"
         isConfirming={isDeleting}
+      />
+
+      {/* Merge Confirmation — nothing is written until this is confirmed. */}
+      <ConfirmDialog
+        isOpen={!!mergeSource && !!mergePartner}
+        onClose={() => { if (!isMerging) setMergePartner(null); }}
+        onConfirm={confirmMerge}
+        title="Merge Transactions"
+        message={
+          mergeSource && mergePartner ? (() => {
+            // Name the row that ACTUALLY survives. `pickMergeKeeper` can choose
+            // the partner (a calendar-linked row always wins), so phrasing this
+            // as "partner into source" would promise the wrong survivor exactly
+            // when the two rows differ most — which is the whole reason to merge.
+            const { keeper, dupe } = pickMergeKeeper(mergeSource, mergePartner);
+            return (
+              <>
+                Merge <strong>{displayNameFor({ merchant: dupe.merchant, amount: dupe.amount })}</strong> ({fmt(dupe.amount)}) into{' '}
+                <strong>{displayNameFor({ merchant: keeper.merchant, amount: keeper.amount })}</strong> ({fmt(keeper.amount)})?{' '}
+                {displayNameFor({ merchant: keeper.merchant, amount: keeper.amount })} survives and the other row is removed.
+              </>
+            );
+          })() : null
+        }
+        confirmLabel="Merge"
+        confirmVariant="primary"
+        isConfirming={isMerging}
       />
 
       {/* Mobile Actions Drawer */}
@@ -935,6 +1065,17 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
                 }}
               >
                 Split Transaction
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<GitMerge className="text-brand-500" />}
+                onClick={() => {
+                  handleMergeStart(actionTransaction);
+                  setActionTransaction(null);
+                }}
+              >
+                Merge with recent
               </Button>
               <div className="h-px bg-brand-200 dark:bg-brand-700 my-2" />
               <Button
@@ -1040,6 +1181,7 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
           transactions={transactions}
           stores={stores}
           accounts={accounts}
+          defaultAccountId={defaultAccountId}
         />
       </Drawer>
     </div>

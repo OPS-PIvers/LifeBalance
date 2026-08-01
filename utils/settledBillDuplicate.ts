@@ -127,15 +127,31 @@ function evidenceFor(
   const aliases = aliasDocFor(bill, calendarItems).bankDescriptorAliases;
   if (matchesAlias(descriptor, aliases)) return 'descriptor';
   if (shareSignificantToken(descriptor, bill.title)) return 'descriptor';
+  // The merchant field is not the only place the bill's name surfaces. A
+  // screenshot/receipt import routinely carries the STOREFRONT as the merchant
+  // ("Chewy") and what was actually bought in its note ("Manny Meds") — the
+  // note is the half that names the bill ("Manny Medicine"). Same whole-token
+  // test on the same noise-word-stripped vocabulary, so this is still a real
+  // name overlap and never a bare amount coincidence.
+  if (candidate.notes && shareSignificantToken(candidate.notes, bill.title)) return 'descriptor';
   return 'amount-only';
 }
 
 /**
- * Could `tx` be the BANK half of such a pair at all? Row-level tests only —
+ * Could `tx` be the IMPORTED half of such a pair at all? Row-level tests only —
  * nothing here compares two rows.
+ *
+ * The nightly bank-email sync is not the only road a charge takes into the app:
+ * a bank/card screenshot run through `parseBankStatement`, a CSV import and a
+ * plain hand entry all land as ordinary `pending_review` rows carrying neither
+ * `source: 'bank-sync'` nor a `bankRef`, and requiring `isBankSyncTransaction`
+ * here kept every one of them out of this arm entirely. What keeps that
+ * widening safe is NOT this predicate but the evidence gate in
+ * {@link findSettledBillDuplicate}: a row the sync didn't write must clear the
+ * `descriptor` tier (a real name-token overlap) to match at all.
  */
 function isBankHalf(tx: Transaction): boolean {
-  return isBankSyncTransaction(tx) && needsReview(tx) && !tx.paidCalendarItemId;
+  return needsReview(tx) && !tx.paidCalendarItemId;
 }
 
 /**
@@ -186,8 +202,9 @@ function pairQualifies(bankHalf: Transaction, settledHalf: Transaction): boolean
  * `undefined` when there is no such row.
  *
  * EVERY one of these must hold:
- *  - `candidate` is a bank-sync row that is still awaiting review, and is not
- *    itself already linked to a bill;
+ *  - `candidate` is a row still awaiting review that is not itself already
+ *    linked to a bill — and, unless the nightly sync wrote it, one whose
+ *    evidence reaches the `descriptor` tier (see the gate in the loop below);
  *  - the counterpart carries a `paidCalendarItemId` that still resolves to a
  *    paid, non-deleted calendar item (via the shared `findSettledBill`), and
  *    carries no `bankRef` of its own;
@@ -226,10 +243,20 @@ export function findSettledBillDuplicate(
     const bill = findSettledBill(other, calendarItems);
     if (!bill) continue;
 
+    // THE EVIDENCE GATE that makes `isBankHalf`'s wider population safe. The
+    // amount-only tier is a question worth asking about a row the nightly sync
+    // wrote — that population is small, and every one of its rows is by
+    // definition a charge the bank really made. Across the far larger set of
+    // hand-entered and imported rows, "same amount, same account, same week"
+    // alone would be a steady drip of wrong questions, so those rows must name
+    // the bill to match at all.
+    const evidence = evidenceFor(candidate, bill, calendarItems);
+    if (evidence === 'amount-only' && !isBankSyncTransaction(candidate)) continue;
+
     // Under-merge rather than mis-merge: a second qualifying counterpart makes
     // the pairing ambiguous, so stop and report nothing.
     if (match) return undefined;
-    match = { counterpart: other, bill, evidence: evidenceFor(candidate, bill, calendarItems) };
+    match = { counterpart: other, bill, evidence };
   }
 
   // Bound to a const so the closure below narrows (and so the scan can never

@@ -710,6 +710,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const weeklyPoints = householdSettings?.points?.weekly || 0;
   const totalPoints = householdSettings?.points?.total || 0;
 
+  // The account new transactions pre-select when they carry none of their own
+  // (undefined until an admin picks one — see Household.defaultAccountId).
+  const defaultAccountId = householdSettings?.defaultAccountId;
+
   // Shopping Settings state derived from householdSettings
   const stores = useMemo(() => householdSettings?.stores || [], [householdSettings?.stores]);
   const groceryCategories = useMemo(() => householdSettings?.groceryCategories || [], [householdSettings?.groceryCategories]);
@@ -2248,6 +2252,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeHouseholdSettingsMutations({ db, householdId }).setCeremonyTone(tone);
   }, [householdId]);
 
+  // Default account: set (id) or clear (null) the account new transactions
+  // pre-select when they carry none of their own.
+  const setDefaultAccountId = useCallback(async (accountId: string | null): Promise<void> => {
+    await makeHouseholdSettingsMutations({ db, householdId }).setDefaultAccountId(accountId);
+  }, [householdId]);
+
   // --- ACTIONS: MERCHANT RULES (F-MONEY-14) ---
   // (contexts/household/mutations/merchantRuleMutations.ts — all three transact
   // on the household doc so a concurrent edit from the partner is never lost.)
@@ -2634,6 +2644,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     unarchiveAccount,
     updateAccountOrder,
     reorderAccounts,
+    defaultAccountId,
+    setDefaultAccountId,
     addSavingsGoal,
     updateSavingsGoal,
     deleteSavingsGoal,
@@ -2672,6 +2684,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     transactionWindowStart, isLoadingOlderTransactions, hasMoreTransactions, loadOlderTransactions, loadAllTransactions,
     isLoadingOlderBucketHistory, hasMoreBucketHistory, loadAllBucketHistory,
     addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, setAccountCardDetails, deleteAccount, archiveAccount, unarchiveAccount, updateAccountOrder, reorderAccounts,
+    defaultAccountId, setDefaultAccountId,
     addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, setBucketLimits, saveCeremonyChanges, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem, linkBankTransactionToBill, settleBillWithTransaction, forgetBillDescriptorAlias,

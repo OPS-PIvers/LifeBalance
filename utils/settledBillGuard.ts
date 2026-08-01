@@ -14,8 +14,12 @@ import type { CalendarItem, Transaction } from '@/types/schema';
  * that occurrence is permanently dropped from unpaid bills, so Safe-to-Spend
  * silently overstates cash by the bill's amount, every period, forever.
  *
- * Un-settling from the transaction side is deliberately out of scope, so every
- * such mutation REFUSES and points at the side that can actually undo it.
+ * `merge`, `split`, `edit` and `undo` all REFUSE and point at the side that can
+ * actually undo it — they replace or re-price the row, so there is no coherent
+ * "and also un-pay the bill" to offer. DELETE is the exception: it destroys the
+ * row outright, which has exactly one sensible counterpart on the calendar, so
+ * `deleteTransaction` UN-SETTLES the bill in its own batch instead of refusing
+ * (the caller confirms the extra effect first). See makeDeleteTransaction.
  *
  * The guard is deliberately keyed on the bill still BEING paid, not merely on
  * the field being present: once the user removes the payment on the calendar

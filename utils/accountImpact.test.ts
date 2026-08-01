@@ -76,6 +76,34 @@ describe('resolveTargetAccount', () => {
   it('returns undefined when no checking account exists and no match', () => {
     expect(resolveTargetAccount('missing', [savings, card])).toBeUndefined();
   });
+
+  // Household default account (`Household.defaultAccountId`).
+  it('uses the household default for an untagged transaction', () => {
+    expect(resolveTargetAccount(undefined, accounts, 'sav')).toBe(savings);
+    expect(resolveTargetAccount('', accounts, 'cc')).toBe(card);
+  });
+
+  it('uses the household default when the tagged account was deleted', () => {
+    expect(resolveTargetAccount('does-not-exist', accounts, 'sav')).toBe(savings);
+  });
+
+  it('never overrides an existing tag with the default', () => {
+    expect(resolveTargetAccount('cc', accounts, 'sav')).toBe(card);
+  });
+
+  it('resolves the default even when no checking account exists', () => {
+    expect(resolveTargetAccount(undefined, [savings, card], 'sav')).toBe(savings);
+  });
+
+  it('falls back to checking when the default points at a deleted account', () => {
+    expect(resolveTargetAccount(undefined, accounts, 'gone')).toBe(checking);
+  });
+
+  it('is byte-identical to legacy behaviour when no default is set', () => {
+    for (const id of [undefined, '', 'cc', 'sav', 'does-not-exist']) {
+      expect(resolveTargetAccount(id, accounts, undefined)).toBe(resolveTargetAccount(id, accounts));
+    }
+  });
 });
 
 describe('isBankSyncTransaction', () => {
