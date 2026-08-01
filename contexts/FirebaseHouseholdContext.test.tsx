@@ -8,6 +8,7 @@ import type {
   Account,
   BudgetBucket,
   CalendarItem,
+  Challenge,
   FreezeBank,
   GroceryCatalogItem,
   Habit,
@@ -1546,6 +1547,132 @@ describe('FirebaseHouseholdContext — addChallenge (Plan 080e family challenges
     expect(data).not.toHaveProperty('description');
     expect(data).not.toHaveProperty('targetValue');
     expect(data).toMatchObject({ title: 'No Frills', status: 'active', relatedHabitIds: [] });
+  });
+});
+
+describe('FirebaseHouseholdContext — challenge writes match the firestore.rules shape', () => {
+  // Regression cover for three live `permission-denied` bugs on /challenges. The
+  // rule's keys().hasOnly([...]) allow-list has NO 'id', and it validates both
+  // createdAt (isValidString, 30) and completedAt (isValidOptionalString, 30) as
+  // STRINGS — so a converter-injected id or a serverTimestamp() sentinel is
+  // rejected outright. `docSnap` mirrors challengeConverter.fromFirestore by
+  // spreading `{ ...data, id }`, so the seeded challenge carries the synthetic id
+  // exactly as the real listener hands it to ChallengeHubModal.
+  const seededChallenge = {
+    month: '2026-07',
+    title: 'July Push',
+    description: 'Move daily',
+    relatedHabitIds: ['hb1'],
+    targetType: 'count' as const,
+    targetValue: 60,
+    currentValue: 5,
+    yearlyRewardLabel: 'Badge',
+    status: 'active' as const,
+    createdAt: '2026-07-01T00:00:00.000Z',
+    createdBy: 'user1',
+  };
+
+  // Every key the /challenges rule's hasOnly() allow-list permits. Any key a
+  // write emits that is NOT in here is a permission-denied.
+  const ALLOWED_KEYS = [
+    'month', 'title', 'description', 'relatedHabitIds',
+    'targetType', 'targetValue', 'targetTotalCount', 'currentValue',
+    'yearlyGoalId', 'yearlyRewardLabel', 'status',
+    'createdAt', 'createdBy', 'completedAt',
+  ];
+
+  function seedActiveChallenge() {
+    emitCollection(`${householdPath}/habits`, [
+      docSnap('hb1', baseHabit({ id: 'hb1', totalCount: 12 })),
+    ]);
+    emitCollection(`${householdPath}/challenges`, [docSnap('ch1', seededChallenge)]);
+  }
+
+  it('updateChallenge strips the converter-injected id from the update payload', async () => {
+    renderProvider();
+    seedActiveChallenge();
+
+    // Exactly what ChallengeHubModal sends: the active challenge (id and all)
+    // spread with the edited fields on top.
+    const edited: Challenge = {
+      ...seededChallenge,
+      id: 'ch1',
+      title: 'July Push (edited)',
+    };
+
+    await act(async () => {
+      await captured.value!.gamification.updateChallenge(edited);
+    });
+
+    expect(updateDocMock).toHaveBeenCalledTimes(1);
+    const [ref, data] = updateDocMock.mock.calls[0]!;
+    expect(pathOf(ref)).toBe(`${householdPath}/challenges/ch1`);
+    // The bug: `id` used to ride along, so hasOnly() denied every edit.
+    expect(data).not.toHaveProperty('id');
+    // updateDoc's field-path overload widens arg 1 to `string | FieldPath`; the
+    // double cast matches persistedListsFromCall's precedent further down.
+    const payload = data as unknown as Record<string, unknown>;
+    expect(Object.keys(payload)).toEqual(
+      expect.arrayContaining(['title', 'status', 'currentValue']),
+    );
+    for (const key of Object.keys(payload)) {
+      expect(ALLOWED_KEYS).toContain(key);
+    }
+  });
+
+  it('updateChallenge writes an ISO-string createdAt when it creates instead of updates', async () => {
+    renderProvider();
+    // No challenges listener payload => activeChallenge stays null => create branch.
+    emitCollection(`${householdPath}/challenges`, []);
+
+    const created: Challenge = {
+      ...seededChallenge,
+      id: 'new', // ChallengeHubModal's placeholder id
+      title: 'Brand New',
+    };
+
+    await act(async () => {
+      await captured.value!.gamification.updateChallenge(created);
+    });
+
+    expect(addDocMock).toHaveBeenCalledTimes(1);
+    const [collRef, data] = addDocMock.mock.calls[0]!;
+    expect(pathOf(collRef)).toBe(`${householdPath}/challenges`);
+    const payload = data as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('id');
+    // The bug: createdAt was serverTimestamp(), but the rule wants isValidString.
+    expect(typeof payload.createdAt).toBe('string');
+    expect(payload.createdAt).not.toBe('__serverTimestamp');
+    expect((payload.createdAt as string).length).toBeLessThanOrEqual(30);
+    expect(payload.createdBy).toBe(AUTH_USER.uid);
+    for (const key of Object.keys(payload)) {
+      expect(ALLOWED_KEYS).toContain(key);
+    }
+  });
+
+  it('markChallengeComplete writes an ISO-string completedAt in a single batch', async () => {
+    renderProvider();
+    seedActiveChallenge();
+
+    await act(async () => {
+      await captured.value!.gamification.markChallengeComplete('ch1', true);
+    });
+
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    expect(batch.committed).toBe(true);
+    const ops = opsForPath(batch, `${householdPath}/challenges/ch1`);
+    expect(ops).toHaveLength(1);
+    const data = ops[0]!.data as Record<string, unknown>;
+    expect(data.status).toBe('success');
+    // The bug: completedAt was serverTimestamp(), but Challenge.completedAt is a
+    // string and the rule validates it with isValidOptionalString(..., 30).
+    expect(typeof data.completedAt).toBe('string');
+    expect(data.completedAt).not.toBe('__serverTimestamp');
+    expect((data.completedAt as string).length).toBeLessThanOrEqual(30);
+    for (const key of Object.keys(data)) {
+      expect(ALLOWED_KEYS).toContain(key);
+    }
   });
 });
 

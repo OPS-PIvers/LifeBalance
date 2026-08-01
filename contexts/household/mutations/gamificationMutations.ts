@@ -237,10 +237,20 @@ export function makeUpdateChallenge(deps: {
 
     const { currentValue } = calculateChallengeProgress(challenge, linkedHabits);
 
+    // Exclude 'id' field - it's not stored in Firestore (document ID is separate).
+    // `challenge` comes straight off the challengeConverter, which injects the
+    // synthetic `id` on read; the refs below are plain (no .withConverter()), so
+    // toFirestore never runs to strip it. Leaving it in puts 'id' into
+    // request.resource.data.keys(), which the /challenges rule's hasOnly()
+    // allow-list rejects — i.e. every edit was permission-denied.
+    // `isFamilyChallenge` is likewise a client-only marker that the same
+    // allow-list does not include and that is deliberately never persisted.
+    const { id: _id, isFamilyChallenge: _isFamilyChallenge, ...challengeWithoutId } = challenge;
+
     // Build update object, filtering out undefined values (Firestore rejects undefined)
     const updatedChallenge = Object.fromEntries(
       Object.entries({
-        ...challenge,
+        ...challengeWithoutId,
         currentValue,
         // Support both old and new schema fields
         targetValue: challenge.targetValue ?? challenge.targetTotalCount,
@@ -251,13 +261,12 @@ export function makeUpdateChallenge(deps: {
     if (activeChallenge?.id) {
       await updateDoc(doc(db, `households/${householdId}/challenges`, activeChallenge.id), updatedChallenge);
     } else {
-      // Remove placeholder ID if it exists
-      const { id: _id, ...newChallengeData } = updatedChallenge;
-
       await addDoc(collection(db, `households/${householdId}/challenges`), {
-        ...newChallengeData,
+        ...updatedChallenge,
         createdBy: user?.uid,
-        createdAt: serverTimestamp(),
+        // ISO string, not serverTimestamp(): the /challenges rule validates
+        // createdAt with isValidString(..., 30). Matches addChallenge below.
+        createdAt: new Date().toISOString(),
       });
     }
     toast.success('Challenge Updated');
@@ -363,7 +372,10 @@ export function makeMarkChallengeComplete(deps: {
     // Update challenge status
     batch.update(doc(db, `households/${householdId}/challenges`, challengeId), {
       status: success ? 'success' : 'failed',
-      completedAt: serverTimestamp(),
+      // ISO string, not serverTimestamp(): Challenge.completedAt is typed as a
+      // string and the /challenges rule validates it with
+      // isValidOptionalString(..., 30), so a Timestamp sentinel is denied.
+      completedAt: new Date().toISOString(),
     });
 
     // If successful and linked to yearly goal, update yearly goal progress
