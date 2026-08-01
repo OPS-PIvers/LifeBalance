@@ -32,6 +32,7 @@ import {
   updateDoc,
   deleteDoc,
   deleteField,
+  serverTimestamp,
   setLogLevel,
   type Firestore,
 } from 'firebase/firestore';
@@ -2105,6 +2106,182 @@ describe('calendar items (bill↔transaction alias learning)', () => {
       updateDoc(doc(dbFor(CAROL), 'households', H1, 'calendarItems', BILL), {
         bankDescriptorAliases: arrayUnion('CPENERGY MNGCO'),
       }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// challenges — first coverage for this collection. Three live permission-denied
+// bugs prompted it, ALL of them client-side (the rules were already correct):
+//   1. `updateChallenge` spread the challenge straight off challengeConverter,
+//      carrying the synthetic `id`, and wrote through a ref with no
+//      .withConverter() — so toFirestore never ran to strip it and `id` landed
+//      in request.resource.data.keys(), which hasOnly() has no entry for.
+//      Editing ANY existing challenge was denied.
+//   2. `markChallengeComplete` wrote completedAt: serverTimestamp(), but the
+//      rule (and Challenge.completedAt) want an optional STRING.
+//   3. The inline-create branch of `updateChallenge` wrote
+//      createdAt: serverTimestamp() against isValidString.
+// These cases pin the exact payload shapes the fixed client now sends, plus the
+// broken shapes, so the client can't regress back onto a denied write.
+// ---------------------------------------------------------------------------
+describe('challenges (client write shapes must satisfy hasOnly + string timestamps)', () => {
+  const CH = 'challenge-seed';
+
+  // A fully rules-valid stored challenge. `update` validates the MERGED document,
+  // so the seed itself has to satisfy every field validator or even a correct
+  // partial update would be denied for the wrong reason.
+  const storedChallenge = {
+    month: '2026-07',
+    title: 'July Push',
+    description: 'Move daily',
+    relatedHabitIds: ['hb1'],
+    targetType: 'count',
+    targetValue: 60,
+    currentValue: 5,
+    yearlyRewardLabel: 'Badge',
+    status: 'active',
+    createdAt: '2026-07-01T00:00:00.000Z',
+    createdBy: ALICE,
+  };
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = asFirestore(ctx.firestore());
+      await setDoc(doc(db, 'households', H1, 'challenges', CH), storedChallenge);
+    });
+  });
+
+  // --- create (updateChallenge's inline-create branch + addChallenge) -------
+
+  it('a member can create a challenge whose createdAt is an ISO string', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'challenges', 'ch-new'), {
+        ...storedChallenge,
+        title: 'August Push',
+        createdBy: BOB,
+        createdAt: new Date().toISOString(),
+      }),
+    );
+  });
+
+  it('rejects a create whose createdAt is a serverTimestamp sentinel (bug 3)', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'challenges', 'ch-ts'), {
+        ...storedChallenge,
+        title: 'August Push',
+        createdBy: BOB,
+        createdAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it('rejects a create carrying the synthetic id field', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'challenges', 'ch-id'), {
+        ...storedChallenge,
+        id: 'ch-id',
+        createdBy: BOB,
+        createdAt: new Date().toISOString(),
+      }),
+    );
+  });
+
+  // --- update (the ChallengeHubModal edit path) ----------------------------
+
+  it('a member can update a challenge with the exact payload the client now sends', async () => {
+    // What makeUpdateChallenge builds today: the stored challenge minus `id`,
+    // with the recomputed currentValue and the normalized target fields on top.
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'challenges', CH), {
+        ...storedChallenge,
+        title: 'July Push (edited)',
+        currentValue: 12,
+        targetValue: 60,
+        targetType: 'count',
+      }),
+    );
+  });
+
+  it('rejects the same update once the converter-injected id rides along (bug 1)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'challenges', CH), {
+        ...storedChallenge,
+        id: CH, // synthetic — not in the hasOnly() allow-list
+        title: 'July Push (edited)',
+        currentValue: 12,
+      }),
+    );
+  });
+
+  it('rejects an update carrying the client-only isFamilyChallenge marker', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'challenges', CH), {
+        isFamilyChallenge: true,
+      }),
+    );
+  });
+
+  // --- completion (markChallengeComplete) ----------------------------------
+
+  it('a member can complete a challenge with an ISO-string completedAt', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'challenges', CH), {
+        status: 'success',
+        completedAt: new Date().toISOString(),
+      }),
+    );
+  });
+
+  it('a member can mark a challenge failed with an ISO-string completedAt', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'challenges', CH), {
+        status: 'failed',
+        completedAt: new Date().toISOString(),
+      }),
+    );
+  });
+
+  it('rejects a completion whose completedAt is a serverTimestamp sentinel (bug 2)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'challenges', CH), {
+        status: 'success',
+        completedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it('rejects an unknown status value', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'challenges', CH), {
+        status: 'complete', // not one of active|success|failed
+      }),
+    );
+  });
+
+  it('rejects an over-30-char completedAt (the string cap)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'challenges', CH), {
+        status: 'success',
+        completedAt: `${new Date().toISOString()}-padding-past-the-cap`,
+      }),
+    );
+  });
+
+  // --- isolation ------------------------------------------------------------
+
+  it("a member of another household cannot complete H1's challenge", async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(CAROL), 'households', H1, 'challenges', CH), {
+        status: 'success',
+        completedAt: new Date().toISOString(),
+      }),
+    );
+  });
+
+  it('a member can delete a challenge', async () => {
+    await assertSucceeds(
+      deleteDoc(doc(dbFor(BOB), 'households', H1, 'challenges', CH)),
     );
   });
 });
