@@ -36,10 +36,14 @@ interface PastWeekData {
  * ScoreboardWidget — home-feed points scoreboard (per-member points, PR 4/6).
  *
  * Household-first (mock `scoreboard-v3.png` / `.claude/mocks/per-member-points/
- * r3-scoreboard.html`): the household's live "N household total" total leads,
- * with a best-week sub-label + trend chip; adult standings rows (weekly bar,
- * today's points, crown on a strict leader) follow underneath. Plain avatars —
- * NO flame rings, which are habits-page-only UI per the locked decision.
+ * r3-scoreboard.html`): a household hero ROW leads — household badge +
+ * "Household" + the live total, with the best-week sub-label and the trend
+ * chip on its subtitle line; adult standings rows (weekly bar, today's points,
+ * crown on a strict leader) follow underneath. The hero shares the standings
+ * rows' silhouette on purpose so every row lines up on one vertical grid,
+ * which is also why the household's OWN share below is labelled "Shared
+ * habits" rather than "Household". Plain avatars — NO flame rings, which are
+ * habits-page-only UI per the locked decision.
  *
  * Default-on and never hides itself: before any member has earned points it
  * renders the same layout with quiet zeros (0% bars, no crown, no trend chip)
@@ -329,39 +333,68 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
       }
     >
       <SurfaceList className="px-3.5 pt-[11px] pb-2.5">
-        {/* Household lead block */}
-        <div className="flex items-end justify-between gap-2.5 pb-2.5">
-          <div>
-            <div className="flex items-baseline gap-1.5">
-              <span
-                data-testid="scoreboard-total"
-                className="font-display font-semibold text-[38px] leading-none tracking-tight text-brand-900 dark:text-brand-50"
-              >
-                {isPastWeek && displayTotal === undefined ? '…' : (displayTotal ?? 0)}
-              </span>
-              <span className="font-display text-[15px] font-semibold text-warm-600 dark:text-warm-300">
-                household total
-              </span>
+        {/* Household lead row — same [avatar] · name · ——— · points silhouette
+            as the standings rows below (and as the Points drawer's hero), so
+            the household, each member and the shared-habits row all sit on one
+            vertical grid instead of the hero floating on a layout of its own.
+            The numeral stays larger than a member's, but in the same
+            right-aligned `w-14` column.
+
+            The trend chip moved off the row's right edge onto the subtitle
+            line: that edge is the points column now, and anything parked there
+            pushes the total out of alignment with the rows underneath. It also
+            sits naturally beside "Best week this month" — both are notes about
+            the week, not about the household. */}
+        <div className="flex items-center gap-[11px] pb-2.5" data-testid="scoreboard-hero-row">
+          <HouseholdAvatar size={30} data-testid="scoreboard-hero-badge" />
+          <div className="flex-1 min-w-0">
+            <div className="text-[13.5px] font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate">
+              Household
             </div>
-            {!isPastWeek && trend.isBestWeek && (
-              <div className="mt-1 text-[10.5px] text-brand-500 dark:text-brand-400">
-                Best week this month
+            {!isPastWeek && (trend.isBestWeek || (trend.trendPct !== null && trend.trendPct !== 0)) && (
+              <div className="mt-[3px] flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                {trend.isBestWeek && (
+                  <span className="text-[10.5px] text-brand-500 dark:text-brand-400">
+                    Best week this month
+                  </span>
+                )}
+                {trend.trendPct !== null && trend.trendPct !== 0 && (
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-[10px] font-semibold border',
+                      trendPositive
+                        ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark border-money-pos/18 dark:border-money-pos/35'
+                        : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg dark:text-money-negDark border-money-neg/18 dark:border-money-neg/35'
+                    )}
+                  >
+                    <TrendIcon size={10} aria-hidden="true" />
+                    {Math.abs(trend.trendPct)}%
+                    {/* Visually just the percentage, matching the drawer's chip.
+                        Spelled out for screen readers because the arrow that
+                        supplies the direction is aria-hidden, and because at
+                        375px "N% vs last week" beside "Best week this month"
+                        overruns the subtitle slot by ~7px and wraps the hero to
+                        a second line — which is exactly the ragged silhouette
+                        this row was restructured to fix. */}
+                    <span className="sr-only">
+                      {trendPositive ? ' up' : ' down'} vs last week
+                    </span>
+                  </span>
+                )}
               </div>
             )}
           </div>
-          {!isPastWeek && trend.trendPct !== null && trend.trendPct !== 0 && (
-            <span
-              className={cn(
-                'flex-none inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-xs font-semibold border mb-[3px]',
-                trendPositive
-                  ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark border-money-pos/18 dark:border-money-pos/35'
-                  : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg dark:text-money-negDark border-money-neg/18 dark:border-money-neg/35'
-              )}
+          <div className="flex-none w-14 text-right">
+            <div
+              data-testid="scoreboard-total"
+              className="font-mono font-bold text-[22px] leading-none tracking-tight text-brand-900 dark:text-brand-50 tabular-nums"
             >
-              <TrendIcon size={12} aria-hidden="true" />
-              {Math.abs(trend.trendPct)}% vs last week
-            </span>
-          )}
+              {isPastWeek && displayTotal === undefined ? '…' : (displayTotal ?? 0)}
+            </div>
+            <div className="mt-[3px] text-[9px] font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">
+              Week
+            </div>
+          </div>
         </div>
 
         {/* A grandfathered past week (no per-member attribution recorded) gets a
@@ -422,16 +455,19 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
                 </div>
               </div>
             ))}
-            {/* Household row — the unattributed remainder: pre-attribution
-                legacy history today, and (once shipped) Household-credit
-                habits. Shown only when nonzero so an ordinary household with
-                neither sees exactly what it saw before this row existed. */}
+            {/* "Shared habits" row — the unattributed remainder: pre-attribution
+                legacy history, plus habits that credit the household instead of
+                a member. Shown only when nonzero so an ordinary household with
+                neither sees exactly what it saw before this row existed.
+                Labelled "Shared habits", not "Household": the hero row above is
+                the household now, and two rows with the same badge and the same
+                word would be indistinguishable at a glance. */}
             {householdShare !== undefined && householdShare !== 0 && (
               <div className="flex items-center gap-[11px] py-[5px]" data-testid="scoreboard-household-row">
                 <HouseholdAvatar size={30} data-testid="scoreboard-household-badge" />
                 <div className="flex-1 min-w-0">
                   <span className="text-[13.5px] font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate">
-                    Household
+                    Shared habits
                   </span>
                 </div>
                 <div className="flex-none w-14 text-right">

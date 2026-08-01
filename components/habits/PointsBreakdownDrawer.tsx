@@ -28,10 +28,19 @@ interface PointsBreakdownDrawerProps {
  * Rewards deep-link; Rewards is now one tap deeper via the row at the bottom).
  *
  * Household-first stack, locked: grab handle → title + Day/Week toggle →
- * household total (with a "vs last week" trend chip, derived from the
- * newest WeeklyRecap) → adults-only per-member standings (plain avatars, crown
- * on the sole leader) → Reward pool row (lifetime pool total + the
- * pending-redemption count, absorbed from the header, + a Rewards deep-link).
+ * the household hero row (household badge + "Household" + the total, with the
+ * period label and a "vs last week" trend chip — derived from the newest
+ * WeeklyRecap — on its subtitle line) → adults-only per-member standings
+ * (plain avatars, crown on the sole leader) → Reward pool row (lifetime pool
+ * total + the pending-redemption count, absorbed from the header, + a Rewards
+ * deep-link).
+ *
+ * The hero deliberately shares the standings rows' silhouette — [avatar] ·
+ * name · ——— · points — so the household, each member and the shared-habits
+ * row all line up on one vertical grid. That is also why the row below that
+ * reports the household's OWN share is labelled "Shared habits" rather than
+ * "Household": with the hero restructured, two rows reading "Household" with
+ * the same badge would be indistinguishable at a glance.
  *
  * Reads ONLY the narrow `useGamification`/`useHouseholdCore` slices, and reads
  * `dailyPoints`/`weeklyPoints`/member `points` as-is rather than re-deriving
@@ -195,43 +204,68 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
       }
     >
       <div className="flex flex-col gap-2.5 px-4 pt-4 pb-4">
-        {/* Household total. */}
+        {/* The household total — the headline figure (members + the household's
+            own share + any unattributed remainder), drawn on the SAME
+            [avatar] · name · ——— · points silhouette as the standings rows
+            below so all three row types share one vertical grid instead of the
+            hero floating on a layout of its own. The numeral stays visibly
+            larger than a member's, but it sits in the same right-aligned slot.
+
+            The trend chip rides the SUBTITLE line rather than the row's right
+            edge: that edge is the points column now, and anything parked there
+            pushes the total out of alignment with the member rows. It also
+            belongs with `dateLabel` — it is a statement about the period ("vs
+            last week"), not about the household. */}
         <SurfaceList>
-          <Row className="items-end justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-baseline gap-1.5">
-                <span className="font-display font-semibold leading-none tracking-tight tabular-nums text-4xl text-brand-900 dark:text-brand-50">
-                  {householdTotal}
-                </span>
-                <span className="font-display text-sm font-semibold text-warm-600 dark:text-warm-300">
-                  household total
-                </span>
-              </div>
-              <p className="mt-1 text-xxs text-brand-450 dark:text-brand-450">{dateLabel}</p>
-            </div>
-            {trend && (
-              <span
-                className={cn(
-                  'flex-none inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold',
-                  trend.percent >= 0
-                    ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark border-money-pos/20'
-                    : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg dark:text-money-negDark border-money-neg/20',
-                )}
-              >
-                {trend.percent >= 0 ? (
-                  <TrendingUp size={12} aria-hidden="true" />
-                ) : (
-                  <TrendingDown size={12} aria-hidden="true" />
-                )}
-                {Math.abs(trend.percent)}%
+          <Row className="gap-3" data-testid="points-drawer-hero-row">
+            <HouseholdAvatar size={30} className="flex-none" data-testid="points-drawer-hero-badge" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold tracking-tight text-brand-900 dark:text-brand-50">
+                Household
               </span>
-            )}
+              <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                <span className="text-xxs text-brand-450 dark:text-brand-450">{dateLabel}</span>
+                {trend && (
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-0.5 rounded-full border px-1.5 py-px text-xxs font-semibold',
+                      trend.percent >= 0
+                        ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark border-money-pos/20'
+                        : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg dark:text-money-negDark border-money-neg/20',
+                    )}
+                  >
+                    {trend.percent >= 0 ? (
+                      <TrendingUp size={11} aria-hidden="true" />
+                    ) : (
+                      <TrendingDown size={11} aria-hidden="true" />
+                    )}
+                    {Math.abs(trend.percent)}%
+                    {/* The arrow supplying the direction is aria-hidden, so
+                        without this a screen reader gets an unqualified "12%"
+                        with nothing to say whether it is up or down. Matches
+                        the ScoreboardWidget chip. */}
+                    <span className="sr-only">
+                      {trend.percent >= 0 ? ' up' : ' down'} vs last week
+                    </span>
+                  </span>
+                )}
+              </span>
+            </span>
+            <span className="flex-none flex items-baseline gap-1">
+              <span className="font-mono font-bold tabular-nums text-2xl tracking-tight text-brand-900 dark:text-brand-50">
+                {householdTotal}
+              </span>
+              <span className="text-[9px] font-semibold uppercase tracking-wide text-brand-450 dark:text-brand-450">
+                pts
+              </span>
+            </span>
           </Row>
         </SurfaceList>
 
-        {/* Per-member standings — adults only — plus the Household row, the
-            `unattributed` remainder of `household = Σ members + unattributed`
-            (pre-attribution legacy history today). Shown only when nonzero
+        {/* Per-member standings — adults only — plus the "Shared habits" row,
+            the `unattributed` remainder of `household = Σ members +
+            unattributed` (pre-attribution legacy history today, plus habits
+            that credit the household). Shown only when nonzero
             (and only once its submission-aware figure has loaded — see
             `householdShare`'s doc comment) so an ordinary household with none
             sees exactly what it saw before this row existed. */}
@@ -273,7 +307,7 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
                 <HouseholdAvatar size={30} className="flex-none" data-testid="points-drawer-household-badge" />
                 <span className="min-w-0 flex-1 flex items-center gap-1.5">
                   <span className="truncate text-sm font-semibold tracking-tight text-brand-900 dark:text-brand-50">
-                    Household
+                    Shared habits
                   </span>
                 </span>
                 <span className="flex-none flex items-baseline gap-1">
