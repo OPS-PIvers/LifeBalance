@@ -434,10 +434,11 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   };
 
   const handleDelete = () => {
-    // `showDeleteConfirmation` defaults its noun to "task", so this dialog read
-    // "Delete this task?" over a transaction. Harmless while Delete was an
-    // unlabelled glyph most people never pressed; not harmless now that it
-    // carries its own word and invites the press.
+    // `showDeleteConfirmation` used to default its noun to "task", so this
+    // dialog read "Delete this task?" over a transaction. Harmless while Delete
+    // was an unlabelled glyph most people never pressed; not harmless now that
+    // it carries its own word and invites the press. The default is gone — the
+    // noun is a required argument — but keep passing it explicitly here.
     showDeleteConfirmation(async () => {
       await deleteTransaction(transaction.id);
       (onDeleted ?? onDone)();

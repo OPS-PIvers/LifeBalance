@@ -10,11 +10,18 @@ import { requestDeleteConfirmation } from '@/components/ui/confirmDialogStore';
  * user. The imperative call signature is preserved for existing call sites.
  *
  * @param onConfirm - Callback to execute when user confirms deletion
- * @param itemName - Optional name of the item being deleted (defaults to "task")
+ * @param itemName - Noun for the thing being deleted, e.g. "transaction",
+ *   "shopping item", "calendar item". It is interpolated into both the dialog
+ *   title (`Delete this {itemName}?`) and the host's failure toast, so it must
+ *   read as a singular noun. **Required on purpose:** this used to default to
+ *   "task", which meant every caller that deleted something else — a
+ *   transaction, a shopping item — silently asked "Delete this task?" over the
+ *   wrong noun. Making it required means a new call site cannot inherit that
+ *   mistake; it has to name what it deletes.
  */
 export const showDeleteConfirmation = (
   onConfirm: () => void | Promise<void>,
-  itemName: string = 'task'
+  itemName: string
 ) => {
   requestDeleteConfirmation({ onConfirm, itemName });
 };

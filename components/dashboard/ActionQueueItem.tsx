@@ -508,7 +508,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
             await deleteToDo(item.id);
             setExpandedId(null);
             toast.success('Task deleted');
-          });
+          }, 'task');
         }}
         className="flex-1"
         leftIcon={<Trash2 size={16} />}

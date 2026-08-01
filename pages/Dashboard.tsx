@@ -40,7 +40,7 @@ import {
   nextDeferDate,
 } from '@/utils/actionQueueSmart';
 import { isTodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
-import { showDeleteConfirmation } from '@/utils/toastHelpers';
+import { requestDeleteConfirmation } from '@/components/ui/confirmDialogStore';
 import {
   captureDeferUndo,
   findRecurringDeferArtifacts,
@@ -432,26 +432,34 @@ const Dashboard: React.FC = () => {
 
   const handleBulkDelete = useCallback(() => {
     const items = selectedItems;
-    showDeleteConfirmation(async () => {
-      setIsBulkRunning(true);
-      let deleted = 0;
-      let failed = 0;
-      for (const item of items) {
-        try {
-          if (isCalendarQueueItem(item)) await deleteCalendarItem(item.id, { silent: true });
-          else if (isTodoQueueItem(item)) await deleteToDo(item.id);
-          else await deleteTransaction(item.id, { silent: true });
-          deleted++;
-        } catch (error) {
-          console.error('[ActionQueue] Bulk delete failed for item:', item.id, error);
-          failed++;
+    // Bulk delete spans transactions, calendar items and to-dos at once, so no
+    // single noun fits the standard "Delete this {itemName}?" question — and
+    // the count read as "Delete this 3 items?". Ask it by count instead; the
+    // noun still names the thing in the host's failure toast.
+    requestDeleteConfirmation({
+      itemName: items.length === 1 ? 'item' : 'items',
+      title: items.length === 1 ? 'Delete this item?' : `Delete ${items.length} items?`,
+      onConfirm: async () => {
+        setIsBulkRunning(true);
+        let deleted = 0;
+        let failed = 0;
+        for (const item of items) {
+          try {
+            if (isCalendarQueueItem(item)) await deleteCalendarItem(item.id, { silent: true });
+            else if (isTodoQueueItem(item)) await deleteToDo(item.id);
+            else await deleteTransaction(item.id, { silent: true });
+            deleted++;
+          } catch (error) {
+            console.error('[ActionQueue] Bulk delete failed for item:', item.id, error);
+            failed++;
+          }
         }
-      }
-      setIsBulkRunning(false);
-      if (deleted > 0) toast.success(`Deleted ${deleted} item${deleted === 1 ? '' : 's'}`);
-      if (failed > 0) toast.error(`Failed to delete ${failed} item${failed === 1 ? '' : 's'}`);
-      exitSelectionMode();
-    }, items.length === 1 ? 'item' : `${items.length} items`);
+        setIsBulkRunning(false);
+        if (deleted > 0) toast.success(`Deleted ${deleted} item${deleted === 1 ? '' : 's'}`);
+        if (failed > 0) toast.error(`Failed to delete ${failed} item${failed === 1 ? '' : 's'}`);
+        exitSelectionMode();
+      },
+    });
   }, [selectedItems, deleteCalendarItem, deleteToDo, deleteTransaction, exitSelectionMode]);
 
   // Selection mode always renders the FULL queue so bulk select/approve/defer
