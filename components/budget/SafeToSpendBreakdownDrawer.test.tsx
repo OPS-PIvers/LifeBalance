@@ -225,8 +225,11 @@ describe('SafeToSpendBreakdownDrawer', () => {
       await user.click(toggle);
 
       expect(toggle).toHaveAttribute('aria-expanded', 'true');
-      const panel = screen.getByRole('button', { name: /Unpaid bills this period/ })
-        .nextElementSibling as HTMLElement;
+      // Reach the panel through `aria-controls` rather than DOM position — that
+      // both survives markup changes and asserts the a11y wiring is real.
+      const panelId = toggle.getAttribute('aria-controls') as string;
+      const panel = document.getElementById(panelId) as HTMLElement;
+      expect(panel).not.toBeNull();
       expect(within(panel).getByText('Water')).toBeInTheDocument();
       expect(within(panel).getByText('$75.00')).toBeInTheDocument();
       expect(within(panel).getByText('Rent')).toBeInTheDocument();

@@ -129,18 +129,21 @@ export function getTransactionsForBucket(
  * Like the spent math, duplicate-named buckets share one list — a transaction
  * links to a bucket only by category NAME, so the two cannot be told apart.
  *
- * The newest-first order is INHERITED from {@link getTransactionsForBucket}'s
- * sort (`.filter` preserves it) rather than re-established here — so if that
- * sort ever changes, this contract changes with it.
+ * The newest-first sort is re-established here rather than inherited from
+ * {@link getTransactionsForBucket} — that one orders by `new Date(…).getTime()`
+ * while this orders the `yyyy-MM-dd` strings lexicographically (identical
+ * results for the stored format). Owning the sort keeps this function's stated
+ * order true on its own terms, so a change to the upstream sort key can't
+ * silently re-order the drawer's itemization.
  */
 export function getBucketSpendTransactions(
   bucketName: string,
   transactions: Transaction[],
   periodId: string
 ): Transaction[] {
-  return getTransactionsForBucket(bucketName, transactions, periodId).filter(
-    tx => tx.category !== INCOME_CATEGORY && tx.category !== CREDIT_CARD_CATEGORY
-  );
+  return getTransactionsForBucket(bucketName, transactions, periodId)
+    .filter(tx => tx.category !== INCOME_CATEGORY && tx.category !== CREDIT_CARD_CATEGORY)
+    .sort((a, b) => b.date.localeCompare(a.date));
 }
 
 /**
