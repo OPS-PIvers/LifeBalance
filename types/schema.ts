@@ -912,9 +912,20 @@ export interface HabitSubmission {
    * themselves). It is snapshotted rather than re-derived on read because
    * `Habit.assignedTo` can be REASSIGNED between an add and its delete/edit:
    * re-deriving would debit whoever holds the chore today for points the
-   * previous assignee actually earned. Absent on every submission written
-   * before this field shipped — readers fall back to `createdBy` and then, per
-   * `resolveReversalSources`, to whatever `Habit.completedBy` actually records.
+   * previous assignee actually earned.
+   *
+   * 🛡️ ABSENT means "credits NOBODY" — never "credits `createdBy`". Besides
+   * pre-attribution history, three live writers produce a doc with neither this
+   * field nor `creditsHousehold` (`transactionMutations`' keyword fire,
+   * `noSpendFire`, the backfill script) and none of them writes `completedBy`.
+   * `createdBy` is the OPERATOR, and on a keyword fire that is a real member
+   * uid, so an `?? createdBy` fallback hands a reversal a creditee the doc never
+   * had: it debits that member's own genuine attribution, or — once
+   * `resolveReversalSources` falls through to the date's holders — some other
+   * member's. `deleteHabitSubmission` therefore reverses a doc with no
+   * `attributedTo` against the POOL alone, at its stored `pointsEarned`.
+   * ⚠️ `updateHabitSubmission` still carries the `?? createdBy` fallback and has
+   * the same defect on a count edit; it is knowingly unfixed here.
    */
   attributedTo?: string;
   /**

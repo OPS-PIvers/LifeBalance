@@ -1580,17 +1580,49 @@ export const useHabitActions = (
       //      (`reversalMoves`): we may only take back units `completedBy` really
       //      records. A pre-stage-1 submission records none, so it reverses the
       //      household pool only and debits no member at all.
-      //   3. A HOUSEHOLD submission (`creditsHousehold`) credited nobody, so it
-      //      takes NOTHING back from any member — `reversalMoves`' holder
-      //      fallback would otherwise debit whoever happens to hold a
-      //      per-completion override on that date. It still reverses through the
-      //      decomposition (below), which is how a threshold period's
-      //      side-effect member awards move with it.
+      //   3. A submission that names NO creditee credits NOBODY, so it takes
+      //      NOTHING back from any member — see `creditsNoMember` below.
+      //
+      // 🛡️ WHICH DOCS CREDIT NOBODY — `attributedTo == null`, FULL STOP.
+      //
+      // `addHabitSubmission` writes `attributedTo` for a member credit and
+      // `creditsHousehold: true` for a household one, exclusively, so a doc
+      // carrying NEITHER was written by something else: the three automation
+      // writers (`transactionMutations`' keyword fire, `noSpendFire`, the
+      // backfill script) or pre-attribution history. NONE of them credits a
+      // member — none writes `completedBy` at all.
+      //
+      // Resolving `creditedUid = attributedTo ?? createdBy` for those treated
+      // the OPERATOR as the creditee. `createdBy` is the audit trail, never a
+      // credit (see the add path and `HabitSubmission.createdBy`), and on a
+      // keyword fire it is whoever VERIFIED the triggering transaction — a real
+      // member uid, routinely the same admin who logs habits by hand. Probed on
+      // this mutation with a neither-field doc, `createdBy: user1`:
+      //   • user1 holds a genuine unit that day
+      //     → `completedBy.<date>.user1: -1`, user1 points -10   ← corruption
+      //   • jen-uid holds the unit instead (holder fallback)
+      //     → `completedBy.<date>.jen-uid: -1`, jen points -10   ← corruption
+      //   • nobody holds attribution on the date
+      //     → no member write, pool reverses `pointsEarned`      ← correct
+      // Generalising the third row to all three is the fix; it is reachable
+      // from the submission log modal, which lists automation docs unfiltered.
+      //
+      // 🛡️ THIS IS NOT THE SAME PREDICATE AS `isHouseholdSubmission`, which
+      // stays `creditsHousehold === true`. That flag ALSO selects the reversal
+      // MODE (`attributionMoved` below): a household doc reverses through the
+      // before/after decomposition that credited it, while a member-less doc
+      // with no such marker must keep reversing its stored `pointsEarned` via
+      // `legacyDelta` — the ONLY record of what a pre-attribution doc received.
+      // Widening `isHouseholdSubmission` instead would suppress that and leave
+      // the pool holding points nothing else ever gives back.
       const isHouseholdSubmission = submission.creditsHousehold === true;
-      const creditedUid = submission.attributedTo ?? submission.createdBy;
-      const deleteMoves = isHouseholdSubmission
-        ? []
-        : reversalMoves(habit, creditedUid, submission.date, submission.count);
+      // `null` = this doc credited nobody (household, automation, grandfathered)
+      // — NEVER an `?? createdBy` fallback.
+      const creditedUid = submission.attributedTo ?? null;
+      const deleteMoves =
+        creditedUid === null
+          ? []
+          : reversalMoves(habit, creditedUid, submission.date, submission.count);
       // 🛡️ THE REVERSAL MODE IS DECIDED BY THE DOC, NOT BY THE MOVES.
       //
       // An ATTRIBUTED submission reverses through the attribution-bounded path
@@ -1604,12 +1636,14 @@ export const useHabitActions = (
       // the pool a SECOND time, and `computeHouseholdPointsSync` only ever
       // RAISES the stored total, so that drift is permanent.
       //
-      // `legacyDelta` therefore stays reserved for genuinely UNATTRIBUTED
-      // (pre-feature) submissions, whose stored `pointsEarned` is the only
-      // record of what they were credited — plus the case where one of those
-      // lands on a date that has since gained attribution, which stays on the
-      // bounded path exactly as before.
-      const submissionIsAttributed = submission.attributedTo != null;
+      // `legacyDelta` therefore stays reserved for submissions that name no
+      // creditee and carry no household marker — pre-attribution history and
+      // the automation writers — whose stored `pointsEarned` is the only record
+      // of what they were credited. That now holds even when such a doc lands on
+      // a date that HAS since gained attribution: the bounded path used to
+      // capture that case, but only by debiting a member the doc never credited
+      // (see `creditedUid` above), so it belongs here with the rest of its class.
+      const submissionIsAttributed = creditedUid !== null;
       let deleteAfter: Habit = {
         ...habit,
         count: nextCount,
@@ -1649,8 +1683,12 @@ export const useHabitActions = (
         date: submission.date,
         today,
         targets: deleteTargets,
-        attributionMoved:
-          isHouseholdSubmission || submissionIsAttributed || deleteMoves.length > 0,
+        // `deleteMoves.length > 0` is deliberately NOT a third disjunct: moves
+        // exist only when `creditedUid !== null`, i.e. only when
+        // `submissionIsAttributed` already holds, so it would be dead — and as a
+        // live test it is exactly what let an unattributed doc slip onto the
+        // bounded path off the back of a wrongly-derived creditee.
+        attributionMoved: isHouseholdSubmission || submissionIsAttributed,
         legacyDelta: -submission.pointsEarned,
       });
 
