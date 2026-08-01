@@ -20,6 +20,7 @@ import type { SubmissionTotalsByHabitDate } from '@/utils/habitLogic';
 import { buildMemberPointsLedger, buildSharedPointsLedger } from '@/utils/pointsLedger';
 import { cn } from '@/utils/cn';
 import { Section, SurfaceList } from '@/components/ui/Section';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import MemberAvatar from '@/components/ui/MemberAvatar';
 import HouseholdAvatar from '@/components/ui/HouseholdAvatar';
@@ -112,10 +113,12 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
   // help explain. Fetched the same way the past-week path below already
   // does, via the same `fetchSubmissionTotals` helper `usePointsSync` uses.
   //
-  // `undefined` means "not fetched yet for this week" — the Household row
-  // stays hidden (see the `!!householdShare` render guard) rather than
-  // flashing a submission-less, possibly-wrong figure while the fetch is in
-  // flight; render nothing, never a wrong number.
+  // `undefined` means "not fetched yet for this week" — the Shared habits row
+  // still renders in its final position (the member rows above it derive
+  // synchronously, so gating the whole row on this fetch made it pop in and
+  // shift the layout), but its VALUE SLOT shows a Skeleton rather than a
+  // submission-less, possibly-wrong figure while the fetch is in flight:
+  // render no number, never a wrong number.
   const [currentWeekSubmissionTotals, setCurrentWeekSubmissionTotals] =
     useState<SubmissionTotalsByHabitDate | undefined>(undefined);
 
@@ -155,8 +158,8 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
           setCurrentWeekSubmissionTotals(totals);
         }
       } catch {
-        // A transient failure leaves the row hidden (per the doc comment
-        // above) rather than showing a stale/incomplete figure; the cache
+        // A transient failure leaves the value slot in its placeholder state
+        // (per the doc comment above) rather than showing a stale/incomplete figure; the cache
         // isn't updated on failure, so the next habits snapshot or week
         // change re-fires this effect and retries.
         if (!cancelled) setCurrentWeekSubmissionTotals(undefined);
@@ -544,14 +547,14 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
             })}
             {/* "Shared habits" row — the unattributed remainder: pre-attribution
                 legacy history, plus habits that credit the household instead of
-                a member. Always shown once loaded (even at 0), same as the
-                per-member rows, so the scoreboard doesn't change height when
-                the Day/Week toggle moves this value across zero.
+                a member. ALWAYS rendered — from first paint (with a Skeleton in
+                the value slot until the submissions fetch lands) and at 0 —
+                same as the per-member rows, so the scoreboard never changes
+                height as this value loads or crosses zero.
                 Labelled "Shared habits", not "Household": the hero row above is
                 the household now, and two rows with the same badge and the same
                 word would be indistinguishable at a glance. */}
-            {householdShare !== undefined && (
-              <div data-testid="scoreboard-household-row">
+            <div data-testid="scoreboard-household-row">
                 <button
                   type="button"
                   onClick={() =>
@@ -569,9 +572,13 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
                     </span>
                   </div>
                   <div className="flex-none w-14 text-right">
-                    <div className="font-mono font-bold text-[17px] leading-tight text-brand-900 dark:text-brand-50 tabular-nums">
-                      {householdShare}
-                    </div>
+                    {householdShare === undefined ? (
+                      <Skeleton className="ml-auto h-[21px] w-8" />
+                    ) : (
+                      <div className="font-mono font-bold text-[17px] leading-tight text-brand-900 dark:text-brand-50 tabular-nums">
+                        {householdShare}
+                      </div>
+                    )}
                     <div className="text-[9px] font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">
                       Week
                     </div>
@@ -590,14 +597,22 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
                     id="scoreboard-ledger-shared"
                     className="pb-2.5 pl-[41px] pr-[25px] animate-in fade-in slide-in-from-top-2 duration-(--duration-base)"
                   >
-                    <PointsLedgerList
-                      entries={expandedLedger ?? []}
-                      emptyLabel={`No shared-habit points ${isPastWeek ? 'that week' : 'this week'}.`}
-                    />
+                    {/* The row is now tappable before the submissions fetch
+                        lands, so the ledger must not assert "no points" about a
+                        week it hasn't read yet — that empty copy is a claim, not
+                        a blank. Same rule as the value slot above: no number,
+                        and no statement about the number, until it's known. */}
+                    {householdShare === undefined ? (
+                      <Skeleton className="h-4 w-44" />
+                    ) : (
+                      <PointsLedgerList
+                        entries={expandedLedger ?? []}
+                        emptyLabel={`No shared-habit points ${isPastWeek ? 'that week' : 'this week'}.`}
+                      />
+                    )}
                   </div>
                 )}
-              </div>
-            )}
+            </div>
           </div>
         )}
       </SurfaceList>
