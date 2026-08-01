@@ -126,7 +126,9 @@ describe('TodoReviewForm', () => {
     await user.click(screen.getByRole('button', { name: /discard/i }));
 
     expect(mockRequestDeleteConfirmation).toHaveBeenCalledWith(
-      expect.objectContaining({ itemName: 'Buy dog food' })
+      // A noun, not the to-do's text — the host asks "Delete this {itemName}?",
+      // which "Buy dog food" turned into "Delete this Buy dog food?".
+      expect.objectContaining({ itemName: 'task' })
     );
     expect(mockDeleteToDo).toHaveBeenCalledWith('todo-1');
     expect(mockOnDeleted).toHaveBeenCalled();

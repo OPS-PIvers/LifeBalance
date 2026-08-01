@@ -782,7 +782,7 @@ export const TodoRow = React.memo(function TodoRow({
           showDeleteConfirmation(async () => {
             await onDelete(item.id);
             toast.success('Task deleted');
-          });
+          }, 'task');
         },
       }]}
       onSwipeStart={handleSwipeStart}

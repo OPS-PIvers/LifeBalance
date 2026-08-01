@@ -92,7 +92,10 @@ const ShoppingReviewForm: React.FC<ShoppingReviewFormProps> = ({ item, onDone, o
       } finally {
         setIsSubmitting(false);
       }
-    }, trimmedName || 'item');
+      // A NOUN, not the item's own name: the dialog interpolates this into
+      // "Delete this {itemName}?", where the name read "Delete this Milk?".
+      // The form behind the dialog already shows which item this is.
+    }, 'shopping item');
   };
 
   return (
