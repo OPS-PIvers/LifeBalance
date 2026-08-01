@@ -120,7 +120,9 @@ describe('ShoppingReviewForm', () => {
     await user.click(screen.getByRole('button', { name: /discard/i }));
 
     expect(mockRequestDeleteConfirmation).toHaveBeenCalledWith(
-      expect.objectContaining({ itemName: 'Milk' })
+      // A noun, not the item's name — the host asks "Delete this {itemName}?",
+      // which "Milk" turned into "Delete this Milk?".
+      expect.objectContaining({ itemName: 'shopping item' })
     );
     expect(mockDeleteShoppingItem).toHaveBeenCalledWith('item-1');
     expect(mockOnDeleted).toHaveBeenCalled();

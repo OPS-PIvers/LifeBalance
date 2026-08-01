@@ -389,14 +389,17 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
       // that is whoever VERIFIED the triggering transaction, i.e. a real member
       // uid, routinely the same admin who logs habits by hand.
       //
-      // Matching one is not a harmless no-op: `deleteHabitSubmission` resolves
-      // `creditedUid = attributedTo ?? createdBy` and runs `reversalMoves`, so
-      // un-crediting "Me" would delete an unrelated automation doc AND debit
-      // this member's REAL `completedBy` attribution for the day (probe: a
-      // neither-field doc with `createdBy: user1` on a date where user1 holds
-      // one genuine unit writes `completedBy.<date>.user1: -1` and `-10` to
-      // user1's points). Dropping the fallback costs nothing and falls through
-      // to `uncreditHabitCompletion`, the pre-existing correct reversal.
+      // Matching one is not a harmless no-op: un-crediting "Me" would delete an
+      // unrelated automation doc. It also used to debit this member's REAL
+      // `completedBy` attribution for the day, because `deleteHabitSubmission`
+      // resolved `creditedUid = attributedTo ?? createdBy` and ran
+      // `reversalMoves` (probe: a neither-field doc with `createdBy: user1` on a
+      // date where user1 holds one genuine unit wrote
+      // `completedBy.<date>.user1: -1` and `-10` to user1's points). That
+      // fallback is now GONE — a doc naming no creditee reverses the POOL alone
+      // — but deleting the wrong doc is harm enough on its own, so this
+      // predicate stays `attributedTo`-only. Dropping the fallback costs nothing
+      // and falls through to `uncreditHabitCompletion`, the correct reversal.
       //
       // `creditsHousehold !== true` is deliberately NOT kept: the two fields are
       // mutually exclusive by construction above, so a household doc has no
@@ -432,13 +435,19 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     // and enumerating `sourceTransactionId`/`sourceNoSpendDate` would just be
     // whack-a-mole against the next writer.
     //
-    // 🛡️ So guard the INVARIANT instead of the marker. The harm is entirely
-    // downstream: `deleteHabitSubmission` resolves
+    // 🛡️ So guard the INVARIANT instead of the marker. The harm was entirely
+    // downstream: `deleteHabitSubmission` used to resolve
     // `creditedUid = attributedTo ?? createdBy` for any doc without
     // `creditsHousehold`, so an automation doc whose `createdBy` is a real
-    // member uid makes `reversalMoves` debit that member's genuine
-    // `completedBy` — and when they hold nothing, its holder fallback debits
-    // whoever else does. Probed on the real mutation:
+    // member uid made `reversalMoves` debit that member's genuine
+    // `completedBy` — and when they held nothing, its holder fallback debited
+    // whoever else did. That root cause is now FIXED at the source — a doc with
+    // no `attributedTo` reverses the POOL alone, so all three probe rows below
+    // land on the third one's behaviour and this guard no longer has corruption
+    // to prevent. It is kept because narrowing which docs this branch sweeps is
+    // a behaviour change in its own right (which doc gets deleted, and the
+    // tie-break warned about below), not because the harm is still live. Probed
+    // on the real mutation, PRE-fix:
     //   • neither-field doc, `createdBy: user1`, user1 holds a unit that day
     //     → `completedBy.<date>.user1: -1`, user1 points -10   ← corruption
     //   • same doc, jen-uid holds the unit instead
@@ -450,10 +459,11 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     // Under-reversing beats debiting the wrong ledger.
     //
     // 🛡️ WHAT `dateHasNoAttribution` DOES AND DOES NOT BUY. It is DATE-scoped;
-    // a reversal's member blast radius is PERIOD-scoped. All it guarantees is
-    // that `reversalMoves` → `resolveReversalSources` returns `[]`, so
+    // a reversal's member blast radius is PERIOD-scoped. All it ever guaranteed
+    // is that `reversalMoves` → `resolveReversalSources` returns `[]`, so
     // `deleteHabitSubmission` takes nothing off the doc's own `createdBy` (nor
-    // off a holder-fallback member) — the three rows above. It does NOT mean no
+    // off a holder-fallback member) — the three rows above; that now holds for
+    // ANY doc with no `attributedTo`, guard or no guard. It does NOT mean no
     // member is debited: `queueHabitPointsMove` writes `move.perMember`
     // UNCONDITIONALLY (`attributionMoved` gates only the POOL term), and
     // `periodPointsMove` scopes members to `periodScoredDates` — the whole week

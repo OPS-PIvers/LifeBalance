@@ -939,10 +939,10 @@ describe('TransactionReviewForm', () => {
     });
 
     it('names a transaction, not a "task", in the delete confirmation', async () => {
-      // `showDeleteConfirmation`'s itemName defaults to "task", so this dialog
-      // used to read "Delete this task?" over a transaction. It mattered little
-      // while Delete was an unlabelled glyph; it matters now that the button
-      // carries its own word and invites the press.
+      // `showDeleteConfirmation`'s itemName once defaulted to "task", so this
+      // dialog used to read "Delete this task?" over a transaction. It mattered
+      // little while Delete was an unlabelled glyph; it matters now that the
+      // button carries its own word and invites the press.
       const user = userEvent.setup();
       const { container } = render(<TransactionReviewForm transaction={baseTx} onDone={mockOnDone} />);
 

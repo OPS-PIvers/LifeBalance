@@ -2777,7 +2777,7 @@ const ToDosPage: React.FC = () => {
                      haptic('medium');
                      await deleteToDo(actionTodo.id);
                      toast.success('Task deleted');
-                   });
+                   }, 'task');
                 }}
               >
                 Delete
@@ -2880,7 +2880,7 @@ const CompletedTodoRow = React.memo(function CompletedTodoRow({ item, assignee, 
                         haptic('medium');
                         await onDelete(item.id);
                         toast.success('Task deleted');
-                    })}
+                    }, 'task')}
                     className="min-w-11 min-h-11"
                     title="Delete forever"
                     aria-label={`Delete forever: ${item.text}`}

@@ -94,7 +94,9 @@ export const TaskTemplateDrawer: React.FC<TaskTemplateDrawerProps> = ({ isOpen, 
   };
 
   const handleDelete = (template: TaskTemplate) => {
-    showDeleteConfirmation(() => deleteTaskTemplate(template.id), template.name);
+    // A noun, not `template.name` — the dialog asks "Delete this {itemName}?",
+    // which the name turned into "Delete this Morning routine?".
+    showDeleteConfirmation(() => deleteTaskTemplate(template.id), 'task template');
   };
 
   const handleAddCategory = async (category: string) => {

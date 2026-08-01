@@ -624,6 +624,17 @@ export function makeAddTransaction(deps: {
         target
       );
 
+      // CREDIT-CARD PAYMENT PROVENANCE: persist the funding account id only when
+      // it actually applies to a credit payment, matching the optional-field
+      // convention above. This MUST be assigned BEFORE `batch.set` below —
+      // `WriteBatch.set` serializes its payload at call time, so a later mutation
+      // of `docData` is silently dropped from the write.
+      const trimmedFundingId = tx.fundingAccountId?.trim() || undefined;
+      const isCreditPaymentOnCard = tx.creditPayment === true && target?.type === 'credit';
+      if (trimmedFundingId && isCreditPaymentOnCard) {
+        docData.fundingAccountId = trimmedFundingId;
+      }
+
       // HABIT AUTOMATIONS (PRD #1065) — fire the habits attached to this entry.
       //
       // A hand-entered transaction is stamped `verified` by the capture modal,
@@ -704,14 +715,8 @@ export function makeAddTransaction(deps: {
       // partially apply. Verified-only (a pending payment moves no balance),
       // and skipped when the funding account is missing/credit/the same doc
       // (a batch must not write one doc twice) — those degrade to today's
-      // card-only behavior. The id is persisted only when it actually applies
-      // to a credit payment, matching the optional-field convention.
-      const trimmedFundingId = tx.fundingAccountId?.trim() || undefined;
+      // card-only behavior. (The id itself is persisted above, before the set.)
       const fundingAccount = trimmedFundingId ? accounts.find(a => a.id === trimmedFundingId) : undefined;
-      const isCreditPaymentOnCard = tx.creditPayment === true && target?.type === 'credit';
-      if (trimmedFundingId && isCreditPaymentOnCard) {
-        docData.fundingAccountId = trimmedFundingId;
-      }
       if (
         isCreditPaymentOnCard &&
         fundingAccount &&

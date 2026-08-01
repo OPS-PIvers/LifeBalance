@@ -2689,14 +2689,18 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     if (!habit) return;
 
     const today = getLocalDateString();
-    // A HOUSEHOLD doc credited nobody, so it takes nothing back from any member
-    // (production parity — the holder fallback would otherwise debit whoever
-    // holds a per-completion override on this date).
-    const isHouseholdSubmission = submission.creditsHousehold === true;
-    const creditedUid = submission.attributedTo ?? submission.createdBy;
-    const moves = isHouseholdSubmission
-      ? []
-      : resolveReversalSources(habit, creditedUid, submission.date, submission.count);
+    // A doc that names no creditee credited nobody, so it takes nothing back
+    // from any member — household, automation-written and pre-attribution docs
+    // alike. Production parity: `createdBy` is the OPERATOR, never a credit, so
+    // there is no `?? createdBy` fallback here either (it would debit that
+    // member's own genuine attribution, or — via the holder fallback — whoever
+    // else holds an override on this date). See `deleteHabitSubmission` in
+    // hooks/useHabitActions.tsx for the full rule.
+    const creditedUid = submission.attributedTo ?? null;
+    const moves =
+      creditedUid === null
+        ? []
+        : resolveReversalSources(habit, creditedUid, submission.date, submission.count);
     const inLivePeriod =
       habitPeriodStart(habit.period, submission.date) === habitPeriodStart(habit.period, today) &&
       !isHabitStale(habit);
@@ -2743,9 +2747,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
     const feedsAttribution = habitFeedsMemberAttribution(habit);
     // An ATTRIBUTED doc reverses through the attribution-bounded path only —
-    // never through its stored `pointsEarned` (production's A2 rule).
-    const attributed =
-      isHouseholdSubmission || submission.attributedTo != null || moves.length > 0;
+    // never through its stored `pointsEarned` (production's A2 rule). A
+    // member-less doc with no household marker keeps the stored figure, which is
+    // the only record of what it was credited; `moves.length > 0` is not a third
+    // disjunct because moves exist only when `creditedUid !== null`.
+    const attributed = submission.creditsHousehold === true || creditedUid !== null;
     const poolDelta = feedsAttribution && attributed
       ? householdPeriodPointsDelta(habit, after, submission.date, today)
       : -submission.pointsEarned;

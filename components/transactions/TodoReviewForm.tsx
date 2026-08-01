@@ -92,7 +92,10 @@ const TodoReviewForm: React.FC<TodoReviewFormProps> = ({ item, onDone, onDeleted
       } finally {
         setIsSubmitting(false);
       }
-    }, trimmedText || 'task');
+      // A NOUN, not the to-do's own text: the dialog interpolates this into
+      // "Delete this {itemName}?", where the text read "Delete this Buy dog
+      // food?". "task" matches the noun every other to-do delete path uses.
+    }, 'task');
   };
 
   return (
