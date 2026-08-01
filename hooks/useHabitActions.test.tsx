@@ -3543,6 +3543,151 @@ describe('useHabitActions — household credit mode', () => {
     expect(bucketOf(householdUpdate(), 'points.total')).toBe(-10);
   });
 
+  // -------------------------------------------------------------------------
+  // 🛡️ THE OTHER MEMBER-LESS SHAPE: a doc carrying NEITHER `attributedTo` NOR
+  // `creditsHousehold`. Three live writers produce it — `transactionMutations`'
+  // keyword fire (`createdBy` = whoever VERIFIED the triggering transaction, a
+  // REAL member uid), `noSpendFire` (`createdBy: 'system'`) and the backfill
+  // script (`createdBy: 'migration_script'`) — plus all pre-attribution
+  // history. None of them credited ANYBODY: they write no `completedBy`.
+  //
+  // `createdBy` is the OPERATOR (schema + the add path's own comment), never a
+  // credit, so resolving `creditedUid = attributedTo ?? createdBy` and running
+  // `reversalMoves` on it takes units off a member this doc never touched —
+  // their own genuine completion, or (via `resolveReversalSources`' holder
+  // fallback) some other member's entirely. Reachable today: the submission log
+  // modal lists these docs unfiltered and its delete button hits this path.
+  // -------------------------------------------------------------------------
+
+  it('deleteHabitSubmission: an automation doc never debits its OPERATOR’s own attribution', async () => {
+    // The keyword-fire shape: `createdBy` is a real member uid, and that member
+    // separately holds a genuine completion on the same date. Reversing off
+    // `createdBy` strips the completion they actually earned.
+    vi.useFakeTimers({ now: NOW });
+    const habit = baseHabit({
+      basePoints: 10,
+      scoringType: 'incremental',
+      count: 2,
+      totalCount: 2,
+      completedDates: [TODAY],
+      completedBy: { [TODAY]: { 'user1': 1 } },
+      lastUpdated: '2026-07-15T08:00:00',
+    });
+    getDocMock.mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        habitId: 'h1', date: TODAY, count: 1, pointsEarned: 10,
+        // NEITHER attributedTo NOR creditsHousehold — plus the automation's own
+        // audit field, which is what makes this doc's provenance unambiguous.
+        createdBy: 'user1', sourceTransactionId: 'txn_9', createdAt: '2026-07-15T08:30:00',
+      }),
+    } as unknown as Awaited<ReturnType<typeof getDoc>>);
+    getDocsMock.mockResolvedValue(
+      { size: 2, empty: false, docs: [] } as unknown as Awaited<ReturnType<typeof getDocs>>,
+    );
+
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.deleteHabitSubmission('h1', 's1');
+    });
+
+    // Pre-fix: `completedBy.<TODAY>.user1: -1` and `points.total: -10` on user1.
+    expect(attributionKeys()).toEqual([]);
+    expect(memberWrites()).toHaveLength(0);
+    // The pool still reverses the doc's stored figure — the only record of what
+    // a doc that credited nobody was actually credited.
+    expect(bucketOf(householdUpdate(), 'points.total')).toBe(-10);
+    expect(commitCount).toBe(1);
+  });
+
+  it('deleteHabitSubmission: an automation doc never debits an UNRELATED holder either', async () => {
+    // Same doc, but `createdBy` holds nothing that day — so
+    // `resolveReversalSources`' holder fallback reaches for Jen instead, a
+    // member with no connection whatsoever to this doc.
+    vi.useFakeTimers({ now: NOW });
+    const habit = baseHabit({
+      basePoints: 10,
+      scoringType: 'incremental',
+      count: 2,
+      totalCount: 2,
+      completedDates: [TODAY],
+      completedBy: { [TODAY]: { 'jen-uid': 1 } },
+      lastUpdated: '2026-07-15T08:00:00',
+    });
+    getDocMock.mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        habitId: 'h1', date: TODAY, count: 1, pointsEarned: 10,
+        createdBy: 'user1', createdAt: '2026-07-15T08:30:00',
+      }),
+    } as unknown as Awaited<ReturnType<typeof getDoc>>);
+    getDocsMock.mockResolvedValue(
+      { size: 2, empty: false, docs: [] } as unknown as Awaited<ReturnType<typeof getDocs>>,
+    );
+
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.deleteHabitSubmission('h1', 's1');
+    });
+
+    // Pre-fix: `completedBy.<TODAY>.jen-uid: -1` and `points.total: -10` on Jen.
+    expect(attributionKeys()).toEqual([]);
+    expect(memberWrites()).toHaveLength(0);
+    expect(bucketOf(householdUpdate(), 'points.total')).toBe(-10);
+    expect(commitCount).toBe(1);
+  });
+
+  it('deleteHabitSubmission: a member-less doc on an UNATTRIBUTED date is unchanged (control)', async () => {
+    // 🔒 The row that was already correct pre-fix, pinned so the fix is proven
+    // to have generalised the right answer rather than invented a new one: no
+    // attribution anywhere on the date → nothing member-level to take back, and
+    // the pool reverses the stored `pointsEarned` through `legacyDelta`.
+    vi.useFakeTimers({ now: NOW });
+    const habit = baseHabit({
+      basePoints: 10,
+      scoringType: 'incremental',
+      count: 2,
+      totalCount: 2,
+      completedDates: [TODAY],
+      lastUpdated: '2026-07-15T08:00:00',
+    });
+    getDocMock.mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        habitId: 'h1', date: TODAY, count: 1, pointsEarned: 10,
+        createdBy: 'system', createdAt: '2026-07-15T08:30:00',
+      }),
+    } as unknown as Awaited<ReturnType<typeof getDoc>>);
+    getDocsMock.mockResolvedValue(
+      { size: 2, empty: false, docs: [] } as unknown as Awaited<ReturnType<typeof getDocs>>,
+    );
+
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.deleteHabitSubmission('h1', 's1');
+    });
+
+    expect(attributionKeys()).toEqual([]);
+    expect(memberWrites()).toHaveLength(0);
+    expect(bucketOf(householdUpdate(), 'points.total')).toBe(-10);
+    expect(commitCount).toBe(1);
+  });
+
   it('an assignedTo chore ignores creditMode entirely', async () => {
     vi.useFakeTimers({ now: NOW });
     const habit = householdHabit({
