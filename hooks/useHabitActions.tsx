@@ -1892,9 +1892,9 @@ export const useHabitActions = (
       // multiplier.
       //
       // 🛡️ Same two guards as deleteHabitSubmission: the credited uid is the one
-      // SNAPSHOTTED at add time (`attributedTo`, legacy fallback `createdBy`) —
-      // NOT re-derived from the habit's current `assignedTo`, which a
-      // reassignment would have changed — and a DOWNWARD edit is bounded by what
+      // SNAPSHOTTED at add time (`attributedTo`, and ONLY that) — NOT re-derived
+      // from the habit's current `assignedTo`, which a reassignment would have
+      // changed, and NOT `createdBy` — and a DOWNWARD edit is bounded by what
       // `completedBy` actually records. An upward edit is a forward credit, so it
       // simply lands on the credited member.
       const submissionDate = updates.date || originalSubmission.date;
@@ -1906,15 +1906,24 @@ export const useHabitActions = (
       // is what `attributedTo ?? createdBy` would fall back to), and a downward
       // one must not debit whoever holds an override on that date.
       const isHouseholdSubmission = originalSubmission.creditsHousehold === true;
-      const creditedUid = originalSubmission.attributedTo ?? originalSubmission.createdBy;
+      // `null` = this doc credited nobody (household, automation, grandfathered)
+      // — NEVER an `?? createdBy` fallback. Identical rule, and for identical
+      // reasons, to `deleteHabitSubmission` above: `createdBy` is the audit
+      // trail, and on an automation-written doc it is whoever VERIFIED the
+      // triggering transaction — a real member uid. Falling back to it made an
+      // UPWARD edit credit that operator units they never earned, and a
+      // DOWNWARD edit debit them (or, via `reversalMoves`' holder fallback, an
+      // unrelated member) for units this doc never gave them.
+      const creditedUid = originalSubmission.attributedTo ?? null;
       const editMoves: AttributionMove[] =
-        isHouseholdSubmission
+        isHouseholdSubmission || creditedUid === null
           ? []
           : countDelta > 0
             ? [{ memberId: creditedUid, delta: countDelta }]
             : countDelta < 0
               ? reversalMoves(habit, creditedUid, submissionDate, -countDelta)
               : [];
+      const submissionIsAttributed = creditedUid !== null;
       let editAfter: Habit = {
         ...habit,
         count: habit.count + countDelta,
@@ -1957,10 +1966,12 @@ export const useHabitActions = (
         // through the attribution-bounded path exclusively, so a downward edit
         // whose attribution someone else already took back reverses NOTHING
         // rather than debiting the pool a second time via `legacyDelta`.
-        attributionMoved:
-          isHouseholdSubmission ||
-          originalSubmission.attributedTo != null ||
-          editMoves.length > 0,
+        // `editMoves.length > 0` is deliberately NOT a third disjunct: moves
+        // exist only when `creditedUid !== null`, i.e. only when
+        // `submissionIsAttributed` already holds, so it would be dead — and as
+        // a LIVE test it is exactly what let an unattributed doc slip onto the
+        // bounded path off the back of a wrongly-derived creditee.
+        attributionMoved: isHouseholdSubmission || submissionIsAttributed,
         legacyDelta: pointsDelta,
       });
 

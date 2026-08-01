@@ -2295,6 +2295,92 @@ describe('useHabitActions — reversals follow stored attribution, not current a
     expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -10 });
   });
 
+  // The LEGACY-down case above passes on a habit with NO `completedBy` — there
+  // is simply nothing there to debit wrongly. These three put real attribution
+  // on the date, which is the only shape in which the `?? createdBy` fallback
+  // could reach a member, and each one fails against that fallback.
+  it('editing an unattributed submission down never debits its createdBy operator', async () => {
+    // A transaction keyword fire / noSpendFire doc names no creditee, but its
+    // `createdBy` is whoever VERIFIED the triggering transaction — a real member
+    // uid, routinely one who ALSO holds genuine units that day. The fallback
+    // aimed the reversal at those units and stripped a completion user1 earned.
+    const date = today();
+    getDocMock.mockResolvedValue(submissionDoc({
+      habitId: 'h1', date, count: 2, pointsEarned: 20,
+      createdBy: 'user1', streakDaysAtTime: 1, multiplierApplied: 1,
+    }));
+
+    const habit = baseHabit({
+      completedDates: [date],
+      count: 3,
+      totalCount: 3,
+      // user1's OWN genuine completion, which this doc never credited.
+      completedBy: { [date]: { user1: 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1'))
+    );
+
+    await act(async () => {
+      await result.current.updateHabitSubmission('h1', 's1', { count: 1 });
+    });
+
+    expect(Object.keys(habitUpdate()!.data).some(k => k.startsWith('completedBy.'))).toBe(false);
+    expect(capturedUpdates.filter(u => u.ref.__path.includes('/members/'))).toEqual([]);
+  });
+
+  it('editing an unattributed submission down never debits an unrelated holder', async () => {
+    // `reversalMoves` falls through to the DATE's holders when the named uid
+    // holds nothing, so the fallback could reach a member the doc never touched.
+    const date = today();
+    getDocMock.mockResolvedValue(submissionDoc({
+      habitId: 'h1', date, count: 2, pointsEarned: 20,
+      createdBy: 'user1', streakDaysAtTime: 1, multiplierApplied: 1,
+    }));
+
+    const habit = baseHabit({
+      completedDates: [date],
+      count: 3,
+      totalCount: 3,
+      completedBy: { [date]: { 'jen-uid': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.updateHabitSubmission('h1', 's1', { count: 1 });
+    });
+
+    expect(habitUpdate()!.data[`completedBy.${date}.jen-uid`]).toBeUndefined();
+    expect(memberUpdate('jen-uid')).toBeUndefined();
+    expect(capturedUpdates.filter(u => u.ref.__path.includes('/members/'))).toEqual([]);
+  });
+
+  it('editing an unattributed submission UP credits nobody', async () => {
+    // The forward direction has the same defect: an increase landed units and
+    // points on the operator, inventing attribution the doc never carried.
+    const date = today();
+    getDocMock.mockResolvedValue(submissionDoc({
+      habitId: 'h1', date, count: 1, pointsEarned: 10,
+      createdBy: 'user1', streakDaysAtTime: 1, multiplierApplied: 1,
+    }));
+
+    const habit = baseHabit({ completedDates: [date], count: 1, totalCount: 1 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1'))
+    );
+
+    await act(async () => {
+      await result.current.updateHabitSubmission('h1', 's1', { count: 2 });
+    });
+
+    expect(Object.keys(habitUpdate()!.data).some(k => k.startsWith('completedBy.'))).toBe(false);
+    expect(capturedUpdates.filter(u => u.ref.__path.includes('/members/'))).toEqual([]);
+  });
+
   it('editing a submission UP still credits the snapshotted member forward', async () => {
     // Bounding applies to reversals only — an increase is a forward credit and
     // lands on the member the submission belongs to.
