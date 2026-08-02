@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { usePlaidLink } from 'react-plaid-link';
 import { httpsCallable } from 'firebase/functions';
 import { Landmark } from 'lucide-react';
@@ -107,26 +108,49 @@ const ConnectBankCard: React.FC = () => {
 
   return (
     <Section title="Bank">
-      <SurfaceList>
-        <DisclosureRow
-          disabled={connectDisabled}
-          icon={
-            <div className="w-10 h-10 rounded-full bg-accent-50 text-accent-700 dark:bg-accent-800/40 dark:text-accent-200 flex items-center justify-center shrink-0">
-              <Landmark size={18} />
-            </div>
-          }
-          title="Connect a bank"
-          subtitle={busy ? 'Connecting…' : 'Securely link via Plaid — auto-sync transactions'}
-          onClick={handleConnect}
-        />
+      <div className="space-y-2">
+        <SurfaceList>
+          <DisclosureRow
+            disabled={connectDisabled}
+            icon={
+              <div className="w-10 h-10 rounded-full bg-accent-50 text-accent-700 dark:bg-accent-800/40 dark:text-accent-200 flex items-center justify-center shrink-0">
+                <Landmark size={18} />
+              </div>
+            }
+            title="Connect a bank"
+            subtitle={busy ? 'Connecting…' : 'Securely link via Plaid — auto-sync transactions'}
+            onClick={handleConnect}
+          />
 
-        <DisclosureRow
-          destructive
-          disabled={disconnectDisabled}
-          title="Disconnect bank"
-          onClick={() => setConfirmDisconnect(true)}
-        />
-      </SurfaceList>
+          <DisclosureRow
+            destructive
+            disabled={disconnectDisabled}
+            title="Disconnect bank"
+            onClick={() => setConfirmDisconnect(true)}
+          />
+        </SurfaceList>
+
+        <p className="text-xs text-brand-500 dark:text-brand-400 px-1">
+          Plaid connects to your bank on our behalf. The credential it issues is stored on our
+          servers and never reaches this app. See the{' '}
+          <a
+            href="https://plaid.com/legal/#end-user-privacy-policy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent-700 dark:text-accent-300 underline underline-offset-2 hover:text-accent-800 dark:hover:text-accent-200"
+          >
+            Plaid End User Privacy Policy
+          </a>{' '}
+          and our{' '}
+          <Link
+            to="/privacy"
+            className="text-accent-700 dark:text-accent-300 underline underline-offset-2 hover:text-accent-800 dark:hover:text-accent-200"
+          >
+            Privacy Policy
+          </Link>
+          .
+        </p>
+      </div>
 
       <ConfirmDialog
         isOpen={confirmDisconnect}

@@ -52,6 +52,15 @@ be written.)
 > Order matters: secrets (§1) **before** export (§2) **before** deploy (§3). Deploying
 > a `defineSecret`-bound function whose secret doesn't exist fails the whole deploy.
 
+> ⚠️ **`deletehousehold` is secret-bound too, and it is NOT a Plaid function.** It
+> declares `secrets: PLAID_SECRETS` because deleting a household must revoke any linked
+> bank at Plaid before `recursiveDelete` destroys the access tokens
+> (`functions/src/plaid/revoke.ts`). So the three Plaid secrets are now a hard deploy
+> dependency for **account deletion**, regardless of whether `plaidEnabled` is ever
+> flipped on. A clean-room deploy without them fails on `deletehousehold` — which reads
+> as a baffling error, since nothing about that function's name suggests Plaid. Set the
+> secrets (§1) even if you never intend to enable bank linking.
+
 ## §4 — Flip the flag (no deploy)
 
 Settings → **Developer Console → Feature Flags → Plaid Bank Link → ON** (or set

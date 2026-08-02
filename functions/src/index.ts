@@ -34,6 +34,8 @@ import {
   localClock,
   normalizeHabitReminder,
 } from "./shared/habitReminders";
+import { PLAID_SECRETS } from "./plaid/client";
+import { revokeAllPlaidItems } from "./plaid/revoke";
 
 // Re-export for consumers that imported this from index.ts before the
 // extraction to shared/notifications.ts.
@@ -1089,15 +1091,19 @@ export const sendtestnotification = onCall(
 /**
  * Callable function: Permanently delete a household and all of its data.
  *
- * Only a household admin may invoke this. Recursively deletes the household
- * document and every subcollection (members, habits, transactions, etc.), then
- * removes any invite codes that point at the household. Uses a longer timeout
- * because large households can have many subcollection documents to delete.
+ * Only a household admin may invoke this. Revokes any linked bank connections
+ * at Plaid, then recursively deletes the household document and every
+ * subcollection (members, habits, transactions, etc.), then removes any invite
+ * codes that point at the household. Uses a longer timeout because large
+ * households can have many subcollection documents to delete.
  */
 export const deletehousehold = onCall(
   {
     cors: true,
     timeoutSeconds: 300,
+    // Needed only when the household has linked banks — revokeAllPlaidItems
+    // returns early without constructing a client when `plaidItems` is empty.
+    secrets: PLAID_SECRETS,
   },
   async (request) => {
     // Ensure the user is authenticated
@@ -1127,6 +1133,31 @@ export const deletehousehold = onCall(
       throw new HttpsError(
         "permission-denied",
         "Only a household admin can delete the household."
+      );
+    }
+
+    // Revoke bank connections BEFORE the recursive delete. The plaidItems docs
+    // hold the only access tokens that can invalidate an Item at Plaid, and
+    // recursiveDelete would destroy them — leaving the bank connection live at
+    // Plaid with nothing left that could ever revoke it.
+    //
+    // Best-effort: a Plaid outage must never block a deletion request. If this
+    // throws we log loudly (an orphaned Item needs manual cleanup in the Plaid
+    // dashboard) and still delete the household — a user asking to be deleted
+    // gets deleted.
+    try {
+      const revoked = await revokeAllPlaidItems(householdId);
+      if (revoked > 0) {
+        logger.info("Revoked Plaid connections before household delete", {
+          householdId,
+          revoked,
+        });
+      }
+    } catch (err) {
+      logger.error(
+        `Failed to revoke Plaid connections for household ${householdId} — ` +
+          "continuing with delete; the Plaid Item(s) may need manual removal.",
+        err
       );
     }
 
