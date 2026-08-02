@@ -540,6 +540,11 @@ policy does not yet have:
   Nothing listens, so a dead connection stays listed as active and `plaidsynctransactions` keeps
   failing silently against it. Needs a decision on what the user sees — a passive "reconnect"
   banner, a push, or nothing — before wiring the webhook endpoint. **M / MED.**
+- **Terms of Service may need a Plaid acknowledgement too.** The Privacy Policy now names Plaid as
+  a data processor, but Plaid's developer agreement also calls for referencing Plaid in the app's
+  end-user terms, and `pages/TermsOfService.tsx` still has zero mentions. Verify against the
+  current agreement — this belongs in the counsel pass alongside the six remaining
+  `[PLACEHOLDER]` values, not as a solo edit. **S / HIGH (before any non-alpha signup).**
 - **No retention policy for synced bank transaction data.** Transactions imported from Plaid live
   in `households/{id}/transactions` indefinitely, alongside hand-entered ones and indistinguishable
   from them after the fact except by `plaidTransactionId`. Disconnecting a bank stops the sync but
