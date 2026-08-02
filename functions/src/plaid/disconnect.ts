@@ -1,11 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
-import {
-  PLAID_SECRETS,
-  makePlaidClient,
-  assertHouseholdMember,
-} from "./client";
+import { PLAID_SECRETS, assertHouseholdMember } from "./client";
+import { revokeAllPlaidItems } from "./revoke";
 
 /**
  * Callable: disconnect (remove) all linked Plaid bank connections for a
@@ -17,6 +13,9 @@ import {
  * Why server-side: `plaidItems` (and the access_token inside) are denied to ALL
  * clients in firestore.rules, so only the Admin SDK can read/delete them — a
  * client cannot clean these up directly.
+ *
+ * The mechanics live in `revokeAllPlaidItems` (./revoke), shared with
+ * `deletehousehold` so the two revocation paths cannot drift.
  *
  * Lowercased name — client must call "plaiddisconnectbank".
  */
@@ -32,41 +31,7 @@ export const plaiddisconnectbank = onCall(
     }
     await assertHouseholdMember(request.auth.uid, householdId);
 
-    const db = admin.firestore();
-    const itemsSnap = await db
-      .collection(`households/${householdId}/plaidItems`)
-      .get();
-    if (itemsSnap.empty) return { removed: 0 };
-
-    const plaid = makePlaidClient();
-    let removed = 0;
-    for (const itemDoc of itemsSnap.docs) {
-      const accessToken = itemDoc.data()?.accessToken as string | undefined;
-      // Best-effort: ask Plaid to invalidate the item. A stale or cross-env
-      // token (e.g. a sandbox token after switching to production) will throw —
-      // that's fine; we still delete our record so the connection is gone.
-      if (accessToken) {
-        try {
-          await plaid.itemRemove({ access_token: accessToken });
-        } catch (err) {
-          logger.warn(
-            `Plaid itemRemove failed for household ${householdId} item ${itemDoc.id} (deleting record anyway)`,
-            err,
-          );
-        }
-      }
-      await itemDoc.ref.delete();
-      removed += 1;
-    }
-
-    // Keep the ops-only counter in step (count, never a token) — mirrors the
-    // increment(+1) in plaidexchangepublictoken.
-    if (removed > 0) {
-      await db.doc("app_config/global").set(
-        { plaidItemCount: admin.firestore.FieldValue.increment(-removed) },
-        { merge: true },
-      );
-    }
+    const removed = await revokeAllPlaidItems(householdId);
 
     logger.info("Plaid bank(s) disconnected", { householdId, removed });
     return { removed };

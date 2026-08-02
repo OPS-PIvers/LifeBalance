@@ -530,6 +530,22 @@ pay-with-balance-delta mutation — not a widening of the existing gates.**
 
 ## 3. Product backlog (needs a product decision before planning)
 
+Plaid privacy follow-ups (from the 2026-08-02 privacy review; the false "we do not connect to your
+bank" policy claim and the missing revoke-on-delete are already fixed). Neither is a defect while
+`plaidEnabled` is off and no account has ever been linked — both want counsel's input, which the
+policy does not yet have:
+
+- **No webhook handler for Plaid Item expiry or bank-revoked consent.** Banks and Plaid can
+  invalidate an Item on their side (re-auth required, consent withdrawn at the bank, `ITEM_ERROR`).
+  Nothing listens, so a dead connection stays listed as active and `plaidsynctransactions` keeps
+  failing silently against it. Needs a decision on what the user sees — a passive "reconnect"
+  banner, a push, or nothing — before wiring the webhook endpoint. **M / MED.**
+- **No retention policy for synced bank transaction data.** Transactions imported from Plaid live
+  in `households/{id}/transactions` indefinitely, alongside hand-entered ones and indistinguishable
+  from them after the fact except by `plaidTransactionId`. Disconnecting a bank stops the sync but
+  keeps everything already imported. Needs a product + legal decision on whether disconnect should
+  offer to purge, and whether any age-based expiry applies at all. **S / MED.**
+
 Per-member habit points follow-ups (from the 2026-07-30 six-stage ship, PRs #1152–#1158; spec
 `.claude/PER_MEMBER_POINTS_HANDOFF.md`):
 

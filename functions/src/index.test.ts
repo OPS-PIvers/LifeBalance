@@ -77,7 +77,9 @@ const adminMock = vi.hoisted(() => {
     batch: vi.fn(),
   };
   const sendEachForMulticast = vi.fn();
-  return { db, sendEachForMulticast };
+  // app_config/global — plaid/revoke.ts decrements plaidItemCount on it.
+  const appConfigSet = vi.fn(() => Promise.resolve());
+  return { db, sendEachForMulticast, appConfigSet };
 });
 
 vi.mock("firebase-admin", () => {
@@ -106,6 +108,20 @@ vi.mock("firebase-functions/params", () => ({
   defineSecret: (_name: string) => ({
     value: () => "fake-secret",
   }),
+}));
+
+// `deletehousehold` revokes bank connections via plaid/revoke.ts, which builds a
+// real PlaidApi from the `plaid` SDK — stub it so no network call is attempted.
+const plaidMock = vi.hoisted(() => ({
+  itemRemove: vi.fn(() => Promise.resolve({})),
+}));
+
+vi.mock("plaid", () => ({
+  Configuration: class {},
+  PlaidEnvironments: { sandbox: "https://sandbox.plaid.com" },
+  PlaidApi: class {
+    itemRemove = plaidMock.itemRemove;
+  },
 }));
 
 // Import AFTER mocks are registered.
@@ -156,9 +172,36 @@ function configureMemberDoc(config: MemberDocConfig): { householdRef: { __path: 
     if (path === `households/${HOUSEHOLD_ID}`) {
       return householdRef;
     }
+    if (path === "app_config/global") {
+      return { set: adminMock.appConfigSet };
+    }
     return { get: () => Promise.resolve({ exists: false, data: () => undefined }) };
   });
   return { householdRef };
+}
+
+/** A stored Plaid item doc as plaid/revoke.ts reads it. */
+interface MockPlaidItem {
+  id: string;
+  accessToken?: string;
+  ref: { delete: ReturnType<typeof vi.fn> };
+}
+
+/**
+ * Holder for the household's plaidItems, read by the shared db.collection mock
+ * below. Kept separate from configureInviteCodes so the two can be set
+ * independently without either clobbering the other's mockImplementation.
+ */
+let plaidItems: MockPlaidItem[] = [];
+
+/** Seed the household's plaidItems subcollection. */
+function configurePlaidItems(items: MockPlaidItem[]): void {
+  plaidItems = items;
+}
+
+/** Build a plaidItems doc with a recording delete(). */
+function makePlaidItem(id: string, accessToken?: string): MockPlaidItem {
+  return { id, accessToken, ref: { delete: vi.fn(() => Promise.resolve()) } };
 }
 
 /** Configure the inviteCodes collection query to return the given doc refs. */
@@ -171,8 +214,22 @@ function configureInviteCodes(refs: Array<{ delete: ReturnType<typeof vi.fn> }>)
         }),
       };
     }
+    if (path === `households/${HOUSEHOLD_ID}/plaidItems`) {
+      return {
+        get: () =>
+          Promise.resolve({
+            empty: plaidItems.length === 0,
+            docs: plaidItems.map((item) => ({
+              id: item.id,
+              ref: item.ref,
+              data: () => ({ accessToken: item.accessToken }),
+            })),
+          }),
+      };
+    }
     return {
       where: () => ({ get: () => Promise.resolve({ docs: [] }) }),
+      get: () => Promise.resolve({ empty: true, docs: [] }),
     };
   });
 }
@@ -184,6 +241,9 @@ function configureInviteCodes(refs: Array<{ delete: ReturnType<typeof vi.fn> }>)
 beforeEach(() => {
   vi.clearAllMocks();
   adminMock.db.recursiveDelete.mockImplementation(() => Promise.resolve());
+  adminMock.appConfigSet.mockImplementation(() => Promise.resolve());
+  plaidMock.itemRemove.mockImplementation(() => Promise.resolve({}));
+  configurePlaidItems([]);
   configureMemberDoc({ exists: true, role: "admin" });
   configureInviteCodes([]);
 });
@@ -270,6 +330,83 @@ describe("deletehousehold", () => {
 
     expect(result).toEqual({ success: true });
     expect(adminMock.db.recursiveDelete).toHaveBeenCalledTimes(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // Plaid revocation (privacy): deleting a household must also revoke the bank
+  // connection at Plaid, not merely drop the token we stored for it.
+  // -------------------------------------------------------------------------
+
+  it("revokes every linked Plaid item at Plaid before deleting the household", async () => {
+    configurePlaidItems([makePlaidItem("item-a", "tok-a"), makePlaidItem("item-b", "tok-b")]);
+    const callOrder: string[] = [];
+    plaidMock.itemRemove.mockImplementation(() => {
+      callOrder.push("itemRemove");
+      return Promise.resolve({});
+    });
+    adminMock.db.recursiveDelete.mockImplementation(() => {
+      callOrder.push("recursiveDelete");
+      return Promise.resolve();
+    });
+
+    const result = await asCallable(deletehousehold)({
+      auth: { uid: ADMIN_UID },
+      data: { householdId: HOUSEHOLD_ID },
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(plaidMock.itemRemove).toHaveBeenCalledTimes(2);
+    expect(plaidMock.itemRemove).toHaveBeenCalledWith({ access_token: "tok-a" });
+    expect(plaidMock.itemRemove).toHaveBeenCalledWith({ access_token: "tok-b" });
+    // Order is load-bearing: recursiveDelete destroys the only tokens that can
+    // revoke the Items, so revocation MUST come first.
+    expect(callOrder).toEqual(["itemRemove", "itemRemove", "recursiveDelete"]);
+    // The ops-only counter drops by the number of items removed.
+    expect(adminMock.appConfigSet).toHaveBeenCalledWith(
+      { plaidItemCount: { __inc: -2 } },
+      { merge: true }
+    );
+  });
+
+  it("still deletes the household when Plaid revocation fails", async () => {
+    configurePlaidItems([makePlaidItem("item-a", "tok-a")]);
+    plaidMock.itemRemove.mockImplementation(() => Promise.reject(new Error("plaid down")));
+
+    const result = await asCallable(deletehousehold)({
+      auth: { uid: ADMIN_UID },
+      data: { householdId: HOUSEHOLD_ID },
+    });
+
+    // A user asking to be deleted gets deleted, even if Plaid is unreachable.
+    expect(result).toEqual({ success: true });
+    expect(adminMock.db.recursiveDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it("never contacts Plaid when the household has no linked banks", async () => {
+    configurePlaidItems([]);
+
+    const result = await asCallable(deletehousehold)({
+      auth: { uid: ADMIN_UID },
+      data: { householdId: HOUSEHOLD_ID },
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(plaidMock.itemRemove).not.toHaveBeenCalled();
+    expect(adminMock.appConfigSet).not.toHaveBeenCalled();
+    expect(adminMock.db.recursiveDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not revoke Plaid items when the caller is not an admin", async () => {
+    configureMemberDoc({ exists: true, role: "member" });
+    configurePlaidItems([makePlaidItem("item-a", "tok-a")]);
+
+    await expect(
+      asCallable(deletehousehold)({
+        auth: { uid: ADMIN_UID },
+        data: { householdId: HOUSEHOLD_ID },
+      })
+    ).rejects.toMatchObject({ code: "permission-denied" });
+    expect(plaidMock.itemRemove).not.toHaveBeenCalled();
   });
 });
 
