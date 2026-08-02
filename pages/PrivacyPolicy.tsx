@@ -229,9 +229,11 @@ const PrivacyPolicy: React.FC = () => {
                 We keep your data for as long as your household exists and you remain a member. You
                 control your data from within the app: you can edit or delete individual items, use
                 the in-app &ldquo;export my data&rdquo; feature to download a copy, and use the
-                in-app &ldquo;delete household&rdquo; feature to remove a household and its data. To
-                request deletion of any remaining personal data associated with your account, contact
-                us at [PLACEHOLDER: contact email].
+                in-app &ldquo;delete household&rdquo; feature to remove a household and its data.
+                Deleting a household also disconnects any linked bank account at Plaid, so the
+                connection does not outlive the account. To request deletion of any remaining
+                personal data associated with your account, contact us at [PLACEHOLDER: contact
+                email].
               </p>
             </section>
 
