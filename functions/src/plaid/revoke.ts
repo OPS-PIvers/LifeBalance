@@ -33,9 +33,11 @@ export async function revokeAllPlaidItems(householdId: string): Promise<number> 
   let removed = 0;
   for (const itemDoc of itemsSnap.docs) {
     const accessToken = itemDoc.data()?.accessToken as string | undefined;
+    let revokedAtPlaid = false;
     if (accessToken) {
       try {
         await plaid.itemRemove({ access_token: accessToken });
+        revokedAtPlaid = true;
       } catch (err) {
         logger.warn(
           `Plaid itemRemove failed for household ${householdId} item ${itemDoc.id} (deleting record anyway)`,
@@ -52,9 +54,15 @@ export async function revokeAllPlaidItems(householdId: string): Promise<number> 
       await itemDoc.ref.delete();
       removed += 1;
     } catch (err) {
+      // Say which of the two actually happened — during incident triage the
+      // difference is everything: a live Item needs manual removal in the Plaid
+      // dashboard, a merely-undeleted record does not.
       logger.error(
-        `Failed to delete plaidItems/${itemDoc.id} for household ${householdId} ` +
-          "(the Item was still revoked at Plaid; the record remains)",
+        `Failed to delete plaidItems/${itemDoc.id} for household ${householdId} — ` +
+          (revokedAtPlaid
+            ? "the Item WAS revoked at Plaid; only the record remains."
+            : "the Item was NOT revoked at Plaid either; it may still be live " +
+              "and needs manual removal from the Plaid dashboard."),
         err,
       );
     }
