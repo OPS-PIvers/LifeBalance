@@ -74,7 +74,15 @@ const PrivacyPolicy: React.FC = () => {
                 <li>
                   <span className="font-medium">Financial figures you enter.</span> Account balances,
                   budget amounts, transactions, bills, and other money figures you type into the app.
-                  We do not connect to your bank; everything financial is entered by you.
+                </li>
+                <li>
+                  <span className="font-medium">Bank account data, if you choose to connect one.</span>{' '}
+                  You can optionally connect a bank account through our provider Plaid so that
+                  transactions and balances import automatically. This is off by default. If you use
+                  it, we receive and store the transactions and balances Plaid sends us. The
+                  credential that grants access to your bank is held on our servers and is never sent
+                  to the app. You can disconnect at any time from Settings, which revokes the
+                  connection at Plaid. See &ldquo;How your data is stored &amp; processed&rdquo; below.
                 </li>
                 <li>
                   <span className="font-medium">Habits and gamification data.</span> The habits you
@@ -161,9 +169,25 @@ const PrivacyPolicy: React.FC = () => {
                 AI requests are sent through LifeBalance&apos;s server-side proxy rather than directly
                 from your browser. LifeBalance does not retain the images or data you submit for these
                 features beyond what is needed to complete the request. Once Google processes a
-                request, Google&apos;s own terms and privacy policy apply to that processing; see{' '}
-                [PLACEHOLDER: link to Google AI / Gemini terms]. If you prefer not to share this data,
-                simply do not use the AI features.
+                request, Google&apos;s own terms and privacy policy apply to that processing; see the{' '}
+                <a
+                  href="https://ai.google.dev/gemini-api/terms"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-accent-700 dark:text-accent-300 underline underline-offset-2 hover:text-accent-800 dark:hover:text-accent-200"
+                >
+                  Gemini API Additional Terms of Service
+                </a>{' '}
+                and the{' '}
+                <a
+                  href="https://policies.google.com/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-accent-700 dark:text-accent-300 underline underline-offset-2 hover:text-accent-800 dark:hover:text-accent-200"
+                >
+                  Google Privacy Policy
+                </a>
+                . If you prefer not to share this data, simply do not use the AI features.
               </p>
             </section>
 
@@ -178,6 +202,23 @@ const PrivacyPolicy: React.FC = () => {
                 Google&apos;s security practices. Our AI features are processed by Google Gemini as
                 described above.
               </p>
+              <p>
+                If you connect a bank account, that connection is provided by{' '}
+                <span className="font-medium">Plaid Inc.</span>, which acts as our data processor for
+                bank data. Plaid communicates with your bank on our behalf and sends us your
+                transactions and balances. The access credential Plaid issues is stored server-side
+                and is never included in the app or exposed to your browser. Plaid&apos;s own handling
+                of your information is governed by the{' '}
+                <a
+                  href="https://plaid.com/legal/#end-user-privacy-policy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-accent-700 dark:text-accent-300 underline underline-offset-2 hover:text-accent-800 dark:hover:text-accent-200"
+                >
+                  Plaid End User Privacy Policy
+                </a>
+                . If you never connect a bank account, no data is shared with Plaid.
+              </p>
             </section>
 
             <section className="space-y-2">
@@ -188,9 +229,11 @@ const PrivacyPolicy: React.FC = () => {
                 We keep your data for as long as your household exists and you remain a member. You
                 control your data from within the app: you can edit or delete individual items, use
                 the in-app &ldquo;export my data&rdquo; feature to download a copy, and use the
-                in-app &ldquo;delete household&rdquo; feature to remove a household and its data. To
-                request deletion of any remaining personal data associated with your account, contact
-                us at [PLACEHOLDER: contact email].
+                in-app &ldquo;delete household&rdquo; feature to remove a household and its data.
+                Deleting a household also disconnects any linked bank account at Plaid, so the
+                connection does not outlive the account. To request deletion of any remaining
+                personal data associated with your account, contact us at [PLACEHOLDER: contact
+                email].
               </p>
             </section>
 
