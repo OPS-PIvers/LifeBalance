@@ -37,22 +37,24 @@ export interface ScoreboardStanding {
 }
 
 /**
- * Width (0-100) of one scoreboard bar, against the scale EVERY bar on the
- * board shares.
+ * Width (0-100) of one scoreboard bar: this row's share of `scale`, where
+ * `scale` is the WEEK TOTAL every row on the board decomposes — 9 of 19, not
+ * 9 of the leader's 9.
  *
- * That scale is the largest row on the board — which is usually the leader's,
- * but deliberately isn't defined as the leader's. The Shared habits row is not
- * part of the population the leader was picked from: a habit with
- * `creditMode: 'household'` pays that row and no person, so it can genuinely
- * top the board. Measuring it against a leader it exceeds would peg it at a
- * misleading 100% beside a leader that is actually smaller — two full bars
- * for two different numbers. Callers therefore pass
- * `max(leader, householdShare)`, and every bar stays comparable.
+ * Deliberately NOT leader-relative. The scoreboard's rows sum to the household
+ * total displayed above them, so a share-of-total bar draws that relationship;
+ * a leader-relative one pins the top row full whether the leader earned 9 or
+ * 900, says nothing about the week, and re-bases every other bar whenever the
+ * lead changes hands.
  *
  * Clamped at 0 because a negative CSS width is invalid and browsers DROP the
- * declaration — rendering a full bar where an empty one was meant. Clamped at
- * 100 defensively: `scale` is the maximum by construction, so nothing should
- * exceed it.
+ * declaration — rendering a FULL bar where an empty one was meant. Clamped at
+ * 100 for a case that is real rather than defensive: with a negative row in
+ * the mix a positive row can exceed the NET total (20 and -5 against a total
+ * of 15), and it should read as "the whole week and then some," not overflow.
+ *
+ * A non-positive `scale` yields 0 for every row — a week that netted zero or
+ * less has no proportion to draw, and dividing by it would flip every sign.
  */
 export const scoreboardBarPct = (value: number, scale: number): number =>
   scale > 0 ? Math.min(100, Math.max(0, Math.round((value / scale) * 100))) : 0;

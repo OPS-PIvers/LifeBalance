@@ -422,37 +422,37 @@ describe('buildWeekStandings', () => {
 });
 
 describe('scoreboardBarPct', () => {
-  it('measures every bar against the board-wide scale, so the widths stay comparable', () => {
-    // The usual case: the leader IS the largest row, so this is exactly the
-    // leader-relative math the selectors used to carry.
-    expect(scoreboardBarPct(325, 325)).toBe(100);
-    expect(scoreboardBarPct(285, 325)).toBe(88); // 0.8769… -> 88
-    expect(scoreboardBarPct(0, 325)).toBe(0);
+  it('draws each row as its share of the WEEK TOTAL, not of the leader', () => {
+    // Jen 9, Paul 5, Shared 5, week total 19 — the shape on the Dashboard.
+    // Leader-relative these would be 100/56/56, which pins Jen full and says
+    // nothing about how much of the week she actually holds.
+    expect(scoreboardBarPct(9, 19)).toBe(47);
+    expect(scoreboardBarPct(5, 19)).toBe(26);
+    expect(scoreboardBarPct(0, 19)).toBe(0);
   });
 
-  it('shrinks the member bars — rather than clamping the shared one — when the shared row tops the board', () => {
-    // The case the leader-as-denominator got wrong. A habit that credits the
-    // household pays the Shared row and no person, so it can outrun every
-    // member. Scaled to the leader (40) the shared row would read 200% —
-    // clipped by the track into looking IDENTICAL to the leader's full bar,
-    // i.e. two equal bars for 80 and 40.
-    const scale = Math.max(40, 80);
-    expect(scoreboardBarPct(80, scale)).toBe(100);
-    expect(scoreboardBarPct(40, scale)).toBe(50);
+  it('leaves the leader short of full whenever anyone else scored — the bars decompose the total', () => {
+    // The property that distinguishes this from leader-relative: the top row
+    // fills the track ONLY when it is the entire week.
+    expect(scoreboardBarPct(9, 9)).toBe(100);
+    expect(scoreboardBarPct(9, 19)).toBeLessThan(100);
   });
 
-  it('clamps a negative value to 0 — a negative CSS width is dropped, rendering a FULL bar', () => {
+  it('clamps a negative row to 0 — a negative CSS width is dropped, rendering a FULL bar', () => {
     expect(scoreboardBarPct(-20, 100)).toBe(0);
   });
 
-  it('returns 0 for a non-positive scale, so a wholly negative board draws empty bars', () => {
-    // Everyone lost points this week: there is no meaningful proportion to
-    // draw, and dividing by a negative scale would flip every sign.
+  it('returns 0 for a non-positive scale, so a week that netted zero or less draws empty bars', () => {
+    // No meaningful proportion to draw, and dividing by a negative total
+    // would flip every sign.
     expect(scoreboardBarPct(-10, -10)).toBe(0);
+    expect(scoreboardBarPct(10, 0)).toBe(0);
     expect(scoreboardBarPct(0, 0)).toBe(0);
   });
 
-  it('clamps at 100 defensively, even though a correct scale is the maximum by construction', () => {
-    expect(scoreboardBarPct(500, 100)).toBe(100);
+  it('clamps at 100 when a positive row outruns a NET total dragged down by a negative one', () => {
+    // 20 and -5 net to 15: Jen really is worth more than the whole week. That
+    // reads as "the entire week and then some", not as an overflowing track.
+    expect(scoreboardBarPct(20, 15)).toBe(100);
   });
 });

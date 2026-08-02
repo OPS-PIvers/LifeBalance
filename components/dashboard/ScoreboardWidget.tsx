@@ -367,22 +367,27 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
   // whose `subLabel` is likewise null there.
   const sharedToday = isPastWeek ? null : currentWeekHouseholdToday;
 
-  // The scale EVERY bar on the board is measured against — the largest row on
-  // it, member or shared, which is what keeps them comparable to each other
-  // (see `scoreboardBarPct`). Usually that IS the leader, whom `rows` is
-  // already sorted by; but the Shared habits row is not part of the population
-  // the leader was picked from and can outrun it, so it takes part in choosing
-  // the scale rather than being pegged at a misleading full bar beside a
-  // leader it actually exceeds.
+  // The scale EVERY bar is measured against: the WEEK TOTAL on the hero row
+  // directly above them — 9 of 19, not 9 of the leader's 9.
   //
-  // It joins the scale only once the fetch that produces it lands — so while
-  // `householdShare` is undefined the scale is exactly the leader's and the
-  // member bars are untouched. The one case where they DO change on load is
-  // the one case where the shared row genuinely tops the board: they render
-  // against the leader, then narrow. `transition-[width]` below makes that a
-  // settle rather than a jump, and index.css's app-wide reduced-motion guard
-  // collapses that duration for anyone who asked for less of it.
-  const barScale = Math.max(rows[0]?.value ?? 0, householdShare ?? 0);
+  // These rows are a decomposition of that total (their values sum to it, by
+  // construction — see `currentWeekHouseholdShare`), so each bar reads as the
+  // share of the week that row contributed, and the bars decompose the number
+  // they sit beneath. Measured against the LEADER instead, the top bar is
+  // pinned full whether the leader earned 9 or 900 and carries no information
+  // about the week at all; it also silently re-based the whole board whenever
+  // the lead changed hands.
+  //
+  // Taking the denominator from the DISPLAYED total (rather than re-deriving
+  // it as Σ rows) is the same discipline `calculateHouseholdShareForDateRange`
+  // follows: if the rows ever stop summing to the total, the bars visibly fail
+  // to fill the track instead of quietly renormalising the drift away.
+  //
+  // It is also synchronous for the current week (`weeklyPoints` is context
+  // state), so unlike the leader-derived scale it does NOT depend on the
+  // in-flight submissions fetch — the member bars now render at their final
+  // width on first paint, and only the shared row's own fill waits.
+  const barScale = displayTotal ?? 0;
 
   return (
     <Section
