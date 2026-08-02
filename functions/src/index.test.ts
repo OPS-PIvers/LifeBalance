@@ -368,6 +368,28 @@ describe("deletehousehold", () => {
     );
   });
 
+  it("keeps revoking later items when one Firestore delete fails", async () => {
+    const failing = makePlaidItem("item-a", "tok-a");
+    failing.ref.delete.mockImplementation(() => Promise.reject(new Error("firestore down")));
+    configurePlaidItems([failing, makePlaidItem("item-b", "tok-b")]);
+
+    const result = await asCallable(deletehousehold)({
+      auth: { uid: ADMIN_UID },
+      data: { householdId: HOUSEHOLD_ID },
+    });
+
+    expect(result).toEqual({ success: true });
+    // item-b MUST still reach Plaid: an abort here would leave its token to be
+    // destroyed by recursiveDelete, orphaning the Item with no way to revoke it.
+    expect(plaidMock.itemRemove).toHaveBeenCalledTimes(2);
+    expect(plaidMock.itemRemove).toHaveBeenCalledWith({ access_token: "tok-b" });
+    // Only the record that was actually deleted decrements the counter.
+    expect(adminMock.appConfigSet).toHaveBeenCalledWith(
+      { plaidItemCount: { __inc: -1 } },
+      { merge: true }
+    );
+  });
+
   it("still deletes the household when Plaid revocation fails", async () => {
     configurePlaidItems([makePlaidItem("item-a", "tok-a")]);
     plaidMock.itemRemove.mockImplementation(() => Promise.reject(new Error("plaid down")));

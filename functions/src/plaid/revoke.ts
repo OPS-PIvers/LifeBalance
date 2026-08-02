@@ -43,8 +43,21 @@ export async function revokeAllPlaidItems(householdId: string): Promise<number> 
         );
       }
     }
-    await itemDoc.ref.delete();
-    removed += 1;
+    // Guarded separately from itemRemove: an unguarded throw here would abort
+    // the loop with items N+1…M never revoked, and on the deletehousehold path
+    // recursiveDelete then destroys their tokens — the exact orphaning this
+    // function exists to prevent. Log and keep going; `removed` counts only
+    // records actually deleted, so the counter stays truthful either way.
+    try {
+      await itemDoc.ref.delete();
+      removed += 1;
+    } catch (err) {
+      logger.error(
+        `Failed to delete plaidItems/${itemDoc.id} for household ${householdId} ` +
+          "(the Item was still revoked at Plaid; the record remains)",
+        err,
+      );
+    }
   }
 
   // Keep the ops-only counter (count, never a token) in step — mirrors the
