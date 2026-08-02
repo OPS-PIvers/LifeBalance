@@ -10,52 +10,13 @@ LifeBalance is a React-based household management application combining finance 
 
 This project uses **pnpm** (`packageManager: pnpm@9.15.0`) — always use `pnpm`, never `npm` (an `npm install` would desync dependencies from what CI resolves via `pnpm-lock.yaml`). It is a pnpm workspace with two packages: the root app and `functions/` (Firebase Cloud Functions). See [pnpm-workspace.yaml](pnpm-workspace.yaml).
 
-```bash
-# Install dependencies (root + functions workspace)
-pnpm install --frozen-lockfile
-
-# Run development server (http://localhost:3000)
-pnpm dev
-
-# Build for production
-pnpm run build
-
-# Preview production build
-pnpm preview
-
-# Lint: type-check (tsc --noEmit) + eslint
-pnpm lint          # root app
-pnpm lint:all      # root + functions (recursive)
-pnpm lint:fix      # auto-fix eslint issues
-
-# Tests (Vitest)
-pnpm test          # run once
-pnpm test:watch    # watch mode
-pnpm test:coverage # with coverage
-```
+Scripts are in [package.json](package.json). Two that aren't guessable: `pnpm install --frozen-lockfile` (root + functions workspace) and `pnpm lint:all` (recursive — root *and* `functions/`, where plain `pnpm lint` covers only the root app). `pnpm lint` runs `tsc --noEmit` before eslint.
 
 **Before pushing, all changes must pass `pnpm lint` and `pnpm test`.** CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs lint (root + functions), tests, and a production build on every PR to `main`.
 
 ## Environment Setup
 
-Create a `.env.local` file in the project root (copy from `.env.local.example`):
-
-```bash
-# Firebase Configuration
-VITE_FIREBASE_API_KEY=your_firebase_api_key
-VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your-project-id
-VITE_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
-VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
-
-# Firebase Cloud Messaging (for push notifications)
-VITE_FIREBASE_VAPID_KEY=your_vapid_key_here
-
-# Firebase UID of the global administrator (gates the Developer Console)
-VITE_ADMIN_UID=your_uid_here
-```
+Create a `.env.local` file in the project root by copying [.env.local.example](.env.local.example), which lists every variable.
 
 **Required for:**
 - Firebase Authentication (Google Sign-In)
@@ -220,46 +181,7 @@ Live values come from `useModuleVisibility()` (page/module answers) and `usePage
 
 ### Component Organization
 
-```
-components/
-  ├── analytics/    # Charts/analytics widgets (recharts; lazy-loaded)
-  ├── auth/         # ProtectedRoute, ModuleRoute, PlanTabRedirect, HouseholdInviteCard
-  ├── budget/       # Budget-specific UI components (TransactionMasterList is windowed with @tanstack/react-virtual)
-  ├── dashboard/    # Dashboard widgets (PulseStripWidget, action queue, etc.)
-  ├── habits/       # Habit tracking UI components
-  ├── kid/          # Kid Mode surface (KidDashboard; lazy-loaded shell swap)
-  ├── layout/       # MainLayout, TopToolbar, BottomNav, OfflineBanner
-  ├── meals/        # Meal planning components (MealPlanTab, ShoppingListTab)
-  ├── modals/       # Modal dialogs for forms (incl. DeveloperConsole)
-  ├── onboarding/   # First-run OnboardingWizard (route: /onboarding)
-  ├── settings/     # Settings sub-components (NotificationSettings, ConnectBankCard, ThemeToggle)
-  ├── transactions/ # Transaction review/list components
-  └── ui/           # Reusable primitives (Button, Input, Card, Drawer, Skeleton, ConfirmDialog, etc.)
-
-pages/              # Route-level page components (lazy-loaded in App.tsx)
-  ├── Dashboard.tsx        # Main overview with AI insights
-  ├── Budget.tsx           # Finance management
-  ├── Habits.tsx           # Habit tracker
-  ├── ToDosPage.tsx        # Shared household to-dos (rendered via /lists' To-Dos tab; no standalone route)
-  ├── ListsPage.tsx        # Tab container for To-Dos / Meals / Shopping (route: /lists)
-  ├── Settings.tsx         # App settings and preferences
-  ├── Login.tsx            # Authentication
-  ├── HouseholdSetup.tsx   # Household creation/joining
-  ├── PrivacyPolicy.tsx    # Public /privacy page
-  └── TermsOfService.tsx   # Public /terms page
-
-contexts/           # React Context providers (AuthContext, FirebaseHouseholdContext,
-                    #   ThemeContext, and Mock* providers used by Test Mode)
-hooks/              # Custom hooks (useHabitActions, useFocusTrap, useReducedMotion,
-                    #   useMidnightScheduler, useMediaQuery, etc.)
-services/           # External API integrations (authService, geminiService,
-                    #   householdService, notificationService)
-types/              # TypeScript type definitions (schema.ts)
-utils/              # Business logic utilities (safeToSpendCalculator, habitLogic,
-                    #   money, dateHelpers, bucketSpentCalculator, migrations/, etc.)
-data/               # Static seed data (presetHabits, groceryCategories, etc.)
-functions/          # Firebase Cloud Functions (separate pnpm package; e.g. quickAdd)
-```
+`components/` is grouped by domain and `pages/` holds the route-level components — read the directories themselves for the current layout. Two groupings that aren't self-evident: `components/ui/` is the shared primitive layer (Button, Input, Card, Drawer, Skeleton, ConfirmDialog) that every other group builds on, and `functions/` is a separate pnpm package, not part of the app's module graph.
 
 ### Path Aliases
 
@@ -292,67 +214,13 @@ The project compiles in **strict mode** — [tsconfig.json](tsconfig.json) enabl
 
 ## Key Data Models
 
-All TypeScript interfaces defined in [types/schema.ts](types/schema.ts):
+All TypeScript interfaces are defined in [types/schema.ts](types/schema.ts) — read it for the field-level shapes. The one model whose behavior the type can't convey:
 
-### Finance
-- **Account**: Financial accounts (checking, savings, credit)
-- **BudgetBucket**: Spending categories with limits and period tracking
-- **Transaction**: Expense records with categorization and pay period tracking
-- **CalendarItem**: Recurring/one-time income and expenses
-
-### Gamification
-- **Habit**: Tracks user behaviors with points, streaks, and completion history
-- **Challenge**: Monthly goals tied to specific habits
-- **RewardItem**: Redeemable rewards using accumulated points
 - **FreezeBank**: Auto-applied streak protection (Plan 25): at midnight/login a token is consumed to freeze a missed day on a daily habit with a 3+ day streak (`Habit.frozenDates`); frozen days preserve streak continuity but never earn points. Stock refills to 2 monthly. **`Household.freezeMode`** (per-member points, stage 6) selects how tokens are spent — `'shared'` (the absent default = the behavior above), `'freeze_both'` (identical mechanics, pinned deliberately) or `'per_member'` (each adult holds their own bank in `Household.freezeBanksByMember` and their own frozen dates in `Habit.frozenDatesBy`, which bridges only that member's chain). [utils/freezeSettings.ts](utils/freezeSettings.ts) is the single source of truth for resolving both that field and `Household.ceremonyTone` (`'podium' | 'household_first' | 'adaptive'`, absent ⇒ `'household_first'`, consumed by the weekly ceremony); both resolvers map absent/unrecognised onto today's behavior, so the settings are inert until an admin picks one in Settings → Household → Habits. `freezeBanksByMember` and `frozenDatesBy` are written ONLY via dot paths (`freezeBanksByMember.<uid>.*`, `arrayUnion` on `frozenDatesBy.<date>`) — never whole-map writes, same discipline as `completedBy`.
-
-### Meals & Nutrition
-- **Meal**: Recipes with ingredients, tags, and ratings
-- **MealPlanItem**: Weekly meal calendar entries linking to meals
-- **ShoppingItem**: Grocery list items with category and purchase status
-
-### Core
-- **Household**: Main entity containing all household data, members, and settings
-- **HouseholdMember**: User membership info with roles and permissions
 
 ## Meals Feature
 
-The Meals tab (`MealPlanTab`, rendered by [pages/ListsPage.tsx](pages/ListsPage.tsx) at `/lists`) provides comprehensive meal planning and grocery management:
-
-### Meal Planning
-- Weekly calendar view for meal planning
-- Create new meals or reuse previous recipes from your cookbook
-- **AI meal suggestions**: Get personalized meal ideas based on:
-  - Budget constraints (cheap option)
-  - Time constraints (quick 30-min meals)
-  - Novelty (new meals vs. favorites)
-- Link meals to dates with meal type (breakfast, lunch, dinner, snack)
-- Ingredient management
-- One-click shopping list generation from meal ingredients
-
-### Shopping List
-- Manual item entry with category grouping
-- **AI receipt scanning**: Upload grocery receipt photos to auto-populate shopping list
-- Mark items as purchased to track what you've bought
-- Duplicate prevention when adding items
-- Smart filtering: only adds ingredients to shopping list if not already in list
-
-**Implementation:**
-- Components: [MealPlanTab.tsx](components/meals/MealPlanTab.tsx), [ShoppingListTab.tsx](components/meals/ShoppingListTab.tsx)
-- AI Services: `suggestMeal()`, `parseGroceryReceipt()` in [geminiService.ts](services/geminiService.ts)
-- Data stored in Firestore subcollections: `meals`, `mealPlan`, `shoppingList`
-
-## Important Notes
-
-- **Persistence**: All data is stored in **Firebase Firestore** with real-time sync across devices
-- **Multi-household support**: Users can create or join households using 6-character invite codes
-- **Authentication**: Google Sign-In required via Firebase Auth
-- **Toast notifications**: Provided by `react-hot-toast` for user feedback
-- **Mobile-optimized**: Designed for mobile-first with bottom navigation and touch-friendly UI
-- **AI-powered features**:
-  - Receipt/statement scanning for quick transaction entry
-  - AI meal suggestions based on budget and time constraints
-  - Dashboard insights generated by Gemini (`generateInsight()` via the context's `refreshInsight`)
+The Meals tab is `MealPlanTab`, rendered by [pages/ListsPage.tsx](pages/ListsPage.tsx) at `/lists` alongside `ShoppingListTab`. AI entry points are `suggestMeal()` and `parseGroceryReceipt()` in [geminiService.ts](services/geminiService.ts); data lives in the `meals`, `mealPlan`, and `shoppingList` Firestore subcollections.
 
 ## Code Quality Standards
 
@@ -440,136 +308,6 @@ See [LINT_SUPPRESSIONS.md](LINT_SUPPRESSIONS.md) for:
 - Existing suppressions should be removed as files are touched
 - Goal: Zero suppressions except for legitimate exceptions
 
-#### Examples of Good vs. Bad Practices
-
-**❌ BAD - Suppressing instead of fixing:**
-```typescript
-useEffect(() => {
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [householdId]); // Missing householdSettings dependency!
-```
-
-**✅ GOOD - Actually fixing the issue:**
-```typescript
-useEffect(() => {
-  // Now includes all dependencies
-}, [householdId, householdSettings]);
-```
-
-**❌ BAD - Using any:**
-```typescript
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const data: any = await fetchData();
-```
-
-**✅ GOOD - Proper typing:**
-```typescript
-interface UserData {
-  id: string;
-  name: string;
-}
-const data: UserData = await fetchData();
-```
-
 ## Test Mode for AI Coding Agents
 
-LifeBalance includes a **secure test mode** specifically designed for AI coding agents to explore and test the application without requiring Firebase authentication or a real backend.
-
-### Activating Test Mode
-
-**Requirements:**
-1. Must be running in development mode (`pnpm dev`)
-2. Must have `VITE_ENABLE_TEST_MODE=true` in your `.env.local` file
-3. Navigate to: `http://localhost:3000/#/login?test=true`
-
-**Security Features:**
-- ✅ Only works in development (`import.meta.env.DEV`)
-- ✅ Requires explicit environment variable (`VITE_ENABLE_TEST_MODE=true`)
-- ✅ Mock code is **excluded from production builds** via dynamic imports
-- ✅ Session-only persistence (cleared on browser restart)
-- ✅ Visible orange banner: "🧪 TEST MODE - MOCK DATA"
-
-### What Test Mode Provides
-
-**Mock Authentication:**
-- Pre-authenticated as "Test User" (test@example.com)
-- Mock household ID: `test-household-id`
-- No Firebase calls required
-
-**Mock Data** (seeded in [contexts/MockHouseholdContext.tsx](contexts/MockHouseholdContext.tsx)):
-- **Accounts**: 3 sample accounts (checking, savings, credit)
-- **Budget Buckets**: 4 categories
-- **Transactions**: 2 sample transactions
-- **Habits**: 3 (2 shared + 1 kid-assigned chore)
-- **Stores**: 2
-- **Members**: 2 (the admin test user with points + a managed kid profile for Kid Mode)
-- Plus seed challenges, rewards, redemptions, todos, and a grocery catalog
-
-**Full CRUD Operations:**
-All context methods are fully implemented with **in-memory persistence**:
-- ✅ Add/Update/Delete accounts, buckets, transactions
-- ✅ Add/Update/Delete habits, calendar items
-- ✅ Add/Update/Delete meals, shopping items
-- ✅ Add/Update/Delete todos, stores
-- ✅ Toggle habits, update balances
-- ✅ All operations show toast notifications
-
-### Example Usage
-
-```bash
-# 1. Add to .env.local
-echo "VITE_ENABLE_TEST_MODE=true" >> .env.local
-
-# 2. Start dev server
-pnpm dev
-
-# 3. Navigate to test mode URL
-# Browser: http://localhost:3000/#/login?test=true
-
-# 4. Application loads with mock data, no login required
-```
-
-### Implementation Details
-
-**Files:**
-- [contexts/MockAuthContext.tsx](contexts/MockAuthContext.tsx) - Mock authentication provider
-- [contexts/MockHouseholdContext.tsx](contexts/MockHouseholdContext.tsx) - Mock data provider with full CRUD
-- [App.tsx](App.tsx) - Dynamic import logic (tree-shaken in production)
-- [pages/Login.tsx](pages/Login.tsx) - Test mode activation (`?test=true` sets the sessionStorage flag)
-
-**Key Architecture:**
-- Uses **dynamic imports** (`import()`) to load mock providers
-- Mock code is automatically **tree-shaken** from production builds
-- Providers swap at runtime based on test mode flag
-- All state is kept in-memory (React useState) - no Firebase calls
-
-### Deactivating Test Mode
-
-Test mode automatically deactivates when:
-- User signs out
-- Browser/tab is closed (session storage cleared)
-- User navigates to login without `?test=true` parameter
-
-Or manually:
-```javascript
-sessionStorage.removeItem('LIFEBALANCE_TEST_MODE');
-window.location.reload();
-```
-
-### Production Safety
-
-**Multiple layers of protection:**
-1. **Build-time**: Mock code excluded via dynamic imports
-2. **Runtime**: Requires `import.meta.env.DEV === true`
-3. **Environment**: Requires `VITE_ENABLE_TEST_MODE=true`
-4. **Session**: Only persists in sessionStorage (not localStorage)
-
-**Verification:**
-```bash
-# Build for production
-pnpm run build
-
-# Check bundle - mock code should NOT be present
-grep -r "MockAuthProvider" dist/   # Should return nothing
-grep -r "TEST MODE" dist/           # Should return nothing
-```
+A Firebase-free, mock-data sandbox for driving the app in a browser without credentials or a backend. Activation, the seeded fixtures, and the production-safety verification live in the `test-mode` skill (`.claude/skills/test-mode/SKILL.md`) so they load only when you actually need them.
