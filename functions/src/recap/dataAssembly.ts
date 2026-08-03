@@ -93,6 +93,24 @@ export interface DataAssemblyInput {
   weekStart: string;
   /** yyyy-MM-dd, local — the last day of the recap week (a Sunday, inclusive). */
   weekEnd: string;
+  /**
+   * The household's budget bucket names, in any casing.
+   *
+   * Consulted BEFORE `isCalendarBudgetedCategory` when classifying a
+   * transaction into the bills/day-to-day spend slices, mirroring the
+   * client's `components/budget/BudgetBuckets.tsx` resolution order: a
+   * transaction whose category exactly matches a real bucket name belongs to
+   * that bucket, and the calendar-budgeted fallback is consulted ONLY when it
+   * doesn't. Without this, a household with a bucket literally named "Bills"
+   * (or "Budgeted in Calendar") had every one of that bucket's genuinely
+   * discretionary transactions reclassified as a paid calendar bill, because
+   * `LEGACY_BILLS_CATEGORY` IS the string `"Bills"`.
+   *
+   * OPTIONAL and defaulted to an empty list, so a caller that hasn't been
+   * updated to supply bucket names degrades to the pre-existing (legacy
+   * classifier only) behavior rather than throwing.
+   */
+  bucketNames?: string[];
 }
 
 export type AssembledRecap = Pick<
@@ -145,15 +163,25 @@ function addDays(dateStr: string, days: number): string {
  *
  * TWO sentinels are excluded, not one: `INCOME_CATEGORY` (money in) and
  * `CREDIT_CARD_CATEGORY` (an account-routing tag, not real spending — see its
- * constant above). Both matches are case-insensitive, matching the income check
- * this function already did.
+ * constant above).
+ *
+ * The two matches are DELIBERATELY asymmetric:
+ *  - `CREDIT_CARD_CATEGORY` matches EXACTLY, case-sensitively — mirroring the
+ *    client's `utils/bucketSpentCalculator.ts` (the source of truth this
+ *    exclusion is supposed to track) precisely. `Credit Card` is a
+ *    system-written sentinel a transaction carries INSTEAD OF a bucket name,
+ *    but a free-text bucket can legitimately be named "credit card" (no
+ *    collision guard against it client-side) and its spend must count
+ *    normally, exactly as it does in the Money/Budget tab.
+ *  - `INCOME_CATEGORY` stays case-insensitive, matching this function's
+ *    pre-existing behavior — that predates the bills/day-to-day split and is
+ *    left as-is pending a separate decision, not changed here.
  */
 function isCountedSpend(t: RecapTransaction, start: string, end: string): boolean {
-  const category = t.category.toLowerCase();
   return (
     t.status === "verified" &&
-    category !== INCOME_CATEGORY.toLowerCase() &&
-    category !== CREDIT_CARD_CATEGORY.toLowerCase() &&
+    t.category.toLowerCase() !== INCOME_CATEGORY.toLowerCase() &&
+    t.category !== CREDIT_CARD_CATEGORY &&
     t.date >= start &&
     t.date <= end
   );
@@ -168,9 +196,23 @@ function isCountedSpend(t: RecapTransaction, start: string, end: string): boolea
  */
 type SpendSlice = "all" | "bills" | "dayToDay";
 
-const inSlice = (t: RecapTransaction, slice: SpendSlice): boolean => {
+/**
+ * Is this a paid calendar bill rather than day-to-day spending?
+ *
+ * A real bucket name wins FIRST — matching `BudgetBuckets.tsx`'s own
+ * resolution order (a transaction whose category matches a bucket is that
+ * bucket's spend, and the calendar-budgeted fallback only fires when it
+ * doesn't). Only once the category matches no bucket does this fall back to
+ * `isCalendarBudgetedCategory`, which recognises both the `Budgeted in
+ * Calendar` sentinel AND the legacy `Bills` tag — the exact tag a household
+ * naming a bucket "Bills" would otherwise be shadowed by.
+ *
+ * `bucketNameSet` is pre-lowercased, matching the case-insensitive bucket
+ * lookup the client does.
+ */
+const inSlice = (t: RecapTransaction, slice: SpendSlice, bucketNameSet: ReadonlySet<string>): boolean => {
   if (slice === "all") return true;
-  const isBill = isCalendarBudgetedCategory(t.category);
+  const isBill = !bucketNameSet.has(t.category.toLowerCase()) && isCalendarBudgetedCategory(t.category);
   return slice === "bills" ? isBill : !isBill;
 };
 
@@ -179,10 +221,11 @@ function sumSpendCents(
   transactions: RecapTransaction[],
   start: string,
   end: string,
-  slice: SpendSlice
+  slice: SpendSlice,
+  bucketNameSet: ReadonlySet<string>
 ): number {
   return transactions
-    .filter((t) => isCountedSpend(t, start, end) && inSlice(t, slice))
+    .filter((t) => isCountedSpend(t, start, end) && inSlice(t, slice, bucketNameSet))
     .reduce((sum, t) => sum + toCents(t.amount), 0);
 }
 
@@ -198,11 +241,12 @@ function sumSpendCents(
 function sumVerifiedSpendByCategoryCents(
   transactions: RecapTransaction[],
   start: string,
-  end: string
+  end: string,
+  bucketNameSet: ReadonlySet<string>
 ): Map<string, { display: string; cents: number }> {
   const byCategory = new Map<string, { display: string; cents: number }>();
   for (const t of transactions) {
-    if (!isCountedSpend(t, start, end) || !inSlice(t, "dayToDay")) continue;
+    if (!isCountedSpend(t, start, end) || !inSlice(t, "dayToDay", bucketNameSet)) continue;
     const key = t.category.toLowerCase();
     const existing = byCategory.get(key);
     if (existing) {
@@ -220,25 +264,54 @@ function sumVerifiedSpendByCategoryCents(
  * narrative/narrativeSource/premium/generatedAt/isoWeek fields.
  */
 export function assembleWeeklyRecap(input: DataAssemblyInput): AssembledRecap {
-  const { transactions, habits, members, calendarItems, weekStart, weekEnd } = input;
+  const { transactions, habits, members, calendarItems, weekStart, weekEnd, bucketNames } = input;
+
+  // Pre-lowercased once so every `inSlice` call does a plain Set lookup — same
+  // case-insensitive semantics the client's `BudgetBuckets.tsx` uses for its
+  // own bucket-name lookup, and the same lowercasing convention this module
+  // already uses for category grouping.
+  const bucketNameSet = new Set((bucketNames ?? []).map((name) => name.toLowerCase()));
 
   const priorWeekStart = addDays(weekStart, -7);
   const priorWeekEnd = addDays(weekEnd, -7);
 
-  const totalSpendCents = sumSpendCents(transactions, weekStart, weekEnd, "all");
-  const priorWeekSpendCents = sumSpendCents(transactions, priorWeekStart, priorWeekEnd, "all");
-  const billsSpendCents = sumSpendCents(transactions, weekStart, weekEnd, "bills");
-  const priorWeekBillsSpendCents = sumSpendCents(transactions, priorWeekStart, priorWeekEnd, "bills");
-  const dayToDaySpendCents = sumSpendCents(transactions, weekStart, weekEnd, "dayToDay");
+  const totalSpendCents = sumSpendCents(transactions, weekStart, weekEnd, "all", bucketNameSet);
+  const priorWeekSpendCents = sumSpendCents(
+    transactions,
+    priorWeekStart,
+    priorWeekEnd,
+    "all",
+    bucketNameSet
+  );
+  const billsSpendCents = sumSpendCents(transactions, weekStart, weekEnd, "bills", bucketNameSet);
+  const priorWeekBillsSpendCents = sumSpendCents(
+    transactions,
+    priorWeekStart,
+    priorWeekEnd,
+    "bills",
+    bucketNameSet
+  );
+  const dayToDaySpendCents = sumSpendCents(transactions, weekStart, weekEnd, "dayToDay", bucketNameSet);
   const priorWeekDayToDaySpendCents = sumSpendCents(
     transactions,
     priorWeekStart,
     priorWeekEnd,
-    "dayToDay"
+    "dayToDay",
+    bucketNameSet
   );
 
-  const currentByCategory = sumVerifiedSpendByCategoryCents(transactions, weekStart, weekEnd);
-  const priorByCategory = sumVerifiedSpendByCategoryCents(transactions, priorWeekStart, priorWeekEnd);
+  const currentByCategory = sumVerifiedSpendByCategoryCents(
+    transactions,
+    weekStart,
+    weekEnd,
+    bucketNameSet
+  );
+  const priorByCategory = sumVerifiedSpendByCategoryCents(
+    transactions,
+    priorWeekStart,
+    priorWeekEnd,
+    bucketNameSet
+  );
 
   const allCategories = new Set([...currentByCategory.keys(), ...priorByCategory.keys()]);
   const topCategoryDeltas = Array.from(allCategories)

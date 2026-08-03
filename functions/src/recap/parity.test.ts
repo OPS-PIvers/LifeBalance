@@ -402,8 +402,11 @@ const MONEY_FIXTURE: DataAssemblyInput = input({
     { amount: 99.01, category: "income", date: FRI, status: "verified" }, // excluded (casing)
     { amount: 500, category: "Shopping", date: SAT, status: "pending_review" }, // excluded
     // RECAP-MATH sentinels — counted-spend exclusions and the bills slice.
-    { amount: 220.89, category: "Credit Card", date: TUE, status: "verified" }, // excluded
-    { amount: 11.11, category: "credit card", date: THU, status: "verified" }, // excluded (casing)
+    { amount: 220.89, category: "Credit Card", date: TUE, status: "verified" }, // excluded (exact sentinel)
+    // The EXACT-match fix (RECAP-MATH finding A): a differently-cased
+    // "credit card" is a real, non-sentinel category and counts as ordinary
+    // day-to-day spend, unlike the "income" casing variant below.
+    { amount: 11.11, category: "credit card", date: THU, status: "verified" }, // counted
     { amount: 1200, category: "Budgeted in Calendar", date: MON, status: "verified" }, // bills
     { amount: 106.77, category: "Bills", date: THU, status: "verified" }, // bills (legacy tag)
     // 🛡️ TRAILING SPACE — real production data ("Grocery & Misc. "). The
@@ -564,6 +567,52 @@ const ASSEMBLY_FIXTURES: Array<{ name: string; input: DataAssemblyInput }> = [
   },
   { name: "everything at once", input: FULL_FIXTURE },
   { name: "the real 2026-W31 week", input: W31_FIXTURE },
+  // --- bucketNames (RECAP-MATH bucket-name guard) --------------------------
+  // A household with a budget bucket named "Bills" — without the guard,
+  // `LEGACY_BILLS_CATEGORY` being the literal string "Bills" reclassified
+  // every one of that bucket's transactions as a paid calendar bill instead
+  // of the discretionary spend it actually is. The SAME household has no
+  // bucket named "Budgeted in Calendar", so that sentinel still runs through
+  // the legacy fallback classifier normally — both resolution paths pinned
+  // side by side.
+  {
+    name: "household with a budget bucket named \"Bills\" (bucket wins) alongside an unshadowed bill",
+    input: input({
+      bucketNames: ["Bills", "Groceries"],
+      transactions: [
+        // Filed to the "Bills" bucket → day-to-day, NOT bills (bucket wins).
+        { amount: 75, category: "Bills", date: MON, status: "verified" },
+        // No bucket named "Budgeted in Calendar" → legacy classifier still
+        // applies normally; a genuine paid bill.
+        { amount: 40, category: "Budgeted in Calendar", date: WED, status: "verified" },
+        { amount: 30, category: "Groceries", date: TUE, status: "verified" },
+      ],
+    }),
+  },
+  // A bucket literally named "Budgeted in Calendar" — bucket-wins is
+  // UNCONDITIONAL, so this claims the spend as day-to-day too, same as the
+  // "Bills" case above (see the dedicated unit test for the full reasoning).
+  {
+    name: 'a bucket literally named "Budgeted in Calendar" (bucket-wins is unconditional)',
+    input: input({
+      bucketNames: ["Budgeted in Calendar"],
+      transactions: [{ amount: 40, category: "Budgeted in Calendar", date: MON, status: "verified" }],
+    }),
+  },
+  // --- Credit Card exact-match (RECAP-MATH finding A) -----------------------
+  // A household whose bucket is literally named "credit card" (lowercase) —
+  // real discretionary spend, counted normally. The capitalized system
+  // sentinel stays excluded.
+  {
+    name: 'a bucket literally named "credit card" (lowercase, not the sentinel)',
+    input: input({
+      bucketNames: ["credit card"],
+      transactions: [
+        { amount: 75, category: "credit card", date: MON, status: "verified" }, // counted
+        { amount: 220.89, category: "Credit Card", date: TUE, status: "verified" }, // excluded
+      ],
+    }),
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -773,14 +822,24 @@ describe("recap assembly parity — client vs server", () => {
       }
     });
 
-    it("no sentinel category ever reaches topCategoryDeltas", () => {
+    it("no true sentinel category ever reaches topCategoryDeltas", () => {
       const r = assembleWeeklyRecap(fixture);
+      // A category shadowed by a REAL bucket of the same name is no longer a
+      // sentinel for this household — it's that bucket's spend, and may
+      // legitimately reach this list (the bucket-name guard's whole point).
+      const bucketKeys = new Set((fixture.bucketNames ?? []).map((n) => n.toLowerCase()));
       for (const delta of r.topCategoryDeltas) {
         const key = delta.category.toLowerCase();
-        expect(key).not.toBe("budgeted in calendar");
-        expect(key).not.toBe("bills");
-        expect(key).not.toBe("credit card");
+        if (!bucketKeys.has(key)) {
+          expect(key).not.toBe("budgeted in calendar");
+          expect(key).not.toBe("bills");
+        }
         expect(key).not.toBe("income");
+        // `Credit Card` matches EXACTLY, case-sensitively (RECAP-MATH finding
+        // A) — a differently-cased "credit card" bucket is real spend and MAY
+        // legitimately reach this list, so only the exact sentinel string is
+        // disallowed here.
+        expect(delta.category).not.toBe("Credit Card");
       }
     });
   });

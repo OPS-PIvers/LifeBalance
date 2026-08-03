@@ -670,14 +670,12 @@ describe('assembleWeeklyRecap', () => {
 // ---------------------------------------------------------------------------
 
 describe('counted spend excludes the Credit Card sentinel', () => {
-  it('drops it from totalSpend, both slices and the category deltas', () => {
+  it('drops the EXACT sentinel from totalSpend, both slices and the category deltas', () => {
     const transactions: RecapTransaction[] = [
       { amount: 100, category: 'Groceries', date: MON, status: 'verified' },
       // `CREDIT_CARD_CATEGORY` is an ACCOUNT-ROUTING tag, not spending —
       // `utils/bucketSpentCalculator.ts` has always excluded it.
       { amount: 220.89, category: 'Credit Card', date: TUE, status: 'verified' },
-      // Case-insensitive, matching the income check in the same predicate.
-      { amount: 11.11, category: 'credit card', date: WED, status: 'verified' },
     ];
     const result = assembleWeeklyRecap(baseInput({ transactions }));
     expect(result.totalSpend).toBe(100);
@@ -686,13 +684,29 @@ describe('counted spend excludes the Credit Card sentinel', () => {
     expect(result.topCategoryDeltas).toEqual([{ category: 'Groceries', current: 100, prior: 0 }]);
   });
 
-  it('still excludes it when a household literally named a bucket "Credit Card"', () => {
+  it('still excludes the exact sentinel when a household literally named a bucket "Credit Card"', () => {
     // Mirrors the bucket calculator's comment: the sentinel is not a bucket
     // category, even when a bucket happens to share its name.
     const transactions: RecapTransaction[] = [
       { amount: 50, category: 'Credit Card', date: MON, status: 'verified' },
     ];
     expect(assembleWeeklyRecap(baseInput({ transactions })).totalSpend).toBe(0);
+  });
+
+  it('COUNTS a lower-cased "credit card" bucket name as ordinary spend', () => {
+    // `bucketSpentCalculator.ts` (the source of truth) matches the sentinel
+    // EXACTLY and case-sensitively — a free-text bucket literally named
+    // "credit card" (no collision guard against it in `BucketFormModal`) is a
+    // real discretionary category, and its spend must count exactly as it
+    // does in the Money/Budget tab. Only the capitalized system sentinel is
+    // excluded; a hand-typed lowercase variant is NOT the same string.
+    const transactions: RecapTransaction[] = [
+      { amount: 75, category: 'credit card', date: MON, status: 'verified' },
+    ];
+    const result = assembleWeeklyRecap(baseInput({ transactions }));
+    expect(result.totalSpend).toBe(75);
+    expect(result.dayToDaySpend).toBe(75);
+    expect(result.topCategoryDeltas).toEqual([{ category: 'credit card', current: 75, prior: 0 }]);
   });
 });
 
@@ -760,6 +774,107 @@ describe('bills vs day-to-day spend', () => {
       { category: 'Grocery & Misc. ', current: 30, prior: 0 },
       { category: 'Grocery & Misc.', current: 5, prior: 0 },
     ]);
+  });
+
+  it('keeps the partition invariant with a negative-amount (refund) transaction', () => {
+    // A refund lands in the same slice its original purchase would (a
+    // day-to-day category here), and per-transaction integer-cents summing
+    // means signed addition is exact — proven, not just argued.
+    const result = assembleWeeklyRecap(
+      baseInput({
+        transactions: [
+          { amount: 200, category: 'Groceries', date: TUE, status: 'verified' },
+          { amount: -35.5, category: 'Groceries', date: THU, status: 'verified' }, // refund
+          { amount: 950, category: 'Budgeted in Calendar', date: MON, status: 'verified' },
+        ],
+      }),
+    );
+    expect(result.dayToDaySpend).toBe(164.5);
+    expect(result.billsSpend).toBe(950);
+    expect(result.totalSpend).toBe(1114.5);
+    expect(result.billsSpend + result.dayToDaySpend).toBe(result.totalSpend);
+  });
+});
+
+describe('bucket names take priority over the calendar-budgeted classifier', () => {
+  it('counts a "Bills"-categorized transaction as DAY-TO-DAY when a bucket is named "Bills"', () => {
+    // The failure this guard exists to prevent: `LEGACY_BILLS_CATEGORY` IS the
+    // string "Bills", so without the guard every transaction filed to a
+    // household's own "Bills" bucket was silently reclassified as a paid
+    // calendar bill.
+    const transactions: RecapTransaction[] = [
+      { amount: 75, category: 'Bills', date: MON, status: 'verified' },
+    ];
+    const result = assembleWeeklyRecap(baseInput({ transactions, bucketNames: ['Bills'] }));
+    expect(result.dayToDaySpend).toBe(75);
+    expect(result.billsSpend).toBe(0);
+    expect(result.totalSpend).toBe(75);
+  });
+
+  it('still counts "Bills" as a paid calendar bill when NO such bucket exists (legacy behavior preserved)', () => {
+    const transactions: RecapTransaction[] = [
+      { amount: 75, category: 'Bills', date: MON, status: 'verified' },
+    ];
+    const result = assembleWeeklyRecap(baseInput({ transactions, bucketNames: ['Groceries', 'Dining'] }));
+    expect(result.billsSpend).toBe(75);
+    expect(result.dayToDaySpend).toBe(0);
+
+    // Also true with no bucket list supplied at all (the default/legacy path).
+    const noBucketsResult = assembleWeeklyRecap(baseInput({ transactions }));
+    expect(noBucketsResult.billsSpend).toBe(75);
+    expect(noBucketsResult.dayToDaySpend).toBe(0);
+  });
+
+  it('"Budgeted in Calendar" always counts as bills when NO bucket shadows it', () => {
+    const transactions: RecapTransaction[] = [
+      { amount: 40, category: 'Budgeted in Calendar', date: MON, status: 'verified' },
+    ];
+    // A household can have OTHER buckets without disturbing the sentinel.
+    const result = assembleWeeklyRecap(baseInput({ transactions, bucketNames: ['Groceries'] }));
+    expect(result.billsSpend).toBe(40);
+    expect(result.dayToDaySpend).toBe(0);
+  });
+
+  it('a bucket literally named "Budgeted in Calendar" claims that spend too — bucket-wins is UNCONDITIONAL', () => {
+    // The bucket-wins rule doesn't special-case either sentinel string: it's
+    // the exact same resolution order `BudgetBuckets.tsx` already applies
+    // (match a real bucket first, fall back to the classifier only when
+    // nothing matches). A household that names a bucket "Budgeted in
+    // Calendar" therefore gets that spend counted as day-to-day/bucket spend,
+    // the same as it would in the Money/Budget tab — it is NO LONGER
+    // distinguishable from a paid calendar bill on the stored transaction,
+    // but that ambiguity is inherent to reusing the sentinel string as a
+    // bucket name, not something this guard can (or should) resolve
+    // differently from how the rest of the app already resolves it.
+    const transactions: RecapTransaction[] = [
+      { amount: 40, category: 'Budgeted in Calendar', date: MON, status: 'verified' },
+    ];
+    const result = assembleWeeklyRecap(
+      baseInput({ transactions, bucketNames: ['Budgeted in Calendar'] }),
+    );
+    expect(result.dayToDaySpend).toBe(40);
+    expect(result.billsSpend).toBe(0);
+  });
+
+  it('matches bucket names case-insensitively', () => {
+    const transactions: RecapTransaction[] = [
+      { amount: 60, category: 'bills', date: MON, status: 'verified' },
+    ];
+    const result = assembleWeeklyRecap(baseInput({ transactions, bucketNames: ['BILLS'] }));
+    expect(result.dayToDaySpend).toBe(60);
+    expect(result.billsSpend).toBe(0);
+  });
+
+  it('keeps the partition invariant whichever way a "Bills"-named bucket resolves', () => {
+    const transactions: RecapTransaction[] = [
+      { amount: 75, category: 'Bills', date: MON, status: 'verified' },
+      { amount: 30, category: 'Groceries', date: TUE, status: 'verified' },
+    ];
+    const withBucket = assembleWeeklyRecap(baseInput({ transactions, bucketNames: ['Bills'] }));
+    expect(withBucket.billsSpend + withBucket.dayToDaySpend).toBe(withBucket.totalSpend);
+
+    const withoutBucket = assembleWeeklyRecap(baseInput({ transactions }));
+    expect(withoutBucket.billsSpend + withoutBucket.dayToDaySpend).toBe(withoutBucket.totalSpend);
   });
 });
 
