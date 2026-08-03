@@ -1038,6 +1038,18 @@ export const quickAddExpense = onRequest(
         householdData?.lastPaycheckDate
       );
 
+      // CARD-1: the card last-4 that resolved (or attempted to resolve) the
+      // account above — normalized the same way accountMatch.ts normalizes it
+      // for routing — persisted onto the row instead of being discarded once
+      // routing is done, so a later PR can attribute the purchase to whoever
+      // owns that card (see Account.cardOwners / utils/cardOwnership.ts).
+      // Independent of whether routing actually found a match: even an
+      // unmatched/ambiguous card digit is worth keeping on the row.
+      const persistedCardLast4 =
+        rawCardLast4 !== undefined && rawCardLast4 !== null
+          ? normalizeCardLast4(rawCardLast4) ?? undefined
+          : undefined;
+
       // 6. Create transaction document as PENDING (for review)
       const transactionData = {
         amount,
@@ -1054,6 +1066,9 @@ export const quickAddExpense = onRequest(
         // Route to the card matched by last-4 (or explicit accountId). Omitted
         // when nothing matched so review falls back to the checking account.
         ...(resolvedAccountId ? { accountId: resolvedAccountId } : {}),
+        // CARD-1: the card digits themselves (see persistedCardLast4 above).
+        // Omitted when no card digit was ever supplied/parsed.
+        ...(persistedCardLast4 ? { cardLast4: persistedCardLast4 } : {}),
         // Apple Pay $0 pre-auth stub: flags the review UI that the real amount
         // still needs to be entered. Omitted for normal (amount > 0) expenses.
         ...(amount === 0 ? { needsAmount: true } : {}),

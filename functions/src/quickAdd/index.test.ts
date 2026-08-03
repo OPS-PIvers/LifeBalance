@@ -650,6 +650,70 @@ describe("quickAddExpense", () => {
     expect(res.body).toMatchObject({ data: { amount: 50 } });
   });
 
+  // --- CARD-1: persisting the parsed card last-4 onto the transaction ---
+
+  it("persists an explicit cardLast4 body field onto the created transaction", async () => {
+    const add = vi.fn(() => Promise.resolve({ id: "tx1" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = { add };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { amount: 12.5, merchant: "Coffee", cardLast4: "8899" } }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(add).toHaveBeenCalledTimes(1);
+    const txData = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(txData.cardLast4).toBe("8899");
+  });
+
+  it("normalizes a masked cardLast4 ('...8899') before persisting it", async () => {
+    const add = vi.fn(() => Promise.resolve({ id: "tx1" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = { add };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { amount: 12.5, merchant: "Coffee", cardLast4: "...8899" } }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    const txData = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(txData.cardLast4).toBe("8899");
+  });
+
+  it("omits cardLast4 from the transaction when no card digit was ever supplied", async () => {
+    const add = vi.fn(() => Promise.resolve({ id: "tx1" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = { add };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { amount: 12.5, merchant: "Coffee" } }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    const txData = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(txData.cardLast4).toBeUndefined();
+    expect("cardLast4" in txData).toBe(false);
+  });
+
+  it("persists the account-routing card digit even when it matches no account", async () => {
+    // No accounts collection override configured → the default empty scan
+    // means the card resolves to no account, but the digits themselves must
+    // still land on the row (CARD-1 is independent of routing success).
+    const add = vi.fn(() => Promise.resolve({ id: "tx1" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = { add };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { amount: 12.5, merchant: "Coffee", cardLast4: "0000" } }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    const txData = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(txData.accountId).toBeUndefined();
+    expect(txData.cardLast4).toBe("0000");
+  });
+
   // --- Bank-notification reconciliation (fromBankNotification) ---
 
   /** Build a query-snapshot doc for the recent-transactions reconcile lookup. */
@@ -1159,6 +1223,9 @@ Date: 07/01/2026`;
     expect(txData.merchant).toBe("Google CLOUD");
     expect(txData.date).toBe("2026-07-01");
     expect(txData.source).toBe("shortcut");
+    // CARD-1: the card last-4 the email parser extracted ("...8899") is
+    // persisted onto the row, not just used to route it.
+    expect(txData.cardLast4).toBe("8899");
   });
 
   it("emailText is redacted from the audit log", async () => {

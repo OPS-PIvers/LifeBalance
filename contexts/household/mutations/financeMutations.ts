@@ -108,7 +108,7 @@ export function makeAccountMutations(deps: {
 
   const setAccountCardDetails = async (
     id: string,
-    details: { accountLast4?: string; cardLast4s: string[] }
+    details: { accountLast4?: string; cardLast4s: string[]; cardOwners?: Record<string, string> }
   ) => {
     if (!householdId) return;
     // Same digit-cleaning as setAccountCardLast4: strip non-digits, keep the
@@ -121,6 +121,18 @@ export function makeAccountMutations(deps: {
     const cardLast4s = Array.from(
       new Set(details.cardLast4s.map(cleanLast4).filter((v): v is string => v !== null))
     );
+    // CARD-1: prune the owner map to cards that actually survive into the
+    // final cardLast4s list — a card removed in this same save (or whose
+    // digits failed cleaning) must not leave an orphaned owner entry behind.
+    const cardOwners: Record<string, string> = {};
+    if (details.cardOwners) {
+      for (const [rawDigits, uid] of Object.entries(details.cardOwners)) {
+        const digits = cleanLast4(rawDigits);
+        if (digits && uid && cardLast4s.includes(digits)) {
+          cardOwners[digits] = uid;
+        }
+      }
+    }
     await updateDoc(doc(db, `households/${householdId}/accounts`, id), {
       accountLast4: accountLast4 ? accountLast4 : deleteField(),
       cardLast4s: cardLast4s.length > 0 ? cardLast4s : deleteField(),
@@ -128,6 +140,7 @@ export function makeAccountMutations(deps: {
       // need to consult one field going forward (accountMatch.ts still reads
       // both, for docs edited before this migration point runs).
       cardLast4: deleteField(),
+      cardOwners: Object.keys(cardOwners).length > 0 ? cardOwners : deleteField(),
     });
     toast.success('Account details saved');
   };

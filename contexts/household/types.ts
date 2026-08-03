@@ -218,15 +218,18 @@ export interface HouseholdContextType {
   /** Set (or clear, with an empty string) the last-4 card digits used to
    *  auto-route incoming Shortcut/Wells-Fargo-email transactions to this account. */
   setAccountCardLast4: (id: string, cardLast4: string) => Promise<void>;
-  /** Set (or clear) the bank account-number last-4 and the full list of
-   *  tagged debit/credit cards for this account. Migrates the legacy
-   *  `cardLast4` field into `cardLast4s` (clearing the legacy field) so
-   *  readers only need to consult `cardLast4s` going forward — see
-   *  `functions/src/quickAdd/accountMatch.ts`, which still reads both for
-   *  docs not yet migrated. */
+  /** Set (or clear) the bank account-number last-4, the full list of tagged
+   *  debit/credit cards, and (CARD-1) each card's owner for this account.
+   *  Migrates the legacy `cardLast4` field into `cardLast4s` (clearing the
+   *  legacy field) so readers only need to consult `cardLast4s` going forward
+   *  — see `functions/src/quickAdd/accountMatch.ts`, which still reads both
+   *  for docs not yet migrated. `cardOwners` (optional; a map of card last-4
+   *  → member uid) is written verbatim after being pruned to only the cards
+   *  present in the final `cardLast4s` list — a removed card's owner tag is
+   *  dropped along with it rather than left orphaned. */
   setAccountCardDetails: (
     id: string,
-    details: { accountLast4?: string; cardLast4s: string[] }
+    details: { accountLast4?: string; cardLast4s: string[]; cardOwners?: Record<string, string> }
   ) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
   /** Soft-delete: hide from active lists/net worth/Safe-to-Spend while keeping

@@ -278,6 +278,21 @@ export interface Account {
    *  Readers should treat the legacy `cardLast4` as an extra (deduped) entry
    *  of this list rather than a separate value — see `accountMatch.ts`. */
   cardLast4s?: string[];
+  /** Per-card owner tagging (CARD-1): maps a tagged card's last-4 (a key that
+   *  appears in `cardLast4s`, or the legacy `cardLast4`) to the household
+   *  member `uid` who holds that physical card — e.g. two adults with
+   *  separate debit cards on one SHARED checking account, where the card
+   *  used is the only available signal for who actually spent the money.
+   *  Orthogonal to routing: `functions/src/quickAdd/accountMatch.ts`'s last-4
+   *  → ACCOUNT matching reads only `cardLast4`/`cardLast4s` and is completely
+   *  untouched by this field. Absent on every account that predates this
+   *  field (no migration needed) and absent per-card until a member
+   *  explicitly tags one — an untagged card is "unknown owner", never an
+   *  error. A later PR uses this to attribute transaction-fired habit
+   *  completions to the member who made the purchase; this field only stores
+   *  the tagging — no attribution logic lives here. See the lookup helper in
+   *  `utils/cardOwnership.ts`. */
+  cardOwners?: Record<string, string>;
   /** Last 4 digits of the bank ACCOUNT number itself (distinct from a card),
    *  e.g. parsed from a bank email header like "for account ...5581". Used to
    *  route nightly bank-email sync rows to the right account. */
@@ -405,6 +420,19 @@ export interface Transaction {
   firedHabitIds?: string[];
   store?: string;
   accountId?: string;
+  /** Card last-4 that produced this transaction (CARD-1), when known — the
+   *  digits `quickAddExpense` used to route the purchase via
+   *  `functions/src/quickAdd/accountMatch.ts` (an explicit `cardLast4` body
+   *  field, or one extracted from `emailText` by `emailParser.ts`), persisted
+   *  onto the row instead of being discarded once routing is done.
+   *  Normalized to exactly 4 digits, matching the keys of
+   *  `Account.cardLast4s`/`cardOwners` — see `utils/cardOwnership.ts` for the
+   *  owner lookup this enables. Absent on every transaction from a path that
+   *  never captures a card digit (manual entry, receipt/statement scans,
+   *  Plaid, bank-sync) and on historical rows (no migration). Not yet written
+   *  by the stub-fill/duplicate-merge reconcile paths in
+   *  `functions/src/quickAdd/reconcile.ts` — only the primary create path. */
+  cardLast4?: string;
   /** When the transaction is tagged to a CREDIT account, marks it as a PAYMENT
    *  toward the card (reduces the credit balance) rather than a charge (which
    *  increases it). Meaningless / ignored for checking & savings accounts.
