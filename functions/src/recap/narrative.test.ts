@@ -310,6 +310,54 @@ describe("deriveVerdicts", () => {
       expect(verdicts.points).toMatchObject({ direction: "down", material: true });
       expect(verdicts.week).not.toBe("better");
     });
+
+    // -----------------------------------------------------------------------
+    // 🛡️ SHOULD-FIX — the absolute floor is calibrated to THIS household's
+    // real scale (the shipped W31 fixture's `totalPoints` was 28 for an
+    // ENTIRE week), not a flat number sized for a much bigger household.
+    // Pins the exact reviewer-reproduced failure AND that a genuinely
+    // trivial move at the same scale still reads as immaterial, so the fix
+    // didn't just lower the floor into the opposite failure.
+    // -----------------------------------------------------------------------
+    it("a -2 -> -18 week (delta 16, over half a ~28-point week) is material, never 'level'", () => {
+      const points = deriveVerdicts({ ...NEG_POINTS_BASE, totalPoints: -18, priorWeekPoints: -2 }).points;
+      expect(points).toMatchObject({ current: -18, prior: -2, direction: "down", material: true });
+
+      const text = buildTemplateNarrative({ ...NEG_POINTS_BASE, totalPoints: -18, priorWeekPoints: -2 });
+      expect(text.toLowerCase()).not.toMatch(/level|not a change/);
+
+      const prompt = buildPrompt({ ...NEG_POINTS_BASE, totalPoints: -18, priorWeekPoints: -2 });
+      expect(prompt).not.toContain("level, not a change");
+    });
+
+    it("the same -2 -> -18 collapse, combined with a materially-improved spend figure, does NOT read 'better'", () => {
+      const verdicts = deriveVerdicts({
+        ...NEG_POINTS_BASE,
+        billsSpend: 0,
+        priorWeekBillsSpend: 0,
+        dayToDaySpend: 100,
+        priorWeekDayToDaySpend: 300,
+        totalSpend: 100,
+        priorWeekSpend: 300,
+        totalPoints: -18,
+        priorWeekPoints: -2,
+      });
+      expect(verdicts.spend).toMatchObject({ direction: "down", material: true });
+      expect(verdicts.points).toMatchObject({ direction: "down", material: true });
+      expect(verdicts.week).not.toBe("better");
+    });
+
+    it("a genuinely trivial move (a point or two) at the SAME ~28-point scale stays immaterial", () => {
+      // Same order of magnitude as W31's real 28-point week — unlike the
+      // 500-point fixtures elsewhere in this describe block, this is what
+      // confirms the fix calibrated the floor rather than just lowering it.
+      expect(deriveVerdicts({ ...NEG_POINTS_BASE, totalPoints: -27, priorWeekPoints: -28 }).points.material).toBe(
+        false
+      );
+      expect(deriveVerdicts({ ...NEG_POINTS_BASE, totalPoints: -26, priorWeekPoints: -28 }).points.material).toBe(
+        false
+      );
+    });
   });
 
   // -------------------------------------------------------------------------

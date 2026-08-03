@@ -194,16 +194,29 @@ export const BILLS_HEAVY_SHARE = 0.5;
 export const POINTS_MATERIAL_PCT = 10;
 
 /**
- * A points swing under this many points is noise when a percentage isn't
- * well-defined — i.e. the prior week's total was zero or negative, which is
- * real for this app: several habits are `type: 'negative'` (Order from
- * Target, Go to liquor store, Starbucks…), so a week's total can genuinely be
- * negative or worsen from one negative number to a much larger one. A ratio
- * against a non-positive base is meaningless, but the absolute move is not —
- * this is the floor `derivePoints` falls back to instead of silently calling
- * every non-positive-base week "not a change".
+ * Minimum absolute point floor when a percentage isn't well-defined (the
+ * prior week's total was zero or negative, real for this app: several habits
+ * are `type: 'negative'` — Order from Target, Go to liquor store, Starbucks…
+ * — so a week's total can genuinely be negative, or worsen from one negative
+ * number to a much larger one).
+ *
+ * A flat constant here is wrong at this app's real scale: the shipped W31
+ * fixture had `totalPoints: 28` for an ENTIRE week, so a floor has to be
+ * calibrated against single-digit weekly totals, not the hundreds a
+ * multi-adult household with many habits might score. `derivePoints` below
+ * does NOT use this constant alone — it derives the actual threshold as
+ * `max(POINTS_MATERIAL_ABSOLUTE_FLOOR, round(scale * POINTS_MATERIAL_PCT /
+ * 100))`, where `scale` is the larger of the two weeks' magnitudes. That
+ * keeps the non-positive-base gate exactly as sensitive as the positive-base
+ * `POINTS_MATERIAL_PCT` gate already is at the household's own scale — a
+ * -2 → -18 week (delta 16, over half of a ~28-point week) now clears the
+ * threshold (scale 18, 10% ≈ 2, but the delta of 16 clears it easily),
+ * while a 1-2 point wobble around a similar-sized negative base does not.
+ * This constant is only the floor for a near-zero scale, where even 10%
+ * would be sub-single-digit and any nonzero delta would otherwise read as a
+ * trend — 3 points keeps ordinary noise from doing that.
  */
-export const POINTS_MATERIAL_ABSOLUTE = 20;
+export const POINTS_MATERIAL_ABSOLUTE_FLOOR = 3;
 
 /** A category has to move this much, AND by this ratio, to be called a spike. */
 export const CATEGORY_SPIKE_DOLLARS = 50;
@@ -517,11 +530,22 @@ function derivePoints(recap: RecapNumericFields): PointsVerdict {
   // against zero or a negative base is meaningless. That does NOT mean the
   // week didn't move: this household runs negative-point habits, so both
   // weeks can be negative and one can still be dramatically worse (-5 → -500
-  // is a real collapse, not noise). Fall back to an ABSOLUTE point floor
-  // whenever the percentage isn't well-defined, on either side of zero —
-  // this is what stops a materially-worse negative week from voting "flat"
-  // in the week verdict and being narrated as "level, not a change".
-  const material = pct === null ? Math.abs(delta) >= POINTS_MATERIAL_ABSOLUTE : Math.abs(pct) >= POINTS_MATERIAL_PCT;
+  // is a real collapse, not noise). Fall back to an ABSOLUTE point threshold
+  // whenever the percentage isn't well-defined, on either side of zero — this
+  // is what stops a materially-worse negative week from voting "flat" in the
+  // week verdict and being narrated as "level, not a change".
+  //
+  // The threshold self-calibrates to the week's own scale rather than using a
+  // single hardcoded number for every household: it's the larger of the two
+  // weeks' magnitudes, scored at the SAME POINTS_MATERIAL_PCT the positive
+  // region already uses, floored at POINTS_MATERIAL_ABSOLUTE_FLOOR so a
+  // near-zero week's ordinary 1-2 point noise still doesn't read as a trend.
+  const scale = Math.max(Math.abs(current), Math.abs(prior));
+  const absoluteThreshold = Math.max(
+    POINTS_MATERIAL_ABSOLUTE_FLOOR,
+    Math.round(scale * (POINTS_MATERIAL_PCT / 100))
+  );
+  const material = pct === null ? Math.abs(delta) >= absoluteThreshold : Math.abs(pct) >= POINTS_MATERIAL_PCT;
   return { current, prior, pct, direction, material };
 }
 
