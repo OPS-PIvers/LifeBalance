@@ -38,7 +38,7 @@
  */
 
 import type { BankEmailWithdrawal } from "./bankEmailParser";
-import { merchantSimilar } from "./transactionIdentity";
+import { merchantSimilar, INCOME_CATEGORY } from "./transactionIdentity";
 import { pickFillTarget, type ReconcileCandidate } from "./reconcile";
 import { pickMerchantRule, type MerchantRule } from "./merchantRules";
 
@@ -202,6 +202,52 @@ export function matchesAlias(descriptor: string, aliases: string[] | undefined):
  *    otherwise null (ambiguous → the endpoint falls through to CREATE)
  *  - none → null
  */
+/**
+ * Is an ALREADY-VERIFIED stored transaction eligible to be confirmed by a
+ * nightly withdrawal line?
+ *
+ * The endpoint originally offered only `pending_review` rows as confirm
+ * candidates, which made review speed the enemy of correctness: reviewing an
+ * Apple Pay / Shortcut capture flips it to `verified`, removing it from the
+ * pool, so the bank email arriving afterwards could not recognise the purchase
+ * and filed a duplicate. Reviewing a row does not change what it IS, and
+ * CONFIRM asks an identity question — so a verified row is an equally valid
+ * target. Confirming stamps its `bankRef`, which is what makes it immune to
+ * re-creation by every later email.
+ *
+ * The exclusions are the whole substance of this predicate:
+ *  - not `verified` — `pending_review` rows come from the endpoint's own
+ *    unbounded status query; anything else is not a settled purchase.
+ *  - already has a `bankRef` — the row IS a bank line. It is already covered
+ *    by the 4a skip, and re-matching it could steal the target from a
+ *    genuinely new purchase sharing its amount and date.
+ *  - income — stored positive exactly like a withdrawal, so a same-amount
+ *    deposit would otherwise be "confirmed" by a debit.
+ *  - a credit-card payment — the account gate exists to stop a checking email
+ *    touching card rows; this closes the same hole for rows the gate can't see
+ *    because they carry no `accountId`.
+ *  - a non-positive amount — a $0 Apple Pay stub belongs to the FILL step
+ *    (4b), which knows how to populate it; matching one here would verify a
+ *    row whose amount is still a placeholder.
+ *
+ * Takes an unvalidated Firestore document shape rather than a typed row: the
+ * caller reads raw `DocumentData`, and narrowing here keeps the rule and its
+ * justification in one place instead of split across the query site.
+ */
+export function isVerifiedConfirmCandidate(tx: {
+  status?: unknown;
+  bankRef?: unknown;
+  category?: unknown;
+  creditPayment?: unknown;
+  amount?: unknown;
+}): boolean {
+  if (tx.status !== "verified") return false;
+  if (typeof tx.bankRef === "string" && tx.bankRef !== "") return false;
+  if (tx.category === INCOME_CATEGORY) return false;
+  if (tx.creditPayment === true) return false;
+  return typeof tx.amount === "number" && Number.isFinite(tx.amount) && tx.amount > 0;
+}
+
 export function pickPendingToConfirm(
   withdrawal: BankEmailWithdrawal,
   candidates: readonly PendingConfirmCandidate[],
