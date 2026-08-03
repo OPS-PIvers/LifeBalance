@@ -576,6 +576,55 @@ const affectedPeriodMembers = (
 ];
 
 /**
+ * ATTR-1 mock parity: the points ONE transaction-fired habit moves, decomposed
+ * into the POOL's share and every affected member's own — the mock twin of
+ * production `fireHabitsIntoBatch`'s `periodPointsMove` decomposition, and the
+ * same shape `addHabitSubmission`'s mock already uses.
+ *
+ * 🛡️ AN ATTRIBUTED MOVE MUST NOT USE THE HABIT-LEVEL FIGURE. `fire.pointsDelta`
+ * applies the HABIT's streak multiplier, while an attributed completion is paid
+ * at the credited MEMBER's own — so the moment the two differ (a habit with a
+ * long legacy streak meeting a member's first attributed completion) the pool is
+ * credited more than the sum of what its members received. Test Mode has NO
+ * corrective recompute — `totalPoints` is a bare `useState` and it gates reward
+ * redemption — so that error persists for the whole session.
+ *
+ * `actors` is the uid(s) this move is FOR (the card owner on a fire, the members
+ * an undo takes units back from). `null` means the move was unattributed — a
+ * household-credit habit, a chore, an untagged card, a uid off the roster — and
+ * then `legacyDelta` is returned untouched with no member half at all, which is
+ * bit-for-bit both production's fallback and the mock's pre-ATTR-1 behaviour.
+ *
+ * The member scope is `affectedPeriodMembers`, never just `actors`: a threshold
+ * period's completion flips an EARLIER member's award on as a side effect, and
+ * paying the pool for it while skipping that member is exactly the drift this
+ * helper exists to prevent.
+ */
+const transactionHabitPointsMove = (
+  before: Habit,
+  after: Habit,
+  fireDate: string,
+  today: string,
+  actors: readonly string[] | null,
+  legacyDelta: PointsBuckets,
+): { pool: PointsBuckets; perMember: Map<string, PointsBuckets> } => {
+  if (actors === null) return { pool: legacyDelta, perMember: new Map() };
+  // Same gating as `addHabitSubmission`'s mock: a back-dated move credits the
+  // lifetime total but not a day/week it did not land in.
+  const gate = (amount: number): PointsBuckets => ({
+    daily: fireDate === today ? amount : 0,
+    weekly:
+      habitPeriodStart('weekly', fireDate) === habitPeriodStart('weekly', today) ? amount : 0,
+    total: amount,
+  });
+  const perMember = new Map<string, PointsBuckets>();
+  for (const uid of affectedPeriodMembers(before, after, fireDate, actors)) {
+    perMember.set(uid, gate(memberPeriodPointsDelta(before, after, uid, fireDate, today)));
+  }
+  return { pool: gate(householdPeriodPointsDelta(before, after, fireDate, today)), perMember };
+};
+
+/**
  * The UNATTRIBUTED remainder over a set of dates — the grandfathering /
  * household-credit term of production's `household = Σ members + unattributed`.
  *
@@ -1478,6 +1527,64 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Funds reallocated');
   }, [buckets]);
 
+  // Credit (or debit, negative delta) the HOUSEHOLD pool ONLY — the redeemable
+  // lifetime total (`totalPoints`). Production writes a shared habit's pool
+  // share to a SEPARATE `households/{id}.points` document that no member doc
+  // ever mirrors, so this must not touch `members` either.
+  //
+  // 🛡️ This USED TO also mirror `delta` onto the signed-in test user's own
+  // three point windows, on the theory that "the pool and the tapper move by
+  // the same number." That happens to be true for an ORDINARY members-mode tap
+  // (the pool figure IS that lone credited member's own award) but is wrong in
+  // two ways it papered over: a `creditMode: 'household'` completion has NO
+  // actor at all — the pool moves, the tapper must not — and every OTHER
+  // credited member's own award ALSO reaches the pool through this function,
+  // so mirroring only the test user double-counted whichever of them happened
+  // to be MOCK_USER_UID. Every caller that needs a member's own score to move
+  // now does so explicitly via `creditMemberPoints`, the same pattern
+  // `addHabitSubmission`/`deleteHabitSubmission` already used unmodified.
+  const creditHouseholdPool = useCallback((
+    delta: { daily: number; weekly: number; total: number },
+  ) => {
+    if (delta.total === 0) return;
+    setTotalPoints(prev => prev + delta.total);
+  }, []);
+
+  /**
+   * Per-member points (stage 1): move ONE member's own score, without touching
+   * the household pool — the member half of the two-layer model. Buckets are
+   * pre-gated by the caller (a back-dated credit moves total only).
+   */
+  const creditMemberPoints = useCallback((
+    memberId: string,
+    delta: { daily: number; weekly: number; total: number },
+  ) => {
+    if (delta.daily === 0 && delta.weekly === 0 && delta.total === 0) return;
+    setMembers(prev => prev.map(m => m.uid === memberId
+      ? { ...m, points: {
+          daily: m.points.daily + delta.daily,
+          weekly: m.points.weekly + delta.weekly,
+          total: m.points.total + delta.total,
+        } }
+      : m));
+  }, []);
+
+  /**
+   * Route a habit's POOL points exactly as production's `habitPointsTargets`
+   * does (Plan 080c): an ASSIGNED chore credits its assignee's own member doc
+   * and the shared household pool receives nothing; a shared habit credits the
+   * pool. Test Mode previously sent every habit — assigned chores included — to
+   * `creditPoints`, so a kid's chore silently paid the test user and inflated
+   * the redeemable pool, which production never does.
+   */
+  const creditHabitPool = useCallback((
+    habit: Pick<Habit, 'assignedTo'>,
+    delta: { daily: number; weekly: number; total: number },
+  ) => {
+    if (habit.assignedTo) creditMemberPoints(habit.assignedTo, delta);
+    else creditHouseholdPool(delta);
+  }, [creditHouseholdPool, creditMemberPoints]);
+
   // Transaction operations
   const addTransaction = useCallback(async (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => {
     // Assign the mock pay period (the real context derives one via
@@ -1497,12 +1604,61 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       [],
     );
     const addToday = getLocalDateString();
-    const addFires = new Map<string, NonNullable<ReturnType<typeof computeBackdatedHabitFire>>>();
+    // ATTR-1 parity with `makeAddTransaction`: the manual-entry path attributes
+    // by CARD exactly as the review path does, so a hand-entered row on a tagged
+    // card credits its owner rather than landing in the recap's unattributed
+    // bucket. Resolved OUTSIDE the setState updaters (StrictMode double-invokes
+    // them), along with the whole post-fire habit and its points decomposition.
+    const addCardAccount = resolveTargetAccount(tx.accountId, accounts);
+    const addIsCurrentMember = currentMemberPredicate(membersRef.current);
+    const addFires = new Map<string, Habit>();
+    const addPool: PointsBuckets = { daily: 0, weekly: 0, total: 0 };
+    const addMemberPoints = new Map<string, PointsBuckets>();
     for (const habitId of habitIdsToFire) {
       const habit = habits.find(h => h.id === habitId);
       if (!habit) continue;
       const fire = computeBackdatedHabitFire(habit, tx.date, addToday);
-      if (fire) addFires.set(habitId, fire);
+      if (!fire) continue;
+      const attributedTo = resolveCardFireAttribution({
+        habit,
+        account: addCardAccount,
+        cardLast4: tx.cardLast4,
+        isCurrentMember: addIsCurrentMember,
+      });
+      const firedHabit: Habit = {
+        ...habit,
+        count: fire.resetCount ? fire.count : habit.count + fire.countDelta,
+        totalCount: habit.totalCount + fire.totalCountDelta,
+        ...(fire.addedDate ? { completedDates: [...habit.completedDates, fire.addedDate] } : {}),
+        ...(fire.unfrozenDate
+          ? { frozenDates: (habit.frozenDates ?? []).filter(d => d !== fire.unfrozenDate) }
+          : {}),
+        streakDays: fire.streakDays,
+        hasSubmissionTracking: true,
+        lastUpdated: new Date().toISOString(),
+      };
+      const after = attributedTo
+        ? withAttributionDelta(firedHabit, tx.date, attributedTo, 1)
+        : firedHabit;
+      addFires.set(habitId, after);
+      const move = transactionHabitPointsMove(
+        habit,
+        after,
+        tx.date,
+        addToday,
+        attributedTo ? [attributedTo] : null,
+        fire.pointsDelta,
+      );
+      addPool.daily += move.pool.daily;
+      addPool.weekly += move.pool.weekly;
+      addPool.total += move.pool.total;
+      for (const [uid, delta] of move.perMember) {
+        const acc = addMemberPoints.get(uid) ?? { daily: 0, weekly: 0, total: 0 };
+        acc.daily += delta.daily;
+        acc.weekly += delta.weekly;
+        acc.total += delta.total;
+        addMemberPoints.set(uid, acc);
+      }
     }
     const newTx = {
       ...tx,
@@ -1542,30 +1698,16 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       }));
     }
     if (addFires.size > 0) {
-      setHabits(prev => prev.map(h => {
-        const fire = addFires.get(h.id);
-        if (!fire) return h;
-        return {
-          ...h,
-          count: fire.resetCount ? fire.count : h.count + fire.countDelta,
-          totalCount: h.totalCount + fire.totalCountDelta,
-          ...(fire.addedDate ? { completedDates: [...h.completedDates, fire.addedDate] } : {}),
-          ...(fire.unfrozenDate
-            ? { frozenDates: (h.frozenDates ?? []).filter(d => d !== fire.unfrozenDate) }
-            : {}),
-          streakDays: fire.streakDays,
-          hasSubmissionTracking: true,
-          lastUpdated: new Date().toISOString(),
-        };
-      }));
-      // Only the lifetime total is mirrored (same simplification the mock's
-      // updateTransactionCategory makes): pointsDelta.total is the bucket every
-      // fire credits, while daily/weekly are date-gated.
-      const pointsChange = [...addFires.values()].reduce((sum, f) => sum + f.pointsDelta.total, 0);
-      if (pointsChange !== 0) setTotalPoints(prev => prev + pointsChange);
+      setHabits(prev => prev.map(h => addFires.get(h.id) ?? h));
+      // The pool and every affected member, from the ONE decomposition computed
+      // above — never two figures that could disagree. A transaction fire always
+      // credits the shared pool (`creditHouseholdPool`, matching production's
+      // transaction path), never an assignee's own doc.
+      creditHouseholdPool(addPool);
+      for (const [uid, delta] of addMemberPoints) creditMemberPoints(uid, delta);
     }
     toast.success('Mock: Transaction added');
-  }, [accounts, habits]);
+  }, [accounts, habits, creditHouseholdPool, creditMemberPoints]);
 
   // F-DASH-04 parity: add several transactions (e.g. a receipt split into
   // category transactions) with their combined verified-only balance effects.
@@ -1691,41 +1833,63 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       // cases (household credit, chore, no/untagged card, uid off the roster).
       const cardAccount = resolveTargetAccount(existing?.accountId, accounts);
       const isCurrentMember = currentMemberPredicate(membersRef.current);
-      let pointsChange = 0;
-      setHabits(prev => prev.map(h => {
-        if (!habitIdsToFire.includes(h.id)) return h;
-        const fire = computeBackdatedHabitFire(h, fireDate, today);
-        if (!fire) return h;
-        pointsChange += fire.pointsDelta.total;
+      // Resolved OUTSIDE the setState updater, which StrictMode double-invokes —
+      // accumulating points inside it credits them twice in dev.
+      const firedHabits = new Map<string, Habit>();
+      const pool: PointsBuckets = { daily: 0, weekly: 0, total: 0 };
+      const memberPoints = new Map<string, PointsBuckets>();
+      for (const habitId of habitIdsToFire) {
+        const habit = habits.find(h => h.id === habitId);
+        if (!habit) continue;
+        const fire = computeBackdatedHabitFire(habit, fireDate, today);
+        if (!fire) continue;
         const attributedTo = resolveCardFireAttribution({
-          habit: h,
+          habit,
           account: cardAccount,
           cardLast4: existing?.cardLast4,
           isCurrentMember,
         });
         const fired: Habit = {
-          ...h,
-          count: fire.resetCount ? fire.count : h.count + fire.countDelta,
-          totalCount: h.totalCount + fire.totalCountDelta,
-          ...(fire.addedDate ? { completedDates: [...h.completedDates, fire.addedDate] } : {}),
+          ...habit,
+          count: fire.resetCount ? fire.count : habit.count + fire.countDelta,
+          totalCount: habit.totalCount + fire.totalCountDelta,
+          ...(fire.addedDate ? { completedDates: [...habit.completedDates, fire.addedDate] } : {}),
           ...(fire.unfrozenDate
-            ? { frozenDates: (h.frozenDates ?? []).filter(d => d !== fire.unfrozenDate) }
+            ? { frozenDates: (habit.frozenDates ?? []).filter(d => d !== fire.unfrozenDate) }
             : {}),
           streakDays: fire.streakDays,
           hasSubmissionTracking: true,
           lastUpdated: new Date().toISOString(),
         };
-        return attributedTo
+        const after = attributedTo
           ? withAttributionDelta(fired, fireDate, attributedTo, 1)
           : fired;
-      }));
-      // Only the lifetime total is mirrored here: pointsDelta.total is the
-      // bucket a back-dated fire always credits, while daily/weekly are gated by
-      // date and would be 0 for the common overnight-sync case anyway.
-      if (pointsChange !== 0) setTotalPoints(prev => prev + pointsChange);
+        firedHabits.set(habitId, after);
+        const move = transactionHabitPointsMove(
+          habit,
+          after,
+          fireDate,
+          today,
+          attributedTo ? [attributedTo] : null,
+          fire.pointsDelta,
+        );
+        pool.daily += move.pool.daily;
+        pool.weekly += move.pool.weekly;
+        pool.total += move.pool.total;
+        for (const [uid, delta] of move.perMember) {
+          const acc = memberPoints.get(uid) ?? { daily: 0, weekly: 0, total: 0 };
+          acc.daily += delta.daily;
+          acc.weekly += delta.weekly;
+          acc.total += delta.total;
+          memberPoints.set(uid, acc);
+        }
+      }
+      setHabits(prev => prev.map(h => firedHabits.get(h.id) ?? h));
+      creditHouseholdPool(pool);
+      for (const [uid, delta] of memberPoints) creditMemberPoints(uid, delta);
     }
     toast.success('Mock: Verified & Categorized!');
-  }, [transactions, accounts]);
+  }, [transactions, accounts, habits, creditHouseholdPool, creditMemberPoints]);
 
   // Habit Automations (PRD #1065): mock parity for the atomic undo. Reverses the
   // transaction to pending_review, restores prior category/account/relatedHabitIds,
@@ -1758,11 +1922,102 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       return next;
     }));
     if (firedHabitIds.length > 0) {
-      setHabits(prev => prev.map(h => firedHabitIds.includes(h.id)
-        ? { ...h, count: Math.max(0, h.count - 1), totalCount: Math.max(0, h.totalCount - 1) }
-        : h));
+      // 🛡️ ATTR-1: the fire now writes `completedBy.<date>.<uid>`, so an undo
+      // that only decremented the counters left a PHANTOM attribution entry
+      // behind — a completion credited to somebody with no completion under it,
+      // which the recap would keep scoring. Un-write it the same way production
+      // does: bounded by `resolveReversalSources`, so a member who no longer
+      // holds units on that date has nothing taken back rather than being driven
+      // negative, and the points follow the same holders.
+      //
+      // Computed OUTSIDE the setState updater (StrictMode double-invokes it).
+      const undoDate = existing?.date ?? getLocalDateString();
+      const undoToday = getLocalDateString();
+      const undoCardAccount = resolveTargetAccount(existing?.accountId, accounts);
+      const undoIsCurrentMember = currentMemberPredicate(membersRef.current);
+      const undone = new Map<string, Habit>();
+      const undoPool: PointsBuckets = { daily: 0, weekly: 0, total: 0 };
+      const undoMemberPoints = new Map<string, PointsBuckets>();
+      for (const habitId of firedHabitIds) {
+        const habit = habits.find(h => h.id === habitId);
+        if (!habit) continue;
+        // The uid the fire credited, re-resolved from the same inputs — the mock
+        // writes no submission doc to snapshot it on, unlike production.
+        const attributedTo = resolveCardFireAttribution({
+          habit,
+          account: undoCardAccount,
+          cardLast4: existing?.cardLast4,
+          isCurrentMember: undoIsCurrentMember,
+        });
+        const sources = attributedTo
+          ? resolveReversalSources(habit, attributedTo, undoDate, 1)
+          : [];
+        // The date leaves `completedDates` only if no hand-logged submission
+        // still justifies it — the mock's stand-in for production's
+        // remaining-submissions scan.
+        const stillLogged = habitSubmissions.some(
+          s => s.habitId === habitId && s.date === undoDate,
+        );
+        let after: Habit = {
+          ...habit,
+          count: Math.max(0, habit.count - 1),
+          totalCount: Math.max(0, habit.totalCount - 1),
+          completedDates: stillLogged
+            ? habit.completedDates
+            : habit.completedDates.filter(d => d !== undoDate),
+          lastUpdated: new Date().toISOString(),
+        };
+        for (const source of sources) {
+          after = withAttributionDelta(after, undoDate, source.memberId, -source.units);
+        }
+        after = { ...after, streakDays: streakForHabit(after) };
+        undone.set(habitId, after);
+        // The BRANCH is decided by whether the fire attributed, not by whether
+        // `sources` found anything — production's `anyAttributed` rule. With no
+        // units left to take back the derived move still reverses the completion
+        // itself and moves nobody, which is exactly right.
+        const move = transactionHabitPointsMove(
+          habit,
+          after,
+          undoDate,
+          undoToday,
+          attributedTo ? [attributedTo] : null,
+          // Unattributed: no member half, and the pool gives back the habit-level
+          // figure. The mock writes no submission doc, so unlike production this
+          // is reconstructed from the period rather than read off a stored
+          // `pointsEarned` — the closest available stand-in.
+          {
+            daily: 0,
+            weekly: 0,
+            total:
+              legacyPeriodPoints(after, undoDate, undoToday) -
+              legacyPeriodPoints(habit, undoDate, undoToday),
+          },
+        );
+        undoPool.daily += move.pool.daily;
+        undoPool.weekly += move.pool.weekly;
+        undoPool.total += move.pool.total;
+        for (const [uid, delta] of move.perMember) {
+          const acc = undoMemberPoints.get(uid) ?? { daily: 0, weekly: 0, total: 0 };
+          acc.daily += delta.daily;
+          acc.weekly += delta.weekly;
+          acc.total += delta.total;
+          undoMemberPoints.set(uid, acc);
+        }
+      }
+      setHabits(prev => prev.map(h => undone.get(h.id) ?? h));
+      creditHouseholdPool(undoPool);
+      for (const [uid, delta] of undoMemberPoints) creditMemberPoints(uid, delta);
     }
-  }, [transactions, calendarItems]);
+  }, [
+    transactions,
+    calendarItems,
+    habits,
+    habitSubmissions,
+    accounts,
+    creditHouseholdPool,
+    creditMemberPoints,
+  ]);
 
   // F-XCUT-03: push a soft-deleted record into the in-memory trash mirror so
   // Test Mode exercises the same restore/purge flow as the real listener.
@@ -2081,63 +2336,6 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Habits reordered');
   }, []);
 
-  // Credit (or debit, negative delta) the HOUSEHOLD pool ONLY — the redeemable
-  // lifetime total (`totalPoints`). Production writes a shared habit's pool
-  // share to a SEPARATE `households/{id}.points` document that no member doc
-  // ever mirrors, so this must not touch `members` either.
-  //
-  // 🛡️ This USED TO also mirror `delta` onto the signed-in test user's own
-  // three point windows, on the theory that "the pool and the tapper move by
-  // the same number." That happens to be true for an ORDINARY members-mode tap
-  // (the pool figure IS that lone credited member's own award) but is wrong in
-  // two ways it papered over: a `creditMode: 'household'` completion has NO
-  // actor at all — the pool moves, the tapper must not — and every OTHER
-  // credited member's own award ALSO reaches the pool through this function,
-  // so mirroring only the test user double-counted whichever of them happened
-  // to be MOCK_USER_UID. Every caller that needs a member's own score to move
-  // now does so explicitly via `creditMemberPoints`, the same pattern
-  // `addHabitSubmission`/`deleteHabitSubmission` already used unmodified.
-  const creditHouseholdPool = useCallback((
-    delta: { daily: number; weekly: number; total: number },
-  ) => {
-    if (delta.total === 0) return;
-    setTotalPoints(prev => prev + delta.total);
-  }, []);
-
-  /**
-   * Per-member points (stage 1): move ONE member's own score, without touching
-   * the household pool — the member half of the two-layer model. Buckets are
-   * pre-gated by the caller (a back-dated credit moves total only).
-   */
-  const creditMemberPoints = useCallback((
-    memberId: string,
-    delta: { daily: number; weekly: number; total: number },
-  ) => {
-    if (delta.daily === 0 && delta.weekly === 0 && delta.total === 0) return;
-    setMembers(prev => prev.map(m => m.uid === memberId
-      ? { ...m, points: {
-          daily: m.points.daily + delta.daily,
-          weekly: m.points.weekly + delta.weekly,
-          total: m.points.total + delta.total,
-        } }
-      : m));
-  }, []);
-
-  /**
-   * Route a habit's POOL points exactly as production's `habitPointsTargets`
-   * does (Plan 080c): an ASSIGNED chore credits its assignee's own member doc
-   * and the shared household pool receives nothing; a shared habit credits the
-   * pool. Test Mode previously sent every habit — assigned chores included — to
-   * `creditPoints`, so a kid's chore silently paid the test user and inflated
-   * the redeemable pool, which production never does.
-   */
-  const creditHabitPool = useCallback((
-    habit: Pick<Habit, 'assignedTo'>,
-    delta: { daily: number; weekly: number; total: number },
-  ) => {
-    if (habit.assignedTo) creditMemberPoints(habit.assignedTo, delta);
-    else creditHouseholdPool(delta);
-  }, [creditHouseholdPool, creditMemberPoints]);
 
   // Habit Automations (PRD #1065): fire (or reverse) the habit a to-do is linked
   // to, mirroring the real fireLinkedHabitInBatch — same pure scoring helper

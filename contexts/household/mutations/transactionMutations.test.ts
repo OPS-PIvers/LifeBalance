@@ -2234,11 +2234,14 @@ describe('ATTR-1 — transaction-fired habits credit the card owner', () => {
     expect(commitCount).toBe(1);
   });
 
-  // 🛡️ The pool and the credited member get DIFFERENT figures when a threshold
-  // period's crossing also flips a second member's award on: the pool pays
-  // both, the submission stores the creditee's own. Without
-  // `householdPointsEarned` the undo would debit the pool the smaller figure
-  // and leave it permanently over-credited.
+  // 🛡️ THE SIDE-EFFECT MEMBER. A threshold period whose crossing COMPLETES it
+  // flips an EARLIER member's award from 0 to a full one, so the pool pays BOTH
+  // while the submission stores only the creditee's own share. That second
+  // member has no submission of their own, so an undo that reversed from the
+  // stored doc alone left them permanently over-credited — `points.total` is a
+  // lifetime counter `writeSyncedMemberPoints` never writes. The undo therefore
+  // DERIVES its debit from the live habit's before/after decomposition, exactly
+  // as `deleteHabitSubmission` does.
   describe('a threshold period that also flips a second member’s award on', () => {
     // targetCount 2: the APPROVER already banked the period's first unit
     // (attributed to them), and the CARDHOLDER's card crosses the target now,
@@ -2251,75 +2254,230 @@ describe('ATTR-1 — transaction-fired habits credit the card owner', () => {
       completedBy: { [today]: { [APPROVER]: 1 } },
     };
 
+    /** Every `points.*` increment captured for one doc, summed across writes. */
+    const pointsFor = (path: string) => {
+      const out = { daily: 0, weekly: 0, total: 0 };
+      for (const write of capturedUpdates.filter(u => u.ref.__path === path)) {
+        for (const bucket of ['daily', 'weekly', 'total'] as const) {
+          const value = write.data?.[`points.${bucket}`] as { __increment: number } | undefined;
+          out[bucket] += value?.__increment ?? 0;
+        }
+      }
+      return out;
+    };
+    const negated = (b: { daily: number; weekly: number; total: number }) => ({
+      daily: -b.daily,
+      weekly: -b.weekly,
+      total: -b.total,
+    });
+
+    /**
+     * The habit as a write LEFT it, replayed from the deltas that write actually
+     * captured — so the undo below is fed the fire's own output (and the re-fire
+     * the undo's own output) rather than a hand-written guess that could quietly
+     * diverge from either.
+     *
+     * A node decremented to zero is DROPPED, matching `withAttributionDelta` and
+     * `memberCompletionCount`, for which a ≤0 count means "absent".
+     */
+    const applyHabitWrite = (habit: Habit): Habit => {
+      const data = habitData();
+      const inc = (value: unknown) =>
+        (value as { __increment?: number } | undefined)?.__increment ?? 0;
+      const completedBy: NonNullable<Habit['completedBy']> = {};
+      for (const [date, day] of Object.entries(habit.completedBy ?? {})) {
+        completedBy[date] = { ...day };
+      }
+      for (const [key, value] of Object.entries(data)) {
+        const parts = key.split('.');
+        const [root, date, uid] = parts;
+        if (root !== 'completedBy' || parts.length !== 3 || !date || !uid) continue;
+        const day = { ...(completedBy[date] ?? {}) };
+        const next = (day[uid] ?? 0) + inc(value);
+        if (next > 0) day[uid] = next;
+        else delete day[uid];
+        if (Object.keys(day).length > 0) completedBy[date] = day;
+        else delete completedBy[date];
+      }
+      const dates = data.completedDates as
+        | { __arrayUnion?: string[]; __arrayRemove?: string[] }
+        | undefined;
+      const removed = new Set(dates?.__arrayRemove ?? []);
+      return {
+        ...habit,
+        count: typeof data.count === 'number' ? data.count : habit.count + inc(data.count),
+        totalCount: habit.totalCount + inc(data.totalCount),
+        completedDates: [
+          ...new Set([...habit.completedDates, ...(dates?.__arrayUnion ?? [])]),
+        ].filter(d => !removed.has(d)),
+        completedBy,
+      };
+    };
+
+    /** Seed the undo's submission read with the doc the fire actually wrote. */
+    const seedFiredSubmission = () => {
+      const fired = capturedSets.find(s => s.ref.__path.startsWith(submissionsPath('h1')))!;
+      submissionDocs[submissionsPath('h1')] = [{ id: 'sub-1', ...fired.data! }];
+    };
+
+    const undoDeps = (
+      habits: Habit[],
+      members: { uid: string }[] = [{ uid: APPROVER }, { uid: CARDHOLDER }],
+    ) => ({
+      db,
+      householdId: HOUSEHOLD_ID,
+      habits,
+      transactions: [{ ...cardTx, status: 'verified' as const, firedHabitIds: ['h1'] }],
+      accounts: cardAccounts,
+      members,
+      calendarItems: [] as CalendarItem[],
+    });
+
     it('pays the pool BOTH awards while the submission stores only the creditee’s', async () => {
       const { updateTransactionCategory } = makeUpdateTransactionCategory(deps([twoStepHabit]));
       await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
 
       const submission = capturedSets.find(s => s.ref.__path.startsWith(submissionsPath('h1')))!;
-      const memberAward = submission.data!.pointsEarned as number;
-      const pooled = submission.data!.householdPointsEarned as number;
-      const hh = capturedUpdates.find(u => u.ref.__path === householdPath)!;
-
-      // Both members earn; the pool receives the sum, the doc stores one share.
-      expect(pooled).toBeGreaterThan(memberAward);
-      expect(hh.data!['points.total']).toEqual({ __increment: pooled });
-      expect(capturedUpdates.find(u => u.ref.__path === memberPath(APPROVER))).toBeDefined();
-      expect(capturedUpdates.find(u => u.ref.__path === memberPath(CARDHOLDER))).toBeDefined();
+      // The doc stores ONE share; the pool receives the sum of both.
+      expect(submission.data!.pointsEarned).toBe(10);
+      expect(pointsFor(householdPath).total).toBe(20);
+      expect(pointsFor(memberPath(APPROVER)).total).toBe(10);
+      expect(pointsFor(memberPath(CARDHOLDER)).total).toBe(10);
     });
 
-    it('the undo debits the pool that SAME figure, not the member’s share', async () => {
-      // Replay the fire's own record, as the undo reads it back.
-      submissionDocs[submissionsPath('h1')] = [{
-        id: 'sub-1',
-        habitId: 'h1',
-        habitTitle: baseHabit.title,
-        timestamp: `${today}T12:00:00.000Z`,
-        date: today,
-        count: 1,
-        pointsEarned: 10,
-        householdPointsEarned: 20,
-        streakDaysAtTime: 1,
-        multiplierApplied: 1,
-        createdBy: APPROVER,
-        attributedTo: CARDHOLDER,
-        createdAt: `${today}T12:00:00.000Z`,
-        sourceTransactionId: 'tx-card',
-      }];
-      const firedTwoStep: Habit = {
-        ...twoStepHabit,
-        count: 2,
-        totalCount: 5,
-        completedDates: [today, '2020-01-01'],
-        completedBy: { [today]: { [APPROVER]: 1, [CARDHOLDER]: 1 } },
-      };
-      const { reverseTransactionApproval } = makeReverseTransactionApproval({
-        db,
-        householdId: HOUSEHOLD_ID,
-        habits: [firedTwoStep],
-        transactions: [{ ...cardTx, status: 'verified', firedHabitIds: ['h1'] }],
-        accounts: cardAccounts,
-        members: [{ uid: APPROVER }, { uid: CARDHOLDER }],
-        calendarItems: [] as CalendarItem[],
-      });
+    // 🛡️ THE REGRESSION THIS PR'S FIRST DRAFT SHIPPED: the undo debited the
+    // creditee and the pool but wrote NOTHING to the side-effect member, and
+    // `points.total` has no corrective recompute to clean up after it.
+    it('fire → undo returns the pool AND every member it touched to zero', async () => {
+      const { updateTransactionCategory } = makeUpdateTransactionCategory(deps([twoStepHabit]));
+      await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
+
+      const afterFire = applyHabitWrite(twoStepHabit);
+      const firePool = pointsFor(householdPath);
+      const fireApprover = pointsFor(memberPath(APPROVER));
+      const fireCardholder = pointsFor(memberPath(CARDHOLDER));
+      // Guard the fixture: if the fire stopped paying a SIDE-EFFECT member the
+      // round-trip below would pass while testing nothing.
+      expect(fireApprover.total).toBeGreaterThan(0);
+      expect(firePool.total).toBe(fireApprover.total + fireCardholder.total);
+
+      seedFiredSubmission();
+      capturedUpdates = [];
+      const { reverseTransactionApproval } = makeReverseTransactionApproval(undoDeps([afterFire]));
       await reverseTransactionApproval('tx-card', { category: 'Uncategorized' }, ['h1']);
 
-      const hh = capturedUpdates.find(u => u.ref.__path === householdPath)!;
-      // The POOL figure, in every bucket — not the member's 10.
-      expect(hh.data!['points.total']).toEqual({ __increment: -20 });
-      expect(hh.data!['points.daily']).toEqual({ __increment: -20 });
-      expect(hh.data!['points.weekly']).toEqual({ __increment: -20 });
-      // The creditee still gets debited their OWN share.
-      const memberWrite = capturedUpdates.find(u => u.ref.__path === memberPath(CARDHOLDER))!;
-      expect(memberWrite.data!['points.total']).toEqual({ __increment: -10 });
+      // Every touched doc back to its pre-fire figure, bucket for bucket —
+      // `points.total` included, which is the field nothing else recovers.
+      expect(pointsFor(householdPath)).toEqual(negated(firePool));
+      expect(pointsFor(memberPath(APPROVER))).toEqual(negated(fireApprover));
+      expect(pointsFor(memberPath(CARDHOLDER))).toEqual(negated(fireCardholder));
     });
-  });
 
-  it('records no householdPointsEarned when the pool and the member agree', async () => {
-    const { updateTransactionCategory } = makeUpdateTransactionCategory(deps([baseHabit]));
-    await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
+    it('returns TWO side-effect members to zero, not just the first', async () => {
+      const THIRD = 'user-3';
+      const roster = [{ uid: APPROVER }, { uid: CARDHOLDER }, { uid: THIRD }];
+      const threeStep: Habit = {
+        ...baseHabit,
+        targetCount: 3,
+        count: 2,
+        completedBy: { [today]: { [APPROVER]: 1, [THIRD]: 1 } },
+      };
+      const { updateTransactionCategory } = makeUpdateTransactionCategory(
+        deps([threeStep], [cardTx], roster),
+      );
+      await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
 
-    const submission = capturedSets.find(s => s.ref.__path.startsWith(submissionsPath('h1')))!;
-    expect(submission.data).not.toHaveProperty('householdPointsEarned');
+      const afterFire = applyHabitWrite(threeStep);
+      const fire = {
+        pool: pointsFor(householdPath),
+        approver: pointsFor(memberPath(APPROVER)),
+        third: pointsFor(memberPath(THIRD)),
+        cardholder: pointsFor(memberPath(CARDHOLDER)),
+      };
+      expect(fire.approver.total).toBeGreaterThan(0);
+      expect(fire.third.total).toBeGreaterThan(0);
+
+      seedFiredSubmission();
+      capturedUpdates = [];
+      const { reverseTransactionApproval } = makeReverseTransactionApproval(
+        undoDeps([afterFire], roster),
+      );
+      await reverseTransactionApproval('tx-card', { category: 'Uncategorized' }, ['h1']);
+
+      expect(pointsFor(householdPath)).toEqual(negated(fire.pool));
+      expect(pointsFor(memberPath(APPROVER))).toEqual(negated(fire.approver));
+      expect(pointsFor(memberPath(THIRD))).toEqual(negated(fire.third));
+      expect(pointsFor(memberPath(CARDHOLDER))).toEqual(negated(fire.cardholder));
+    });
+
+    // The side-effect member's award is NOT assumed equal to the creditee's:
+    // each is scored at their OWN streak multiplier. APPROVER carries a 7-day
+    // attributed chain (2.0x) into a period the CARDHOLDER enters cold (1.0x).
+    it('debits a side-effect member their OWN award, not the creditee’s', async () => {
+      const priorDays = Object.fromEntries(
+        [1, 2, 3, 4, 5, 6].map(n => [
+          format(subDays(parseISO(today), n), 'yyyy-MM-dd'),
+          { [APPROVER]: 1 },
+        ]),
+      );
+      const streakedHabit: Habit = {
+        ...baseHabit,
+        targetCount: 2,
+        count: 1,
+        completedBy: { ...priorDays, [today]: { [APPROVER]: 1 } },
+      };
+      const { updateTransactionCategory } = makeUpdateTransactionCategory(deps([streakedHabit]));
+      await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
+
+      const afterFire = applyHabitWrite(streakedHabit);
+      const fireApprover = pointsFor(memberPath(APPROVER));
+      const fireCardholder = pointsFor(memberPath(CARDHOLDER));
+      const firePool = pointsFor(householdPath);
+      // 7-day chain → 2.0x → 20, against the cardholder's first-ever 1.0x → 10.
+      expect(fireApprover.total).toBe(20);
+      expect(fireCardholder.total).toBe(10);
+      expect(firePool.total).toBe(30);
+
+      seedFiredSubmission();
+      capturedUpdates = [];
+      const { reverseTransactionApproval } = makeReverseTransactionApproval(undoDeps([afterFire]));
+      await reverseTransactionApproval('tx-card', { category: 'Uncategorized' }, ['h1']);
+
+      expect(pointsFor(memberPath(APPROVER)).total).toBe(-20);
+      expect(pointsFor(memberPath(CARDHOLDER)).total).toBe(-10);
+      expect(pointsFor(householdPath).total).toBe(-30);
+    });
+
+    it('re-firing after an undo credits exactly what the first fire did', async () => {
+      const { updateTransactionCategory } = makeUpdateTransactionCategory(deps([twoStepHabit]));
+      await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
+      const afterFire = applyHabitWrite(twoStepHabit);
+      const first = {
+        pool: pointsFor(householdPath),
+        approver: pointsFor(memberPath(APPROVER)),
+        cardholder: pointsFor(memberPath(CARDHOLDER)),
+      };
+
+      seedFiredSubmission();
+      capturedUpdates = [];
+      const { reverseTransactionApproval } = makeReverseTransactionApproval(undoDeps([afterFire]));
+      await reverseTransactionApproval('tx-card', { category: 'Uncategorized' }, ['h1']);
+      const afterUndo = applyHabitWrite(afterFire);
+
+      // The undo restored the habit itself, so the re-approve starts level.
+      expect(afterUndo.count).toBe(twoStepHabit.count);
+      expect(afterUndo.completedBy).toEqual(twoStepHabit.completedBy);
+
+      submissionDocs = {};
+      capturedUpdates = [];
+      capturedSets = [];
+      const refire = makeUpdateTransactionCategory(deps([afterUndo]));
+      await refire.updateTransactionCategory('tx-card', 'Shopping', ['h1']);
+
+      expect(pointsFor(householdPath)).toEqual(first.pool);
+      expect(pointsFor(memberPath(APPROVER))).toEqual(first.approver);
+      expect(pointsFor(memberPath(CARDHOLDER))).toEqual(first.cardholder);
+    });
   });
 
   it('back-dates the attribution to the TRANSACTION date, never today', async () => {

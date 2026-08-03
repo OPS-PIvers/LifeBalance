@@ -449,14 +449,13 @@ function fireHabitsIntoBatch(
       // debits exactly what that member was paid; an unattributed doc keeps the
       // habit-level figure it always stored.
       pointsEarned: attributedTo ? memberAward : fire.pointsEarned,
-      // The POOL's own figure, recorded only when it differs from the member's
-      // — see the field's docblock. Without it a reversal debits the pool the
-      // member's award while the fire credited it the household's, which for a
-      // threshold period that also flipped a second member's award on leaves
-      // the pool permanently over-credited.
-      ...(move && move.household.total !== memberAward
-        ? { householdPointsEarned: move.household.total }
-        : {}),
+      // NOTE — the POOL's own figure is deliberately NOT stored beside it. The
+      // two diverge whenever a threshold period's crossing also flips a second
+      // member's award on, but `reverseTransactionApproval` does not reverse
+      // from a stored pool figure at all: it re-decomposes the live habit's
+      // before/after around this date, which reverses the SIDE-EFFECT member
+      // too and stays correct when a second transaction keeps the period met.
+      // A stored scalar could do neither. See that function's ATTR-1 block.
       // Habit-level in BOTH cases, exactly as `addHabitSubmission` records them
       // even for an explicitly attributed log — only `pointsEarned` forks.
       streakDaysAtTime: fire.streakAtFireDate,
@@ -1477,16 +1476,6 @@ export function makeReverseTransactionApproval(deps: {
 
       const reversedDates = new Set(fired.map(s => s.date));
       const unitsReversed = fired.reduce((sum, s) => sum + (s.count ?? 0), 0);
-      // 🛡️ ATTR-1: the POOL-facing figure, which is not always `pointsEarned` —
-      // an attributed fire credits the pool the household scorer's own move
-      // while the doc stores the credited MEMBER's award, and the two diverge
-      // when a threshold period's crossing also flips a second member's award
-      // on. `householdPointsEarned` records the difference; absent (every
-      // unattributed fire, every pre-ATTR-1 doc) means the two were the same.
-      const creditedPoints = fired.reduce(
-        (sum, s) => sum + (s.householdPointsEarned ?? s.pointsEarned ?? 0),
-        0,
-      );
 
       // Only units belonging to the habit's CURRENT period came out of the live
       // counter; a past-period fire never touched it, so it must not be
@@ -1542,33 +1531,27 @@ export function makeReverseTransactionApproval(deps: {
       // must collapse into ONE increment — a later object key would silently
       // replace the earlier one rather than adding to it).
       const reversedUnitsByPath = new Map<string, number>();
+      // The POST-UNDO view of this habit, built alongside the dot paths from the
+      // SAME `resolveReversalSources` verdicts, so the object and the Firestore
+      // write can never describe different reversals. It is the `after` half of
+      // the points derivation below.
+      let reverseAfter: Habit = {
+        ...habit,
+        count: Math.max(0, habit.count - liveUnitsReversed),
+        totalCount: Math.max(0, habit.totalCount - unitsReversed),
+        completedDates: nextCompletedDates,
+      };
+      let anyAttributed = false;
       for (const s of fired) {
         if (!s.attributedTo) continue;
+        anyAttributed = true;
         const units = s.count ?? 0;
         if (units <= 0) continue;
         const sources = resolveReversalSources(habit, s.attributedTo, s.date, units);
         for (const source of sources) {
           const path = completedByPath(s.date, source.memberId);
           reversedUnitsByPath.set(path, (reversedUnitsByPath.get(path) ?? 0) + source.units);
-        }
-        // Debit at the submission's STORED figure — exactly what was credited —
-        // but ONLY for the members the attribution reversal above actually took
-        // units back from, and in proportion to those units. Deriving the debit
-        // from `attributedTo` alone would double-debit a member whose node some
-        // other path had already cleared, and would miss the fall-through case
-        // where `resolveReversalSources` takes the units from a DIFFERENT holder.
-        // A transaction fire always writes `count: 1`, so the share is exact.
-        const earned = s.pointsEarned ?? 0;
-        if (earned === 0) continue;
-        for (const source of sources) {
-          if (!isCurrentMember(source.memberId)) continue;
-          const share = Math.round((earned * source.units) / units);
-          if (share === 0) continue;
-          const acc = memberPointsDelta.get(source.memberId) ?? { daily: 0, weekly: 0, total: 0 };
-          acc.total -= share;
-          if (s.date === today) acc.daily -= share;
-          if (s.date >= weekStart && s.date <= today) acc.weekly -= share;
-          memberPointsDelta.set(source.memberId, acc);
+          reverseAfter = withAttributionDelta(reverseAfter, s.date, source.memberId, -source.units);
         }
       }
       const attributionReversal: Record<string, unknown> = {};
@@ -1596,16 +1579,72 @@ export function makeReverseTransactionApproval(deps: {
         batch.delete(doc(db, `households/${householdId}/habits/${habitId}/submissions`, s.id));
       }
 
-      // Bucket-gate the refund by the date each submission credited, mirroring
-      // the forward fire — reversing a Monday fire must not drain today's daily.
-      pointsDelta.total -= creditedPoints;
-      for (const s of fired) {
-        // Same pool-facing figure as `creditedPoints` above — the three buckets
-        // must be gated views of ONE number, or an attributed reversal drains a
-        // different amount from `daily`/`weekly` than it does from `total`.
-        const pooled = s.householdPointsEarned ?? s.pointsEarned ?? 0;
-        if (s.date === today) pointsDelta.daily -= pooled;
-        if (s.date >= weekStart && s.date <= today) pointsDelta.weekly -= pooled;
+      // 🛡️ ATTR-1 — THE REVERSAL MUST DEBIT EVERY MEMBER THE FIRE CREDITED.
+      //
+      // The forward fire pays `periodPointsMove().perMember`, which is the
+      // PERIOD's holders and not just `attributedTo`: a threshold period whose
+      // crossing completes it flips an EARLIER member's award from 0 to a full
+      // one as a side effect, and that member has no submission of their own to
+      // reverse from. Debiting only the doc's own creditee left them
+      // permanently over-credited — `points.total` is a lifetime counter that
+      // NOTHING rebuilds (`writeSyncedMemberPoints` writes only
+      // `points.daily`/`points.weekly`, and `computeHouseholdPointsSync` only
+      // ever RAISES the pool), so that residue never self-heals.
+      //
+      // So the debit is DERIVED from the same before/after decomposition the
+      // credit used, exactly as `deleteHabitSubmission` does
+      // (`queueHabitPointsMove` in hooks/useHabitActions.tsx) — the reviewed
+      // sibling of this path. Two properties make that safe rather than a
+      // re-derivation of "who should be credited":
+      //
+      //   • WHO is still the snapshot. `reverseAfter` is built ONLY from
+      //     `resolveReversalSources(habit, s.attributedTo, …)` verdicts, so a
+      //     habit REASSIGNED or edited between fire and undo cannot move units
+      //     off a member the fire never touched. `periodPointsMove` then diffs
+      //     two views of the SAME live habit, so every field the scorers ignore
+      //     (`assignedTo`, `creditMode`, title…) cancels out of the delta.
+      //   • It is exact under interleaving. Undoing one of two transactions that
+      //     each contributed to a threshold period leaves the period still met,
+      //     so nobody's award moves and nothing is debited — where a stored
+      //     figure would have clawed back an award the household still holds.
+      //
+      // One move per PERIOD touched (a transaction fires one submission per
+      // habit, so this is one iteration in practice); `periodScoredDates` scopes
+      // each to its own period, so the deltas sum without overlap.
+      if (anyAttributed) {
+        const periodRepresentatives = new Map<string, string>();
+        for (const date of reversedDates) {
+          const start = habitPeriodStart(habit.period, date);
+          if (!periodRepresentatives.has(start)) periodRepresentatives.set(start, date);
+        }
+        for (const date of periodRepresentatives.values()) {
+          const move = periodPointsMove(habit, reverseAfter, date, today);
+          addBuckets(pointsDelta, move.household);
+          for (const [memberId, buckets] of move.perMember) {
+            // A member removed since the fire has no doc; `batch.update` on it
+            // would reject NOT_FOUND and, batches being all-or-nothing, break
+            // the whole undo. Their score no longer exists, so skipping costs
+            // nothing — and the forward fire gated identically.
+            if (!isCurrentMember(memberId)) continue;
+            const acc = memberPointsDelta.get(memberId) ?? { daily: 0, weekly: 0, total: 0 };
+            addBuckets(acc, buckets);
+            memberPointsDelta.set(memberId, acc);
+          }
+        }
+      } else {
+        // UNATTRIBUTED — every fire before ATTR-1, plus every household-credit /
+        // chore / untagged-card fire. Those credited the pool the habit-level
+        // `fire.pointsDelta` and wrote no member doc at all, so their stored
+        // `pointsEarned` is the only record of what they were paid and the
+        // reversal stays bit-for-bit the pre-ATTR-1 one. Bucket-gated by the
+        // date each submission credited, mirroring the forward fire — reversing
+        // a Monday fire must not drain today's daily.
+        for (const s of fired) {
+          const pooled = s.pointsEarned ?? 0;
+          pointsDelta.total -= pooled;
+          if (s.date === today) pointsDelta.daily -= pooled;
+          if (s.date >= weekStart && s.date <= today) pointsDelta.weekly -= pooled;
+        }
       }
     }
 

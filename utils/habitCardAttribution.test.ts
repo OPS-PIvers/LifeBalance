@@ -208,4 +208,28 @@ describe('currentMemberPredicate', () => {
       }),
     ).toBeNull();
   });
+
+  // 🛡️ `Account.cardOwners` is member-writable with no key allowlist in
+  // firestore.rules, so the resolver — not the picker UI — is the boundary.
+  it('excludes MANAGED profiles, matching the card-owner picker', () => {
+    const isMember = currentMemberPredicate([
+      { uid: ALICE },
+      { uid: BOB, isManaged: true },
+    ]);
+    expect(isMember(ALICE)).toBe(true);
+    expect(isMember(BOB)).toBe(false);
+    // An absent flag means "not managed", as everywhere else in the codebase.
+    expect(currentMemberPredicate([{ uid: BOB, isManaged: false }])(BOB)).toBe(true);
+  });
+
+  it('declines the whole fire when a kid’s uid was written into cardOwners', () => {
+    expect(
+      resolveCardFireAttribution({
+        habit: habit(),
+        account: account({ '8899': BOB }),
+        cardLast4: '8899',
+        isCurrentMember: currentMemberPredicate([{ uid: ALICE }, { uid: BOB, isManaged: true }]),
+      }),
+    ).toBeNull();
+  });
 });

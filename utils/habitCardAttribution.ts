@@ -117,10 +117,20 @@ export function resolveCardFireAttribution(input: CardFireAttributionInput): str
  * `isCurrentMember` (see that field's docblock for why it differs from
  * `isLiveMember`). An empty/absent roster means "unknown", and an unknown
  * roster credits nobody.
+ *
+ * 🛡️ MANAGED PROFILES ARE EXCLUDED. `BudgetAccounts`' card-owner picker already
+ * offers only `!m.isManaged` members, but the UI is not the boundary here:
+ * `Account.cardOwners` is a plain member-writable map with no key allowlist in
+ * `firestore.rules`, so a stray or hostile write naming a login-less kid's uid
+ * would otherwise be honoured. A managed profile has no card of its own, and
+ * crediting one would put it on adult-only standings via a path the picker
+ * cannot reach — so the resolver enforces the same rule the picker shows.
+ * `isManaged` is optional so a caller holding only uids still type-checks; an
+ * absent flag means "not managed", exactly as everywhere else in the codebase.
  */
 export function currentMemberPredicate(
-  members: readonly { uid: string }[] | null | undefined,
+  members: readonly { uid: string; isManaged?: boolean }[] | null | undefined,
 ): (uid: string) => boolean {
-  const uids = new Set((members ?? []).map(m => m.uid));
+  const uids = new Set((members ?? []).filter(m => !m.isManaged).map(m => m.uid));
   return (uid: string) => uids.has(uid);
 }
