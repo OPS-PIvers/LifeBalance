@@ -161,6 +161,56 @@ describe("buildFillUpdates", () => {
     const updates = buildFillUpdates({ amount: 13.31, merchant: "Amatista" });
     expect(updates).not.toHaveProperty("accountId");
   });
+
+  // CARD-1 (finding 1): cardLast4 must survive the stub-fill merge instead of
+  // being dropped on the floor — this is the Apple Pay $0 stub -> bank-fill
+  // production path, so losing it here silently breaks card attribution for a
+  // large share of real transactions.
+  it("CARD-1: carries the resolved cardLast4 through the stub fill", () => {
+    const target = stub("s1", "Amatista");
+    const updates = buildFillUpdates(
+      { amount: 13.31, merchant: "Amatista", cardLast4: "8899" },
+      target,
+    );
+    expect(updates).toMatchObject({ cardLast4: "8899" });
+  });
+
+  it("CARD-1: omits cardLast4 when the incoming event has none", () => {
+    const target = stub("s1", "Amatista");
+    const updates = buildFillUpdates({ amount: 13.31, merchant: "Amatista" }, target);
+    expect(updates).not.toHaveProperty("cardLast4");
+  });
+
+  it("CARD-1: does NOT overwrite a cardLast4 the stub already carries (conservative merge)", () => {
+    const target: ReconcileCandidate = {
+      id: "s1",
+      merchant: "Amatista",
+      amount: 0,
+      needsAmount: true,
+      cardLast4: "1234",
+    };
+    const updates = buildFillUpdates(
+      { amount: 13.31, merchant: "Amatista", cardLast4: "8899" },
+      target,
+    );
+    expect(updates).not.toHaveProperty("cardLast4");
+  });
+
+  it("CARD-1: still sets cardLast4 when called without a target (backward-compatible signature)", () => {
+    const updates = buildFillUpdates({ amount: 13.31, merchant: "Amatista", cardLast4: "8899" });
+    expect(updates).toMatchObject({ cardLast4: "8899" });
+  });
+
+  it("CARD-1: does not change WHICH target is chosen — pickFillTarget's decision is unaffected by cardLast4", () => {
+    const candidates = [stub("s1", "Gas Station"), stub("s2", "Coffee Shop")];
+    const withoutCard = pickFillTarget({ amount: 40, merchant: "gas station" }, candidates);
+    const withCard = pickFillTarget(
+      { amount: 40, merchant: "gas station", cardLast4: "8899" },
+      candidates,
+    );
+    expect(withCard?.id).toBe(withoutCard?.id);
+    expect(withCard?.id).toBe("s1");
+  });
 });
 
 describe("pickFillTarget — account awareness", () => {
@@ -328,6 +378,20 @@ describe("pickDuplicateShortcutRow", () => {
     );
     expect(target?.id).toBe("ap1");
   });
+
+  it("CARD-1: does not change WHICH target is chosen — the merge decision is unaffected by cardLast4", () => {
+    const candidates = [applePay("ap1", "Target", 18.86)];
+    const withoutCard = pickDuplicateShortcutRow(
+      { amount: 18.86, merchant: "TARGET T-2189" },
+      candidates,
+    );
+    const withCard = pickDuplicateShortcutRow(
+      { amount: 18.86, merchant: "TARGET T-2189", cardLast4: "8899" },
+      candidates,
+    );
+    expect(withCard?.id).toBe(withoutCard?.id);
+    expect(withCard?.id).toBe("ap1");
+  });
 });
 
 describe("buildDuplicateMergeUpdates", () => {
@@ -360,6 +424,25 @@ describe("buildDuplicateMergeUpdates", () => {
         applePay("ap1", "Target", 18.86, { accountId: "credit" }),
       ),
     ).toEqual({});
+  });
+
+  // CARD-1 (finding 1): cardLast4 must survive this merge path too.
+  it("CARD-1: back-fills cardLast4 onto an untagged Apple Pay row", () => {
+    const target = applePay("ap1", "Target", 18.86);
+    const updates = buildDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "TARGET T-2189", cardLast4: "8899" },
+      target,
+    );
+    expect(updates).toMatchObject({ cardLast4: "8899" });
+  });
+
+  it("CARD-1: does NOT overwrite a cardLast4 the target already carries (conservative merge)", () => {
+    const target = applePay("ap1", "Target", 18.86, { cardLast4: "1234" });
+    const updates = buildDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "TARGET T-2189", cardLast4: "8899" },
+      target,
+    );
+    expect(updates).not.toHaveProperty("cardLast4");
   });
 });
 
@@ -525,5 +608,24 @@ describe("buildReverseDuplicateMergeUpdates", () => {
       target,
     );
     expect(updates).not.toHaveProperty("status");
+  });
+
+  // CARD-1 (finding 1): cardLast4 must survive this merge path too.
+  it("CARD-1: back-fills cardLast4 when the surviving bank row was captured untagged", () => {
+    const target = bankRow("bn1", "TARGET T-2189", 18.86);
+    const updates = buildReverseDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "Target", cardLast4: "8899" },
+      target,
+    );
+    expect(updates).toMatchObject({ cardLast4: "8899" });
+  });
+
+  it("CARD-1: does NOT overwrite a cardLast4 the bank row already carries (conservative merge)", () => {
+    const target = bankRow("bn1", "TARGET T-2189", 18.86, { cardLast4: "1234" });
+    const updates = buildReverseDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "Target", cardLast4: "8899" },
+      target,
+    );
+    expect(updates).not.toHaveProperty("cardLast4");
   });
 });

@@ -30,6 +30,11 @@ const BudgetAccounts: React.FC = () => {
   // Number & Cards drawer — a narrow slice read so this page doesn't pull in
   // the rest of useHouseholdCore's surface.
   const { members } = useHouseholdCore();
+  // The picker only ever offers non-managed (adult) members — a managed kid
+  // has no card of their own to tag as an owner. Memoized and shared with the
+  // section's visibility gate below so the gate can never say "yes" while the
+  // picker itself has nothing but "Unassigned" to offer.
+  const assignableMembers = useMemo(() => members.filter(m => !m.isManaged), [members]);
   const [showArchived, setShowArchived] = useState(false);
   const fmt = useFormatCurrency();
 
@@ -958,7 +963,7 @@ const BudgetAccounts: React.FC = () => {
                 feature, so it only appears once there's a card to tag and
                 someone to tag it to. A pick-one field per card, so `Select`
                 per DESIGN.md's picker rule (never chips-as-radio). */}
-            {cardChips.length > 0 && members.length > 0 && (
+            {cardChips.length > 0 && assignableMembers.length > 0 && (
               <div className="space-y-2 pt-1">
                 <label className="text-xs font-semibold text-brand-600 dark:text-brand-300 uppercase tracking-wide">
                   Card owners (optional)
@@ -986,7 +991,7 @@ const BudgetAccounts: React.FC = () => {
                         aria-label={`Owner of card ending ${digits}`}
                       >
                         <option value="">Unassigned</option>
-                        {members.filter(m => !m.isManaged).map(m => (
+                        {assignableMembers.map(m => (
                           <option key={m.uid} value={m.uid}>{m.displayName}</option>
                         ))}
                       </Select>

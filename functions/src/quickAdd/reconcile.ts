@@ -70,6 +70,13 @@ export interface ReconcileCandidate {
    *  purchases captured via the bank-only shortcut would collapse into one and
    *  lose spend data. */
   fromBankNotification?: boolean;
+  /** CARD-1: the card last-4 already persisted on this row, if any. Used ONLY
+   *  by the `build*Updates` functions below to decide whether an incoming
+   *  card digit is safe to write (never overwrite a differing existing
+   *  value) — deliberately NOT consulted by any of the `pick*` matching
+   *  functions, so adding this field cannot change which row a merge
+   *  targets or whether a merge happens at all. */
+  cardLast4?: string;
 }
 
 /** The incoming capture, already parsed/normalized. Depending on the call site
@@ -85,6 +92,12 @@ export interface IncomingExpense {
    *  When set, a candidate tagged to a *different* account is ineligible, and
    *  a filled stub inherits this account. */
   accountId?: string;
+  /** CARD-1: the normalized card last-4 parsed from this event, if any (see
+   *  `accountMatch.ts#normalizeCardLast4`). Threaded through the reconcile
+   *  builders below so a fill/merge doesn't discard it — a later PR uses it
+   *  to attribute a transaction-fired habit completion to whoever's card was
+   *  charged. Never consulted by the `pick*` matching functions. */
+  cardLast4?: string;
 }
 
 /**
@@ -157,9 +170,14 @@ export function pickFillTarget(
  * Status is intentionally left untouched (stays `pending_review`) so the merged
  * row still surfaces in the review/Action-Queue path. Category is only
  * overwritten when the incoming event carries a non-default one.
+ *
+ * `target` (optional, the {@link ReconcileCandidate} `pickFillTarget` chose)
+ * is used ONLY to decide the `cardLast4` write below — omitting it keeps this
+ * function's existing signature/behavior for any caller that predates CARD-1.
  */
 export function buildFillUpdates(
   incoming: IncomingExpense,
+  target?: ReconcileCandidate,
 ): Record<string, unknown> {
   const updates: Record<string, unknown> = {
     amount: incoming.amount,
@@ -175,6 +193,15 @@ export function buildFillUpdates(
   // or re-affirms the correct account for the review/verify step.
   if (incoming.accountId) {
     updates.accountId = incoming.accountId;
+  }
+  // CARD-1 (finding 1): carry the resolved card last-4 through the fill so a
+  // later PR can attribute the purchase. Conservative merge policy: only
+  // write when the stub does NOT already carry a cardLast4 — unlike
+  // accountId, pickFillTarget does not itself gate on cardLast4 compatibility,
+  // so an existing (possibly different) value is preserved rather than
+  // silently overwritten.
+  if (incoming.cardLast4 && !target?.cardLast4) {
+    updates.cardLast4 = incoming.cardLast4;
   }
   return updates;
 }
@@ -245,6 +272,12 @@ export function buildDuplicateMergeUpdates(
   const updates: Record<string, unknown> = {};
   if (incoming.accountId && !target.accountId) {
     updates.accountId = incoming.accountId;
+  }
+  // CARD-1 (finding 1): same conservative back-fill as accountId above — only
+  // write when the surviving row doesn't already carry a cardLast4, so a
+  // differing existing value is never clobbered.
+  if (incoming.cardLast4 && !target.cardLast4) {
+    updates.cardLast4 = incoming.cardLast4;
   }
   return updates;
 }
@@ -335,6 +368,12 @@ export function buildReverseDuplicateMergeUpdates(
   }
   if (incoming.accountId && !target.accountId) {
     updates.accountId = incoming.accountId;
+  }
+  // CARD-1 (finding 1): same conservative back-fill as accountId above — only
+  // write when the surviving (bank) row doesn't already carry a cardLast4, so
+  // a differing existing value is never clobbered.
+  if (incoming.cardLast4 && !target.cardLast4) {
+    updates.cardLast4 = incoming.cardLast4;
   }
   return updates;
 }

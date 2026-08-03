@@ -769,6 +769,20 @@ export const quickAddExpense = onRequest(
         }
       }
 
+      // CARD-1: the card last-4 that resolved (or attempted to resolve) the
+      // account above — normalized the same way accountMatch.ts normalizes it
+      // for routing — persisted onto the row instead of being discarded once
+      // routing is done, so a later PR can attribute the purchase to whoever
+      // owns that card (see Account.cardOwners / utils/cardOwnership.ts).
+      // Independent of whether routing actually found a match: even an
+      // unmatched/ambiguous card digit is worth keeping on the row. Computed
+      // HERE (before the reconcile block below) so the fill/merge builders can
+      // thread it through instead of losing it on those paths (finding 1).
+      const persistedCardLast4 =
+        rawCardLast4 !== undefined && rawCardLast4 !== null
+          ? normalizeCardLast4(rawCardLast4) ?? undefined
+          : undefined;
+
       // --- Reconcile the two Apple Pay capture paths (see reconcile.ts), then
       // cross-path dedup against ALL recent transactions (plan 03 PR-3) ---
       // Fetch the household's recent rows ONCE (same query as before, now
@@ -828,6 +842,11 @@ export const quickAddExpense = onRequest(
               accountId:
                 typeof data.accountId === "string" ? data.accountId : undefined,
               fromBankNotification: data.fromBankNotification === true,
+              // CARD-1 (finding 1): so buildFillUpdates/buildDuplicateMergeUpdates/
+              // buildReverseDuplicateMergeUpdates can tell whether this candidate
+              // already carries a card digit before deciding to write one.
+              cardLast4:
+                typeof data.cardLast4 === "string" ? data.cardLast4 : undefined,
             });
           }
 
@@ -854,13 +873,16 @@ export const quickAddExpense = onRequest(
 
         if (fromBankNotification && amount > 0) {
           const target = pickFillTarget(
-            { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId },
+            { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId, cardLast4: persistedCardLast4 },
             reconcileCandidates
           );
           const targetRef = target ? refById.get(target.id) : undefined;
           if (target && targetRef) {
             await targetRef.update(
-              buildFillUpdates({ amount, merchant: merchant.trim(), category, accountId: resolvedAccountId })
+              buildFillUpdates(
+                { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId, cardLast4: persistedCardLast4 },
+                target
+              )
             );
             await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 200);
             jsonResponse(res, 200, {
@@ -889,13 +911,13 @@ export const quickAddExpense = onRequest(
           // rows. Collapse it here, with the same tight window + exactly-one +
           // cross-source guards the stub-fill path uses.
           const dupTarget = pickDuplicateShortcutRow(
-            { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId },
+            { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId, cardLast4: persistedCardLast4 },
             reconcileCandidates
           );
           const dupRef = dupTarget ? refById.get(dupTarget.id) : undefined;
           if (dupTarget && dupRef) {
             const mergeUpdates = buildDuplicateMergeUpdates(
-              { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId },
+              { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId, cardLast4: persistedCardLast4 },
               dupTarget
             );
             if (Object.keys(mergeUpdates).length > 0) {
@@ -933,13 +955,13 @@ export const quickAddExpense = onRequest(
         // exactly-one + cross-source guards as the forward path.
         if (!fromBankNotification && amount > 0) {
           const reverseTarget = pickReverseDuplicateRow(
-            { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId },
+            { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId, cardLast4: persistedCardLast4 },
             reconcileCandidates
           );
           const reverseRef = reverseTarget ? refById.get(reverseTarget.id) : undefined;
           if (reverseTarget && reverseRef) {
             const mergeUpdates = buildReverseDuplicateMergeUpdates(
-              { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId },
+              { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId, cardLast4: persistedCardLast4 },
               reverseTarget
             );
             // No Object.keys guard here (unlike the forward path above): unlike
@@ -1037,18 +1059,6 @@ export const quickAddExpense = onRequest(
         transactionDate,
         householdData?.lastPaycheckDate
       );
-
-      // CARD-1: the card last-4 that resolved (or attempted to resolve) the
-      // account above — normalized the same way accountMatch.ts normalizes it
-      // for routing — persisted onto the row instead of being discarded once
-      // routing is done, so a later PR can attribute the purchase to whoever
-      // owns that card (see Account.cardOwners / utils/cardOwnership.ts).
-      // Independent of whether routing actually found a match: even an
-      // unmatched/ambiguous card digit is worth keeping on the row.
-      const persistedCardLast4 =
-        rawCardLast4 !== undefined && rawCardLast4 !== null
-          ? normalizeCardLast4(rawCardLast4) ?? undefined
-          : undefined;
 
       // 6. Create transaction document as PENDING (for review)
       const transactionData = {

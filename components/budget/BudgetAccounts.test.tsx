@@ -522,6 +522,30 @@ describe('BudgetAccounts', () => {
     expect(screen.queryByText('Card owners (optional)')).not.toBeInTheDocument();
   });
 
+  it('does not show a card-owner picker when every loaded member is managed (a kid with no card)', async () => {
+    // Finding 4: the gate must use the SAME filtered set the <option> list is
+    // built from (non-managed members) — otherwise a household of only
+    // managed kids would render the section with nothing but "Unassigned".
+    const kid: HouseholdMember = {
+      uid: 'uid-kid', displayName: 'Kid', role: 'member', isManaged: true,
+      points: { daily: 0, weekly: 0, total: 0 },
+    };
+    mockMembers.push(kid);
+    try {
+      const user = userEvent.setup();
+      render(<BudgetAccounts />);
+
+      await user.click(screen.getByLabelText('Options for Main Checking'));
+      await user.click(screen.getByRole('button', { name: /Account Number & Cards/i }));
+      await user.type(screen.getByPlaceholderText('Add card last 4 (e.g. 8899)'), '8899');
+      await user.click(screen.getByRole('button', { name: /^Add$/i }));
+
+      expect(screen.queryByText('Card owners (optional)')).not.toBeInTheDocument();
+    } finally {
+      mockMembers.length = 0;
+    }
+  });
+
   it('lets a member tag a card owner, saved as part of the details write', async () => {
     const paul: HouseholdMember = {
       uid: 'uid-paul', displayName: 'Paul', role: 'admin', points: { daily: 0, weekly: 0, total: 0 },

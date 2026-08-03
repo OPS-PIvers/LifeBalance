@@ -971,7 +971,12 @@ describe("quickAddExpense", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ merged: true, data: { transactionId: "ap1" } });
     expect(applePayRow.ref.update).toHaveBeenCalledTimes(1);
-    expect(applePayRow.ref.update.mock.calls[0]?.[0]).toEqual({ accountId: "credit-1" });
+    // CARD-1 (finding 1): the incoming cardLast4 is now also back-filled onto
+    // the previously-untagged Apple Pay row (was silently dropped before).
+    expect(applePayRow.ref.update.mock.calls[0]?.[0]).toEqual({
+      accountId: "credit-1",
+      cardLast4: "8899",
+    });
     expect(add).not.toHaveBeenCalled();
   });
 
@@ -1008,7 +1013,12 @@ describe("quickAddExpense", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ merged: true, data: { transactionId: "ap1" } });
     expect(applePayRow.ref.update).toHaveBeenCalledTimes(1);
-    expect(applePayRow.ref.update.mock.calls[0]?.[0]).toEqual({ accountId: "credit-1" });
+    // CARD-1 (finding 1): the incoming cardLast4 is now also back-filled onto
+    // the previously-untagged Apple Pay row (was silently dropped before).
+    expect(applePayRow.ref.update.mock.calls[0]?.[0]).toEqual({
+      accountId: "credit-1",
+      cardLast4: "8899",
+    });
     expect(add).not.toHaveBeenCalled();
   });
 
@@ -1044,7 +1054,12 @@ describe("quickAddExpense", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ merged: true, data: { transactionId: "ap1" } });
     expect(applePayRow.ref.update).toHaveBeenCalledTimes(1);
-    expect(applePayRow.ref.update.mock.calls[0]?.[0]).toEqual({ accountId: "credit-1" });
+    // CARD-1 (finding 1): the incoming cardLast4 is now also back-filled onto
+    // the previously-untagged Apple Pay row (was silently dropped before).
+    expect(applePayRow.ref.update.mock.calls[0]?.[0]).toEqual({
+      accountId: "credit-1",
+      cardLast4: "8899",
+    });
     expect(add).not.toHaveBeenCalled();
   });
 
