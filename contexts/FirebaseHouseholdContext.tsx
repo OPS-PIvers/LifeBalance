@@ -224,6 +224,7 @@ import {
   makeKidProfileCrudMutations,
 } from '@/contexts/household/mutations/kidMutations';
 import type {
+  ListenerReadiness,
   MergeLearnAlias,
   MutationOpts,
   HouseholdContextType,
@@ -237,6 +238,7 @@ import type {
 } from '@/contexts/household/types';
 
 export type {
+  ListenerReadiness,
   MergeLearnAlias,
   MutationOpts,
   HouseholdContextType,
@@ -646,6 +648,19 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // block (alongside the rest of the household state) on every household change.
   const [loadedHouseholdId, setLoadedHouseholdId] = useState<string | null>(null);
 
+  // Per-listener FIRST-SNAPSHOT tracking (see `ListenerReadiness` in
+  // contexts/household/types.ts for why `isLoading` cannot answer this).
+  // Stores, per listener key, the household id its most recent first snapshot
+  // belonged to — the exact idiom `loadedHouseholdId`/`isLoading` already uses
+  // above, so a household switch invalidates every flag by comparison rather
+  // than needing an explicit reset. The marks are made from inside the
+  // onSnapshot callbacks (an external event), never from an effect body.
+  const [listenerFirstSnapshot, setListenerFirstSnapshot] =
+    useState<Partial<Record<keyof ListenerReadiness, string>>>({});
+  const markListenerReady = useCallback((key: keyof ListenerReadiness, forHouseholdId: string) => {
+    setListenerFirstSnapshot(prev => (prev[key] === forHouseholdId ? prev : { ...prev, [key]: forHouseholdId }));
+  }, []);
+
   // Pay Period Tracking State
   const [householdSettings, setHouseholdSettings] = useState<Household | null>(null);
 
@@ -826,7 +841,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       setBucketHistoryWindow: (data) => setBucketHistoryWindow(data),
       setHasMoreBucketHistory: (data) => setHasMoreBucketHistory(data),
       bucketHistoryLoadedAllRef,
-      setCalendarItems: (data) => setCalendarItems(data),
+      setCalendarItems: (data) => {
+        setCalendarItems(data);
+        markListenerReady('calendarItems', householdId);
+      },
       setSavingsGoals: (data) => setSavingsGoals(data),
       setNetWorthHistory: (data) => setNetWorthHistory(data),
     }));
@@ -838,7 +856,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     unsubscribers.push(...attachGamificationListeners({
       db,
       householdId,
-      setHabits: (data) => setHabits(data),
+      setHabits: (data) => {
+        setHabits(data);
+        markListenerReady('habits', householdId);
+      },
       setChallenges: (data) => setChallenges(data),
       setYearlyGoals: (data) => setYearlyGoals(data),
       setRewards: (data) => setRewards(data),
@@ -850,6 +871,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       onSnapshot(membersQuery, async (snapshot) => {
         const data = snapshot.docs.map(doc => doc.data());
         setMembers(data);
+        markListenerReady('members', householdId);
 
         // Set current user (read latest user from the ref, not effect closure)
         const u = userRef.current;
@@ -1196,7 +1218,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // Key on user?.uid (not the whole user object) so the ~hourly Firebase token
     // refresh — which replaces the user object reference — does not tear down and
     // re-subscribe every listener. The callbacks read fresh user fields from userRef.
-  }, [householdId, user?.uid]);
+  }, [householdId, user?.uid, markListenerReady]);
 
   // Transactions listener — kept in its own effect so the live window can track
   // the current pay period (currentPeriodId) without re-subscribing every other
@@ -1226,11 +1248,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       db,
       householdId,
       windowStart,
-      setRecentTransactions: (data) => setRecentTransactions(data),
+      setRecentTransactions: (data) => {
+        setRecentTransactions(data);
+        markListenerReady('transactions', householdId);
+      },
     });
 
     return () => unsubscribe();
-  }, [householdId, loadedHouseholdId, currentPeriodId]);
+  }, [householdId, loadedHouseholdId, currentPeriodId, markListenerReady]);
 
   // Holds the live meal-plan window bounds so the on-demand loaders can tell
   // which weeks are already covered by the real-time listener.
@@ -2644,6 +2669,20 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // (pre-setup) is not a "loading" state.
   const isLoading = !!householdId && loadedHouseholdId !== householdId;
 
+  // Per-listener readiness, derived by comparing each recorded first-snapshot
+  // household against the CURRENT one — so switching households invalidates
+  // every flag without an explicit reset.
+  const listenersReady = useMemo<ListenerReadiness>(() => {
+    const delivered = (key: keyof ListenerReadiness) =>
+      !!householdId && listenerFirstSnapshot[key] === householdId;
+    return {
+      transactions: delivered('transactions'),
+      habits: delivered('habits'),
+      members: delivered('members'),
+      calendarItems: delivered('calendarItems'),
+    };
+  }, [householdId, listenerFirstSnapshot]);
+
   // Each slice value is memoized with a TIGHT dependency array so a change in
   // one domain (e.g. a transaction edit) does not produce a new reference for
   // unrelated slices (meals, todos, …) — that is the render-isolation win.
@@ -2855,6 +2894,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   const coreValue = useMemo<HouseholdCoreContextValue>(() => ({
     isLoading,
+    listenersReady,
     currentUser,
     members,
     insight,
@@ -2904,7 +2944,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     markNotificationRead,
     markAllNotificationsRead,
   }), [
-    isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
+    isLoading, listenersReady, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
     householdId, householdSettings, refreshInsight, rateInsight, addMember, updateMember, removeMember, deleteHousehold,
     completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setCaptureReviewMode, setKidModePin, setDietaryProfile, setMealCookedHabitId,

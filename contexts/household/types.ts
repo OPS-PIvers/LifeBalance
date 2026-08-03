@@ -73,10 +73,53 @@ export interface MergeLearnAlias {
   descriptor: string;
 }
 
+/**
+ * Which per-collection live listeners have delivered their FIRST snapshot for
+ * the household that is currently loaded.
+ *
+ * `isLoading` answers a DIFFERENT question: it is driven exclusively by the
+ * household DOCUMENT listener (`coreListeners.ts` calls `setLoadedHouseholdId`
+ * there), so `isLoading === false` says nothing about whether the transactions
+ * or habits listeners have produced anything yet — and the transactions
+ * listener is not even attached until `isLoading` has already flipped.
+ *
+ * Without this, an empty array is ambiguous: "this household genuinely has no
+ * transactions this week" and "the listener has not answered yet" look
+ * identical, and any consumer that computes a total from the array will
+ * confidently report `0` for the second case. Consumers that must not do that
+ * — today the weekly-recap derivation (`useRecapForWeek`), which would
+ * otherwise render a "$0 spent, 0 habits" ceremony and permanently mark it as
+ * shown — gate on these flags instead of on array length, so a household that
+ * legitimately holds zero rows still resolves (honestly empty) the moment its
+ * listener answers.
+ *
+ * Each flag flips true when its listener delivers, and back to false on a
+ * household switch (they are compared against the CURRENT `householdId`). A
+ * listener that ERRORS deliberately never marks itself ready: showing nothing
+ * is recoverable next session, whereas a confident wrong answer is not.
+ */
+export interface ListenerReadiness {
+  /** The windowed transactions listener has delivered at least once. */
+  transactions: boolean;
+  /** The habits listener has delivered at least once. */
+  habits: boolean;
+  /** The members listener has delivered at least once. */
+  members: boolean;
+  /** The calendar-items listener has delivered at least once. */
+  calendarItems: boolean;
+}
+
 export interface HouseholdContextType {
   // State
   /** True during the initial cold load before the first household snapshot resolves. */
   isLoading: boolean;
+  /**
+   * Per-listener first-snapshot readiness — see `ListenerReadiness`. NOT a
+   * substitute for `isLoading` (which gates the app-wide skeleton); this is
+   * for consumers that must distinguish "delivered, and empty" from "has not
+   * delivered".
+   */
+  listenersReady: ListenerReadiness;
   safeToSpend: number;
   /**
    * Itemized breakdown behind the safe-to-spend number (memoized, no re-expansion).
@@ -772,7 +815,7 @@ export type TodosContextValue = Pick<HouseholdContextType,
 >;
 
 export type HouseholdCoreContextValue = Pick<HouseholdContextType,
-  | 'isLoading' | 'currentUser' | 'members'
+  | 'isLoading' | 'listenersReady' | 'currentUser' | 'members'
   | 'insight' | 'insightsHistory' | 'isGeneratingInsight'
   | 'hasMoreInsights' | 'loadAllInsights'
   | 'pendingItemsCount' | 'apiKeys'

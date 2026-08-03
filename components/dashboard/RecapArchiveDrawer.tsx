@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { format } from 'date-fns';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronRight, Loader2, RotateCcw } from 'lucide-react';
 import { Drawer } from '@/components/ui/Drawer';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { pastClosedWeeks, type RecapWeekRange } from '@/utils/recapWeek';
@@ -21,7 +21,11 @@ import { RECAP_ARCHIVE_WEEKS } from '@/components/dashboard/recapVisibility';
  * owns that via `useRecapForWeek` and passes `pendingWeek` back down so the
  * tapped row can show a spinner instead of going visibly inert while a
  * derived week's transactions load (or an on-demand stored-doc fetch
- * resolves).
+ * resolves), plus `errorWeek` for the case where that load FAILED. A failure
+ * has to be visible HERE and not only in a toast: the toast may already have
+ * been dismissed by the time the user looks back at the row, and an
+ * indefinite spinner reads as "still working" forever. The failed row stays
+ * enabled — tapping it is the retry.
  */
 interface RecapArchiveDrawerProps {
   isOpen: boolean;
@@ -29,6 +33,8 @@ interface RecapArchiveDrawerProps {
   onSelectWeek: (isoWeek: string) => void;
   /** The isoWeek currently being resolved (post-tap, pre-drawer-open), or null. */
   pendingWeek: string | null;
+  /** The isoWeek whose resolution failed and can be retried by tapping, or null. */
+  errorWeek: string | null;
 }
 
 const weekLabel = (range: RecapWeekRange): string => {
@@ -41,6 +47,7 @@ export const RecapArchiveDrawer: React.FC<RecapArchiveDrawerProps> = ({
   onClose,
   onSelectWeek,
   pendingWeek,
+  errorWeek,
 }) => {
   const { recaps } = useHouseholdCore();
   const storedWeeks = useMemo(() => new Set(recaps.map(r => r.isoWeek)), [recaps]);
@@ -56,6 +63,7 @@ export const RecapArchiveDrawer: React.FC<RecapArchiveDrawerProps> = ({
       <ul className="divide-y divide-brand-100 dark:divide-brand-700/60">
         {weeks.map(range => {
           const isPending = pendingWeek === range.isoWeek;
+          const isError = errorWeek === range.isoWeek;
           return (
             <li key={range.isoWeek}>
               <button
@@ -63,13 +71,26 @@ export const RecapArchiveDrawer: React.FC<RecapArchiveDrawerProps> = ({
                 onClick={() => onSelectWeek(range.isoWeek)}
                 disabled={isPending}
                 className="flex w-full min-h-11 items-center justify-between gap-3 py-3 text-left disabled:opacity-70 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-btn"
-                aria-label={`Open weekly recap for ${range.isoWeek}`}
+                aria-label={
+                  isError
+                    ? `Retry loading weekly recap for ${range.isoWeek}`
+                    : `Open weekly recap for ${range.isoWeek}`
+                }
               >
-                <span className="text-sm font-medium text-brand-900 dark:text-brand-100">
-                  {weekLabel(range)}
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-brand-900 dark:text-brand-100">
+                    {weekLabel(range)}
+                  </span>
+                  {isError && (
+                    <span className="block text-xs font-medium text-money-neg dark:text-money-negDark">
+                      Couldn&rsquo;t load — tap to retry
+                    </span>
+                  )}
                 </span>
                 {isPending ? (
                   <Loader2 size={16} className="animate-spin text-brand-400 dark:text-brand-450" aria-hidden="true" />
+                ) : isError ? (
+                  <RotateCcw size={16} className="shrink-0 text-money-neg dark:text-money-negDark" aria-hidden="true" />
                 ) : (
                   <ChevronRight
                     size={16}

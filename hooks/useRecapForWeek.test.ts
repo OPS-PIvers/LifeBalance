@@ -7,16 +7,20 @@ const fetchStoredRecap = vi.fn<(isoWeek: string) => Promise<WeeklyRecap | null>>
 const loadAllTransactions = vi.fn(async () => []);
 const mockBillingEnabled = vi.fn(() => false);
 
+const ALL_LISTENERS_READY = { transactions: true, habits: true, members: true, calendarItems: true };
+
 const mockCore = {
   recaps: [] as WeeklyRecap[],
   members: [{ uid: 'u1', displayName: 'Jen' }],
   fetchStoredRecap,
   household: undefined as Pick<Household, 'subscription'> | undefined,
+  listenersReady: { ...ALL_LISTENERS_READY },
 };
+const SEED_TRANSACTIONS = [
+  { id: 't1', amount: 42, category: 'Groceries', date: '2026-06-30', status: 'verified' as const },
+];
 const mockFinance = {
-  transactions: [
-    { id: 't1', amount: 42, category: 'Groceries', date: '2026-06-30', status: 'verified' as const },
-  ],
+  transactions: [...SEED_TRANSACTIONS],
   calendarItems: [] as { id: string; title: string; amount: number; date: string; type: 'income' | 'expense'; isPaid: boolean }[],
   transactionWindowStart: null as string | null,
   hasMoreTransactions: false,
@@ -57,15 +61,27 @@ describe('useRecapForWeek', () => {
     vi.clearAllMocks();
     mockCore.recaps = [];
     mockCore.household = undefined;
+    mockCore.listenersReady = { ...ALL_LISTENERS_READY };
+    mockFinance.transactions = [...SEED_TRANSACTIONS];
     mockFinance.transactionWindowStart = null;
     mockFinance.hasMoreTransactions = false;
+    mockGamification.habits = [];
+    loadAllTransactions.mockImplementation(async () => {
+      // The real mutation's success path always ends the "more to load"
+      // state; that flip is precisely what the hook reads as "the load
+      // worked" (see its historyLoadFailed comment).
+      mockFinance.hasMoreTransactions = false;
+      return [];
+    });
     mockBillingEnabled.mockReturnValue(false);
     fetchStoredRecap.mockResolvedValue(null);
   });
 
   it('returns nothing for a null isoWeek and never touches fetchStoredRecap', () => {
     const { result } = renderHook(() => useRecapForWeek(null));
-    expect(result.current).toEqual({ recap: null, source: null });
+    expect(result.current.recap).toBeNull();
+    expect(result.current.source).toBeNull();
+    expect(result.current.status).toBe('idle');
     expect(fetchStoredRecap).not.toHaveBeenCalled();
   });
 
@@ -73,7 +89,9 @@ describe('useRecapForWeek', () => {
     const stored = makeStoredRecap();
     mockCore.recaps = [stored];
     const { result } = renderHook(() => useRecapForWeek(ISO_WEEK));
-    expect(result.current).toEqual({ recap: stored, source: 'stored' });
+    expect(result.current.recap).toBe(stored);
+    expect(result.current.source).toBe('stored');
+    expect(result.current.status).toBe('ready');
     expect(fetchStoredRecap).not.toHaveBeenCalled();
   });
 
@@ -86,7 +104,9 @@ describe('useRecapForWeek', () => {
     expect(result.current.recap).toBeNull();
 
     await waitFor(() => expect(result.current.recap).not.toBeNull());
-    expect(result.current).toEqual({ recap: olderStored, source: 'stored' });
+    expect(result.current.recap).toBe(olderStored);
+    expect(result.current.source).toBe('stored');
+    expect(result.current.status).toBe('ready');
     expect(fetchStoredRecap).toHaveBeenCalledWith(ISO_WEEK);
     expect(fetchStoredRecap).toHaveBeenCalledTimes(1);
   });
@@ -150,13 +170,16 @@ describe('useRecapForWeek', () => {
     // safe to trust yet.
     mockFinance.transactionWindowStart = '2026-07-01';
     mockFinance.hasMoreTransactions = true;
+    // Never settles — this test is about the in-flight state.
+    loadAllTransactions.mockImplementation(() => new Promise<never[]>(() => {}));
     fetchStoredRecap.mockResolvedValue(null);
 
     const { result } = renderHook(() => useRecapForWeek(ISO_WEEK));
 
     await waitFor(() => expect(fetchStoredRecap).toHaveBeenCalled());
     // Still nothing — the money figures can't be trusted yet.
-    expect(result.current).toEqual({ recap: null, source: null });
+    expect(result.current.recap).toBeNull();
+    expect(result.current.status).toBe('pending');
     await waitFor(() => expect(loadAllTransactions).toHaveBeenCalledTimes(1));
   });
 
@@ -164,6 +187,124 @@ describe('useRecapForWeek', () => {
     fetchStoredRecap.mockResolvedValue(null);
     const { result } = renderHook(() => useRecapForWeek('not-a-week'));
     await waitFor(() => expect(fetchStoredRecap).toHaveBeenCalled());
-    expect(result.current).toEqual({ recap: null, source: null });
+    expect(result.current.recap).toBeNull();
+    expect(result.current.source).toBeNull();
+    expect(result.current.status).toBe('error');
+  });
+
+  describe('listener readiness — an empty array is NOT an empty week', () => {
+    // BLOCKING-1: `isLoading` is set by the household DOCUMENT listener alone,
+    // and the transactions listener is not even attached until it flips. So
+    // "not loading, arrays empty" is the app's normal first few hundred ms —
+    // deriving there yields a confident "$0 spent, 0 habits", which the
+    // auto-open caller would then mark as shown FOREVER for that ISO week.
+
+    it.each([
+      ['transactions'],
+      ['habits'],
+      ['members'],
+      ['calendarItems'],
+    ] as const)('withholds the derivation while the %s listener has not delivered', async (key) => {
+      mockCore.listenersReady = { ...ALL_LISTENERS_READY, [key]: false };
+      fetchStoredRecap.mockResolvedValue(null);
+
+      const { result } = renderHook(() => useRecapForWeek(ISO_WEEK));
+      await waitFor(() => expect(fetchStoredRecap).toHaveBeenCalled());
+
+      expect(result.current.recap).toBeNull();
+      expect(result.current.source).toBeNull();
+      expect(result.current.status).toBe('pending');
+    });
+
+    it('resolves the moment the last pending listener delivers', async () => {
+      mockCore.listenersReady = { ...ALL_LISTENERS_READY, transactions: false };
+      fetchStoredRecap.mockResolvedValue(null);
+
+      const { result, rerender } = renderHook(() => useRecapForWeek(ISO_WEEK));
+      await waitFor(() => expect(fetchStoredRecap).toHaveBeenCalled());
+      expect(result.current.status).toBe('pending');
+
+      mockCore.listenersReady = { ...ALL_LISTENERS_READY };
+      rerender();
+
+      await waitFor(() => expect(result.current.recap).not.toBeNull());
+      expect(result.current.source).toBe('derived');
+      expect(result.current.recap?.totalSpend).toBe(42);
+    });
+
+    it('STILL resolves for a household that genuinely recorded nothing that week', async () => {
+      // The bug must not be traded for "never opens": readiness is a delivery
+      // flag, not an array-length check, so a real empty week resolves —
+      // honestly empty — as soon as the listeners answer.
+      mockFinance.transactions = [];
+      mockGamification.habits = [];
+      fetchStoredRecap.mockResolvedValue(null);
+
+      const { result } = renderHook(() => useRecapForWeek(ISO_WEEK));
+
+      await waitFor(() => expect(result.current.recap).not.toBeNull());
+      expect(result.current.source).toBe('derived');
+      expect(result.current.status).toBe('ready');
+      expect(result.current.recap?.totalSpend).toBe(0);
+      expect(result.current.recap?.habitCompletions).toBe(0);
+    });
+  });
+
+  describe('a failed history load is recoverable, not permanent', () => {
+    // SHOULD-FIX 3: `loadAllTransactions` swallows its own error (it toasts
+    // and returns the unchanged list — semantics shared with export/analytics
+    // and deliberately untouched), so a failure used to leave `needsMoney`
+    // true forever with the one-shot trigger guard already spent.
+    const failLoad = () => {
+      loadAllTransactions.mockImplementation(async () => {
+        // The real catch block leaves hasMoreTransactions alone.
+        return [];
+      });
+    };
+
+    beforeEach(() => {
+      mockFinance.transactionWindowStart = '2026-07-01';
+      mockFinance.hasMoreTransactions = true;
+      fetchStoredRecap.mockResolvedValue(null);
+    });
+
+    it('surfaces status:error instead of hanging on pending forever', async () => {
+      failLoad();
+      const { result } = renderHook(() => useRecapForWeek(ISO_WEEK));
+      await waitFor(() => expect(result.current.status).toBe('error'));
+      expect(result.current.recap).toBeNull();
+      expect(loadAllTransactions).toHaveBeenCalledTimes(1);
+    });
+
+    it('retry() re-attempts the load and resolves once it succeeds', async () => {
+      failLoad();
+      const { result } = renderHook(() => useRecapForWeek(ISO_WEEK));
+      await waitFor(() => expect(result.current.status).toBe('error'));
+
+      // The next attempt works (transient failure — e.g. a dropped connection).
+      loadAllTransactions.mockImplementation(async () => {
+        mockFinance.hasMoreTransactions = false;
+        return [];
+      });
+      result.current.retry();
+
+      await waitFor(() => expect(result.current.recap).not.toBeNull());
+      expect(result.current.status).toBe('ready');
+      expect(result.current.source).toBe('derived');
+      expect(loadAllTransactions).toHaveBeenCalledTimes(2);
+    });
+
+    it('does NOT retry on its own — one attempt per user-initiated retry', async () => {
+      failLoad();
+      const { result, rerender } = renderHook(() => useRecapForWeek(ISO_WEEK));
+      await waitFor(() => expect(result.current.status).toBe('error'));
+
+      // Re-render a few times (a live listener delivering, an unrelated state
+      // change) — none of them may kick off another full-history read.
+      rerender();
+      rerender();
+      await new Promise(resolve => setTimeout(resolve, 10));
+      expect(loadAllTransactions).toHaveBeenCalledTimes(1);
+    });
   });
 });

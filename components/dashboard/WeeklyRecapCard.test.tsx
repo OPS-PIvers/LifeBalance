@@ -1,7 +1,8 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { WeeklyRecap } from '@/types/schema';
 import { track } from '@/services/analytics';
+import { registerOpenDrawer, resetOpenDrawersForTest } from '@/utils/openDrawerRegistry';
 
 // The card reads recaps from the core slice; useFormatCurrency reads the same
 // mocked context (householdSettings → default USD).
@@ -28,12 +29,26 @@ vi.mock('@/utils/recapWeek', () => ({
 // it does with the answer) without dragging in useFinance/useGamification
 // mocks. `hooks/useRecapForWeek.test.ts` covers the hook's own resolution
 // logic; `RecapArchiveDrawer.test.tsx` covers the archive list itself.
-const mockUseRecapForWeek = vi.fn(
-  (_isoWeek: string | null): { recap: WeeklyRecap | null; source: 'stored' | 'derived' | null } => ({
-    recap: null,
-    source: null,
-  })
-);
+type MockRecapResult = {
+  recap: WeeklyRecap | null;
+  source: 'stored' | 'derived' | null;
+  status: 'idle' | 'pending' | 'ready' | 'error';
+  retry: () => void;
+};
+const retry = vi.fn();
+const unresolved = (status: MockRecapResult['status'] = 'pending'): MockRecapResult => ({
+  recap: null,
+  source: null,
+  status,
+  retry,
+});
+const resolved = (recap: WeeklyRecap): MockRecapResult => ({
+  recap,
+  source: 'derived',
+  status: 'ready',
+  retry,
+});
+const mockUseRecapForWeek = vi.fn((_isoWeek: string | null): MockRecapResult => unresolved('idle'));
 vi.mock('@/hooks/useRecapForWeek', () => ({
   useRecapForWeek: (isoWeek: string | null) => mockUseRecapForWeek(isoWeek),
 }));
@@ -53,15 +68,18 @@ vi.mock('@/components/dashboard/RecapArchiveDrawer', () => ({
     isOpen,
     onSelectWeek,
     pendingWeek,
+    errorWeek,
   }: {
     isOpen: boolean;
     onSelectWeek: (isoWeek: string) => void;
     pendingWeek: string | null;
+    errorWeek: string | null;
   }) =>
     isOpen ? (
       <div data-testid="archive-drawer">
         <button onClick={() => onSelectWeek('2026-W20')}>select-2026-W20</button>
         {pendingWeek && <span data-testid="archive-pending">{pendingWeek}</span>}
+        {errorWeek && <span data-testid="archive-error">{errorWeek}</span>}
       </div>
     ) : null,
 }));
@@ -92,8 +110,10 @@ describe('WeeklyRecapCard', () => {
     window.history.replaceState(null, '', '/');
     mockCore.recaps = [];
     mockCore.isLoading = false;
+    retry.mockClear();
+    resetOpenDrawersForTest();
     mockUseRecapForWeek.mockReset();
-    mockUseRecapForWeek.mockImplementation(() => ({ recap: null, source: null }));
+    mockUseRecapForWeek.mockImplementation(() => unresolved('idle'));
   });
 
   it('renders nothing (but keeps the drawer mount) without a recap', () => {
@@ -206,9 +226,18 @@ describe('WeeklyRecapCard', () => {
   });
 
   describe('ARCH-1 — auto-open the just-closed week', () => {
+    const AUTO_OPEN_KEY = `lb_recap_autoopened_${AUTO_OPEN_WEEK}`;
+
     const mockClosedWeekResolved = (recap: WeeklyRecap) => {
       mockUseRecapForWeek.mockImplementation((isoWeek: string | null) =>
-        isoWeek === AUTO_OPEN_WEEK ? { recap, source: 'derived' as const } : { recap: null, source: null }
+        isoWeek === AUTO_OPEN_WEEK ? resolved(recap) : unresolved('idle')
+      );
+    };
+    /** The week is armed, but `useRecapForWeek` hasn't produced a trustworthy
+     *  answer yet (a live listener hasn't delivered its first snapshot). */
+    const mockClosedWeekPending = () => {
+      mockUseRecapForWeek.mockImplementation((isoWeek: string | null) =>
+        isoWeek === AUTO_OPEN_WEEK ? unresolved('pending') : unresolved('idle')
       );
     };
 
@@ -217,9 +246,7 @@ describe('WeeklyRecapCard', () => {
       render(<WeeklyRecapCard />);
 
       expect(await screen.findByTestId('recap-drawer')).toHaveTextContent(AUTO_OPEN_WEEK);
-      await waitFor(() =>
-        expect(window.localStorage.getItem(`lb_recap_autoopened_${AUTO_OPEN_WEEK}`)).toBe('1')
-      );
+      await waitFor(() => expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBe('1'));
     });
 
     it('does not fire while household data is still loading', async () => {
@@ -228,11 +255,11 @@ describe('WeeklyRecapCard', () => {
       render(<WeeklyRecapCard />);
       await new Promise(resolve => setTimeout(resolve, 10));
       expect(screen.queryByTestId('recap-drawer')).not.toBeInTheDocument();
-      expect(window.localStorage.getItem(`lb_recap_autoopened_${AUTO_OPEN_WEEK}`)).toBeNull();
+      expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBeNull();
     });
 
     it('never fires twice for the same ISO week, including across a remount', async () => {
-      window.localStorage.setItem(`lb_recap_autoopened_${AUTO_OPEN_WEEK}`, '1');
+      window.localStorage.setItem(AUTO_OPEN_KEY, '1');
       mockClosedWeekResolved(makeRecap({ id: AUTO_OPEN_WEEK, isoWeek: AUTO_OPEN_WEEK }));
       render(<WeeklyRecapCard />);
       await new Promise(resolve => setTimeout(resolve, 10));
@@ -249,7 +276,73 @@ describe('WeeklyRecapCard', () => {
       expect(await screen.findByTestId('recap-drawer')).toHaveTextContent('2026-W27');
       // …but the auto-open target never got its turn.
       await new Promise(resolve => setTimeout(resolve, 10));
-      expect(window.localStorage.getItem(`lb_recap_autoopened_${AUTO_OPEN_WEEK}`)).toBeNull();
+      expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBeNull();
+    });
+
+    // --- BLOCKING 1: never open (or MARK) off data that hasn't arrived ------
+    it('neither opens nor marks while the recap is still resolving', async () => {
+      mockClosedWeekPending();
+      render(<WeeklyRecapCard />);
+      await new Promise(resolve => setTimeout(resolve, 10));
+      expect(screen.queryByTestId('recap-drawer')).not.toBeInTheDocument();
+      // The critical half: marking here would permanently suppress the
+      // CORRECT auto-open for this ISO week.
+      expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBeNull();
+      expect(track).not.toHaveBeenCalledWith('recap_viewed', expect.objectContaining({ source: 'auto' }));
+    });
+
+    it('fires exactly once, later, when the listeners finally deliver', async () => {
+      mockClosedWeekPending();
+      const { rerender } = render(<WeeklyRecapCard />);
+      await new Promise(resolve => setTimeout(resolve, 10));
+      expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBeNull();
+
+      mockClosedWeekResolved(makeRecap({ id: AUTO_OPEN_WEEK, isoWeek: AUTO_OPEN_WEEK }));
+      rerender(<WeeklyRecapCard />);
+
+      expect(await screen.findByTestId('recap-drawer')).toHaveTextContent(AUTO_OPEN_WEEK);
+      await waitFor(() => expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBe('1'));
+      expect(
+        vi.mocked(track).mock.calls.filter(([, params]) => (params as { source?: string })?.source === 'auto')
+      ).toHaveLength(1);
+    });
+
+    it('still opens and marks a genuinely EMPTY week (zeroes that are the truth)', async () => {
+      mockClosedWeekResolved(
+        makeRecap({
+          id: AUTO_OPEN_WEEK,
+          isoWeek: AUTO_OPEN_WEEK,
+          totalSpend: 0,
+          priorWeekSpend: 0,
+          habitCompletions: 0,
+        })
+      );
+      render(<WeeklyRecapCard />);
+      expect(await screen.findByTestId('recap-drawer')).toHaveTextContent(AUTO_OPEN_WEEK);
+      await waitFor(() => expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBe('1'));
+    });
+
+    // --- BLOCKING 2: wait your turn in the drawer registry -----------------
+    // Both halves live in ONE test on purpose: the "did not stack" assertion
+    // is a negative, and a negative alone can pass for the wrong reason (an
+    // auto-open that never armed at all looks identical to one that correctly
+    // deferred). Asserting the landing in the same test is the positive
+    // control that proves the open was genuinely pending the whole time.
+    it('waits its turn: no stack over an open drawer, then DEFERS-not-drops once the stack empties', async () => {
+      const close = registerOpenDrawer(Symbol('some-other-sheet'));
+      mockClosedWeekResolved(makeRecap({ id: AUTO_OPEN_WEEK, isoWeek: AUTO_OPEN_WEEK }));
+      render(<WeeklyRecapCard />);
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+      // Deferred — and crucially NOT marked, so the week isn't burned.
+      expect(screen.queryByTestId('recap-drawer')).not.toBeInTheDocument();
+      expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBeNull();
+
+      act(() => close());
+
+      // Same session, no remount, no second app open.
+      expect(await screen.findByTestId('recap-drawer')).toHaveTextContent(AUTO_OPEN_WEEK);
+      await waitFor(() => expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBe('1'));
     });
   });
 
@@ -266,7 +359,7 @@ describe('WeeklyRecapCard', () => {
       mockCore.recaps = [makeRecap()];
       const selected = makeRecap({ id: '2026-W20', isoWeek: '2026-W20', narrative: 'An archived week.' });
       mockUseRecapForWeek.mockImplementation((isoWeek: string | null) =>
-        isoWeek === '2026-W20' ? { recap: selected, source: 'derived' as const } : { recap: null, source: null }
+        isoWeek === '2026-W20' ? resolved(selected) : unresolved('idle')
       );
       render(<WeeklyRecapCard />);
       fireEvent.click(screen.getByText('Past weeks'));
@@ -274,6 +367,47 @@ describe('WeeklyRecapCard', () => {
 
       expect(await screen.findByTestId('recap-drawer')).toHaveTextContent('2026-W20');
       expect(track).toHaveBeenCalledWith('recap_viewed', { isoWeek: '2026-W20', source: 'archive' });
+    });
+
+    it('surfaces a failed selection as an error row, not an eternal spinner', () => {
+      mockCore.recaps = [makeRecap()];
+      mockUseRecapForWeek.mockImplementation((isoWeek: string | null) =>
+        isoWeek === '2026-W20' ? unresolved('error') : unresolved('idle')
+      );
+      render(<WeeklyRecapCard />);
+      fireEvent.click(screen.getByText('Past weeks'));
+      fireEvent.click(screen.getByText('select-2026-W20'));
+
+      expect(screen.getByTestId('archive-error')).toHaveTextContent('2026-W20');
+      expect(screen.queryByTestId('archive-pending')).not.toBeInTheDocument();
+    });
+
+    it('re-tapping a failed row retries it exactly once per tap — and never when healthy', () => {
+      mockCore.recaps = [makeRecap()];
+      mockUseRecapForWeek.mockImplementation((isoWeek: string | null) =>
+        isoWeek === '2026-W20' ? unresolved('error') : unresolved('idle')
+      );
+      const { rerender } = render(<WeeklyRecapCard />);
+      fireEvent.click(screen.getByText('Past weeks'));
+      fireEvent.click(screen.getByText('select-2026-W20'));
+      retry.mockClear();
+
+      fireEvent.click(screen.getByText('select-2026-W20'));
+      expect(retry).toHaveBeenCalledTimes(1);
+
+      // A tap while the hook is NOT failed must start no redundant
+      // full-history read.
+      mockUseRecapForWeek.mockImplementation(() => unresolved('pending'));
+      rerender(<WeeklyRecapCard />);
+      retry.mockClear();
+      fireEvent.click(screen.getByText('select-2026-W20'));
+      expect(retry).not.toHaveBeenCalled();
+
+      // …and only the one tracked view for the original selection (a retry is
+      // not a new "recap_viewed").
+      expect(
+        vi.mocked(track).mock.calls.filter(([, params]) => (params as { source?: string })?.source === 'archive')
+      ).toHaveLength(1);
     });
   });
 });
