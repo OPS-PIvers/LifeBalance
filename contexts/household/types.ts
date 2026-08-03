@@ -73,10 +73,68 @@ export interface MergeLearnAlias {
   descriptor: string;
 }
 
+/**
+ * Which per-collection live listeners have delivered their FIRST snapshot for
+ * the household that is currently loaded.
+ *
+ * `isLoading` answers a DIFFERENT question: it is driven exclusively by the
+ * household DOCUMENT listener (`coreListeners.ts` calls `setLoadedHouseholdId`
+ * there), so `isLoading === false` says nothing about whether the transactions
+ * or habits listeners have produced anything yet — and the transactions
+ * listener is not even attached until `isLoading` has already flipped.
+ *
+ * Without this, an empty array is ambiguous: "this household genuinely has no
+ * transactions this week" and "the listener has not answered yet" look
+ * identical, and any consumer that computes a total from the array will
+ * confidently report `0` for the second case. Consumers that must not do that
+ * — today the weekly-recap derivation (`useRecapForWeek`), which would
+ * otherwise render a "$0 spent, 0 habits" ceremony and permanently mark it as
+ * shown — gate on these flags instead of on array length, so a household that
+ * legitimately holds zero rows still resolves (honestly empty) the moment its
+ * listener answers.
+ *
+ * A flag flips true when its listener delivers its first snapshot for the
+ * household currently loaded, and back to false in exactly two ways — both of
+ * which are required, because neither covers the other:
+ *
+ *  1. The recorded first-snapshot household no longer equals the CURRENT
+ *     `householdId`. This is what invalidates the flags on a household SWITCH,
+ *     with no write of any kind.
+ *  2. The provider's listener effect clears the whole map in its teardown/reset
+ *     block — the same place `loadedHouseholdId` is re-armed — which is what
+ *     covers a SIGN-OUT → SIGN-IN cycle. That path returns to the SAME
+ *     household id (ids are stable, and a shared device signs two adults into
+ *     one household), and the provider sits above `<Routes>` so it never
+ *     unmounts across it. Rule 1 alone would let the previous session's marks
+ *     match the re-attached listeners' household and report "delivered" over
+ *     arrays the reset had just emptied — precisely the confident "$0 spent, 0
+ *     habits" recap these flags exist to prevent.
+ *
+ * A listener that ERRORS deliberately never marks itself ready: showing nothing
+ * is recoverable next session, whereas a confident wrong answer is not.
+ */
+export interface ListenerReadiness {
+  /** The windowed transactions listener has delivered at least once. */
+  transactions: boolean;
+  /** The habits listener has delivered at least once. */
+  habits: boolean;
+  /** The members listener has delivered at least once. */
+  members: boolean;
+  /** The calendar-items listener has delivered at least once. */
+  calendarItems: boolean;
+}
+
 export interface HouseholdContextType {
   // State
   /** True during the initial cold load before the first household snapshot resolves. */
   isLoading: boolean;
+  /**
+   * Per-listener first-snapshot readiness — see `ListenerReadiness`. NOT a
+   * substitute for `isLoading` (which gates the app-wide skeleton); this is
+   * for consumers that must distinguish "delivered, and empty" from "has not
+   * delivered".
+   */
+  listenersReady: ListenerReadiness;
   safeToSpend: number;
   /**
    * Itemized breakdown behind the safe-to-spend number (memoized, no re-expansion).
@@ -135,6 +193,17 @@ export interface HouseholdContextType {
   bucketHistory: BucketPeriodSnapshot[];
   /** Weekly recaps (Plan 02) — newest first, bounded live window (RECAPS_LIMIT). */
   recaps: WeeklyRecap[];
+  /**
+   * On-demand lookup of ONE stored recap doc by ISO week (ARCH-1), for a week
+   * outside the bounded `recaps` live window (older than `RECAPS_LIMIT`
+   * weeks). The server document remains the source of truth for the AI
+   * narrative no matter how old the week is — the client-side derivation
+   * (`utils/recapCompose.ts`) is only a fallback for weeks that were never
+   * generated at all. Resolves `null` when no doc exists for that week
+   * (the common case; not an error). Idempotent from the caller's
+   * perspective — safe to call repeatedly for the same week.
+   */
+  fetchStoredRecap: (isoWeek: string) => Promise<WeeklyRecap | null>;
   /** Monthly money recaps (F-MONEY-06) — newest first, bounded live window
    *  (MONEY_RECAPS_LIMIT). */
   moneyRecaps: MonthlyMoneyRecap[];
@@ -764,7 +833,7 @@ export type TodosContextValue = Pick<HouseholdContextType,
 >;
 
 export type HouseholdCoreContextValue = Pick<HouseholdContextType,
-  | 'isLoading' | 'currentUser' | 'members'
+  | 'isLoading' | 'listenersReady' | 'currentUser' | 'members'
   | 'insight' | 'insightsHistory' | 'isGeneratingInsight'
   | 'hasMoreInsights' | 'loadAllInsights'
   | 'pendingItemsCount' | 'apiKeys'
@@ -775,7 +844,7 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'addMerchantRule' | 'updateMerchantRule' | 'deleteMerchantRule'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
-  | 'recaps' | 'moneyRecaps' | 'activityLog'
+  | 'recaps' | 'fetchStoredRecap' | 'moneyRecaps' | 'activityLog'
   | 'trashedItems' | 'restoreTrashedItem' | 'purgeTrashedItem'
   | 'notificationLog' | 'unreadNotificationCount' | 'markNotificationRead' | 'markAllNotificationsRead'
 >;

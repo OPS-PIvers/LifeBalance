@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { enterTestMode, usd, localDateString, safeToSpendButton, addManualExpense, reviewDrawer, bottomNav, budgetNavWithPending } from './helpers';
+import { enterTestMode, usd, localDateString, safeToSpendButton, addManualExpense, reviewDrawer, bottomNav, budgetNavWithPending, dismissAutoOpenedRecap } from './helpers';
 
 /**
  * Safe-to-Spend money path (advisor plan 07, spec 1).
@@ -20,6 +20,7 @@ const EXPENSE = 25.5;
 test.describe('Safe to Spend (Test Mode)', () => {
   test('a pending expense drops the figure by exactly its amount', async ({ page }) => {
     await enterTestMode(page);
+    await dismissAutoOpenedRecap(page);
 
     // Baseline headline figure.
     await expect(safeToSpendButton(page)).toContainText(usd(SEED_CHECKING));
@@ -50,6 +51,7 @@ test.describe('Safe to Spend (Test Mode)', () => {
 
   test('verifying the pending expense moves the checking balance, not the headline', async ({ page }) => {
     await enterTestMode(page);
+    await dismissAutoOpenedRecap(page);
     await expect(safeToSpendButton(page)).toContainText(usd(SEED_CHECKING));
 
     await addManualExpense(page, {

@@ -104,6 +104,38 @@ export const getPlan = (household: Pick<Household, 'subscription'>): 'free' | 'p
 export const isPremium = (household: Pick<Household, 'subscription'>): boolean =>
   getPlan(household) === 'premium';
 
+/**
+ * The household's TRUE premium status — matching the server's
+ * `isPremiumHousehold` (`functions/src/recap/index.ts`, a separate protected
+ * package; this is the client-side mirror the same way `utils/recapWeek.ts`
+ * mirrors `functions/src/shared/isoWeek.ts`): while `billingEnabled` is off
+ * (the current, dormant default — see the Feature Flags section of
+ * CLAUDE.md), EVERY household is premium, because nobody is paying for
+ * anything yet and nobody should see a paywall for a plan gate that isn't
+ * live. Only once billing actually goes live does this narrow to the
+ * household's real subscription status.
+ *
+ * Deliberately checks `subscription?.status` directly against
+ * `PREMIUM_STATUSES` rather than delegating to `isPremium()`/`getPlan()` —
+ * those ALSO require `subscription.plan === 'premium'`, a check the server's
+ * `isPremiumHousehold` doesn't make. Anything that needs to agree with what a
+ * SERVER-GENERATED recap's `premium` field says (this function's whole
+ * purpose) has to match the server's exact condition, not the client's
+ * slightly stricter one.
+ *
+ * ARCH-1's first (and so far only) caller: a client-derived recap
+ * (`utils/recapCompose.ts`) has no server-written `premium` field of its own
+ * to read, so it resolves this instead of ever hardcoding `true` or `false`.
+ */
+export const resolveIsPremiumHousehold = (
+  household: Pick<Household, 'subscription'>,
+  billingEnabled: boolean
+): boolean => {
+  if (!billingEnabled) return true;
+  const status = household.subscription?.status;
+  return status !== undefined && PREMIUM_STATUSES.includes(status);
+};
+
 /** The active limit table for a household's effective plan. */
 export const getLimits = (household: Pick<Household, 'subscription'>): PlanLimits =>
   isPremium(household) ? PREMIUM_LIMITS : FREE_LIMITS;

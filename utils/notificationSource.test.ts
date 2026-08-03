@@ -12,6 +12,8 @@ import { track } from '@/services/analytics';
 import {
   appendNotificationSource,
   consumeNotificationSource,
+  getNotificationOpenType,
+  resetNotificationOpenTypeForTest,
   trackNotificationOpenFromUrl,
 } from './notificationSource';
 
@@ -75,6 +77,7 @@ describe('trackNotificationOpenFromUrl', () => {
   beforeEach(() => {
     vi.mocked(track).mockClear();
     window.history.replaceState(null, '', '/');
+    resetNotificationOpenTypeForTest();
   });
 
   it('fires notification_opened and strips the param from the address bar', () => {
@@ -88,5 +91,23 @@ describe('trackNotificationOpenFromUrl', () => {
   it('no-ops without the param', () => {
     trackNotificationOpenFromUrl();
     expect(track).not.toHaveBeenCalled();
+  });
+
+  // The param is consume-once and stripped before React mounts, so the fact
+  // that this app open WAS a notification arrival has to survive the strip —
+  // `WeeklyRecapCard`'s auto-open asks for it long after the URL is clean.
+  it('remembers the arrival type after the param has been stripped', () => {
+    expect(getNotificationOpenType()).toBeNull();
+    window.history.replaceState(null, '', '/?nsrc=bill_reminder#/budget');
+    trackNotificationOpenFromUrl();
+    expect(window.location.search).toBe('');
+    expect(getNotificationOpenType()).toBe('bill_reminder');
+    // Reading is not consuming — a second reader still sees it.
+    expect(getNotificationOpenType()).toBe('bill_reminder');
+  });
+
+  it('leaves the recorded type null for an ordinary app open', () => {
+    trackNotificationOpenFromUrl();
+    expect(getNotificationOpenType()).toBeNull();
   });
 });

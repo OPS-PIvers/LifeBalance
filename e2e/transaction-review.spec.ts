@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { enterTestMode, usd, bottomNav, budgetNavWithPending, safeToSpendButton } from './helpers';
+import { enterTestMode, usd, bottomNav, budgetNavWithPending, safeToSpendButton, dismissAutoOpenedRecap } from './helpers';
 
 /**
  * Unified transaction review (advisor plan 07, spec 2) — the post-#792 review
@@ -20,6 +20,7 @@ const STUB_AMOUNT = 12.34;
 test.describe('Transaction review drawer (Test Mode, stub seed)', () => {
   test('fills a $0 stub inline and verifies it into a bucket', async ({ page }) => {
     await enterTestMode(page, 'stub');
+    await dismissAutoOpenedRecap(page);
 
     // The stub puts a count badge on the Budget nav link's accessible name.
     await expect(budgetNavWithPending(page, 1)).toBeVisible();
@@ -37,6 +38,11 @@ test.describe('Transaction review drawer (Test Mode, stub seed)', () => {
     // Typing an amount swaps the label off the "Add amount" hint onto the CTA.
     await drawer.getByRole('button', { name: 'Approve', exact: true }).click();
     await expect(drawer).not.toBeVisible();
+
+    // No second `dismissAutoOpenedRecap` here. The review drawer held the
+    // app's one auto-open slot, and WeeklyRecapCard now SKIPS THE SESSION
+    // rather than deferring — so closing this drawer can no longer hand the
+    // user a late-landing recap on the way to their next tap.
 
     // It left the review queue: the Budget link's name is back to exactly "Budget".
     await expect(bottomNav(page).getByRole('link', { name: 'Budget', exact: true })).toBeVisible();

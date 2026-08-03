@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { enterTestMode, usd, addManualExpense, bottomNav } from './helpers';
+import { enterTestMode, usd, addManualExpense, bottomNav, dismissAutoOpenedRecap } from './helpers';
 
 /**
  * Bucket reallocation (advisor plan 07, spec 4) — the "Fix Overspending" flow.
@@ -12,6 +12,7 @@ import { enterTestMode, usd, addManualExpense, bottomNav } from './helpers';
 test.describe('Bucket reallocation (Test Mode)', () => {
   test('fixing an overspent bucket moves limit between buckets and conserves totals', async ({ page }) => {
     await enterTestMode(page);
+    await dismissAutoOpenedRecap(page);
 
     // Today-dated manual expense → verified immediately (no review drawer),
     // driving Gas $50 over its $150 limit.

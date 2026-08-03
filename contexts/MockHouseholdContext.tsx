@@ -4,6 +4,8 @@ import { toastIcon } from '@/components/ui/toastIcon';
 import { format, addDays, subDays, startOfWeek } from 'date-fns';
 import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseholdContext';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { pastClosedWeeks } from '@/utils/recapWeek';
+import { shiftDay } from '@/utils/recapAssembly';
 import { rollRecurringAnchorForward, isRecurringId, parseRecurringId } from '@/utils/calendarRecurrence';
 import { BUDGETED_IN_CALENDAR } from '@/utils/categories';
 import { hashKidPin } from '@/utils/kidPin';
@@ -158,6 +160,45 @@ const TEST_SEED_VARIANT = readTestSeedVariant();
 // so a mismatch silently drops transactions from Safe-to-Spend and bucket progress.
 const MOCK_PAY_PERIOD_ID = '2024-01-01';
 
+// ARCH-1 — a deliberately DIFFERENT payPeriodId for the older, history-only
+// transactions below (SEED_PAST_WEEKS_TRANSACTIONS). Those exist purely so
+// the "Past weeks" archive has real, non-zero money figures to derive for a
+// couple of weeks besides the one canned `recaps` doc — recap derivation
+// reads only amount/category/date/status (see utils/recapAssembly.ts), never
+// payPeriodId, but `calculateBucketSpent`/Safe-to-Spend DO filter on
+// `payPeriodId === currentPeriodId`. Sharing MOCK_PAY_PERIOD_ID would silently
+// inflate the Budget page's bucket totals and Safe-to-Spend for a period these
+// transactions don't actually belong to.
+const ARCHIVE_HISTORY_PAY_PERIOD_ID = 'test-archive-history';
+
+/**
+ * ARCH-1 — the CLOSED weeks the "Past weeks" fixtures below are anchored to,
+ * newest first: `[0]` is the last closed week (which is also the week the one
+ * canned `recaps` doc covers — see the `recaps` seed, whose `now - 7d` always
+ * lands inside it), `[1]`/`[2]`/`[3]` are the weeks before it.
+ *
+ * 🛡️ ANCHOR TO THE FIXTURE'S OWN WEEK, NEVER TO AN OFFSET FROM "TODAY". A flat
+ * `subDays(new Date(), 9)` lands in a different ISO week depending on which
+ * weekday Test Mode happens to run — so on some days the archive's DERIVED
+ * rows had data and on others the data fell into the STORED week instead,
+ * silently not exercising the scenario at all. (Weekday-dependent date
+ * fixtures have blocked a production deploy in this repo before: CI runners
+ * are UTC, so the date can roll between the CI run and the deploy run.)
+ * Everything below is placed by ISO-week offset instead, so the relationship
+ * — "week [1] is a derived week with both money and per-member ceremony
+ * data, distinct from the stored week [0]" — holds on every day of the week.
+ */
+const ARCHIVE_SEED_WEEKS = pastClosedWeeks(4);
+/** The Nth-most-recent closed week's Monday (`yyyy-MM-dd`), N counted from 0. */
+const closedWeekStart = (weeksBack: number): string =>
+  ARCHIVE_SEED_WEEKS[weeksBack]?.weekStart ??
+  // Unreachable: pastClosedWeeks(4) always returns 4 ranges. Satisfies
+  // noUncheckedIndexedAccess without a non-null assertion.
+  getLocalDateString(subDays(new Date(), 7 * (weeksBack + 1)));
+/** A day INSIDE the Nth-most-recent closed week (`dayOfWeek` 0 = Monday). */
+const closedWeekDay = (weeksBack: number, dayOfWeek: number): string =>
+  shiftDay(closedWeekStart(weeksBack), dayOfWeek);
+
 // Seed data with realistic examples
 const SEED_ACCOUNTS: Account[] = [
   // Diverging Plaid balance (plan 04) so Test Mode shows the "Update to bank
@@ -240,6 +281,52 @@ const SEED_TRANSACTIONS: Transaction[] = [
   // test matches the nav link by exact name "Budget"; a stub here breaks that.
   // The e2e stub spec opts in via the 'stub' seed variant below; the unit-level
   // flow is covered by ReviewPendingDrawer.test.tsx + the quickAdd tests.
+];
+
+/**
+ * ARCH-1 — a handful of older, verified transactions placed inside specific
+ * CLOSED ISO weeks (never a flat day offset from "today" — see
+ * ARCHIVE_SEED_WEEKS above). Without these every "Past weeks" archive row
+ * before the one canned `recaps` doc would derive to a
+ * legitimate-but-uninteresting $0/no-habits week: not WRONG (the mock truly
+ * has no data there), but not a useful visual check either. Two land in
+ * closed week [1] — the newest DERIVED row, the one whose numbers prove the
+ * derivation works — and one each in [2] and [3] so the list isn't a single
+ * populated row followed by blanks. Distinct `payPeriodId` — see
+ * ARCHIVE_HISTORY_PAY_PERIOD_ID's comment above.
+ */
+const SEED_PAST_WEEKS_TRANSACTIONS: Transaction[] = [
+  {
+    id: 'tx_hist1', amount: 38.20, merchant: 'Trader Joe\'s', category: 'Groceries',
+    date: closedWeekDay(1, 2), // Wednesday of the 2nd-most-recent closed week
+    status: 'verified', isRecurring: false, source: 'manual',
+    autoCategorized: false, payPeriodId: ARCHIVE_HISTORY_PAY_PERIOD_ID,
+  },
+  {
+    id: 'tx_hist2', amount: 24.00, merchant: 'AMC Theatres', category: 'Entertainment',
+    date: closedWeekDay(1, 5), // Saturday of the same week
+    status: 'verified', isRecurring: false, source: 'manual',
+    autoCategorized: false, payPeriodId: ARCHIVE_HISTORY_PAY_PERIOD_ID,
+  },
+  {
+    // NOT "Shell" — MockHouseholdContext.test.tsx's needsAmount-stub test
+    // locates its OWN freshly-added transaction via
+    // `transactions.find(t => t.merchant === 'Shell')`, which would instead
+    // match this already-verified historical row if the names collided.
+    id: 'tx_hist3', amount: 52.10, merchant: 'Chevron', category: 'Gas',
+    date: closedWeekDay(2, 3),
+    status: 'verified', isRecurring: false, source: 'manual',
+    autoCategorized: false, payPeriodId: ARCHIVE_HISTORY_PAY_PERIOD_ID,
+  },
+  {
+    // Not "Safeway" — SEED_TRANSACTIONS' tx1 already uses that merchant; a
+    // second row with the same name risks confusing any future lookup that
+    // assumes it's unique (as the Gas-merchant collision above just did).
+    id: 'tx_hist4', amount: 61.75, merchant: 'Whole Foods', category: 'Groceries',
+    date: closedWeekDay(3, 1),
+    status: 'verified', isRecurring: false, source: 'manual',
+    autoCategorized: false, payPeriodId: ARCHIVE_HISTORY_PAY_PERIOD_ID,
+  },
 ];
 
 // 'stub' seed variant: one Apple Pay $0 pre-auth awaiting its real amount, the
@@ -521,7 +608,22 @@ const SEED_HABITS: Habit[] = [
   {
     id: 'h2', title: 'Exercise 30min', category: 'Fitness', type: 'positive',
     basePoints: 20, scoringType: 'threshold', period: 'daily', targetCount: 1,
-    totalCount: 0, count: 0, completedDates: [], streakDays: 0,
+    totalCount: 2, count: 0,
+    // ARCH-1 — two historical completions (one per adult) inside closed week
+    // [1] — the SAME week `tx_hist1`/`tx_hist2` land in, and deliberately NOT
+    // the last closed week, which is the one the canned `recaps` doc already
+    // covers. That's what makes the archive's newest DERIVED row a real
+    // ceremony (money AND per-member points) rather than a duplicate of the
+    // stored one. Anchored by ISO week, never by a day offset from "today":
+    // a flat `subDays(…, 9)` lands in week [1] on some weekdays and week [0]
+    // on others, so the scenario silently wasn't exercised on those days.
+    // Both dates are ≥8 days old, so today's live streak stays 0 as before.
+    completedDates: [closedWeekDay(1, 2), closedWeekDay(1, 3)],
+    completedBy: {
+      [closedWeekDay(1, 2)]: { 'test-user-id': 1 },
+      [closedWeekDay(1, 3)]: { 'test-partner-id': 1 },
+    },
+    streakDays: 0,
     createdBy: 'test-user-id', lastUpdated: new Date().toISOString(),
     // Habit Automations (PRD #1065): seeded transaction keywords so the
     // habit-editor Automations section AND the review-card "Also logs" chips are
@@ -787,13 +889,17 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [transactions, setTransactions] = useState<Transaction[]>(
     isFresh
       ? []
-      : TEST_SEED_VARIANT === 'stub'
-        ? [...SEED_TRANSACTIONS, STUB_TRANSACTION]
-        : TEST_SEED_VARIANT === 'merchant-rules'
-          ? [...SEED_TRANSACTIONS, ...BANK_DESCRIPTOR_TRANSACTIONS]
-          : TEST_SEED_VARIANT === 'bill-merge'
-            ? [...SEED_TRANSACTIONS, ...BILL_MERGE_TRANSACTIONS]
-            : SEED_TRANSACTIONS
+      : [
+          ...(TEST_SEED_VARIANT === 'stub'
+            ? [...SEED_TRANSACTIONS, STUB_TRANSACTION]
+            : TEST_SEED_VARIANT === 'merchant-rules'
+              ? [...SEED_TRANSACTIONS, ...BANK_DESCRIPTOR_TRANSACTIONS]
+              : TEST_SEED_VARIANT === 'bill-merge'
+                ? [...SEED_TRANSACTIONS, ...BILL_MERGE_TRANSACTIONS]
+                : SEED_TRANSACTIONS),
+          // ARCH-1 — same across every variant; see SEED_PAST_WEEKS_TRANSACTIONS' comment.
+          ...SEED_PAST_WEEKS_TRANSACTIONS,
+        ]
   );
   // Plan 23 — transaction comments, keyed by transaction id. Mirrors the real
   // context's on-demand fetch model (no listener); the "fetch" here is just a
@@ -4060,6 +4166,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const contextValue: HouseholdContextType = {
     // Mock data is available synchronously — never in a loading state.
     isLoading: false,
+    // …and by the same token every "listener" has already delivered: the seed
+    // arrays ARE the first snapshot. See `ListenerReadiness` for why an empty
+    // array alone can't answer this in the real provider.
+    listenersReady: { transactions: true, habits: true, members: true, calendarItems: true },
     // Computed State
     safeToSpend,
     safeToSpendBreakdown,
@@ -4107,6 +4217,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     groceryCatalog,
     bucketHistory,
     recaps,
+    // ARCH-1 — Test Mode has no Firestore doc to fetch, so this just looks up
+    // the same in-memory `recaps` array the live listener would eventually
+    // deliver (Test Mode seeds exactly one, so this resolves `null` for every
+    // other week — the same "not generated" answer the real backend gives).
+    fetchStoredRecap: async (isoWeek: string) => recaps.find(r => r.isoWeek === isoWeek) ?? null,
     moneyRecaps,
     trashedItems,
     restoreTrashedItem,

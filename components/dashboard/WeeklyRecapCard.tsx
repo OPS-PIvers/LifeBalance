@@ -3,27 +3,95 @@ import { format } from 'date-fns';
 import { X, Lock, ChevronRight, Sparkles } from 'lucide-react';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { useRecapForWeek } from '@/hooks/useRecapForWeek';
 import { consumeRecapParam } from '@/utils/recapParam';
+import { getNotificationOpenType } from '@/utils/notificationSource';
+import { getOpenDrawerCount } from '@/utils/openDrawerRegistry';
+import { lastClosedWeekRange } from '@/utils/recapWeek';
 import { track } from '@/services/analytics';
 import { roundMoney } from '@/utils/money';
 import { isoWeekStartDate } from '@/utils/dateHelpers';
 import { cn } from '@/utils/cn';
-import { Section } from '@/components/ui/Section';
+import { useOpenDrawerCount } from '@/hooks/useOpenDrawerCount';
+import { Section, SurfaceList, DisclosureRow } from '@/components/ui/Section';
 import { WeeklyRecapDrawer } from '@/components/dashboard/WeeklyRecapDrawer';
-import { weeklyRecapCardVisible, weeklyRecapDismissKey } from '@/components/dashboard/recapVisibility';
+import { RecapArchiveDrawer } from '@/components/dashboard/RecapArchiveDrawer';
+import {
+  weeklyRecapCardVisible,
+  weeklyRecapDismissKey,
+  wasRecapAutoOpened,
+  markRecapAutoOpened,
+} from '@/components/dashboard/recapVisibility';
 import type { WeeklyRecap } from '@/types/schema';
 
 /**
- * WeeklyRecapCard — Dashboard surface for the server-generated weekly recap
- * (Plan 02, `households/{id}/recaps/{isoWeek}`).
+ * WeeklyRecapCard — Dashboard surface for the weekly recap (Plan 02,
+ * `households/{id}/recaps/{isoWeek}`, generated server-side Monday morning —
+ * see CLAUDE.md's Weekly Recap section) AND, since ARCH-1, for the
+ * CLIENT-DERIVED recap that fills the gap before that generation lands.
  *
- * Shows the LATEST recap for a few days after it lands (Monday → Thursday),
- * dismissible per ISO week (localStorage). Headline numbers render for every
- * plan; the AI narrative is blurred behind a small upsell row when the recap
- * was generated for a free household (`premium: false`). Tapping the card —
- * or arriving via the `?recap=<isoWeek>` push deep link — opens the full
- * detail drawer. The drawer mounts even when the card itself is hidden
- * (dismissed/stale) so a late push open still works.
+ * Shows the LATEST STORED recap for a few days after it lands (Monday →
+ * Thursday), dismissible per ISO week (localStorage). Headline numbers
+ * render for every plan; the AI narrative is blurred behind a small upsell
+ * row when the recap was generated for a free household (`premium: false`).
+ * Tapping the card — or arriving via the `?recap=<isoWeek>` push deep link —
+ * opens the full detail drawer. The drawer mounts even when the card itself
+ * is hidden (dismissed/stale) so a late push open still works.
+ *
+ * ARCH-1 additions, both reusing `WeeklyRecapDrawer` exactly as-is:
+ *  - **Auto-open**: the first time this component mounts after a week has
+ *    closed (any day of the new week — see `lastClosedWeekRange`), it opens
+ *    that week's recap once, automatically — `useRecapForWeek` resolves it
+ *    (a stored doc if generation already ran, else derives one live) so
+ *    there's something to show even before Monday 07:00. Tracked per ISO
+ *    week in localStorage (`weeklyRecapAutoOpenedKey`) so it never fires
+ *    twice, and skipped entirely when the `?recap=` deep link already
+ *    targets a week this load (the deep link owns the open in that case).
+ *  - **Archive**: a permanent "Past weeks" entry point — rendered in every
+ *    branch below, independent of the ephemeral card's freshness/dismissal
+ *    state — opens `RecapArchiveDrawer`, a non-expiring browsable list.
+ *
+ * 🛡️ OPEN CLEANLY OR SKIP THE SESSION — never defer. The auto-open is one of
+ * only two surfaces in this app that opens a bottom sheet WITHOUT the user
+ * asking (the other is `MainLayout`'s `ReviewPendingDrawer`), so it consults
+ * `utils/openDrawerRegistry.ts` before taking the slot. Where `MainLayout`
+ * DEFERS an occupied slot, this one ABANDONS the attempt for the whole
+ * session and re-tries on the next app open. That difference is deliberate,
+ * and it reverses this component's original choice: deferring meant that with
+ * pending rows to review, the review drawer took the slot first and the recap
+ * then landed *the instant the user closed it* — mid-task, right as they moved
+ * on to what they actually opened the app for. One interruption dismissed and
+ * a second immediately handed over is worse than a ceremony that waits a day.
+ * A recap is not time-critical the way a review prompt is; the week stays
+ * eligible, so tomorrow's open shows it properly.
+ *
+ * Two conditions suppress it, both meaning "the user is already somewhere":
+ *  1. Any other bottom sheet holds the slot (`openDrawerCount > 0`).
+ *  2. This app open was a deliberate notification arrival — the `?recap=`
+ *     deep link (which owns the open itself, via `hadPushParamRef`) or ANY
+ *     other push, which `getNotificationOpenType()` reports from the `nsrc`
+ *     tag the boot-time consumer already stripped. A bill reminder must land
+ *     on the bill, not on last week's ceremony.
+ *
+ * They are evaluated at BOTH decision points — arming and landing — because
+ * the two moments see different worlds. At arm time the transactions listener
+ * usually hasn't answered, so the review drawer it will open doesn't exist
+ * yet; the landing check is the load-bearing one precisely because the
+ * delivery that makes this recap resolvable is the same delivery that opens
+ * the competing sheet. The arm-time check is the cheap early-out that avoids
+ * starting resolution work we would only throw away. Neither one ever waits:
+ * once the outcome is `'skipped'` it is final for this mount, so a stack that
+ * empties later can no longer produce a late landing.
+ *
+ * 🛡️ AND MARK ONLY ON LANDING. `markRecapAutoOpened` is the permanent,
+ * per-ISO-week "this has been shown" stamp, so it must never be written for a
+ * recap that wasn't shown — or worse, one derived from listeners that hadn't
+ * answered yet (which is a confident "$0 spent, 0 habits" ceremony). Landing
+ * requires BOTH a `status: 'ready'` recap (`useRecapForWeek` gates that on
+ * `listenersReady`) and a free slot, and the stamp is written in the effect
+ * that observes the landing — never before it. Every SKIP path leaves the week
+ * unmarked and therefore still eligible; that is what makes "try again next
+ * app open" true rather than a promise the code doesn't keep.
  */
 
 // Freshness window + dismissal logic live in recapVisibility.ts, shared with
@@ -48,7 +116,7 @@ interface WeeklyRecapCardProps {
 }
 
 export const WeeklyRecapCard: React.FC<WeeklyRecapCardProps> = ({ drawerOnly = false }) => {
-  const { recaps } = useHouseholdCore();
+  const { recaps, isLoading } = useHouseholdCore();
   const fmt = useFormatCurrency();
 
   const latest: WeeklyRecap | undefined = recaps[0];
@@ -63,6 +131,12 @@ export const WeeklyRecapCard: React.FC<WeeklyRecapCardProps> = ({ drawerOnly = f
   const [drawerWeek, setDrawerWeek] = useState<string | null>(null);
   const [pushWeek, setPushWeek] = useState<string | null>(null);
 
+  // Did THIS load carry a `?recap=` deep link? A plain ref (not state) — the
+  // auto-open decision effect below reads it synchronously, in the same
+  // synchronous effects-flush pass this effect sets it in (effects run in
+  // declaration order on mount), so no render needs to observe it.
+  const hadPushParamRef = useRef(false);
+
   useEffect(() => {
     // Consume the deep-link param once on mount. The setState is deferred to a
     // macrotask (external-input subscription style) rather than called
@@ -70,6 +144,7 @@ export const WeeklyRecapCard: React.FC<WeeklyRecapCardProps> = ({ drawerOnly = f
     // StrictMode's double-effect the second run sees the already-stripped URL
     // and no-ops, so a cleanup would cancel the only real timer.
     const week = consumeRecapParam();
+    hadPushParamRef.current = !!week;
     if (!week) return;
     window.setTimeout(() => {
       track('recap_push_opened');
@@ -98,21 +173,180 @@ export const WeeklyRecapCard: React.FC<WeeklyRecapCardProps> = ({ drawerOnly = f
     () => (drawerWeek ? (recaps.find(r => r.isoWeek === drawerWeek) ?? null) : null),
     [drawerWeek, recaps]
   );
-  const activeRecap = tappedRecap ?? pushRecap;
+
+  // How many bottom sheets are on screen right now. Read for the auto-open
+  // below — the only open in this component the user did not ask for.
+  const openDrawerCount = useOpenDrawerCount();
+
+  // --- ARCH-1: auto-open the just-closed week, once ------------------------
+  // ARM. Decided exactly once per mount, and only after the household doc has
+  // loaded. Note that `isLoading` alone is NOT proof the data is there (it is
+  // set by the household-document listener only) — it just avoids arming
+  // before there is a household at all. The real "is the data there" gate is
+  // `useRecapForWeek`'s own `listenersReady` check, which is what keeps
+  // `autoOpenRecap` null until the numbers are trustworthy. Deferred to a
+  // macrotask for the same reason the push-param consume above is: this must
+  // not call `setState` synchronously inside the effect body.
+  //
+  // The two suppression checks run here as a cheap early-out (see the header):
+  // reading the registry and the recorded notification arrival directly is
+  // safe in a timer callback — the "never read module-mutable state in a
+  // render body" rule that `useOpenDrawerCount` exists for does not apply
+  // outside render.
+  const autoOpenDecidedRef = useRef(false);
+  const [autoOpenWeek, setAutoOpenWeek] = useState<string | null>(null);
+  useEffect(() => {
+    if (autoOpenDecidedRef.current || isLoading) return;
+    autoOpenDecidedRef.current = true;
+    window.setTimeout(() => {
+      if (hadPushParamRef.current) return; // the ?recap= deep link already owns this open
+      if (getNotificationOpenType() !== null) return; // a push sent the user somewhere specific
+      if (getOpenDrawerCount() > 0) return; // someone else already holds the slot
+      const closed = lastClosedWeekRange();
+      if (wasRecapAutoOpened(closed.isoWeek)) return;
+      setAutoOpenWeek(closed.isoWeek);
+    }, 0);
+  }, [isLoading]);
+  // Resolution starts as soon as the week is armed — the open/skip verdict
+  // below can only be reached once there is a trustworthy recap to open.
+  const { recap: autoOpenRecap } = useRecapForWeek(autoOpenWeek);
+
+  // LAND — or SKIP, once and for all. Guarded set-state-during-render (the
+  // documented React pattern, and exactly what `MainLayout`'s review auto-open
+  // does), evaluated at the FIRST render where the recap is resolvable: an
+  // empty slot opens it, an occupied one abandons this session's attempt. Both
+  // outcomes latch, which is what makes the skip a skip rather than a deferral
+  // — and on the landing side it also stops the recap drawer's own
+  // registration (count 1) from un-landing what it just opened.
+  const [autoOpenOutcome, setAutoOpenOutcome] = useState<'undecided' | 'landed' | 'skipped'>(
+    'undecided'
+  );
+  if (autoOpenWeek && autoOpenOutcome === 'undecided' && autoOpenRecap) {
+    setAutoOpenOutcome(openDrawerCount === 0 ? 'landed' : 'skipped');
+  }
+  const autoOpenLanded = autoOpenOutcome === 'landed';
+
+  // Marked on LANDING — i.e. once a recap built from delivered listener data
+  // is actually being shown. Not on close (a user who dismisses it instantly
+  // should still never see it again), never on the incomplete path, and never
+  // on a SKIP: writing this stamp for a recap that was never shown, or one
+  // derived off listeners that hadn't answered, permanently suppresses the
+  // correct auto-open for that ISO week. `autoOpenLanded` is the only key that
+  // opens this door, and only `'landed'` sets it — a skipped session leaves
+  // the week eligible for the next app open, which is the entire premise of
+  // skipping instead of deferring.
+  const autoOpenMarkedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!autoOpenLanded || !autoOpenWeek) return;
+    if (autoOpenMarkedRef.current === autoOpenWeek) return;
+    autoOpenMarkedRef.current = autoOpenWeek;
+    markRecapAutoOpened(autoOpenWeek);
+    track('recap_viewed', { isoWeek: autoOpenWeek, source: 'auto' });
+  }, [autoOpenLanded, autoOpenWeek]);
+
+  // --- ARCH-1: "Past weeks" archive -----------------------------------------
+  const [isArchiveOpen, setIsArchiveOpen] = useState(false);
+  const [archiveSelection, setArchiveSelection] = useState<string | null>(null);
+  const { recap: archiveRecap, status: archiveStatus, retry: retryArchive } = useRecapForWeek(archiveSelection);
+  // Hand off from the list to the detail drawer the instant a selection
+  // resolves — derived directly at render time (not a "close the list" effect
+  // reacting to the resolution) so there's no synchronous setState-in-effect,
+  // and so this can never drift out of sync with `activeRecap` below.
+  const archiveDrawerVisible = isArchiveOpen && !(archiveSelection && archiveRecap);
+
+  const activeRecap =
+    tappedRecap ?? pushRecap ?? archiveRecap ?? (autoOpenLanded ? autoOpenRecap : null);
 
   const closeDrawer = () => {
     setDrawerWeek(null);
     setPushWeek(null);
+    setArchiveSelection(null);
+    setAutoOpenWeek(null);
+    setAutoOpenOutcome('undecided');
   };
 
   const drawer = (
     <WeeklyRecapDrawer recap={activeRecap} isOpen={activeRecap !== null} onClose={closeDrawer} />
   );
 
+  const archiveDrawer = (
+    <RecapArchiveDrawer
+      isOpen={archiveDrawerVisible}
+      onClose={() => setIsArchiveOpen(false)}
+      onSelectWeek={isoWeek => {
+        // A tap made while the hook is in its FAILED state re-arms
+        // `useRecapForWeek`'s one-shot history-load guard, so a week whose
+        // transaction history failed to load is genuinely retried instead of
+        // reporting the stale failure forever. Gated on `'error'`
+        // deliberately: the failure is a property of the shared history load,
+        // not of one row, so this covers both "tap the failed row again" and
+        // "tap a different row after a failure" in a single tap — while a tap
+        // during a healthy or in-flight state starts no redundant
+        // full-history read. One attempt per tap, never an automatic loop.
+        if (archiveStatus === 'error') retryArchive();
+        if (isoWeek === archiveSelection) return; // re-tap of the failed row
+        setArchiveSelection(isoWeek);
+        track('recap_viewed', { isoWeek, source: 'archive' });
+      }}
+      pendingWeek={archiveSelection && archiveStatus === 'pending' ? archiveSelection : null}
+      errorWeek={archiveSelection && archiveStatus === 'error' ? archiveSelection : null}
+    />
+  );
+
+  // Permanent — rendered in EVERY branch below, independent of the ephemeral
+  // card's freshness/dismissal state (the archive itself never expires).
+  //
+  // Two presentations, because the two homes are different. Inside the card's
+  // own `Section` it is a secondary browse link, so it takes
+  // `SectionActionLink`'s idiom verbatim (muted `brand-500` at rest, accent
+  // only on hover, 44px hit target with the negative margins that keep the
+  // rhythm) — it can't literally BE that primitive, which renders a router
+  // `Link`, and this opens a drawer. When the card isn't rendered at all this
+  // is a standalone member of the Dashboard's widget stack, so it gets a real
+  // grouped-flat surface (`SurfaceList` + `DisclosureRow`) instead of bare
+  // text floating between bordered cards — DESIGN.md §5, don't hand-roll
+  // surfaces.
+  const pastWeeksLink = (
+    <button
+      type="button"
+      onClick={() => setIsArchiveOpen(true)}
+      className="flex min-h-11 -my-3 -mx-2 px-2 items-center gap-1 text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-accent-700 dark:hover:text-accent-300 transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-btn"
+    >
+      Past weeks
+      <ChevronRight size={12} aria-hidden="true" className="shrink-0" />
+    </button>
+  );
+
+  const pastWeeksSection = (
+    <Section>
+      <SurfaceList>
+        <DisclosureRow
+          title="Past weeks"
+          subtitle="Browse a closed week's recap"
+          onClick={() => setIsArchiveOpen(true)}
+        />
+      </SurfaceList>
+    </Section>
+  );
+
   // --- Card visibility -----------------------------------------------------
-  if (drawerOnly || !latest) return drawer;
+  if (drawerOnly || !latest) {
+    return (
+      <>
+        {drawer}
+        {archiveDrawer}
+        {pastWeeksSection}
+      </>
+    );
+  }
   if (dismissedWeek === latest.isoWeek || !shouldShowCard(latest)) {
-    return drawer;
+    return (
+      <>
+        {drawer}
+        {archiveDrawer}
+        {pastWeeksSection}
+      </>
+    );
   }
 
   const diff = roundMoney(latest.totalSpend - latest.priorWeekSpend);
@@ -218,8 +452,10 @@ export const WeeklyRecapCard: React.FC<WeeklyRecapCardProps> = ({ drawerOnly = f
             <ChevronRight size={14} aria-hidden="true" />
           </span>
         </button>
+        <div className="mt-4 px-1">{pastWeeksLink}</div>
       </Section>
       {drawer}
+      {archiveDrawer}
     </>
   );
 };

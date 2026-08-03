@@ -25,6 +25,7 @@ import {
   insightConverter,
   mealConverter,
   groceryCatalogItemConverter,
+  weeklyRecapConverter,
 } from '@/utils/firestoreConverters';
 import { db } from '@/firebase.config';
 import { useAuth } from '@/contexts/AuthContext';
@@ -224,6 +225,7 @@ import {
   makeKidProfileCrudMutations,
 } from '@/contexts/household/mutations/kidMutations';
 import type {
+  ListenerReadiness,
   MergeLearnAlias,
   MutationOpts,
   HouseholdContextType,
@@ -237,6 +239,7 @@ import type {
 } from '@/contexts/household/types';
 
 export type {
+  ListenerReadiness,
   MergeLearnAlias,
   MutationOpts,
   HouseholdContextType,
@@ -646,6 +649,26 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // block (alongside the rest of the household state) on every household change.
   const [loadedHouseholdId, setLoadedHouseholdId] = useState<string | null>(null);
 
+  // Per-listener FIRST-SNAPSHOT tracking (see `ListenerReadiness` in
+  // contexts/household/types.ts for why `isLoading` cannot answer this).
+  // Stores, per listener key, the household id its most recent first snapshot
+  // belonged to — the same idiom `loadedHouseholdId`/`isLoading` uses above.
+  //
+  // The id comparison alone is NOT sufficient: it invalidates the marks when the
+  // household CHANGES, but a sign-out → sign-in cycle returns to the SAME
+  // household id (a household id is stable, and both adults share it on one
+  // device) while the provider — mounted above <Routes>, so alive through
+  // /login — tears down and re-attaches every listener underneath it. Stale
+  // marks would then read ready over freshly-emptied arrays. So the map is ALSO
+  // cleared explicitly in the listener effect's reset block, alongside
+  // `setLoadedHouseholdId(null)`. The marks themselves are made from inside the
+  // onSnapshot callbacks (an external event), never from an effect body.
+  const [listenerFirstSnapshot, setListenerFirstSnapshot] =
+    useState<Partial<Record<keyof ListenerReadiness, string>>>({});
+  const markListenerReady = useCallback((key: keyof ListenerReadiness, forHouseholdId: string) => {
+    setListenerFirstSnapshot(prev => (prev[key] === forHouseholdId ? prev : { ...prev, [key]: forHouseholdId }));
+  }, []);
+
   // Pay Period Tracking State
   const [householdSettings, setHouseholdSettings] = useState<Household | null>(null);
 
@@ -811,6 +834,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     processingItemIdsRef.current.clear();
     // Re-arms the isLoading skeleton until the new household's first snapshot lands.
     setLoadedHouseholdId(null);
+    // Re-arms per-listener readiness for the SAME reason, and for a case the
+    // household-id comparison in `listenersReady` cannot cover on its own: a
+    // sign-out → sign-in cycle returns to the same household id, so marks left
+    // over from the previous session would still match and report "delivered"
+    // over the arrays this very block just emptied — a confident, permanently
+    // recorded "$0 spent, 0 habits" weekly recap. Clearing HERE cannot race the
+    // new session's first snapshots: this runs at the top of the effect body,
+    // synchronously before any listener below is attached, and every mark is
+    // made from an onSnapshot callback (never synchronously during subscribe).
+    setListenerFirstSnapshot(prev => (Object.keys(prev).length === 0 ? prev : {}));
 
     if (!householdId) return;
 
@@ -826,7 +859,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       setBucketHistoryWindow: (data) => setBucketHistoryWindow(data),
       setHasMoreBucketHistory: (data) => setHasMoreBucketHistory(data),
       bucketHistoryLoadedAllRef,
-      setCalendarItems: (data) => setCalendarItems(data),
+      setCalendarItems: (data) => {
+        setCalendarItems(data);
+        markListenerReady('calendarItems', householdId);
+      },
       setSavingsGoals: (data) => setSavingsGoals(data),
       setNetWorthHistory: (data) => setNetWorthHistory(data),
     }));
@@ -838,7 +874,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     unsubscribers.push(...attachGamificationListeners({
       db,
       householdId,
-      setHabits: (data) => setHabits(data),
+      setHabits: (data) => {
+        setHabits(data);
+        markListenerReady('habits', householdId);
+      },
       setChallenges: (data) => setChallenges(data),
       setYearlyGoals: (data) => setYearlyGoals(data),
       setRewards: (data) => setRewards(data),
@@ -850,6 +889,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       onSnapshot(membersQuery, async (snapshot) => {
         const data = snapshot.docs.map(doc => doc.data());
         setMembers(data);
+        markListenerReady('members', householdId);
 
         // Set current user (read latest user from the ref, not effect closure)
         const u = userRef.current;
@@ -1196,7 +1236,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // Key on user?.uid (not the whole user object) so the ~hourly Firebase token
     // refresh — which replaces the user object reference — does not tear down and
     // re-subscribe every listener. The callbacks read fresh user fields from userRef.
-  }, [householdId, user?.uid]);
+  }, [householdId, user?.uid, markListenerReady]);
 
   // Transactions listener — kept in its own effect so the live window can track
   // the current pay period (currentPeriodId) without re-subscribing every other
@@ -1226,11 +1266,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       db,
       householdId,
       windowStart,
-      setRecentTransactions: (data) => setRecentTransactions(data),
+      setRecentTransactions: (data) => {
+        setRecentTransactions(data);
+        markListenerReady('transactions', householdId);
+      },
     });
 
     return () => unsubscribe();
-  }, [householdId, loadedHouseholdId, currentPeriodId]);
+  }, [householdId, loadedHouseholdId, currentPeriodId, markListenerReady]);
 
   // Holds the live meal-plan window bounds so the on-demand loaders can tell
   // which weeks are already covered by the real-time listener.
@@ -1273,6 +1316,24 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       setHasMoreInsights(false);
     } catch (error) {
       console.error('[loadAllInsights] Failed:', error);
+    }
+  }, [householdId]);
+
+  // ARCH-1 — on-demand lookup of ONE stored recap doc by ISO week, for a week
+  // outside the bounded `recaps` live listener window (RECAPS_LIMIT). A plain
+  // `getDoc` by id (the doc id IS the isoWeek — see coreListeners.ts), not a
+  // query, so this never needs its own loading/cursor state the way the
+  // "load older" paginators above do.
+  const fetchStoredRecap = useCallback(async (isoWeek: string): Promise<WeeklyRecap | null> => {
+    if (!householdId) return null;
+    try {
+      const snap = await getDoc(
+        doc(db, `households/${householdId}/recaps/${isoWeek}`).withConverter(weeklyRecapConverter)
+      );
+      return snap.exists() ? snap.data() : null;
+    } catch (error) {
+      console.error('[fetchStoredRecap] Failed:', error);
+      return null;
     }
   }, [householdId]);
 
@@ -2654,6 +2715,22 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // (pre-setup) is not a "loading" state.
   const isLoading = !!householdId && loadedHouseholdId !== householdId;
 
+  // Per-listener readiness. Two things hold it honest, and BOTH are needed:
+  // the recorded first-snapshot household must equal the CURRENT one (so a
+  // household switch invalidates every flag by comparison), and the map itself
+  // is cleared in the listener effect's reset block (so a sign-out → sign-in
+  // returning to the same id can't inherit the previous session's marks).
+  const listenersReady = useMemo<ListenerReadiness>(() => {
+    const delivered = (key: keyof ListenerReadiness) =>
+      !!householdId && listenerFirstSnapshot[key] === householdId;
+    return {
+      transactions: delivered('transactions'),
+      habits: delivered('habits'),
+      members: delivered('members'),
+      calendarItems: delivered('calendarItems'),
+    };
+  }, [householdId, listenerFirstSnapshot]);
+
   // Each slice value is memoized with a TIGHT dependency array so a change in
   // one domain (e.g. a transaction edit) does not produce a new reference for
   // unrelated slices (meals, todos, …) — that is the render-isolation win.
@@ -2865,6 +2942,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   const coreValue = useMemo<HouseholdCoreContextValue>(() => ({
     isLoading,
+    listenersReady,
     currentUser,
     members,
     insight,
@@ -2903,6 +2981,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     actAs,
     exitToParent,
     recaps,
+    fetchStoredRecap,
     moneyRecaps,
     trashedItems,
     restoreTrashedItem,
@@ -2913,7 +2992,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     markNotificationRead,
     markAllNotificationsRead,
   }), [
-    isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
+    isLoading, listenersReady, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
     householdId, householdSettings, refreshInsight, rateInsight, addMember, updateMember, removeMember, deleteHousehold,
     completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setCaptureReviewMode, setKidModePin, setDietaryProfile, setMealCookedHabitId,
@@ -2921,6 +3000,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addMerchantRule, updateMerchantRule, deleteMerchantRule,
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
     recaps,
+    fetchStoredRecap,
     moneyRecaps,
     trashedItems, restoreTrashedItem, purgeTrashedItem,
     activityLog,

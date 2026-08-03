@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { enterTestMode, bottomNav } from './helpers';
+import { enterTestMode, bottomNav, dismissAutoOpenedRecap } from './helpers';
 
 /**
  * Habit toggle ↔ points sync (advisor plan 07, spec 3).
@@ -16,6 +16,7 @@ import { enterTestMode, bottomNav } from './helpers';
 test.describe('Habit points (Test Mode)', () => {
   test('completing a threshold habit awards points; reset reverses them exactly', async ({ page }) => {
     await enterTestMode(page);
+    await dismissAutoOpenedRecap(page);
 
     const pointsCluster = page.getByRole('button', { name: /View Rewards and Points breakdown/ });
     await expect(pointsCluster.getByText('48', { exact: true })).toBeVisible();

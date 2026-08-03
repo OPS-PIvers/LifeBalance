@@ -5,6 +5,7 @@ import {
   isPremium,
   getLimits,
   kidProfileLimitReached,
+  resolveIsPremiumHousehold,
   FREE_LIMITS,
   PREMIUM_LIMITS,
 } from './entitlements';
@@ -49,6 +50,35 @@ describe('isPremium', () => {
     expect(isPremium(hh({ plan: 'premium', status: 'active' }))).toBe(true);
     expect(isPremium(hh({ plan: 'premium', status: 'canceled' }))).toBe(false);
     expect(isPremium(hh(undefined))).toBe(false);
+  });
+});
+
+describe('resolveIsPremiumHousehold', () => {
+  // Mirrors functions/src/recap/index.ts's isPremiumHousehold — the server
+  // condition a stored recap's `premium` field is generated from, so a
+  // client-derived recap (ARCH-1, utils/recapCompose.ts) has to agree with
+  // it exactly rather than approximate it via isPremium()/getPlan().
+  it('is true for every household while billing is off, regardless of subscription', () => {
+    expect(resolveIsPremiumHousehold(hh(undefined), false)).toBe(true);
+    expect(resolveIsPremiumHousehold(hh({ plan: 'free', status: 'active' }), false)).toBe(true);
+    expect(resolveIsPremiumHousehold(hh({ plan: 'premium', status: 'canceled' }), false)).toBe(true);
+  });
+
+  it('once billing is live, is true only for a status that still grants access', () => {
+    expect(resolveIsPremiumHousehold(hh({ plan: 'premium', status: 'active' }), true)).toBe(true);
+    expect(resolveIsPremiumHousehold(hh({ plan: 'premium', status: 'trialing' }), true)).toBe(true);
+    expect(resolveIsPremiumHousehold(hh({ plan: 'premium', status: 'past_due' }), true)).toBe(true);
+    expect(resolveIsPremiumHousehold(hh({ plan: 'premium', status: 'canceled' }), true)).toBe(false);
+    expect(resolveIsPremiumHousehold(hh(undefined), true)).toBe(false);
+  });
+
+  it('with billing live, ignores the `plan` field the way the server does — status alone decides', () => {
+    // isPremium()/getPlan() ALSO require plan === 'premium'; the server's
+    // isPremiumHousehold does not. A status-active row with a stale/absent
+    // `plan` field must still resolve premium here, matching the server.
+    expect(resolveIsPremiumHousehold(hh({ plan: 'free', status: 'active' }), true)).toBe(true);
+    // Sanity check that this genuinely diverges from isPremium() for that input.
+    expect(isPremium(hh({ plan: 'free', status: 'active' }))).toBe(false);
   });
 });
 
