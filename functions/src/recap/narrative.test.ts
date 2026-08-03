@@ -521,8 +521,13 @@ describe("buildTemplateNarrative", () => {
   it("does not describe a heavy bill week as overspending", () => {
     const text = buildTemplateNarrative(BILL_HEAVY_WEEK);
     expect(text).toContain("Day-to-day spending was $800.00 this week against $800.00 last week.");
-    expect(text).toContain("Bills took another $1,600.00");
-    expect(text).not.toContain("rose to");
+    expect(text).toContain(
+      "Bills rose to $1,600.00, up from $0.00 last week — most of the week's $2,400.00 total and already budgeted."
+    );
+    // The DAY-TO-DAY spend sentence must not claim a rise (it's flat) — bills
+    // legitimately using "rose to" for their own figure is a separate,
+    // correct fact and must not trip this check.
+    expect(text).not.toContain("Day-to-day spending rose");
     expect(text).not.toContain("came out behind");
   });
 
@@ -582,7 +587,7 @@ describe("buildTemplateNarrative", () => {
       priorWeekDayToDaySpend: 0,
     });
     expect(text).toContain("No day-to-day spending was logged this week.");
-    expect(text).toContain("Bills took another $1,600.00");
+    expect(text).toContain("Bills rose to $1,600.00, up from $0.00 last week");
     // The vacuous day-to-day $0-vs-$0 comparison is suppressed; a genuine
     // bills prior of $0.00 (bills going from nothing to $1,600) is real
     // information and is allowed to appear.
@@ -623,7 +628,7 @@ describe("2026-W31 regression — 'spending tripled' and 'fantastic momentum'", 
 
   it("names bills as the reason the total looks large", () => {
     expect(buildTemplateNarrative(W31)).toContain(
-      "Bills took another $1,306.77 — most of the week's $2,429.00 total"
+      "Bills rose to $1,306.77, up from $0.00 last week — most of the week's $2,429.00 total"
     );
   });
 
@@ -641,10 +646,79 @@ describe("2026-W31 regression — 'spending tripled' and 'fantastic momentum'", 
     expect(buildTemplateNarrative(W31)).toBe(
       "This week came out behind last week. " +
         "Day-to-day spending rose to $1,122.23, up from $803.12 last week. " +
-        "Bills took another $1,306.77 — most of the week's $2,429.00 total, and already budgeted, up from $0.00 last week. " +
+        "Bills rose to $1,306.77, up from $0.00 last week — most of the week's $2,429.00 total and already budgeted. " +
         "47 habit completions earned 28 points. " +
         "AT&T Wireless, $216.80, is due today."
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 🛡️ Round 2 — the SAME W31 recap, but the two prose defects visible when this
+// generator was run against a real household's ACTUAL Firestore document
+// (not a hand-built fixture): a trailing-space category name rendering a
+// double space, and the bills-heavy sentence trailing off into a second,
+// comma-spliced clause instead of reading as one sentence.
+// ---------------------------------------------------------------------------
+
+/**
+ * 🛡️ THE REAL 2026-W31 FIGURES, ROUND 2 (NARR-2 / trailing-space category +
+ * unparsable bills sentence).
+ *
+ * Pulled directly from the household's actual `2026-W31` recap document. The
+ * household genuinely has a budget bucket named `"Grocery & Misc. "` — WITH a
+ * trailing space — and it is a deliberately distinct category from
+ * `"Grocery & Misc."` upstream (see `utils/recapAssembly.ts` /
+ * `functions/src/recap/dataAssembly.ts`); this file only decides how that
+ * already-grouped value is WORDED once it reaches a sentence.
+ */
+const W31_TRAILING_SPACE_CATEGORY: RecapNumericFields = {
+  totalSpend: 2429.0,
+  priorWeekSpend: 555.9,
+  billsSpend: 1306.77,
+  priorWeekBillsSpend: 115.26,
+  dayToDaySpend: 1122.23,
+  priorWeekDayToDaySpend: 440.64,
+  topCategoryDeltas: [{ category: "Grocery & Misc. ", current: 1068.8, prior: 393.75 }],
+  habitCompletions: 47,
+  streaksAtRisk: [],
+  pointsByMember: [{ memberId: "u1", name: "Jen", points: 28 }],
+  totalPoints: 28,
+  priorWeekPoints: 21,
+  upcomingBills: [],
+  weekEnd: "2026-08-02",
+};
+
+describe("2026-W31 regression, round 2 — trailing-space category and the unparsable bills sentence", () => {
+  it("trims the trailing-space category so the prose has no double space", () => {
+    const text = buildTemplateNarrative(W31_TRAILING_SPACE_CATEGORY);
+    expect(text).not.toMatch(/ {2,}/);
+    expect(text).toContain("Grocery & Misc. is where the increase came from");
+    // The literal bug: two spaces between the category and "is".
+    expect(text).not.toContain("Grocery & Misc.  is");
+  });
+
+  it("folds the bills comparison into one sentence instead of a comma-spliced afterthought", () => {
+    const text = buildTemplateNarrative(W31_TRAILING_SPACE_CATEGORY);
+    expect(text).toContain(
+      "Bills rose to $1,306.77, up from $115.26 last week — most of the week's $2,429.00 total and already budgeted."
+    );
+  });
+
+  it("pins the full narrative for the real production figures", () => {
+    expect(buildTemplateNarrative(W31_TRAILING_SPACE_CATEGORY)).toBe(
+      "Day-to-day spending rose to $1,122.23, up from $440.64 last week. " +
+        "Bills rose to $1,306.77, up from $115.26 last week — most of the week's $2,429.00 total and already budgeted. " +
+        "47 habit completions earned 28 points, up 33% on last week's 21. " +
+        "Grocery & Misc. is where the increase came from — $1,068.80 against $393.75 last week."
+    );
+  });
+
+  it("trims the category before it reaches the Gemini prompt too, so the model has nothing trailing to echo back", () => {
+    const prompt = buildPrompt(W31_TRAILING_SPACE_CATEGORY);
+    expect(prompt).toContain(JSON.stringify("Grocery & Misc."));
+    expect(prompt).not.toContain(JSON.stringify("Grocery & Misc. "));
+    expect(prompt).not.toMatch(/ {2,}/);
   });
 });
 
