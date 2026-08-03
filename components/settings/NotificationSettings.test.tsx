@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import NotificationSettings from './NotificationSettings';
@@ -18,6 +18,22 @@ vi.mock('react-hot-toast', () => ({
     dismiss: vi.fn(),
   },
 }));
+
+/** Pins the "detected browser zone" the component reads at mount so the
+ * timezone-row assertions below don't depend on the test runner's actual TZ. */
+const DETECTED_ZONE = 'America/Chicago';
+const stubDetectedTimezone = () => {
+  const OriginalDateTimeFormat = Intl.DateTimeFormat;
+  vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(
+    ((...args: ConstructorParameters<typeof Intl.DateTimeFormat>) => {
+      const real = new OriginalDateTimeFormat(...args);
+      return {
+        ...real,
+        resolvedOptions: () => ({ ...real.resolvedOptions(), timeZone: DETECTED_ZONE }),
+      } as Intl.DateTimeFormat;
+    }) as unknown as typeof Intl.DateTimeFormat
+  );
+};
 
 describe('NotificationSettings', () => {
   it('renders the flat preference list without a nested card heading', () => {
@@ -143,6 +159,77 @@ describe('NotificationSettings', () => {
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave.mock.calls[0]?.[0]).toMatchObject({
       habitReminders: expect.objectContaining({ enabled: true }),
+    });
+  });
+
+  describe('Timezone row (TZ-1)', () => {
+    beforeEach(() => {
+      stubDetectedTimezone();
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('defaults to the detected zone and shows it matches', () => {
+      const onSave = vi.fn().mockResolvedValue(undefined);
+      render(<NotificationSettings householdId="h1" onSave={onSave} />);
+
+      expect(screen.getByRole('combobox', { name: 'Timezone' })).toHaveValue(DETECTED_ZONE);
+      expect(screen.getByText("Matches your device's detected zone.")).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Use detected zone' })).not.toBeInTheDocument();
+    });
+
+    it('flags a saved timezone that differs from the detected zone', () => {
+      const onSave = vi.fn().mockResolvedValue(undefined);
+      const saved: NotificationPreferences = {
+        habitReminders: { enabled: false, time: '20:00' },
+        actionQueueReminders: { enabled: false, time: '08:00' },
+        budgetAlerts: { enabled: true, threshold: 0 },
+        streakWarnings: { enabled: false, time: '21:00' },
+        billReminders: { enabled: false, daysBeforeDue: 1, time: '09:00' },
+        timezone: 'UTC',
+      };
+
+      render(<NotificationSettings householdId="h1" currentPreferences={saved} onSave={onSave} />);
+
+      expect(screen.getByRole('combobox', { name: 'Timezone' })).toHaveValue('UTC');
+      expect(
+        screen.getByText(new RegExp(`This differs from your device's detected zone \\(${DETECTED_ZONE}\\)`))
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Use detected zone' })).toBeInTheDocument();
+    });
+
+    it('"Use detected zone" resets the picker to the detected zone', async () => {
+      const user = userEvent.setup();
+      const onSave = vi.fn().mockResolvedValue(undefined);
+      const saved: NotificationPreferences = {
+        habitReminders: { enabled: false, time: '20:00' },
+        actionQueueReminders: { enabled: false, time: '08:00' },
+        budgetAlerts: { enabled: true, threshold: 0 },
+        streakWarnings: { enabled: false, time: '21:00' },
+        billReminders: { enabled: false, daysBeforeDue: 1, time: '09:00' },
+        timezone: 'UTC',
+      };
+
+      render(<NotificationSettings householdId="h1" currentPreferences={saved} onSave={onSave} />);
+
+      await user.click(screen.getByRole('button', { name: 'Use detected zone' }));
+
+      expect(screen.getByRole('combobox', { name: 'Timezone' })).toHaveValue(DETECTED_ZONE);
+      expect(screen.getByText("Matches your device's detected zone.")).toBeInTheDocument();
+    });
+
+    it('saves an explicit override selection', async () => {
+      const user = userEvent.setup();
+      const onSave = vi.fn().mockResolvedValue(undefined);
+      render(<NotificationSettings householdId="h1" onSave={onSave} />);
+
+      await user.selectOptions(screen.getByRole('combobox', { name: 'Timezone' }), 'Pacific/Honolulu');
+      await user.click(screen.getByRole('button', { name: 'Save Preferences' }));
+
+      await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+      expect(onSave.mock.calls[0]?.[0]).toMatchObject({ timezone: 'Pacific/Honolulu' });
     });
   });
 });

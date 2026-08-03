@@ -87,6 +87,7 @@ import { migrateDuplicateMeals, needsMealDedup } from '@/utils/migrations/mealDe
 import { repairNegativePointsCorruption, needsNegativePointsRepair } from '@/utils/migrations/negativePointsRepair';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 import { usePointsSync, type PointsSyncUpdate } from '@/hooks/usePointsSync';
+import { useTimezoneAutoHeal } from '@/hooks/useTimezoneAutoHeal';
 import { useTodoAutoReschedule } from '@/hooks/useTodoAutoReschedule';
 import { useHabitActions } from '@/hooks/useHabitActions';
 import { expandCalendarItems } from '@/utils/calendarRecurrence';
@@ -212,7 +213,7 @@ import {
   makeMerchantRuleMutations,
   type MerchantRuleDraft,
 } from '@/contexts/household/mutations/merchantRuleMutations';
-import { makeNotificationMutations } from '@/contexts/household/mutations/notificationMutations';
+import { makeNotificationMutations, makeHealMemberTimezone } from '@/contexts/household/mutations/notificationMutations';
 import {
   makeAddMember,
   makeMemberCrudMutations,
@@ -1751,6 +1752,21 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     members,
     writeMemberPoints: writeSyncedMemberPoints,
     getHabitSubmissions: habitActions.getHabitSubmissions,
+  });
+
+  // TZ-1: heal the signed-in member's stored notification timezone once per
+  // session when it's missing/empty or stale vs. the browser's currently-
+  // detected IANA zone. See makeHealMemberTimezone for the dot-path write
+  // discipline; resilient by construction (a failed write is caught and
+  // logged there, never thrown, so it can't block app boot).
+  const healMemberTimezone = useCallback(async (memberUid: string, timezone: string) => {
+    await makeHealMemberTimezone({ db, householdId }).healMemberTimezone(memberUid, timezone);
+  }, [householdId]);
+
+  useTimezoneAutoHeal({
+    householdId,
+    currentUser,
+    healTimezone: healMemberTimezone,
   });
 
   // Refresh FCM token periodically to prevent token staleness

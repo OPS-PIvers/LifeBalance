@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info, Newspaper, NotebookPen, Wallet, Layers, Sunrise, Landmark } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info, Newspaper, NotebookPen, Wallet, Layers, Sunrise, Landmark, Globe } from 'lucide-react';
 import { NotificationPreferences } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { getFunctionsInstance } from '@/firebase.config';
@@ -7,6 +7,7 @@ import { isIOSDevice, isPWA, supportsPush } from '@/utils/platform';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { Switch } from '@/components/ui/Switch';
 import { Button } from '@/components/ui/Button';
+import { getTimezoneOptionsIncluding } from '@/utils/timezoneOptions';
 
 interface NotificationSettingsProps {
   userId?: string;
@@ -197,6 +198,21 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
     }));
   };
 
+  // TZ-1: the timezone row. `detectedTimezone` is computed once per mount —
+  // it doesn't change during a session — and drives both the "differs from
+  // your device" callout and the auto-heal hook's own comparison (this row
+  // is a manual override of the same field the app already auto-heals to
+  // the detected zone on open; see hooks/useTimezoneAutoHeal.ts).
+  const [detectedTimezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const timezoneOptions = useMemo(
+    () => getTimezoneOptionsIncluding(preferences.timezone),
+    [preferences.timezone]
+  );
+
+  const handleTimezoneChange = (timezone: string) => {
+    setPreferences(prev => ({ ...prev, timezone }));
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
@@ -288,6 +304,55 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
       })()}
 
       <SurfaceList>
+        {/* Timezone (TZ-1) — every scheduled job below (habit reminders, streak
+            warnings, bill reminders, the weekly recap, the daily briefing)
+            decides "today" from this field, so it's shown first. Auto-healed to
+            the detected zone on app open when missing/stale (see
+            hooks/useTimezoneAutoHeal.ts); this picker is the explicit override. */}
+        <Row className="items-start">
+          <div className="w-10 h-10 bg-accent-50 dark:bg-accent-500/15 rounded-btn flex items-center justify-center shrink-0">
+            <Globe className="w-5 h-5 text-accent-600 dark:text-accent-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Timezone</h4>
+                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">
+                  Scheduled reminders and your weekly recap fire based on this zone.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 mt-3">
+              <select
+                value={preferences.timezone || detectedTimezone}
+                onChange={(e) => handleTimezoneChange(e.target.value)}
+                className={inlineControlClass}
+                aria-label="Timezone"
+              >
+                {timezoneOptions.map((tz) => (
+                  <option key={tz} value={tz}>{tz}</option>
+                ))}
+              </select>
+            </div>
+            {preferences.timezone && preferences.timezone !== detectedTimezone ? (
+              <p className="text-xs text-warm-600 dark:text-warm-300 mt-2">
+                This differs from your device&apos;s detected zone ({detectedTimezone}).{' '}
+                <button
+                  type="button"
+                  onClick={() => handleTimezoneChange(detectedTimezone)}
+                  className="underline underline-offset-2 hover:text-warm-700 dark:hover:text-warm-200"
+                >
+                  Use detected zone
+                </button>
+              </p>
+            ) : (
+              <p className="text-xs text-brand-400 dark:text-brand-450 mt-2">
+                Matches your device&apos;s detected zone.
+              </p>
+            )}
+          </div>
+        </Row>
+
         {/* Digest Mode — consolidates habit/to-do/streak/bill reminders below
             into one push. Placed first since it changes how those four rows'
             individual sends behave (they're suppressed server-side while
