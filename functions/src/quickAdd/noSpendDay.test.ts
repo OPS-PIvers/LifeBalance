@@ -3,7 +3,10 @@ import {
   BUDGETED_IN_CALENDAR,
   CREDIT_CARD_CATEGORY,
   INCOME_CATEGORY,
+  MAX_NO_SPEND_CATCHUP_DAYS,
+  datesToJudge,
   isoDayOfWeek,
+  noSpendCatchupWindow,
   shouldDeclareToNoSpend,
   spendExemption,
   unplannedSpend,
@@ -259,5 +262,80 @@ describe("weekend rule", () => {
     // 2026-08-02 is a Sunday; its Saturday is in July.
     expect(isoDayOfWeek("2026-08-02")).toBe(7);
     expect(weekendPartnerDate("2026-08-02")).toBe("2026-08-01");
+  });
+});
+
+describe("multi-day catch-up window", () => {
+  // Four, not three: a holiday Monday (no email at all that day) leaves
+  // Saturday/Sunday/Monday/Tuesday all unjudged by the time the next email
+  // arrives on Wednesday — a 3-day window would silently drop Saturday, which
+  // is the exact bug this whole mechanism exists to remove (the "Clean
+  // weekend" habit can never fire without a Saturday verdict).
+  it("is 4", () => {
+    expect(MAX_NO_SPEND_CATCHUP_DAYS).toBe(4);
+  });
+
+  describe("noSpendCatchupWindow", () => {
+    it("returns asOf-4 through asOf-1, ascending", () => {
+      // 2026-07-25 is a Saturday, 2026-07-26 a Sunday, 2026-07-27 a (holiday)
+      // Monday, 2026-07-28 a Tuesday; 2026-07-29 is the Wednesday email.
+      expect(noSpendCatchupWindow("2026-07-29")).toEqual([
+        "2026-07-25",
+        "2026-07-26",
+        "2026-07-27",
+        "2026-07-28",
+      ]);
+    });
+
+    it("honours a caller-supplied maxDays", () => {
+      expect(noSpendCatchupWindow("2026-07-29", 2)).toEqual(["2026-07-27", "2026-07-28"]);
+      expect(noSpendCatchupWindow("2026-07-29", 1)).toEqual(["2026-07-28"]);
+    });
+
+    it("crosses a month boundary correctly", () => {
+      expect(noSpendCatchupWindow("2026-08-02")).toEqual([
+        "2026-07-29",
+        "2026-07-30",
+        "2026-07-31",
+        "2026-08-01",
+      ]);
+    });
+  });
+
+  describe("datesToJudge", () => {
+    const ASOF = "2026-07-29";
+    const FULL_WINDOW = ["2026-07-25", "2026-07-26", "2026-07-27", "2026-07-28"];
+
+    it("judges the whole window when nothing has been judged yet", () => {
+      expect(datesToJudge(ASOF, new Set())).toEqual(FULL_WINDOW);
+    });
+
+    // The Saturday+Sunday case the whole fix is for: Saturday already has a
+    // verdict (an earlier email settled it), so only the remaining days are
+    // judged — and Sunday is NOT silently dropped.
+    it("skips only the days that already have a verdict, keeping the rest ascending", () => {
+      expect(datesToJudge(ASOF, new Set(["2026-07-25"]))).toEqual([
+        "2026-07-26",
+        "2026-07-27",
+        "2026-07-28",
+      ]);
+      expect(datesToJudge(ASOF, new Set(["2026-07-25", "2026-07-27"]))).toEqual([
+        "2026-07-26",
+        "2026-07-28",
+      ]);
+    });
+
+    it("judges nothing when every candidate day is already settled", () => {
+      expect(datesToJudge(ASOF, new Set(FULL_WINDOW))).toEqual([]);
+    });
+
+    // A day outside the window doesn't accidentally suppress anything inside it.
+    it("ignores an already-judged date that isn't in the window", () => {
+      expect(datesToJudge(ASOF, new Set(["2026-06-01"]))).toEqual(FULL_WINDOW);
+    });
+
+    it("honours a caller-supplied maxDays", () => {
+      expect(datesToJudge(ASOF, new Set(), 2)).toEqual(["2026-07-27", "2026-07-28"]);
+    });
   });
 });

@@ -33,9 +33,16 @@ export type NoSpendScope = "day" | "weekend";
 
 /**
  * Cap on habits fired from one email. Keeps `bankEmailSync`'s Firestore
- * batch-size proof intact: this stages 1 (the verdict doc) + 2 per fired habit
- * (habit doc + submission doc) + 1 (the merged household update), so the worst
- * case adds 1 + 2*10 + 1 = 22 writes on top of the withdrawal budget.
+ * batch-size proof intact: ONE call to `applyNoSpendDay` (i.e. one judged
+ * day) stages at most 1 (the verdict doc) + `MAX_NO_SPEND_HABITS * 2` (a
+ * habit-doc update + a submission-doc set, per fired habit) = 1 + 20 = 21
+ * writes. The household update (points + freezeBank) is NOT part of this
+ * per-day cost — `applyNoSpendDay` never writes to the household doc; the
+ * caller (`bankEmailSync.ts`) stages exactly ONE combined household update
+ * for the whole email, after its judging loop, so it belongs in that
+ * proof's fixed overhead, not multiplied per day here. See
+ * `bankEmailSync.ts`'s `MAX_WITHDRAWALS` doc comment for the full
+ * multi-day expression this constant feeds.
  *
  * A household with more than ten habits wired to the same trigger is
  * pathological; the excess is logged rather than silently dropped.
@@ -50,6 +57,40 @@ export interface NoSpendHabitFire {
   pointsEarned: number;
   /** Streak ending on the credited date, after this fire. */
   streak: number;
+}
+
+/** One entry the freeze bank's `history` array gets, per refunded token. */
+export interface NoSpendFreezeRefundNote {
+  habitId: string;
+  habitDate: string;
+  title: string;
+}
+
+/**
+ * One habit fire STAGED (not yet committed) by THIS call, reported back so
+ * the caller can fold it into a LATER same-batch day's scoring — see
+ * `ApplyNoSpendDayDeps.stagedCompletionsByHabit`'s doc for the two problems
+ * this exists to solve.
+ */
+export interface StagedNoSpendFire {
+  habitId: string;
+  /** The date this fire was credited to (== the day judged). */
+  date: string;
+  /**
+   * Units this fire contributed toward its scoring PERIOD — always 1
+   * (mirrors the submission doc's hardcoded `count: 1`).
+   */
+  count: number;
+  /**
+   * True when this fire's own computation newly completed `date` (mirrors
+   * `BackdatedHabitFireDelta.addedDate !== undefined`) — i.e. whether
+   * `date` would land in `completedDates` once this batch commits. For an
+   * INCREMENTAL habit this is true on essentially every fire; for a
+   * THRESHOLD habit only on the fire that actually crosses its target that
+   * period (a non-crossing threshold fire still banks a unit — see `count`
+   * — but does NOT complete the date).
+   */
+  completedDate: boolean;
 }
 
 export interface NoSpendOutcome {
@@ -67,6 +108,48 @@ export interface NoSpendOutcome {
    * this run credited a weekend habit (see the note at the return site).
    */
   weekendCompleted: boolean;
+  /**
+   * Points delta THIS DAY's fires contributed (daily/weekly/total, matching
+   * `Household.points`'s shape) — NOT staged onto the household doc here.
+   * `applyNoSpendDay` deliberately never writes to the household doc: the
+   * caller accumulates this across every day judged in a multi-day catch-up
+   * run and applies ONE combined update after its judging loop (see
+   * `bankEmailSync.ts`). See `freezeTokensRefunded`'s doc for why this
+   * matters even though points, unlike freezeBank, use a transform.
+   */
+  pointsDelta: { daily: number; weekly: number; total: number };
+  /**
+   * Freeze tokens earned back by an unfreeze fire ON THIS DAY. Also NOT
+   * staged here — the caller accumulates this (and `freezeRefundNotes`)
+   * across every judged day and writes `Household.freezeBank` ONCE, computed
+   * from the single pre-batch household snapshot plus the total.
+   *
+   * This is the field that made the original design unsafe: `freezeBank` is
+   * a whole-object, non-transform write built from `householdData` — a
+   * snapshot loaded ONCE, before the batch, by the caller. When
+   * `applyNoSpendDay` ran once per email that was fine. Once the catch-up
+   * window could call it several times on the SAME batch, every call still
+   * read from that SAME stale snapshot, so two days that each refund a token
+   * would BOTH compute `tokens: original + 1` — Firestore applies same-batch
+   * writes to one document in order, so the LAST one staged wins and an
+   * earlier day's refund (and its history entry) is silently lost. Points
+   * are technically safe as bare `FieldValue.increment` calls even across
+   * multiple same-batch writes to the same doc (Firestore transforms are
+   * relative and apply in order), but are accumulated here too, for one
+   * simple, auditable household write per email rather than leaning on that
+   * guarantee.
+   */
+  freezeTokensRefunded: number;
+  /** One entry per refunded token this day contributed. */
+  freezeRefundNotes: NoSpendFreezeRefundNote[];
+  /**
+   * One entry per habit THIS DAY fired, for the CALLER to fold into a LATER
+   * same-batch day's `stagedCompletionsByHabit` (see that field's doc on
+   * `ApplyNoSpendDayDeps`). Distinct from `fired` (the user-facing summary
+   * used for the push/ledger): this carries the bookkeeping a later day's
+   * scoring needs, not what a notification says.
+   */
+  stagedFires: StagedNoSpendFire[];
 }
 
 /** Read the `triggers.noSpend` scope off a raw habit doc, or null. */
@@ -122,8 +205,6 @@ export interface ApplyNoSpendDayDeps {
    * exist in the query; rows it files as bills are exempt anyway.
    */
   extraSpend: SpendCandidate[];
-  /** The household doc's data, for the freeze bank (already loaded by the caller). */
-  householdData: Record<string, unknown> | undefined;
   /**
    * The household's merchant rules, so an `exempt` rule stops a charge breaking
    * the day. Applied to EVERY row the query loads, not just this email's new
@@ -131,6 +212,64 @@ export interface ApplyNoSpendDayDeps {
    * Omit for the pre-rules behaviour.
    */
   merchantRules?: readonly MerchantRule[];
+  /**
+   * Dates already judged CLEAN earlier in this SAME batch (ascending order,
+   * caller-maintained across a multi-day catch-up run — see
+   * `bankEmailSync.ts`). These days' verdict docs are only STAGED on the
+   * batch, not yet committed, so a plain Firestore `.get()` for them would
+   * come back empty.
+   *
+   * Exists so a Saturday+Sunday pair settled by ONE catch-up email lets
+   * Sunday's weekend check see Saturday's in-flight verdict — without this,
+   * a single email judging both days of a weekend would silently miss the
+   * weekend rule every time, reintroducing the exact bug the catch-up window
+   * exists to fix. Omit when judging a single day (the pre-catch-up
+   * behaviour): a plain Firestore read is then always correct, since
+   * Saturday, if judged at all, was judged and committed by an EARLIER email.
+   */
+  stagedCleanDates?: ReadonlySet<string>;
+  /**
+   * Every habit fire STAGED (not yet committed) earlier in THIS SAME BATCH,
+   * keyed by habitId — caller-maintained across a multi-day catch-up run
+   * exactly like `stagedCleanDates` above (see `bankEmailSync.ts`).
+   *
+   * Fixes two staleness problems the catch-up window introduced. Both were
+   * UNREACHABLE when `applyNoSpendDay` ran once per email, since the same
+   * habit could never fire twice in one batch — this function's own reads
+   * only ever see the last COMMITTED Firestore state, never a write staged
+   * by an earlier day's call in this same batch:
+   *
+   * 1. STREAK. If the same "day"-scope habit fires on both Saturday and
+   *    Sunday in one run, Sunday's streak computation would not know
+   *    Saturday was ALSO completed this run — and since `streakDays` is
+   *    written as a plain value, not a transform, the wrong, too-low
+   *    streak/multiplier computed from that stale view is the one that
+   *    survives (Firestore applies same-batch writes to one doc in order, so
+   *    the LAST staged `streakDays` wins). Fixed below by folding each
+   *    entry's `date` (only when `completedDate` is true) into the habit's
+   *    `completedDates` before scoring THIS day's fire.
+   *
+   * 2. THRESHOLD ACCUMULATION. A threshold habit fired into a past period
+   *    needs that period's already-recorded units (`priorPeriodCount`,
+   *    read by querying committed submissions) to know whether THIS fire
+   *    crosses the target. That query can't see a submission staged by an
+   *    earlier day in this same batch either — so two days in the SAME
+   *    scoring period (e.g. a weekly-period habit judged for both Saturday
+   *    and Sunday) would each independently compute the target as not yet
+   *    crossed and BOTH award full points, double-crediting the period.
+   *    Fixed below by folding each entry's `count` (every entry, completed
+   *    or not — a non-crossing fire still banks a unit toward the period)
+   *    into `priorPeriodCount` when its `date` falls in the period being
+   *    scored.
+   *
+   * `frozenDates` is deliberately NOT folded the same way `completedDates`
+   * is: the streak walk treats a date that is in BOTH `completedDates` and
+   * `frozenDates` identically to one in `completedDates` alone (it only
+   * ever counts once), so leaving a same-batch unfreeze un-merged here is
+   * harmless — simpler than threading a second accumulator for no behavior
+   * change.
+   */
+  stagedCompletionsByHabit?: ReadonlyMap<string, readonly StagedNoSpendFire[]>;
 }
 
 /** A habit that survived the read phase and is ready to be scored + staged. */
@@ -155,14 +294,27 @@ interface ReadyFire {
  * the fire is all-or-nothing along with the rest of the email.
  */
 export async function applyNoSpendDay(deps: ApplyNoSpendDayDeps): Promise<NoSpendOutcome> {
-  const { db, householdId, batch, targetDate, today, extraSpend, householdData, merchantRules } =
-    deps;
+  const {
+    db,
+    householdId,
+    batch,
+    targetDate,
+    today,
+    extraSpend,
+    merchantRules,
+    stagedCleanDates,
+    stagedCompletionsByHabit,
+  } = deps;
   const notNoSpend: NoSpendOutcome = {
     targetDate,
     isNoSpendDay: false,
     blockedBy: [],
     fired: [],
     weekendCompleted: false,
+    pointsDelta: { daily: 0, weekly: 0, total: 0 },
+    freezeTokensRefunded: 0,
+    freezeRefundNotes: [],
+    stagedFires: [],
   };
 
   // ---- READ PHASE (may throw; nothing is staged yet) ----
@@ -209,8 +361,15 @@ export async function applyNoSpendDay(deps: ApplyNoSpendDayDeps): Promise<NoSpen
     //    have no evidence, and no evidence must not win a weekend.
     const saturday = weekendPartnerDate(targetDate);
     if (saturday) {
-      const satDoc = await db.doc(`households/${householdId}/noSpendDays/${saturday}`).get();
-      weekendClean = satDoc.exists;
+      if (stagedCleanDates?.has(saturday)) {
+        // Saturday was judged clean earlier in THIS SAME BATCH — its verdict
+        // doc is staged but not yet committed, so skip the read that would
+        // otherwise miss it. See `ApplyNoSpendDayDeps.stagedCleanDates`.
+        weekendClean = true;
+      } else {
+        const satDoc = await db.doc(`households/${householdId}/noSpendDays/${saturday}`).get();
+        weekendClean = satDoc.exists;
+      }
       if (!weekendClean) {
         logger.info(
           `noSpend: ${targetDate} (Sunday) was clean but ${saturday} has no no-spend ` +
@@ -295,6 +454,17 @@ export async function applyNoSpendDay(deps: ApplyNoSpendDayDeps): Promise<NoSpen
           // period early; blocking the fire would be worse.
           logger.warn(`noSpend: prior-period submission read failed for ${habit.id}:`, err);
         }
+
+        // Fold in units STAGED (not committed) by an EARLIER day judged in
+        // this same batch — the Firestore query above can't see them. See
+        // `ApplyNoSpendDayDeps.stagedCompletionsByHabit`'s doc for why: a
+        // targetCount>1 threshold habit spanning two judged days in the same
+        // period would otherwise double-credit it.
+        for (const staged of stagedCompletionsByHabit?.get(habit.id) ?? []) {
+          if (staged.date >= periodStart && staged.date <= periodEnd) {
+            priorPeriodCount += staged.count;
+          }
+        }
       }
 
       ready.push({ habit, title, scope, priorPeriodCount });
@@ -322,12 +492,29 @@ export async function applyNoSpendDay(deps: ApplyNoSpendDayDeps): Promise<NoSpen
   const pointsDelta = { daily: 0, weekly: 0, total: 0 };
   let freezeTokensRefunded = 0;
   const freezeRefundNotes: { habitId: string; habitDate: string; title: string }[] = [];
+  const stagedFires: StagedNoSpendFire[] = [];
 
   for (const { habit, title, scope, priorPeriodCount } of ready) {
     const submissionsRef = db.collection(
       `households/${householdId}/habits/${habit.id}/submissions`
     );
-    const fire = computeBackdatedHabitFire(habit, targetDate, today, priorPeriodCount);
+
+    // Fold in dates that became NEWLY COMPLETE earlier in this same batch
+    // (see `ApplyNoSpendDayDeps.stagedCompletionsByHabit`'s doc — this is
+    // the STREAK half of the fix). `habit.completedDates` alone is still the
+    // pre-batch value, since Firestore reads never see uncommitted writes.
+    const stagedCompletedDates = (stagedCompletionsByHabit?.get(habit.id) ?? [])
+      .filter((s) => s.completedDate)
+      .map((s) => s.date);
+    const effectiveHabit: BackdatableHabit =
+      stagedCompletedDates.length === 0
+        ? habit
+        : {
+            ...habit,
+            completedDates: Array.from(new Set([...habit.completedDates, ...stagedCompletedDates])),
+          };
+
+    const fire = computeBackdatedHabitFire(effectiveHabit, targetDate, today, priorPeriodCount);
     if (!fire) continue;
 
     // DELTA WRITES only — never a whole `completedDates` array (2026-07-15
@@ -389,50 +576,29 @@ export async function applyNoSpendDay(deps: ApplyNoSpendDayDeps): Promise<NoSpen
       pointsEarned: fire.pointsEarned,
       streak: fire.streakAtFireDate,
     });
+    stagedFires.push({
+      habitId: habit.id,
+      date: targetDate,
+      count: 1,
+      completedDate: fire.addedDate !== undefined,
+    });
   }
 
-  // Points and any owed-back freeze token both live on the household doc, so
-  // they merge into ONE update — a batch may not write the same doc twice.
-  const householdUpdates: Record<string, unknown> = {};
-  if (pointsDelta.daily !== 0) {
-    householdUpdates["points.daily"] = admin.firestore.FieldValue.increment(pointsDelta.daily);
-  }
-  if (pointsDelta.weekly !== 0) {
-    householdUpdates["points.weekly"] = admin.firestore.FieldValue.increment(pointsDelta.weekly);
-  }
-  if (pointsDelta.total !== 0) {
-    householdUpdates["points.total"] = admin.firestore.FieldValue.increment(pointsDelta.total);
-  }
-  const freezeBank = householdData?.freezeBank as
-    | { tokens?: number; maxTokens?: number; history?: unknown[] }
-    | undefined;
-  if (freezeTokensRefunded > 0 && freezeBank) {
-    // Whole-object write, matching every other freezeBank writer (it is a nested
-    // map, not a counter, and all writers treat it as last-writer-wins). Capped
-    // so a refund can't push the bank above its ceiling.
-    const maxTokens = typeof freezeBank.maxTokens === "number" ? freezeBank.maxTokens : 2;
-    const tokens = typeof freezeBank.tokens === "number" ? freezeBank.tokens : 0;
-    householdUpdates["freezeBank"] = {
-      ...freezeBank,
-      tokens: Math.min(maxTokens, tokens + freezeTokensRefunded),
-      history: [
-        ...(Array.isArray(freezeBank.history) ? freezeBank.history : []),
-        ...freezeRefundNotes.map((n) => ({
-          id: `nospend-${n.habitId}-${n.habitDate}`,
-          type: "earned",
-          amount: 1,
-          date: today,
-          habitId: n.habitId,
-          habitDate: n.habitDate,
-          notes: `Freeze refunded: ${n.title} was completed on ${n.habitDate} after all (no-spend day)`,
-          createdAt: new Date().toISOString(),
-        })),
-      ],
-    };
-  }
-  if (Object.keys(householdUpdates).length > 0) {
-    batch.update(db.doc(`households/${householdId}`), householdUpdates);
-  }
+  // Deliberately NO household-doc write here. Points and any owed-back
+  // freeze token both live on `households/{id}`, and the OLD single-call
+  // design merged them into one `batch.update` right at this point — safe
+  // when `applyNoSpendDay` ran once per email. Now that the catch-up window
+  // can call this function several times against the SAME batch, staging a
+  // `freezeBank` write per call is unsafe: it is a whole-object (non-
+  // transform) value built from a household snapshot the CALLER loaded once,
+  // before the batch — so two days that each refund a token would both
+  // compute `tokens: original + 1`, and Firestore applying same-batch writes
+  // to one document in order means the LAST one staged wins, silently
+  // dropping the earlier day's refund. So this function only REPORTS what it
+  // would have written (`pointsDelta`, `freezeTokensRefunded`,
+  // `freezeRefundNotes`, below) — the caller accumulates those across every
+  // judged day and stages exactly ONE combined household update after its
+  // loop. See `NoSpendOutcome.freezeTokensRefunded`'s doc for the full story.
 
   return {
     targetDate,
@@ -449,5 +615,9 @@ export async function applyNoSpendDay(deps: ApplyNoSpendDayDeps): Promise<NoSpen
     // also has a verdict, so it states a fact about the weekend that holds
     // regardless of which run observed it, or whether any habit is wired up.
     weekendCompleted: weekendClean,
+    pointsDelta,
+    freezeTokensRefunded,
+    freezeRefundNotes,
+    stagedFires,
   };
 }

@@ -95,10 +95,17 @@ import {
 } from "../shared/notifications";
 import {
   BUDGETED_IN_CALENDAR as NO_SPEND_BILL_CATEGORY,
-  shouldDeclareToNoSpend,
+  datesToJudge,
+  noSpendCatchupWindow,
   type SpendCandidate,
 } from "./noSpendDay";
-import { applyNoSpendDay, type NoSpendOutcome } from "./noSpendFire";
+import {
+  applyNoSpendDay,
+  type NoSpendFreezeRefundNote,
+  type NoSpendHabitFire,
+  type NoSpendOutcome,
+  type StagedNoSpendFire,
+} from "./noSpendFire";
 import { pickMerchantRule } from "./merchantRules";
 import {
   describeRuleEffects,
@@ -119,20 +126,43 @@ const UNCATEGORIZED = "Uncategorized";
 
 /**
  * Hard cap on withdrawal lines processed per request (abuse / runaway-parse
- * guard). A real nightly WF "account update" email carries ~a dozen; anything
- * beyond this is malformed or hostile input.
+ * guard). A real nightly WF "account update" email carries roughly a dozen
+ * lines — the largest ever observed in production is 16 — so this cap is a
+ * huge margin over anything a legitimate email needs; anything beyond it is
+ * malformed or hostile input.
  *
  * Firestore batch-size proof: each withdrawal stages AT MOST 3 document writes
  * (the pay_bill branch: a paid-instance/calendar write + the transaction row +
  * the alias arrayUnion, three distinct docs). Every other branch stages 1 or 0.
  * The email also stages a fixed overhead of 2 writes (the account ending-balance
- * overwrite + the ledger record), plus AT MOST 22 for the no-spend habit fire
- * (`MAX_NO_SPEND_HABITS * 2` for the habit + submission docs, the verdict doc,
- * and the merged household update — see noSpendFire.ts). Worst-case batch:
- *   MAX_WITHDRAWALS * 3 + 2 + 22 = 150 * 3 + 2 + 22 = 474 < 500 (the hard limit).
+ * overwrite + the ledger record), plus the no-spend catch-up term (one email
+ * can now judge several unjudged days — see noSpendDay.ts's `datesToJudge`):
+ *   - PER JUDGED DAY, up to `MAX_NO_SPEND_CATCHUP_DAYS` (4) of them: at most
+ *     1 (the verdict doc) + `MAX_NO_SPEND_HABITS * 2` (a habit-doc update +
+ *     a submission-doc set, per fired habit) = 1 + 20 = 21 — see
+ *     noSpendFire.ts's `MAX_NO_SPEND_HABITS` doc for why this figure is
+ *     per-day, not per-email.
+ *   - PLUS exactly 1 more: the household update (points + freezeBank) is
+ *     staged ONCE for the WHOLE EMAIL, after the judging loop — not once per
+ *     day. `applyNoSpendDay` never writes the household doc itself (a
+ *     per-day write there was the actual bug a stale-snapshot freezeBank
+ *     clobber came from); see `NoSpendOutcome.freezeTokensRefunded`'s doc in
+ *     noSpendFire.ts.
+ * Worst-case batch:
+ *   MAX_WITHDRAWALS * 3 + 2
+ *     + (MAX_NO_SPEND_CATCHUP_DAYS * (1 + MAX_NO_SPEND_HABITS * 2) + 1)
+ *   = 100 * 3 + 2 + (4 * (1 + 20) + 1)
+ *   = 300 + 2 + (84 + 1)
+ *   = 300 + 2 + 85
+ *   = 387 < 500 (the hard limit).
  * Each term is kept separate so any one factor can be changed independently:
- * withdrawals, the fixed email overhead, and the no-spend fire. */
-const MAX_WITHDRAWALS = 150;
+ * withdrawals, the fixed email overhead, the per-day catch-up cost, and the
+ * single whole-email household write.
+ *
+ * `MAX_WITHDRAWALS` was deliberately lowered from 150 to 100 to buy headroom
+ * for the catch-up window — see the paragraph above for why 100 is still an
+ * enormous margin over what a real email ever carries. */
+const MAX_WITHDRAWALS = 100;
 
 /** Max length for bank-derived error text echoed into a push body (item 7). */
 const PUSH_ERROR_MAX_LEN = 120;
@@ -159,8 +189,13 @@ function sanitizeForPush(text: string): string {
  * The streak is described as "N in a row" rather than "N-day": a weekend habit
  * is weekly-cadence, so its streak counts weeks, and one phrasing has to be
  * right for both.
+ *
+ * Takes just `fired` (not a full `NoSpendOutcome`) so the caller can pass a
+ * list POOLED across every day a catch-up email judged, not only the most
+ * recent one — a fire on an earlier settled day must still show up here even
+ * when the day that determines the push title is a different, later day.
  */
-function describeNoSpendFires(outcome: NoSpendOutcome): string {
+function describeNoSpendFires(outcome: { fired: NoSpendHabitFire[] }): string {
   const { fired } = outcome;
   if (fired.length === 0) return "Nothing unplanned left your account. ";
   if (fired.length === 1) {
@@ -173,6 +208,83 @@ function describeNoSpendFires(outcome: NoSpendOutcome): string {
   const total = fired.reduce((sum, f) => sum + f.pointsEarned, 0);
   const pts = total !== 0 ? ` ${total > 0 ? "+" : ""}${total} pts` : "";
   return `${fired.length} habits logged${pts}. `;
+}
+
+/** The subset of `counts` the ordinary sync tally reads. */
+export interface SyncTallyCounts {
+  created: number;
+  confirmed: number;
+  filled: number;
+  billsPaid: number;
+}
+
+/**
+ * The ordinary "N new, N confirmed, N filled, N bills paid." tally.
+ *
+ * `condensed: false` (the historical shape) always lists all four categories,
+ * even the zero ones — kept exactly as before so a run with no fires-sentence
+ * to share the body with is byte-for-byte unchanged.
+ *
+ * `condensed: true` drops zero categories and singularizes "1 bill paid" —
+ * used ONLY when a fires sentence is also going into the same push body (see
+ * `composeBankSyncSummaryBody`), so two full sentences plus the balance don't
+ * risk running past what iOS renders before truncating. Returns "" when every
+ * count is zero (a quiet email whose only news is the fires sentence).
+ */
+function describeSyncCounts(counts: SyncTallyCounts, condensed: boolean): string {
+  if (!condensed) {
+    return (
+      `${counts.created} new, ${counts.confirmed} confirmed, ${counts.filled} filled, ` +
+      `${counts.billsPaid} bills paid. `
+    );
+  }
+  const parts: string[] = [];
+  if (counts.created > 0) parts.push(`${counts.created} new`);
+  if (counts.confirmed > 0) parts.push(`${counts.confirmed} confirmed`);
+  if (counts.filled > 0) parts.push(`${counts.filled} filled`);
+  if (counts.billsPaid > 0) {
+    parts.push(`${counts.billsPaid} bill${counts.billsPaid === 1 ? "" : "s"} paid`);
+  }
+  return parts.length === 0 ? "" : `${parts.join(", ")}. `;
+}
+
+/**
+ * Compose the push (and ledger/response) summary body from the aggregated
+ * multi-day no-spend outcome. Pure — no Firestore, no dates — so it's unit
+ * tested directly in `bankEmailSync.test.ts`.
+ *
+ * THE BUG THIS FUNCTION FIXES: with a catch-up window judging several days
+ * per email, the MOST RECENT judged day can be dirty (today's charge) even
+ * though an EARLIER judged day in the same run was clean and fired a habit
+ * (a "No spend weekend" that a Monday purchase doesn't retroactively undo).
+ * The push must still announce that fire — silently omitting it means a
+ * habit fires and earns points with nobody told.
+ *
+ * The trap: `describeNoSpendFires` returns "Nothing unplanned left your
+ * account. " when `fired` is empty. That's a TRUE statement on a day that
+ * really was clean (the `mostRecentIsNoSpendDay` branch below, unchanged from
+ * before this fix), but it would be a FALSE CLAIM prepended to the dirty
+ * branch — the most recent day demonstrably was NOT clean. So the dirty
+ * branch only ever gets a fires sentence when `allFired` is non-empty (some
+ * OTHER judged day in this run fired something), and never calls the
+ * unconditional form.
+ */
+export function composeBankSyncSummaryBody(params: {
+  mostRecentIsNoSpendDay: boolean;
+  allFired: NoSpendHabitFire[];
+  counts: SyncTallyCounts;
+  ruleSummary: string;
+  balanceSummary: string;
+}): string {
+  const { mostRecentIsNoSpendDay, allFired, counts, ruleSummary, balanceSummary } = params;
+  if (mostRecentIsNoSpendDay) {
+    return `${describeNoSpendFires({ fired: allFired })}${ruleSummary}${balanceSummary}`;
+  }
+  const firesSummary = allFired.length > 0 ? describeNoSpendFires({ fired: allFired }) : "";
+  // Condensed only when actually sharing the body with a fires sentence —
+  // the common dirty-with-no-catch-up-fires case keeps the exact pre-fix text.
+  const countsSummary = describeSyncCounts(counts, firesSummary.length > 0);
+  return `${firesSummary}${countsSummary}${ruleSummary}${balanceSummary}`;
 }
 
 /** Minimal subset of the Express/Firebase response object used below. */
@@ -601,6 +713,25 @@ export const bankEmailSync = onRequest(
         }
       }
 
+      // 8e. F-HABITS-14 catch-up window — which of the last
+      //     MAX_NO_SPEND_CATCHUP_DAYS days (the email's as-of date minus 1
+      //     through minus that many) still need a no-spend verdict. Bounded,
+      //     small doc-id gets (no composite index needed) — see
+      //     noSpendDay.ts's `datesToJudge` for why "already judged" means
+      //     "already has a verdict doc" (a dirty day never gets one, so it is
+      //     correctly re-judged every night until it finally comes back
+      //     clean).
+      const noSpendAsOf = parsed.asOf ?? today;
+      const noSpendWindow = noSpendCatchupWindow(noSpendAsOf);
+      const existingNoSpendVerdicts = await Promise.all(
+        noSpendWindow.map((date) => db.doc(`households/${householdId}/noSpendDays/${date}`).get())
+      );
+      const alreadyJudgedNoSpendDates = new Set<string>(
+        existingNoSpendVerdicts.filter((d) => d.exists).map((d) => d.id)
+      );
+      const noSpendDatesToJudge = datesToJudge(noSpendAsOf, alreadyJudgedNoSpendDates);
+      const noSpendDatesToJudgeSet = new Set(noSpendDatesToJudge);
+
       // 9. Decide + stage all writes in ONE atomic batch.
       const batch = db.batch();
       const transactionsPath = `households/${householdId}/transactions`;
@@ -626,17 +757,13 @@ export const bankEmailSync = onRequest(
       let pendingPool: PendingConfirmCandidate[] = pendingCandidates;
       let billPool: BillPayCandidate[] = billCandidates;
 
-      // F-HABITS-14 — the day the no-spend habits are judged on: the last day
-      // that had fully ENDED when this email was cut. The email's own "As of"
-      // footer is the reference (it says exactly when the bank drew the line),
-      // falling back to the request's local `today` when the footer is absent.
-      const noSpendTargetDate = format(
-        subDays(parseISO(parsed.asOf ?? today), 1),
-        "yyyy-MM-dd"
-      );
-      // Spend this email is about to record for that day that the transactions
-      // query inside applyNoSpendDay cannot possibly see: the CREATE branch, and
-      // only the CREATE branch.
+      // F-HABITS-14 — spend this email is about to record, PER JUDGED DAY,
+      // that the transactions query inside applyNoSpendDay cannot possibly
+      // see: the CREATE branch, and only the CREATE branch. Keyed by date
+      // (rather than a single list) because one email can now judge several
+      // days at once (the catch-up window above) — a Saturday charge this
+      // email CREATEs must be declared to SATURDAY's judgement specifically,
+      // never folded into whichever day happens to be judged last.
       //
       // Every other decision resolves to a row that ALREADY EXISTS, and that row
       // is the authoritative record of the purchase — including its category and
@@ -656,7 +783,7 @@ export const bankEmailSync = onRequest(
       // authorization date. One purchase still breaks exactly one day, and it
       // breaks the day the app shows it on — a day whose visible transaction list
       // is empty is never reported as spent.
-      const noSpendExtraSpend: SpendCandidate[] = [];
+      const noSpendExtraSpendByDate = new Map<string, SpendCandidate[]>();
 
       for (const w of parsed.withdrawals) {
         const decision = decideWithdrawal({
@@ -697,19 +824,38 @@ export const bankEmailSync = onRequest(
         // this email is about to write, not a guess at it.
         const createCategory = ruleCreateCategory(rule, UNCATEGORIZED);
 
-        // Declare a BRAND-NEW row landing on the judged day to the no-spend
-        // judgement — see `shouldDeclareToNoSpend` for why only that branch.
-        // It carries the rule's category so the declaration and the stored row
-        // are the same row: a rule filing a charge as e.g. a card payment must
-        // exempt it here exactly as the stored row will be exempted tomorrow.
-        // (A rule's `exempt` flag is honoured independently — `spendExemption`
-        // re-derives it from the raw merchant, which this row carries.)
-        if (shouldDeclareToNoSpend(decision.kind, w.date, noSpendTargetDate)) {
-          noSpendExtraSpend.push({
+        // Declare a BRAND-NEW row landing on a day THIS EMAIL is actually
+        // going to judge to that day's no-spend judgement — only a `create`
+        // decision qualifies (see `shouldDeclareToNoSpend`'s doc in
+        // noSpendDay.ts for the full reasoning: every other decision
+        // resolves to a row that already exists and is already authoritative
+        // about its own exemption status). It carries the rule's category so
+        // the declaration and the stored row are the same row: a rule filing
+        // a charge as e.g. a card payment must exempt it here exactly as the
+        // stored row will be exempted tomorrow. (A rule's `exempt` flag is
+        // honoured independently — `spendExemption` re-derives it from the
+        // raw merchant, which this row carries.)
+        //
+        // Tested directly on `decision.kind` rather than through
+        // `shouldDeclareToNoSpend(decision.kind, w.date, targetDate)`: that
+        // function's date-equality check made sense when one email judged a
+        // single target date, but a withdrawal can now be declared to any of
+        // several judged days, so ALL date scoping lives in the
+        // `noSpendDatesToJudgeSet.has(w.date)` check below — passing `w.date`
+        // as both of the helper's date arguments would make its own
+        // `withdrawalDate !== targetDate` guard permanently false (never
+        // taken), silently degrading it to this exact `kind === "create"`
+        // test while reading as if it still filtered by date. Calling it out
+        // directly here is the honest version of that.
+        if (noSpendDatesToJudgeSet.has(w.date) && decision.kind === "create") {
+          const entry: SpendCandidate = {
             amount: w.amount,
             merchant: w.descriptor,
             category: createCategory.category,
-          });
+          };
+          const existing = noSpendExtraSpendByDate.get(w.date);
+          if (existing) existing.push(entry);
+          else noSpendExtraSpendByDate.set(w.date, [entry]);
         }
 
         const payPeriodId = getPayPeriodForTransaction(w.date, householdData?.lastPaycheckDate);
@@ -860,24 +1006,157 @@ export const bankEmailSync = onRequest(
         }
       }
 
-      // 9b. F-HABITS-14 — judge the day that just ended and fire any habit wired
-      //     to the no-spend trigger, onto this same batch. Runs on EVERY sync,
-      //     not just a zero-withdrawal one: a day whose only withdrawals were
-      //     scheduled bills or transfers is still a no-spend day. Never throws —
-      //     a habit-side problem must not fail a money sync that succeeded.
-      const noSpend: NoSpendOutcome = await applyNoSpendDay({
-        db,
-        householdId,
-        batch,
-        targetDate: noSpendTargetDate,
-        today,
-        extraSpend: noSpendExtraSpend,
-        householdData,
-        // An `exempt` rule must apply to every row dated to the judged day, not
-        // just the ones this email creates — an exempted subscription is an
-        // ordinary stored transaction on every later sync.
-        merchantRules,
-      });
+      // 9b. F-HABITS-14 — judge EVERY day the catch-up window left unsettled
+      //     (ascending), firing any habit wired to the no-spend trigger onto
+      //     this same batch. Runs on EVERY sync, not just a zero-withdrawal
+      //     one: a day whose only withdrawals were scheduled bills or
+      //     transfers is still a no-spend day. Never throws — a habit-side
+      //     problem must not fail a money sync that succeeded.
+      //
+      //     `stagedCleanDates` accumulates every day THIS loop has already
+      //     judged clean, so when the SAME email settles both Saturday and
+      //     Sunday, Sunday's weekend check can see Saturday's verdict even
+      //     though Saturday's doc is only staged — not yet committed — on
+      //     this batch (see noSpendFire.ts's `stagedCleanDates` doc).
+      //
+      //     `stagedCompletionsByHabit` is the same idea for the HABIT docs
+      //     themselves: if the SAME habit fires on two different judged
+      //     days in this run (e.g. a "day"-scope habit clean on both
+      //     Saturday and Sunday — precisely the case this catch-up window
+      //     exists to enable), a later day's read of the habits collection
+      //     would otherwise be blind to an earlier day's in-flight fire,
+      //     corrupting that day's streak and (for a threshold habit spanning
+      //     the same scoring period) risking a double credit. See
+      //     `ApplyNoSpendDayDeps.stagedCompletionsByHabit`'s doc in
+      //     noSpendFire.ts for the full mechanics.
+      const stagedCleanDates = new Set<string>();
+      const stagedCompletionsByHabit = new Map<string, StagedNoSpendFire[]>();
+      const noSpendOutcomes: NoSpendOutcome[] = [];
+      for (const noSpendDate of noSpendDatesToJudge) {
+        const outcome = await applyNoSpendDay({
+          db,
+          householdId,
+          batch,
+          targetDate: noSpendDate,
+          today,
+          extraSpend: noSpendExtraSpendByDate.get(noSpendDate) ?? [],
+          // No `householdData` passed — `applyNoSpendDay` no longer writes to
+          // the household doc itself (see the accumulation right below this
+          // loop, and `NoSpendOutcome.freezeTokensRefunded`'s doc comment for
+          // why per-call household writes are unsafe across several days on
+          // one batch).
+          // An `exempt` rule must apply to every row dated to the judged day, not
+          // just the ones this email creates — an exempted subscription is an
+          // ordinary stored transaction on every later sync.
+          merchantRules,
+          stagedCleanDates,
+          stagedCompletionsByHabit,
+        });
+        noSpendOutcomes.push(outcome);
+        if (outcome.isNoSpendDay) stagedCleanDates.add(noSpendDate);
+        for (const sf of outcome.stagedFires) {
+          const list = stagedCompletionsByHabit.get(sf.habitId);
+          if (list) list.push(sf);
+          else stagedCompletionsByHabit.set(sf.habitId, [sf]);
+        }
+      }
+      // Used when reporting below. `mostRecentNoSpend` falls back to a
+      // not-a-no-spend-day placeholder dated to the newest day in the window
+      // when NOTHING in the window needed judging this run (every candidate
+      // day was already settled by an earlier email) — a quiet night whose
+      // response/ledger shape should stay familiar rather than crash on an
+      // empty array.
+      const mostRecentNoSpend: NoSpendOutcome = noSpendOutcomes[noSpendOutcomes.length - 1] ?? {
+        targetDate: noSpendWindow[noSpendWindow.length - 1] ?? noSpendAsOf,
+        isNoSpendDay: false,
+        blockedBy: [],
+        fired: [],
+        weekendCompleted: false,
+        pointsDelta: { daily: 0, weekly: 0, total: 0 },
+        freezeTokensRefunded: 0,
+        freezeRefundNotes: [],
+        stagedFires: [],
+      };
+      // Habits fired across EVERY judged day, pooled — a fire on an earlier
+      // settled day of a multi-day catch-up must still be announced even
+      // though the push title below is driven by the most recent day alone.
+      const allFiredNoSpendHabits: NoSpendHabitFire[] = noSpendOutcomes.flatMap((o) => o.fired);
+
+      // Combine every judged day's points delta and freeze-token refund into
+      // ONE household-doc write — see `NoSpendOutcome.freezeTokensRefunded`'s
+      // doc comment in noSpendFire.ts for exactly why a per-day write is
+      // unsafe (the whole-object `freezeBank` write is built from THIS SAME
+      // `householdData` snapshot, loaded once above, before the batch; two
+      // days each computing their own `tokens: original + 1` from that same
+      // stale snapshot would have the later one silently overwrite the
+      // earlier one's refund — the classic whole-map-write clobber this
+      // repo's CLAUDE.md warns about for `freezeBanksByMember`/
+      // `frozenDatesBy`). Points are combined here too even though bare
+      // `FieldValue.increment` calls are themselves safe across multiple
+      // same-batch writes to one document (Firestore applies same-batch
+      // writes to a document atomically and IN ORDER, so relative transforms
+      // correctly accumulate) — one simple, auditable household write per
+      // email is easier to reason about than relying on that guarantee.
+      const noSpendPointsDelta = { daily: 0, weekly: 0, total: 0 };
+      let noSpendFreezeTokensRefunded = 0;
+      const noSpendFreezeRefundNotes: NoSpendFreezeRefundNote[] = [];
+      for (const outcome of noSpendOutcomes) {
+        noSpendPointsDelta.daily += outcome.pointsDelta.daily;
+        noSpendPointsDelta.weekly += outcome.pointsDelta.weekly;
+        noSpendPointsDelta.total += outcome.pointsDelta.total;
+        noSpendFreezeTokensRefunded += outcome.freezeTokensRefunded;
+        noSpendFreezeRefundNotes.push(...outcome.freezeRefundNotes);
+      }
+      const noSpendHouseholdUpdates: Record<string, unknown> = {};
+      if (noSpendPointsDelta.daily !== 0) {
+        noSpendHouseholdUpdates["points.daily"] = admin.firestore.FieldValue.increment(
+          noSpendPointsDelta.daily
+        );
+      }
+      if (noSpendPointsDelta.weekly !== 0) {
+        noSpendHouseholdUpdates["points.weekly"] = admin.firestore.FieldValue.increment(
+          noSpendPointsDelta.weekly
+        );
+      }
+      if (noSpendPointsDelta.total !== 0) {
+        noSpendHouseholdUpdates["points.total"] = admin.firestore.FieldValue.increment(
+          noSpendPointsDelta.total
+        );
+      }
+      if (noSpendFreezeTokensRefunded > 0) {
+        const freezeBank = householdData?.freezeBank as
+          | { tokens?: number; maxTokens?: number; history?: unknown[] }
+          | undefined;
+        if (freezeBank) {
+          // Whole-object write, matching every other freezeBank writer (it is a
+          // nested map, not a counter, and all writers treat it as
+          // last-writer-wins). Capped so a refund can't push the bank above its
+          // ceiling. Computed ONCE here, from the total across every judged day,
+          // so this is the only `freezeBank` write in the whole batch.
+          const maxTokens = typeof freezeBank.maxTokens === "number" ? freezeBank.maxTokens : 2;
+          const tokens = typeof freezeBank.tokens === "number" ? freezeBank.tokens : 0;
+          noSpendHouseholdUpdates["freezeBank"] = {
+            ...freezeBank,
+            tokens: Math.min(maxTokens, tokens + noSpendFreezeTokensRefunded),
+            history: [
+              ...(Array.isArray(freezeBank.history) ? freezeBank.history : []),
+              ...noSpendFreezeRefundNotes.map((n) => ({
+                id: `nospend-${n.habitId}-${n.habitDate}`,
+                type: "earned",
+                amount: 1,
+                date: today,
+                habitId: n.habitId,
+                habitDate: n.habitDate,
+                notes: `Freeze refunded: ${n.title} was completed on ${n.habitDate} after all (no-spend day)`,
+                createdAt: new Date().toISOString(),
+              })),
+            ],
+          };
+        }
+      }
+      if (Object.keys(noSpendHouseholdUpdates).length > 0) {
+        batch.update(db.doc(`households/${householdId}`), noSpendHouseholdUpdates);
+      }
 
       // 10. Overwrite the account balance with the email's AVAILABLE balance
       //     (posted ending balance minus authorized-but-unposted holds) —
@@ -946,14 +1225,26 @@ export const bankEmailSync = onRequest(
         endingBalance: parsed.endingBalance,
         availableBalance: parsed.availableBalance,
         counts,
-        // The no-spend verdict for this run, so "why did/didn't my habit fire?"
-        // is answerable from the ledger without replaying the email.
+        // The MOST RECENT judged day's verdict, kept in this exact shape for
+        // backward compatibility with every ledger entry written before the
+        // multi-day catch-up window — "why did/didn't my habit fire on the
+        // day I'm asking about" now needs `noSpendDays` below when that day
+        // isn't the newest one this run judged.
         noSpend: {
-          date: noSpend.targetDate,
-          isNoSpendDay: noSpend.isNoSpendDay,
-          firedHabitIds: noSpend.fired.map((f) => f.habitId),
-          weekendCompleted: noSpend.weekendCompleted,
+          date: mostRecentNoSpend.targetDate,
+          isNoSpendDay: mostRecentNoSpend.isNoSpendDay,
+          firedHabitIds: mostRecentNoSpend.fired.map((f) => f.habitId),
+          weekendCompleted: mostRecentNoSpend.weekendCompleted,
         },
+        // One entry per day THIS EMAIL actually judged (ascending), so "why
+        // did/didn't my habit fire?" stays answerable for every day the
+        // catch-up window settled, not just the most recent one.
+        noSpendDays: noSpendOutcomes.map((o) => ({
+          date: o.targetDate,
+          isNoSpendDay: o.isNoSpendDay,
+          firedHabitIds: o.fired.map((f) => f.habitId),
+          weekendCompleted: o.weekendCompleted,
+        })),
       });
 
       await batch.commit();
@@ -979,9 +1270,15 @@ export const bankEmailSync = onRequest(
       // Keyed on the VERDICT, not on `withdrawals.length === 0`: a day whose only
       // withdrawals were scheduled bills or transfers is still a no-spend day
       // (see noSpendDay.ts), and that day would otherwise get the counts line.
-      const summaryTitle = noSpend.weekendCompleted
+      //
+      // Driven by the MOST RECENT judged day specifically (so "No spend
+      // weekend" still shows up when the Sunday rule fires in a batch that
+      // also caught up earlier weekdays) — but the fired-habit sentence below
+      // pools EVERY judged day, so an earlier day's fire in the same batch is
+      // never silently dropped from the push body.
+      const summaryTitle = mostRecentNoSpend.weekendCompleted
         ? "No spend weekend"
-        : noSpend.isNoSpendDay
+        : mostRecentNoSpend.isNoSpendDay
           ? "No spend day"
           : "Bank sync complete";
       // What the household's rules did, between the outcome and the balance.
@@ -989,10 +1286,16 @@ export const bankEmailSync = onRequest(
       // household without rules sees the exact push it saw before — the body is
       // already close to what iOS will truncate.
       const ruleSummary = describeRuleEffects(counts);
-      const summaryBody = noSpend.isNoSpendDay
-        ? `${describeNoSpendFires(noSpend)}${ruleSummary}${balanceSummary}`
-        : `${counts.created} new, ${counts.confirmed} confirmed, ${counts.filled} filled, ` +
-          `${counts.billsPaid} bills paid. ${ruleSummary}${balanceSummary}`;
+      // See `composeBankSyncSummaryBody`'s doc: this is what makes a habit
+      // fired on an EARLIER judged day still show up in the push even when
+      // the most recent judged day was dirty.
+      const summaryBody = composeBankSyncSummaryBody({
+        mostRecentIsNoSpendDay: mostRecentNoSpend.isNoSpendDay,
+        allFired: allFiredNoSpendHabits,
+        counts,
+        ruleSummary,
+        balanceSummary,
+      });
       await pushToBankSyncMembers(householdId, summaryTitle, summaryBody);
       await logApiCall(householdId, apiKey.substring(0, 16), "bankSync", req.body, 200);
       jsonResponse(res, 200, {
@@ -1006,13 +1309,22 @@ export const bankEmailSync = onRequest(
           balanceSkipped,
           ...(balanceSkipReason ? { balanceSkipReason } : {}),
           ...counts,
+          // Most recent judged day only, mirroring the ledger's `noSpend`
+          // field — see `noSpendDays` for every day this run settled.
           noSpend: {
-            date: noSpend.targetDate,
-            isNoSpendDay: noSpend.isNoSpendDay,
-            blockedBy: noSpend.blockedBy.length,
-            fired: noSpend.fired.length,
-            weekendCompleted: noSpend.weekendCompleted,
+            date: mostRecentNoSpend.targetDate,
+            isNoSpendDay: mostRecentNoSpend.isNoSpendDay,
+            blockedBy: mostRecentNoSpend.blockedBy.length,
+            fired: mostRecentNoSpend.fired.length,
+            weekendCompleted: mostRecentNoSpend.weekendCompleted,
           },
+          noSpendDays: noSpendOutcomes.map((o) => ({
+            date: o.targetDate,
+            isNoSpendDay: o.isNoSpendDay,
+            blockedBy: o.blockedBy.length,
+            fired: o.fired.length,
+            weekendCompleted: o.weekendCompleted,
+          })),
         },
       });
     } catch (error) {

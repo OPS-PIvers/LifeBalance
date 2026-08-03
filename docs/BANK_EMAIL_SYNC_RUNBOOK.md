@@ -29,7 +29,7 @@ Google Apps Script (search → label → POST)
 bankEmailSync (Cloud Function, functions/src/quickAdd/bankEmailSync.ts)
    │  1. validate API key + bankSync scope + rate limit (50/hour)
    │  2. parseBankEmail() — deterministic, no Gemini (bankEmailParser.ts)
-   │  3. reject if > MAX_WITHDRAWALS (150) lines parsed — abuse guard
+   │  3. reject if > MAX_WITHDRAWALS (100) lines parsed — abuse guard
    │  4. resolve account by parsed bank-account last-4 (bankSyncMatch.ts)
    │  5. atomically CLAIM the messageId ledger doc (idempotent re-runs)
    │  6. per withdrawal, decide a→e (bankSyncMatch.ts: decideWithdrawal)
@@ -40,8 +40,9 @@ bankEmailSync (Cloud Function, functions/src/quickAdd/bankEmailSync.ts)
    │       d. PAY     — a matching unpaid calendar bill, retro-filed to the
    │                    bill's OWN due-date pay period
    │       e. CREATE  — new verified, needsCategory transaction
-   │  7. judge the day that just ENDED for unplanned spending and fire any
-   │     habit wired to the no-spend trigger (noSpendFire.ts — see §5)
+   │  7. judge every still-unjudged day in the catch-up window for unplanned
+   │     spending and fire any habit wired to the no-spend trigger
+   │     (noSpendFire.ts — see §5)
    │  8. OVERWRITE the account balance with the email's AVAILABLE balance
    │  9. commit everything (including the ledger's final record) in ONE
    │     atomic batch
@@ -125,9 +126,13 @@ Key properties (all read directly from the merged `main` code, not assumed):
   is immediately treated as durable (a structural `claimedByUs = false` right
   after `batch.commit()`) so nothing after that point can accidentally delete a
   successfully-processed ledger record.
-- **A 150-withdrawal-line cap (`MAX_WITHDRAWALS`)** rejects an outsized/malformed
+- **A 100-withdrawal-line cap (`MAX_WITHDRAWALS`)** rejects an outsized/malformed
   email with a distinct `TOO_MANY_WITHDRAWALS` failure push rather than staging a
-  batch anywhere near Firestore's 500-write hard limit.
+  batch anywhere near Firestore's 500-write hard limit. Lowered from 150 to 100
+  when the no-spend catch-up window (§5) landed, to buy headroom for judging up
+  to four days in one batch — a real nightly WF email carries roughly a dozen
+  lines (the largest ever observed in production is 16), so 100 is still an
+  enormous margin over anything legitimate.
 - **Every filed/created transaction carries the parsed `bankRef`**, so even
   independently of the ledger claim, a withdrawal whose `bankRef` is already on a
   transaction is skipped (decision `a`) rather than re-filed on any re-run.
@@ -370,11 +375,12 @@ and if the format truly changed, the parser (regexes: `ACCOUNT_LAST4_RE`,
 updating.
 
 **"Bank sync failed" push (`TOO_MANY_WITHDRAWALS`).** The email parsed to more than
-`MAX_WITHDRAWALS` (150) withdrawal lines — an abuse/runaway-parse guard, since a
-real nightly statement carries roughly a dozen. As with `PARSE_FAILED`, nothing is
-written. If a legitimate email genuinely has this many lines, that cap needs
-raising in code (with a recheck of the Firestore 500-write batch-size proof
-documented next to the constant).
+`MAX_WITHDRAWALS` (100) withdrawal lines — an abuse/runaway-parse guard, since a
+real nightly statement carries roughly a dozen (the largest ever observed in
+production is 16). As with `PARSE_FAILED`, nothing is written. If a legitimate
+email genuinely has this many lines, that cap needs raising in code (with a
+recheck of the Firestore 500-write batch-size proof documented next to the
+constant — it now has to account for the no-spend catch-up window too, see §5).
 
 **"Balance: unchanged (nothing new in this email)" in the push, or my balance
 didn't update after a sync that DID find withdrawals.** If withdrawals were found,
@@ -446,15 +452,43 @@ no need to manually delete the ledger doc or any transactions before re-running.
 
 ## §5 — No-spend days & the habits they fire (F-HABITS-14)
 
-Every successful sync also judges one day and, if it was clean, logs any habit
-wired to the no-spend trigger. This runs on **every** email, not only the ones
-with no withdrawals.
+Every successful sync judges every still-unjudged day in a rolling catch-up
+window and, for each one that was clean, logs any habit wired to the no-spend
+trigger. This runs on **every** email, not only the ones with no withdrawals.
 
-**Which day.** The last day that had fully *ended* when the bank drew its line:
-the email's own `As of MM/DD/YYYY` footer date **minus one**, falling back to the
-request's local `today` minus one when the footer is absent. A first-time backfill
-processes at most two days of email (the Apps Script's `newer_than:2d` fence), so
-activation cannot retro-fire a month of habits.
+**Why a window, not a single day.** Wells Fargo does not send a Saturday or
+Sunday email. A day-by-day judgement (the original design) meant the Saturday
+half of every weekend was *never* judged by anyone — the Saturday-dated email
+arrives Sunday and judges Friday, and no email ever covers Saturday or Sunday
+itself. Since the weekend rule (below) requires a `noSpendDays` verdict for
+Saturday to exist, "Clean weekend" could never fire, for any household, ever.
+
+**Which days.** Every day from `asOf - MAX_NO_SPEND_CATCHUP_DAYS` through
+`asOf - 1`, ascending, where `asOf` is the email's own `As of MM/DD/YYYY`
+footer date (falling back to the request's local `today` when the footer is
+absent) — **except** any day that already has a `noSpendDays/{date}` verdict
+doc, which is skipped (see below). `MAX_NO_SPEND_CATCHUP_DAYS` is 4, not 3: a
+holiday Monday (no email that day at all) leaves Saturday, Sunday, Monday AND
+Tuesday all unjudged by the time the next email arrives on Wednesday, and a
+3-day window would silently drop Saturday again — the exact bug this feature
+exists to remove. See `noSpendDay.ts`'s `datesToJudge`/`noSpendCatchupWindow`
+for the pure logic (unit-tested in `noSpendDay.test.ts`), and
+`bankEmailSync.ts`'s `MAX_WITHDRAWALS` doc comment for how this window factors
+into the Firestore batch-size proof (§4's `TOO_MANY_WITHDRAWALS` entry). A
+first-time backfill still only sends at most two days of email (the Apps
+Script's `newer_than:2d` fence), so activation cannot retro-fire a month of
+habits even though any one of those emails could in principle catch up four.
+
+**Skip-if-already-judged.** A day is skipped when it already has a
+`noSpendDays/{date}` doc — i.e. some earlier email already settled it CLEAN.
+Re-judging it would fight the "a later charge does not revoke the credit" rule
+below for a verdict that's already final, and cost an extra transactions query
+for no benefit. A **dirty** day never gets a verdict doc at all (the function
+returns before staging one), so it is *not* "already judged" in this sense — it
+is correctly re-evaluated by every subsequent email until a night finally comes
+back clean. That re-evaluation is harmless: the per-habit `sourceNoSpendDate`
+submission check (below), not the skip, is what actually prevents a double
+credit once a day does qualify.
 
 **What counts as spending.** The question is asked of every transaction *dated to
 that day*, across every account — not of whether the email was empty. Wells Fargo
@@ -474,6 +508,16 @@ Everything else — including a **credit-card charge** — breaks the day. That 
 deliberate: exempting card spend would make the habit satisfiable by reaching for
 a different card.
 
+A withdrawal this email is about to CREATE as a new row (never a fill/confirm/
+pay_bill, whose target row already exists and is authoritative — see
+`shouldDeclareToNoSpend` in `noSpendDay.ts`) is declared to **the day it's
+dated on**, not to whichever day the email happens to be judging last — a
+Saturday charge caught up by Tuesday's email must count against Saturday, not
+get folded into Tuesday's own judgement. Getting this wrong would mean card
+authorizations from an earlier day in the window never count against that
+day, and every day in the catch-up window would read clean by default — worse
+than the single-day bug this feature replaces.
+
 **Known limits, by design.** Spending on an account LifeBalance can't see (a card
 that is neither Plaid-linked nor captured by the iOS Shortcut) is invisible and
 will produce a false no-spend day. A recurring charge that is *not* linked to a
@@ -483,22 +527,37 @@ that arrives after the day was credited does not revoke the credit.
 **The weekend rule.** A `weekend`-scoped habit fires only when **both Saturday and
 Sunday** were clean, credited to the Sunday — which is also what puts the
 completion in the correct Mon–Sun ISO week for a weekly habit's streak. Saturday's
-verdict is read from its own `noSpendDays/{date}` doc rather than recomputed, so
-"we never synced that day" stays distinguishable from "that day was clean": with
-no record for Saturday, the weekend does not fire.
+verdict is normally read from its own `noSpendDays/{date}` doc, so "we never
+synced that day" stays distinguishable from "that day was clean": with no record
+for Saturday, the weekend does not fire. **Exception:** when the SAME email judges
+both Saturday and Sunday (the catch-up window makes this the common case for a
+weekend), Saturday's verdict doc is only *staged* on the batch when Sunday's check
+runs — not yet committed — so a plain Firestore read would miss it. The function
+instead threads a same-batch `stagedCleanDates` set through each day it judges
+(ascending order), so Sunday's check can see Saturday's in-flight verdict. Missing
+this case would silently reintroduce the exact bug the catch-up window exists to
+fix, just one layer deeper.
 
 **Where the verdict lives.** `households/{id}/noSpendDays/{yyyy-MM-dd}`, written
 only by this function (client writes are denied in `firestore.rules`, because the
-presence of a doc is what lets the weekend rule credit a habit). Each run also
-records its verdict on the `bankEmailSyncLedger` entry (`noSpend.date`,
-`isNoSpendDay`, `firedHabitIds`, `weekendCompleted`), so "why did/didn't my habit
-fire?" is answerable without replaying the email.
+presence of a doc is what lets the weekend rule credit a habit, and what lets a
+later email skip re-judging a settled day). Each run also records a `noSpend`
+object on the `bankEmailSyncLedger` entry describing the MOST RECENT day it
+judged (`date`, `isNoSpendDay`, `firedHabitIds`, `weekendCompleted` — kept in
+this exact shape for backward compatibility with entries written before the
+catch-up window), plus a sibling `noSpendDays` array with one entry of the same
+shape **per day the email actually judged**, ascending — so "why did/didn't my
+habit fire on THAT day" stays answerable even when it isn't the most recent one
+a given email settled. The push notification's title/body are driven by the most
+recent judged day (so "No spend weekend" still shows up when the Sunday rule
+fires), but the body's habit-fire sentence pools fires from **every** day the
+email judged, so an earlier day's fire in the same run is never silently dropped.
 
 **Idempotency.** Each fire writes a `HabitSubmission` carrying
 `sourceNoSpendDate`, and the function refuses to fire a habit for a date that
 already has one. The per-`messageId` ledger claim stops the same email being
 processed twice; this stops a *second* email the same morning (another account, a
-backfill) re-crediting the day.
+backfill) re-crediting the same day.
 
 That second guard is sequential, not atomic. Two emails for the same household
 and the same target day, processed *concurrently*, could both pass the
@@ -516,6 +575,13 @@ extra submission and decrement `points`); a silently lost one is not.
 until at least one habit is wired up; the push still reports the clean day.
 
 **Troubleshooting.** "My habit didn't fire on a day I know was clean" — check the
-Cloud Functions log for a `noSpend:` line. It names either the transactions that
-disqualified the day, the missing Saturday record for a weekend, or the habit that
-was already credited.
+Cloud Functions log for a `noSpend:` line, or the `noSpendDays` array on that
+morning's `bankEmailSyncLedger` entry (Firestore console) for that specific
+date's verdict. The log names either the transactions that disqualified the day,
+the missing Saturday record for a weekend, or the habit that was already
+credited. "A day I know was clean never got judged at all" — check whether it
+already has a `noSpendDays/{date}` doc from an earlier email (expected: it was
+already settled and correctly skipped) or whether it falls outside the
+`MAX_NO_SPEND_CATCHUP_DAYS`-day window of the first email sent after it (a gap
+longer than that — several consecutive missed emails — needs a manual replay of
+the missing days' emails through the Apps Script, or raising the constant).
