@@ -136,4 +136,75 @@ describe('PointRebalanceCard', () => {
     await waitFor(() => expect(screen.getByText('Cached suggestion.')).toBeInTheDocument());
     expect(screen.getByText('9 pts')).toBeInTheDocument();
   });
+
+  // Regression coverage for the PR #1215 review fix: `habit.basePoints` had
+  // two storage conventions for `type: 'negative'` habits (signed vs
+  // magnitude-only). The rendered direction/colour must be identical either
+  // way — that equivalence is the whole point of the fix.
+  describe('negative-habit direction is convention-independent', () => {
+    const cache = (
+      habitId: string,
+      suggestion: Omit<HabitPointAdjustmentSuggestion, 'habitId'>
+    ) => {
+      window.localStorage.setItem(
+        `lb_point_rebalance_analysis_test-household`,
+        JSON.stringify({
+          generatedAt: new Date().toISOString(),
+          suggestions: [{ habitId, ...suggestion }],
+        })
+      );
+    };
+
+    const negativeHabit = (basePoints: number): Habit =>
+      makeHabit({ id: 'h1', title: 'Late night snack', type: 'negative', basePoints });
+
+    it('renders a penalty easing off in the favorable (money-pos) colour under the OLD signed convention', async () => {
+      mockHouseholdContext.habits = [negativeHabit(-3)];
+      cache('h1', { habitTitle: 'Late night snack', currentPoints: -3, suggestedPoints: -1, reasoning: 'Slipped once — barely an issue any more, so the penalty can ease off.' });
+
+      render(<PointRebalanceCard />);
+
+      await waitFor(() => expect(screen.getByText('Late night snack')).toBeInTheDocument());
+      expect(screen.getByText('-3 pts')).toBeInTheDocument();
+      const suggested = screen.getByText('-1 pts');
+      expect(suggested.className).toContain('text-money-pos');
+    });
+
+    it('renders the SAME favorable colour and canonical text for the identical change under the NEW magnitude-only convention', async () => {
+      mockHouseholdContext.habits = [negativeHabit(3)];
+      cache('h1', { habitTitle: 'Late night snack', currentPoints: 3, suggestedPoints: 1, reasoning: 'Slipped once — barely an issue any more, so the penalty can ease off.' });
+
+      render(<PointRebalanceCard />);
+
+      await waitFor(() => expect(screen.getByText('Late night snack')).toBeInTheDocument());
+      // Same canonical text as the OLD-convention case above, not "3 pts" / "1 pts".
+      expect(screen.getByText('-3 pts')).toBeInTheDocument();
+      const suggested = screen.getByText('-1 pts');
+      expect(suggested.className).toContain('text-money-pos');
+    });
+
+    it('renders a penalty getting harsher in the unfavorable (money-neg) colour under the OLD signed convention', async () => {
+      mockHouseholdContext.habits = [negativeHabit(-2)];
+      cache('h1', { habitTitle: 'Late night snack', currentPoints: -2, suggestedPoints: -4, reasoning: 'Still a regular slip, so it should sting a little more.' });
+
+      render(<PointRebalanceCard />);
+
+      await waitFor(() => expect(screen.getByText('Late night snack')).toBeInTheDocument());
+      const suggested = screen.getByText('-4 pts');
+      expect(suggested.className).toContain('text-money-neg');
+    });
+
+    it('renders the SAME unfavorable colour and canonical text for the identical harsher change under the NEW magnitude-only convention', async () => {
+      mockHouseholdContext.habits = [negativeHabit(2)];
+      cache('h1', { habitTitle: 'Late night snack', currentPoints: 2, suggestedPoints: 4, reasoning: 'Still a regular slip, so it should sting a little more.' });
+
+      render(<PointRebalanceCard />);
+
+      await waitFor(() => expect(screen.getByText('Late night snack')).toBeInTheDocument());
+      // Same canonical text as the OLD-convention case above, not "2 pts" / "4 pts".
+      expect(screen.getByText('-2 pts')).toBeInTheDocument();
+      const suggested = screen.getByText('-4 pts');
+      expect(suggested.className).toContain('text-money-neg');
+    });
+  });
 });

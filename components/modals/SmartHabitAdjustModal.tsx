@@ -5,7 +5,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
 import type { HabitPointAdjustmentSuggestion } from '@/services/geminiService.types';
-import { generatePointRebalanceSuggestions } from '@/utils/pointRebalance';
+import { generatePointRebalanceSuggestions, rebalanceDisplay } from '@/utils/pointRebalance';
 import toast from 'react-hot-toast';
 
 interface SmartHabitAdjustModalProps {
@@ -68,6 +68,8 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
     setSuggestions(prev => prev.filter(s => s.habitId !== habitId));
   };
 
+  const habitById = new Map(habits.map(h => [h.id, h]));
+
   return (
     <Drawer
       isOpen={isOpen}
@@ -89,54 +91,78 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
               Found <span className="font-bold text-warm-700 dark:text-warm-300">{suggestions.length}</span> suggestions to improve your system:
             </p>
 
-            {suggestions.map((suggestion) => (
-              <div
-                key={suggestion.habitId}
-                className="bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-2xl p-4 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-brand-50 dark:hover:bg-brand-700/40 animate-in slide-in-from-bottom-2 fade-in"
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            {suggestions.map((suggestion) => {
+              // See `rebalanceDisplay` — re-derives canonical signed display
+              // values from `habit.type` rather than the raw (convention-
+              // dependent) stored sign, so a penalty habit reads
+              // unambiguously (e.g. "-8 pts", never a bare "8") and colours
+              // identically under either basePoints storage convention. Fall
+              // back to a positive habit's identity sign in the (untested-
+              // reachable) case the habit has already left the list.
+              const habit = habitById.get(suggestion.habitId) ?? { type: 'positive' as const };
+              const {
+                currentPoints: canonicalCurrent,
+                suggestedPoints: canonicalSuggested,
+                favorable: increasing,
+              } = rebalanceDisplay(habit, suggestion);
 
-                  {/* Info */}
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between sm:justify-start sm:gap-4 mb-2">
-                      <h3 className="font-bold text-brand-800 dark:text-brand-100 text-lg">{suggestion.habitTitle}</h3>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-bold text-brand-500 dark:text-brand-400">{suggestion.currentPoints}</span>
-                        <ArrowRight size={14} className="text-brand-300 dark:text-brand-500" />
-                        <span className="text-sm font-bold text-warm-700 dark:text-warm-300">{suggestion.suggestedPoints} pts</span>
+              return (
+                <div
+                  key={suggestion.habitId}
+                  className="bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-2xl p-4 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-brand-50 dark:hover:bg-brand-700/40 animate-in slide-in-from-bottom-2 fade-in"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+
+                    {/* Info */}
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between sm:justify-start sm:gap-4 mb-2">
+                        <h3 className="font-bold text-brand-800 dark:text-brand-100 text-lg">{suggestion.habitTitle}</h3>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-bold text-brand-500 dark:text-brand-400">{canonicalCurrent} pts</span>
+                          <ArrowRight size={14} className="text-brand-300 dark:text-brand-500" />
+                          <span
+                            className={
+                              increasing
+                                ? 'text-sm font-bold text-money-pos dark:text-money-posDark'
+                                : 'text-sm font-bold text-money-neg dark:text-money-negDark'
+                            }
+                          >
+                            {canonicalSuggested} pts
+                          </span>
+                        </div>
                       </div>
+                      <p className="text-sm text-brand-500 dark:text-brand-400 leading-relaxed italic">
+                        <Sparkles size={12} className="inline mr-1.5 text-warm-600 dark:text-warm-300 -mt-0.5 not-italic" />
+                        {suggestion.reasoning}
+                      </p>
                     </div>
-                    <p className="text-sm text-brand-500 dark:text-brand-400 leading-relaxed italic">
-                      <Sparkles size={12} className="inline mr-1.5 text-warm-600 dark:text-warm-300 -mt-0.5 not-italic" />
-                      {suggestion.reasoning}
-                    </p>
-                  </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 sm:flex-col shrink-0">
-                    <Button
-                      variant="warning"
-                      onClick={() => handleAccept(suggestion)}
-                      leftIcon={<Check size={18} />}
-                      className="flex-1 sm:w-full"
-                      title="Accept Change"
-                    >
-                      <span className="sm:hidden">Accept</span>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={() => handleIgnore(suggestion.habitId)}
-                      leftIcon={<X size={18} />}
-                      className="flex-1 sm:w-full"
-                      title="Ignore"
-                    >
-                      <span className="sm:hidden">Ignore</span>
-                    </Button>
-                  </div>
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 sm:flex-col shrink-0">
+                      <Button
+                        variant="warning"
+                        onClick={() => handleAccept(suggestion)}
+                        leftIcon={<Check size={18} />}
+                        className="flex-1 sm:w-full"
+                        title="Accept Change"
+                      >
+                        <span className="sm:hidden">Accept</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => handleIgnore(suggestion.habitId)}
+                        leftIcon={<X size={18} />}
+                        className="flex-1 sm:w-full"
+                        title="Ignore"
+                      >
+                        <span className="sm:hidden">Ignore</span>
+                      </Button>
+                    </div>
 
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

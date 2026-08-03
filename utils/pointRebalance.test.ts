@@ -7,6 +7,7 @@ import {
   MAX_STEP,
   generatePointRebalanceSuggestions,
   householdMaxMagnitude,
+  rebalanceDisplay,
 } from '@/utils/pointRebalance';
 
 const TODAY = '2026-07-27';
@@ -282,5 +283,111 @@ describe('generatePointRebalanceSuggestions — determinism', () => {
     const suggestions = generatePointRebalanceSuggestions(habits, TODAY);
 
     expect(suggestions[0]?.habitId).toBe('big');
+  });
+});
+
+// rebalanceDisplay — regression coverage for the direction-inversion bug.
+//
+// `suggestion.currentPoints`/`suggestedPoints` are in the habit's STORED
+// basePoints convention (see the `storedSign` comment in
+// generatePointRebalanceSuggestions) — that's correct for `updateHabit`,
+// which writes them back verbatim, but WRONG for display/colour: reading
+// the raw sign of a stored number can't tell "penalty eased off" from
+// "reward lowered" once both conventions exist in the same household.
+// `rebalanceDisplay` re-signs from `habit.type` instead, so these tests pin
+// that the SAME underlying change renders identically under both.
+describe('rebalanceDisplay', () => {
+  const negativeHabit: Pick<Habit, 'type'> = { type: 'negative' };
+  const positiveHabit: Pick<Habit, 'type'> = { type: 'positive' };
+
+  it('a penalty easing off is favorable under the OLD (signed) convention', () => {
+    expect(rebalanceDisplay(negativeHabit, { currentPoints: -3, suggestedPoints: -1 })).toEqual({
+      currentPoints: -3,
+      suggestedPoints: -1,
+      favorable: true,
+    });
+  });
+
+  it('the SAME penalty easing off is favorable under the NEW (magnitude-only) convention', () => {
+    // Same habit, same real-world change (3 -> 1) as the OLD-convention case
+    // above, but stored positive per this PR's converged convention.
+    expect(rebalanceDisplay(negativeHabit, { currentPoints: 3, suggestedPoints: 1 })).toEqual({
+      currentPoints: -3,
+      suggestedPoints: -1,
+      favorable: true,
+    });
+  });
+
+  it('a penalty getting harsher is unfavorable under the OLD (signed) convention', () => {
+    expect(rebalanceDisplay(negativeHabit, { currentPoints: -2, suggestedPoints: -4 })).toEqual({
+      currentPoints: -2,
+      suggestedPoints: -4,
+      favorable: false,
+    });
+  });
+
+  it('the SAME harsher penalty is unfavorable under the NEW (magnitude-only) convention', () => {
+    expect(rebalanceDisplay(negativeHabit, { currentPoints: 2, suggestedPoints: 4 })).toEqual({
+      currentPoints: -2,
+      suggestedPoints: -4,
+      favorable: false,
+    });
+  });
+
+  it('a positive habit whose reward is raised is favorable', () => {
+    expect(rebalanceDisplay(positiveHabit, { currentPoints: 3, suggestedPoints: 4 })).toEqual({
+      currentPoints: 3,
+      suggestedPoints: 4,
+      favorable: true,
+    });
+  });
+
+  it('a positive habit whose reward is lowered is unfavorable', () => {
+    expect(rebalanceDisplay(positiveHabit, { currentPoints: 5, suggestedPoints: 3 })).toEqual({
+      currentPoints: 5,
+      suggestedPoints: 3,
+      favorable: false,
+    });
+  });
+
+  it('reproduces the empirical case end-to-end: a penalty triggered once in 60 days eases off identically under both conventions', () => {
+    // The exact scenario from the PR #1215 review: type: 'negative',
+    // period: 'daily', scoringType: 'incremental', triggered once in the
+    // 60-day window — "the penalty can ease off" case.
+    const base = {
+      id: 'h1',
+      title: 'Late night snack',
+      category: 'health',
+      type: 'negative' as const,
+      scoringType: 'incremental' as const,
+      period: 'daily' as const,
+      targetCount: 1,
+      count: 0,
+      totalCount: 0,
+      streakDays: 0,
+      lastUpdated: TODAY,
+      completedDates: [daysBefore(45)],
+    };
+    const habitOldConvention = { ...base, basePoints: -3 } as Habit;
+    const habitNewConvention = { ...base, basePoints: 3 } as Habit;
+
+    const [oldSuggestion] = generatePointRebalanceSuggestions([habitOldConvention], TODAY);
+    const [newSuggestion] = generatePointRebalanceSuggestions([habitNewConvention], TODAY);
+    if (!oldSuggestion || !newSuggestion) {
+      throw new Error('expected a suggestion for the reproduced scenario under both conventions');
+    }
+
+    // The RAW suggestion values still preserve each convention (proving this
+    // fix didn't touch what `updateHabit` writes).
+    expect(oldSuggestion.currentPoints).toBe(-3);
+    expect(oldSuggestion.suggestedPoints).toBe(-1);
+    expect(newSuggestion.currentPoints).toBe(3);
+    expect(newSuggestion.suggestedPoints).toBe(1);
+
+    // But the DISPLAY derived from habit.type is identical either way.
+    const oldDisplay = rebalanceDisplay(habitOldConvention, oldSuggestion);
+    const newDisplay = rebalanceDisplay(habitNewConvention, newSuggestion);
+    expect(oldDisplay).toEqual({ currentPoints: -3, suggestedPoints: -1, favorable: true });
+    expect(newDisplay).toEqual(oldDisplay);
   });
 });

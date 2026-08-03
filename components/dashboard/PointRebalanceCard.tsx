@@ -6,7 +6,7 @@ import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
 import type { HabitPointAdjustmentSuggestion } from '@/services/geminiService.types';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { Section } from '@/components/ui/Section';
-import { generatePointRebalanceSuggestions } from '@/utils/pointRebalance';
+import { generatePointRebalanceSuggestions, rebalanceDisplay } from '@/utils/pointRebalance';
 import {
   isRebalanceEligible,
   readRebalanceCooldowns,
@@ -87,13 +87,20 @@ export const PointRebalanceCard: React.FC = () => {
     setSuggestions(prev => prev.filter(s => s.habitId !== suggestion.habitId));
   };
 
+  // See `rebalanceDisplay` — re-derives canonical signed display values from
+  // `habit.type` rather than the raw (convention-dependent) stored sign, so
+  // a penalty habit reads/colours identically under either basePoints
+  // storage convention.
+  const { currentPoints: canonicalCurrent, suggestedPoints: canonicalSuggested, favorable: increasing } =
+    rebalanceDisplay(habit, suggestion);
+
   const apply = async () => {
     setApplying(true);
     try {
       await updateHabit({ ...habit, basePoints: suggestion.suggestedPoints });
       persistRebalanceReviewed(suggestion.habitId);
       setSuggestions(prev => prev.filter(s => s.habitId !== suggestion.habitId));
-      toast.success(`${habit.title} is now worth ${suggestion.suggestedPoints} pts`, {
+      toast.success(`${habit.title} is now worth ${canonicalSuggested} pts`, {
         icon: toastIcon(Scale),
       });
     } catch (error) {
@@ -102,8 +109,6 @@ export const PointRebalanceCard: React.FC = () => {
       setApplying(false);
     }
   };
-
-  const increasing = suggestion.suggestedPoints > suggestion.currentPoints;
 
   return (
     <Section
@@ -127,7 +132,7 @@ export const PointRebalanceCard: React.FC = () => {
             <div className="flex items-baseline gap-2 flex-wrap">
               <h4 className="font-semibold text-brand-900 dark:text-brand-50">{suggestion.habitTitle}</h4>
               <span className="stat-num text-sm font-bold text-brand-400 dark:text-brand-450 line-through">
-                {suggestion.currentPoints} pts
+                {canonicalCurrent} pts
               </span>
               <span
                 className={
@@ -136,7 +141,7 @@ export const PointRebalanceCard: React.FC = () => {
                     : 'stat-num text-sm font-bold text-money-neg dark:text-money-negDark'
                 }
               >
-                {suggestion.suggestedPoints} pts
+                {canonicalSuggested} pts
               </span>
             </div>
             <p className="mt-1 text-sm text-brand-500 dark:text-brand-400 leading-relaxed">

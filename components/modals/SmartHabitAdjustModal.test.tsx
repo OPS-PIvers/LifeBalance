@@ -115,4 +115,72 @@ describe('SmartHabitAdjustModal', () => {
     });
     expect(mockUpdateHabit).not.toHaveBeenCalled();
   });
+
+  // Regression coverage for the PR #1215 review fix: `habit.basePoints` had
+  // two storage conventions for `type: 'negative'` habits (signed vs
+  // magnitude-only). The rendered numbers/colour must be identical either
+  // way, and unambiguously signed (never a bare "3 pts" that could mean a
+  // reward OR a penalty).
+  describe('negative-habit direction is convention-independent', () => {
+    /** A daily incremental penalty triggered once in the last 60 days — the "penalty can ease off" case. */
+    const rarelyTriggeredPenalty = (basePoints: number): Habit =>
+      makeHabit({
+        id: '1',
+        title: 'Late night snack',
+        type: 'negative',
+        scoringType: 'incremental',
+        basePoints,
+        completedDates: [getLocalDateString(subDays(new Date(), 45))],
+      });
+
+    it('renders "-3 pts -> -1 pts" in the favorable (money-pos) colour under the OLD signed convention', async () => {
+      setHabits([rarelyTriggeredPenalty(-3)]);
+
+      render(<SmartHabitAdjustModal isOpen={true} onClose={mockOnClose} />);
+
+      await waitFor(() => expect(screen.getByText('Late night snack')).toBeInTheDocument());
+      expect(screen.getByText('-3 pts')).toBeInTheDocument();
+      const suggested = screen.getByText('-1 pts');
+      expect(suggested.className).toContain('text-money-pos');
+    });
+
+    it('renders the SAME canonical text and favorable colour under the NEW magnitude-only convention', async () => {
+      setHabits([rarelyTriggeredPenalty(3)]);
+
+      render(<SmartHabitAdjustModal isOpen={true} onClose={mockOnClose} />);
+
+      await waitFor(() => expect(screen.getByText('Late night snack')).toBeInTheDocument());
+      // Same canonical text as the OLD-convention case above, not "3 pts" / "1 pts".
+      expect(screen.getByText('-3 pts')).toBeInTheDocument();
+      const suggested = screen.getByText('-1 pts');
+      expect(suggested.className).toContain('text-money-pos');
+    });
+
+    it('still writes the RAW (convention-preserving) value through updateHabit, not the display value', async () => {
+      const habit = rarelyTriggeredPenalty(3); // NEW convention: positive magnitude
+      setHabits([habit]);
+
+      render(<SmartHabitAdjustModal isOpen={true} onClose={mockOnClose} />);
+
+      await waitFor(() => expect(screen.getByText('Late night snack')).toBeInTheDocument());
+      fireEvent.click(screen.getByTitle('Accept Change'));
+
+      await waitFor(() => {
+        // basePoints: 1, NOT -1 — the write must stay in the habit's stored
+        // (positive-magnitude) convention; only the display is re-signed.
+        expect(mockUpdateHabit).toHaveBeenCalledWith({ ...habit, basePoints: 1 });
+      });
+    });
+
+    it('a reward habit still shows plain (unsigned) numbers, unaffected by this fix', async () => {
+      setHabits([builtInHabit()]);
+
+      render(<SmartHabitAdjustModal isOpen={true} onClose={mockOnClose} />);
+
+      await waitFor(() => expect(screen.getByText('Run')).toBeInTheDocument());
+      expect(screen.getByText('10 pts')).toBeInTheDocument();
+      const suggested = screen.getByText('8 pts');
+      expect(suggested.className).toContain('text-money-neg');
+    });
+  });
 });

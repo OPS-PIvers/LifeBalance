@@ -221,6 +221,32 @@ export function isHabitStale(
 }
 
 /**
+ * Sign + per-completion magnitude for a habit, canonicalized from
+ * `habit.type`/`basePoints` exactly like the client's `habitSign`/
+ * `habitPointsMagnitude` (`utils/habitLogic.ts`) — the sign comes ONLY from
+ * `type`, the magnitude ONLY from `Math.abs(basePoints)`, never from the raw
+ * sign of `basePoints`. Two client habit-creation paths historically stored
+ * a negative habit's `basePoints` with opposite signs (see the parity-test
+ * docblock in `habitSignParity.test.ts`), so reading `basePoints` raw here
+ * would award points for one convention and double-penalize the other.
+ *
+ * Extracted out of `processToggleHabit` (rather than left inline) so
+ * `habitSignParity.test.ts` can pin this exact computation directly — this
+ * is the REAL production quickAdd/iOS-Shortcut toggle path, and it has its
+ * own independent copy of the canonicalization rather than calling
+ * `streakLogic.ts`'s `habitSign`/`signedHabitPoints`. A parity test that only
+ * compares client `habitLogic.ts` against server `streakLogic.ts` gives this
+ * site zero coverage.
+ */
+export function canonicalizeHabitPoints(
+  habit: Pick<Habit, "type" | "basePoints">
+): { sign: 1 | -1; magnitude: number } {
+  const sign: 1 | -1 = habit.type === "positive" ? 1 : -1;
+  const magnitude = Math.abs(habit.basePoints);
+  return { sign, magnitude };
+}
+
+/**
  * Process a habit toggle and calculate resulting state changes
  */
 export function processToggleHabit(
@@ -257,12 +283,7 @@ export function processToggleHabit(
   // actually completes the habit today. We dispatch by period so weekly habits
   // use the ISO-week streak rather than the day-based one (which would reset
   // on every ~7-day gap).
-  // Sign from `type`, magnitude from |basePoints| — mirrors the client's
-  // habitSign/habitPointsMagnitude (utils/habitLogic.ts). Two client creation
-  // paths historically stored negative habits with opposite basePoints signs,
-  // so reading basePoints raw awards points for one convention.
-  const sign = habit.type === "positive" ? 1 : -1;
-  const baseMagnitude = Math.abs(habit.basePoints);
+  const { sign, magnitude: baseMagnitude } = canonicalizeHabitPoints(habit);
   let multiplier = 1.0;
 
   let isCompletedNow = false;

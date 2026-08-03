@@ -16,8 +16,22 @@ import { describe, expect, it } from "vitest";
 // (rootDir: "src" in functions/tsconfig), but functions TESTS run under the
 // root vitest config, so the alias resolves here — mirrors
 // cardDigitsParity.test.ts / cardOwnerAttributionParity.test.ts.
+//
+// A THIRD copy of this canonicalization lives in `habitProcessor.ts`
+// (`canonicalizeHabitPoints`, used by `processToggleHabit` — the real
+// production quickAdd/iOS-Shortcut toggle path). It does NOT call
+// `streakLogic.ts`'s `habitSign`/`signedHabitPoints`, so comparing only
+// `streakLogic.ts` against the client leaves this site completely
+// uncovered — a PR review caught this: mutating `habitProcessor.ts` alone
+// (stripping its `Math.abs`) left every test in this file green. The
+// `habitProcessor canonicalization` describe block below closes that hole.
 import { habitSign as serverHabitSign, signedHabitPoints as serverSignedHabitPoints } from "./streakLogic";
-import { habitSign as clientHabitSign, signedHabitPoints as clientSignedHabitPoints } from "@/utils/habitLogic";
+import { canonicalizeHabitPoints } from "./habitProcessor";
+import {
+  habitSign as clientHabitSign,
+  habitPointsMagnitude as clientHabitPointsMagnitude,
+  signedHabitPoints as clientSignedHabitPoints,
+} from "@/utils/habitLogic";
 
 type SignFixtureHabit = { type: "positive" | "negative"; basePoints: number };
 
@@ -58,5 +72,28 @@ describe("habitSign parity (server streakLogic vs client habitLogic)", () => {
     // return +1 (an AWARD for performing the undesirable action) instead of -1.
     expect(serverSignedHabitPoints(habit)).toBe(-1);
     expect(clientSignedHabitPoints(habit)).toBe(-1);
+  });
+});
+
+// The real production quickAdd/iOS-Shortcut toggle path: `processToggleHabit`
+// calls `canonicalizeHabitPoints`, NOT `streakLogic.ts`'s `habitSign`. This
+// block pins that site independently of the two above — see the file
+// docblock for why the parity above alone doesn't cover it.
+describe("habitProcessor canonicalization (processToggleHabit's actual site) vs client habitLogic", () => {
+  it.each(SIGN_FIXTURES)("agrees on sign for: $label", ({ habit }) => {
+    expect(canonicalizeHabitPoints(habit).sign).toBe(clientHabitSign(habit));
+  });
+
+  it.each(SIGN_FIXTURES)("agrees on magnitude for: $label", ({ habit }) => {
+    expect(canonicalizeHabitPoints(habit).magnitude).toBe(clientHabitPointsMagnitude(habit));
+  });
+
+  it("never awards points for a negative habit regardless of storage convention (basePoints: -1)", () => {
+    const habit: SignFixtureHabit = { type: "negative", basePoints: -1 };
+    const { sign, magnitude } = canonicalizeHabitPoints(habit);
+    // Same double-negative guard as above, pinned at habitProcessor.ts's own
+    // copy of the computation: reading basePoints raw would flip this to +1.
+    expect(sign * Math.floor(magnitude * 1)).toBe(-1);
+    expect(sign * Math.floor(magnitude * 1)).toBe(clientSignedHabitPoints(habit));
   });
 });
