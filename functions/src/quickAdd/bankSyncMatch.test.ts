@@ -18,6 +18,7 @@ import {
   getBillPayPeriodId,
   computeBalanceAsOf,
   shouldSkipBalanceOverwrite,
+  emailAddsNothingNew,
   CONFIRM_DATE_TOLERANCE_DAYS,
   type PendingConfirmCandidate,
   type BillPayCandidate,
@@ -787,5 +788,166 @@ describe("shouldSkipBalanceOverwrite", () => {
 
   it("does not skip when there is no stored as-of date yet (first sync)", () => {
     expect(shouldSkipBalanceOverwrite(undefined, "2026-07-05")).toBe(false);
+  });
+});
+
+describe("emailAddsNothingNew", () => {
+  it("returns true for zero withdrawals + cent-exact matching balances (the production regression)", () => {
+    // Real evidence: Fri available=949.51 ending=949.51 applied; Sun email had 0
+    // withdrawals and the identical figures — should be recognized as a no-op.
+    expect(
+      emailAddsNothingNew({
+        withdrawalCount: 0,
+        incomingAvailable: 949.51,
+        incomingEnding: 949.51,
+        storedAvailable: 949.51,
+        storedEnding: 949.51,
+      })
+    ).toBe(true);
+  });
+
+  it("does NOT skip when zero withdrawals but the available balance differs", () => {
+    // A quiet day can still see the available balance move (a deposit lands, a
+    // card hold drops off) — that movement must still be applied.
+    expect(
+      emailAddsNothingNew({
+        withdrawalCount: 0,
+        incomingAvailable: 975.0,
+        incomingEnding: 949.51,
+        storedAvailable: 949.51,
+        storedEnding: 949.51,
+      })
+    ).toBe(false);
+  });
+
+  it("does NOT skip when zero withdrawals but the ending balance differs", () => {
+    expect(
+      emailAddsNothingNew({
+        withdrawalCount: 0,
+        incomingAvailable: 949.51,
+        incomingEnding: 900.0,
+        storedAvailable: 949.51,
+        storedEnding: 949.51,
+      })
+    ).toBe(false);
+  });
+
+  it("does NOT skip when withdrawals are present, even with identical balances", () => {
+    // Zero withdrawals is a required condition, not just a common case — a real
+    // day with matching net balances but actual withdrawal activity must apply.
+    expect(
+      emailAddsNothingNew({
+        withdrawalCount: 3,
+        incomingAvailable: 949.51,
+        incomingEnding: 949.51,
+        storedAvailable: 949.51,
+        storedEnding: 949.51,
+      })
+    ).toBe(false);
+  });
+
+  it("does NOT skip when storedAvailable is undefined (never synced under this scheme)", () => {
+    expect(
+      emailAddsNothingNew({
+        withdrawalCount: 0,
+        incomingAvailable: 949.51,
+        incomingEnding: 949.51,
+        storedAvailable: undefined,
+        storedEnding: 949.51,
+      })
+    ).toBe(false);
+  });
+
+  it("does NOT skip when storedEnding is undefined (never synced under this scheme)", () => {
+    expect(
+      emailAddsNothingNew({
+        withdrawalCount: 0,
+        incomingAvailable: 949.51,
+        incomingEnding: 949.51,
+        storedAvailable: 949.51,
+        storedEnding: undefined,
+      })
+    ).toBe(false);
+  });
+
+  it("does NOT skip when both stored figures are undefined (first sync ever)", () => {
+    expect(
+      emailAddsNothingNew({
+        withdrawalCount: 0,
+        incomingAvailable: 949.51,
+        incomingEnding: 949.51,
+        storedAvailable: undefined,
+        storedEnding: undefined,
+      })
+    ).toBe(false);
+  });
+
+  it("treats float-reconstructed amounts as equal (cent comparison, not ===)", () => {
+    const reconstructed = 0.1 + 0.2 + 949.21; // classic float-drift construction
+    expect(
+      emailAddsNothingNew({
+        withdrawalCount: 0,
+        incomingAvailable: reconstructed,
+        incomingEnding: 949.51,
+        storedAvailable: 949.51,
+        storedEnding: 949.51,
+      })
+    ).toBe(true);
+  });
+
+  // Regression: cents() (used elsewhere in this file) is sign-insensitive
+  // (Math.abs), which is harmless for its existing amount-only callers but
+  // would be a real bug here — a balance can genuinely be negative
+  // (toSignedDollars in bankEmailParser.ts parses "($50.00)" / "-$50.00" for
+  // an overdrawn account), so +X must never compare equal to -X.
+  it("does NOT skip when the stored available balance is positive but the incoming one is the same magnitude negative", () => {
+    expect(
+      emailAddsNothingNew({
+        withdrawalCount: 0,
+        incomingAvailable: -949.51,
+        incomingEnding: 949.51,
+        storedAvailable: 949.51,
+        storedEnding: 949.51,
+      })
+    ).toBe(false);
+  });
+
+  it("does NOT skip on the mirrored sign-flip (stored negative, incoming positive)", () => {
+    expect(
+      emailAddsNothingNew({
+        withdrawalCount: 0,
+        incomingAvailable: 949.51,
+        incomingEnding: 949.51,
+        storedAvailable: -949.51,
+        storedEnding: 949.51,
+      })
+    ).toBe(false);
+  });
+
+  it("does NOT skip on a sign-flip of the ENDING balance alone (available equal)", () => {
+    expect(
+      emailAddsNothingNew({
+        withdrawalCount: 0,
+        incomingAvailable: 949.51,
+        incomingEnding: -949.51,
+        storedAvailable: 949.51,
+        storedEnding: 949.51,
+      })
+    ).toBe(false);
+  });
+
+  it("DOES skip when both figures are genuinely negative and equal (a real overdrawn repeat)", () => {
+    // The guard must still work for an overdrawn account whose balance
+    // genuinely hasn't moved — the fix must not make it never fire on
+    // negatives, only stop it from treating +X and -X as equal.
+    expect(
+      emailAddsNothingNew({
+        withdrawalCount: 0,
+        incomingAvailable: -50.0,
+        incomingEnding: -50.0,
+        storedAvailable: -50.0,
+        storedEnding: -50.0,
+      })
+    ).toBe(true);
   });
 });

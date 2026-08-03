@@ -36,6 +36,19 @@
  * first-install backfill processing several historical emails newest-first),
  * independent of the client-side Gmail `newer_than` fence.
  *
+ * No-new-information guard: the ordering guard above is defeated by the
+ * email's own format — its "As of" date is a SEND TIMESTAMP that advances
+ * every morning regardless of whether the bank posted anything, so a stale,
+ * information-free email (zero withdrawals, byte-identical balances) can
+ * still carry a footer date that beats the stored one. A second, independent
+ * check (`emailAddsNothingNew` in bankSyncMatch.ts) also skips the overwrite
+ * when the email parses to zero withdrawals AND both balances are cent-exact
+ * repeats of `Account.lastSyncedAvailableBalance`/`lastSyncedEndingBalance` —
+ * the figures the last email that actually wrote `balance` recorded. Compared
+ * against those dedicated fields rather than `Account.balance` itself, since
+ * `balance` legitimately drifts from the email's figure as the user reviews
+ * transactions client-side — the very state this guard exists to protect.
+ *
  * Lives in its own file (re-exported from the quickAdd barrel + functions
  * index) to keep the churny expense-endpoint code and this apart.
  */
@@ -69,6 +82,7 @@ import {
   getBillPayPeriodId,
   computeBalanceAsOf,
   shouldSkipBalanceOverwrite,
+  emailAddsNothingNew,
   CONFIRM_DATE_TOLERANCE_DAYS,
   isVerifiedConfirmCandidate,
   type PendingConfirmCandidate,
@@ -370,13 +384,26 @@ export const bankEmailSync = onRequest(
         };
       });
       const resolvedAccountId = matchAccountByAccountLast4(parsed.accountLast4, accountsForMatch);
-      // Stored balanceAsOf for the resolved account (only-if-newer guard, below).
-      // Reused from the already-loaded accountsSnap — no extra read.
-      const resolvedAccountBalanceAsOf = (() => {
+      // Stored balanceAsOf + last-synced balance figures for the resolved
+      // account (the only-if-newer guard and the no-new-information guard,
+      // both applied at step 10 below). Reused from the already-loaded
+      // accountsSnap — no extra read.
+      const resolvedAccountSyncState = (() => {
         const doc = accountsSnap.docs.find((d) => d.id === resolvedAccountId);
         const data = doc?.data() as Record<string, unknown> | undefined;
-        return typeof data?.balanceAsOf === "string" ? data.balanceAsOf : undefined;
+        return {
+          balanceAsOf: typeof data?.balanceAsOf === "string" ? data.balanceAsOf : undefined,
+          lastSyncedAvailableBalance:
+            typeof data?.lastSyncedAvailableBalance === "number"
+              ? data.lastSyncedAvailableBalance
+              : undefined,
+          lastSyncedEndingBalance:
+            typeof data?.lastSyncedEndingBalance === "number"
+              ? data.lastSyncedEndingBalance
+              : undefined,
+        };
       })();
+      const resolvedAccountBalanceAsOf = resolvedAccountSyncState.balanceAsOf;
       if (!resolvedAccountId) {
         // Unknown account → WARNING push + no-op (no writes).
         await pushToBankSyncMembers(
@@ -867,20 +894,46 @@ export const bankEmailSync = onRequest(
         today,
         parsed.asOf
       );
-      const balanceSkipped = shouldSkipBalanceOverwrite(
-        resolvedAccountBalanceAsOf,
-        incomingBalanceAsOf
-      );
-      if (balanceSkipped) {
+      const outOfOrder = shouldSkipBalanceOverwrite(resolvedAccountBalanceAsOf, incomingBalanceAsOf);
+      // Second, independent guard (checked only when the first didn't already
+      // skip): the email's footer date can be genuinely newer while still
+      // telling us nothing we didn't already know — see `emailAddsNothingNew`'s
+      // doc comment for why the footer date alone can't be trusted here.
+      const noNewInfo =
+        !outOfOrder &&
+        emailAddsNothingNew({
+          withdrawalCount: parsed.withdrawals.length,
+          incomingAvailable: parsed.availableBalance,
+          incomingEnding: parsed.endingBalance,
+          storedAvailable: resolvedAccountSyncState.lastSyncedAvailableBalance,
+          storedEnding: resolvedAccountSyncState.lastSyncedEndingBalance,
+        });
+      const balanceSkipped = outOfOrder || noNewInfo;
+      // Which reason fired, so the push/response can tell the truth about why
+      // (see item 6 below) — `undefined` when the overwrite actually happened.
+      const balanceSkipReason: "out_of_order" | "no_new_info" | undefined = outOfOrder
+        ? "out_of_order"
+        : noNewInfo
+          ? "no_new_info"
+          : undefined;
+      if (outOfOrder) {
         logger.info(
           `bankEmailSync: skipping balance overwrite for account ${resolvedAccountId} — ` +
             `stored balanceAsOf ${resolvedAccountBalanceAsOf} is newer than incoming ${incomingBalanceAsOf} ` +
             `(out-of-order email, messageId ${messageId})`
         );
+      } else if (noNewInfo) {
+        logger.info(
+          `bankEmailSync: skipping balance overwrite for account ${resolvedAccountId} — ` +
+            `email had 0 withdrawals and matched the last-synced balance exactly ` +
+            `(no new information, messageId ${messageId})`
+        );
       } else {
         batch.update(db.doc(`households/${householdId}/accounts/${resolvedAccountId}`), {
           ...buildBalanceUpdate(parsed.availableBalance),
           balanceAsOf: incomingBalanceAsOf,
+          lastSyncedAvailableBalance: parsed.availableBalance,
+          lastSyncedEndingBalance: parsed.endingBalance,
           lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
@@ -912,9 +965,12 @@ export const bankEmailSync = onRequest(
       claimedByUs = false;
 
       // 12. Summary push + response.
-      const balanceSummary = balanceSkipped
-        ? "Balance: unchanged (older email, out of order)"
-        : `Balance: ${formatCurrency(parsed.availableBalance, { currency })}`;
+      const balanceSummary =
+        balanceSkipReason === "out_of_order"
+          ? "Balance: unchanged (older email, out of order)"
+          : balanceSkipReason === "no_new_info"
+            ? "Balance: unchanged (nothing new in this email)"
+            : `Balance: ${formatCurrency(parsed.availableBalance, { currency })}`;
       // A no-spend day deserves to read like the good news it is rather than
       // "0 new, 0 confirmed, 0 filled, 0 bills paid" — let alone the "Bank sync
       // failed" it used to produce before the parser learned that an omitted
@@ -948,6 +1004,7 @@ export const bankEmailSync = onRequest(
           availableBalance: parsed.availableBalance,
           withdrawals: parsed.withdrawals.length,
           balanceSkipped,
+          ...(balanceSkipReason ? { balanceSkipReason } : {}),
           ...counts,
           noSpend: {
             date: noSpend.targetDate,

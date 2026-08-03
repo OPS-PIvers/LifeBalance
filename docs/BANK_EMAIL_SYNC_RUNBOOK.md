@@ -77,6 +77,26 @@ Key properties (all read directly from the merged `main` code, not assumed):
   so the next night's email overwrites it as before — manual corrections are
   stopgaps, not authoritative. `balanceAsOf` is server-written only (Firestore
   rules reject client writes to it).
+  **No-new-information guard:** the ordering guard above is defeated by the email's
+  own format — its "As of" date is a SEND TIMESTAMP that advances every morning
+  whether or not the bank posted anything, so a genuinely stale, information-free
+  email (no withdrawal lines, byte-identical balances) can still carry a footer date
+  that *beats* the last applied email and slip past the ordering guard. A second,
+  independent guard catches this: the overwrite is also skipped when the email
+  parses to **zero withdrawals** AND both its ending and available balances are
+  cent-exact matches of `Account.lastSyncedAvailableBalance`/`lastSyncedEndingBalance`
+  — the figures the last email that actually wrote `balance` recorded (`emailAddsNothingNew`
+  in `bankSyncMatch.ts`). Both conditions are required: zero withdrawals alone isn't
+  enough, because a quiet day can still see the available balance move (a deposit
+  lands, a hold drops off), and that movement must still apply. This comparison
+  deliberately does NOT use `Account.balance` — it drifts from the email's own
+  figure as the user reviews transactions client-side, which is exactly the
+  in-review state this guard protects from being clobbered. `lastSyncedAvailableBalance`/
+  `lastSyncedEndingBalance` are written in the same batch.update as `balanceAsOf`
+  (whenever the overwrite actually happens) and are likewise server-written only.
+  The push distinguishes the two skip reasons ("older email, out of order" vs.
+  "nothing new in this email") so the notification never claims an ordering problem
+  when the real story is a no-op weekend email.
   This is also why a **filled Apple Pay stub** and a **confirmed pending transaction**
   are both marked `status: 'verified'` in this same pass (not left `pending_review`)
   — leaving either pending would let a later client-side categorize apply its own
@@ -355,6 +375,21 @@ real nightly statement carries roughly a dozen. As with `PARSE_FAILED`, nothing 
 written. If a legitimate email genuinely has this many lines, that cap needs
 raising in code (with a recheck of the Firestore 500-write batch-size proof
 documented next to the constant).
+
+**"Balance: unchanged (nothing new in this email)" in the push, or my balance
+didn't update after a sync that DID find withdrawals.** If withdrawals were found,
+this guard didn't fire — check whether the ordering guard did instead (see the
+"older email, out of order" entry right above). If the push genuinely says
+"nothing new in this email", the email parsed to zero withdrawal lines and its
+balances were a cent-exact repeat of the last email that actually wrote the
+balance — this is `emailAddsNothingNew` working as intended, not a bug. It exists
+specifically so a stale, information-free email (typically a quiet-weekend send
+whose footer date still advances) can't clobber a balance the user has since
+edited or that a same-day Plaid sync moved. If you believe the email genuinely
+carried new information the guard is misreading, check the Cloud Functions log
+line it emits ("no new information, messageId …") and compare the email's
+Ending/Available figures against `Account.lastSyncedAvailableBalance`/
+`lastSyncedEndingBalance` in the Firestore console.
 
 **"Bank sync skipped" push (`UNKNOWN_ACCOUNT`).** The email's account last-4 didn't
 uniquely match any household account's `accountLast4` field. Nothing is written

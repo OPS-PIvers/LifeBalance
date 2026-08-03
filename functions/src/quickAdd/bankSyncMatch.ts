@@ -142,6 +142,22 @@ function cents(amount: number): number {
   return Math.round(Math.abs(amount) * 100);
 }
 
+/**
+ * Signed integer cents (float-drift safe, sign PRESERVED). Every existing
+ * caller of `cents()` above compares magnitudes of things that are always
+ * non-negative in context (a withdrawal amount, a bill amount, an already
+ * `Math.abs`-wrapped difference), so `cents()`'s `Math.abs` is harmless
+ * there. It is NOT safe for a balance comparison: `toSignedDollars` in
+ * `bankEmailParser.ts` deliberately parses `($50.00)` / `-$50.00` as
+ * negative (an overdrawn account is a real, supported case), and
+ * `cents(-949.51) === cents(949.51)` would let a genuinely overdrawn
+ * balance compare equal to its positive counterpart. Use this instead
+ * anywhere the value being compared is a BALANCE rather than an amount.
+ */
+function signedCents(amount: number): number {
+  return Math.round(amount * 100);
+}
+
 /** Absolute whole-day gap between two yyyy-MM-dd strings (NaN-safe → Infinity). */
 export function dayGap(a: string, b: string): number {
   const ta = Date.parse(`${a}T00:00:00Z`);
@@ -609,4 +625,60 @@ export function shouldSkipBalanceOverwrite(
   incomingBalanceAsOf: string
 ): boolean {
   return storedBalanceAsOf !== undefined && storedBalanceAsOf > incomingBalanceAsOf;
+}
+
+// ---------------------------------------------------------------------------
+// No-new-information balance overwrite guard (stale-but-newer-footer email)
+// ---------------------------------------------------------------------------
+
+export interface EmailAddsNothingNewInput {
+  /** Count of parsed withdrawal lines in the incoming email. */
+  withdrawalCount: number;
+  /** Decimal dollars — the incoming email's available/ending balance figures. */
+  incomingAvailable: number;
+  incomingEnding: number;
+  /** Decimal dollars — the figures the LAST email that actually overwrote the
+   *  balance wrote (`Account.lastSyncedAvailableBalance`/`lastSyncedEndingBalance`).
+   *  `undefined` when the account has never been synced under this scheme. */
+  storedAvailable: number | undefined;
+  storedEnding: number | undefined;
+}
+
+/**
+ * True when this email carries literally NO new information: it parsed to
+ * ZERO withdrawal lines AND both its ending and available balances are
+ * cent-exact matches of the figures the last applied email wrote.
+ *
+ * This exists because `shouldSkipBalanceOverwrite`'s ordering guard is
+ * defeated by the email's own format — its "as of" date is a SEND TIMESTAMP
+ * (the footer date), not a data-freshness stamp, so it advances every
+ * morning whether or not the bank posted anything. A quiet-weekend email can
+ * carry a newer footer than the last APPLIED email while still telling us
+ * nothing we didn't already know, and without this guard it would overwrite
+ * `Account.balance` anyway — wiping out any balance movement the user
+ * recorded client-side in the meantime (the whole reason `Account.balance`,
+ * rather than the stored figures here, can't be used for this comparison).
+ *
+ * BOTH conditions are required. Zero withdrawals alone is not enough — a
+ * genuinely quiet day can still see the available balance move (a deposit
+ * lands, a card hold drops off), and that movement must still be applied.
+ *
+ * Returns FALSE whenever either stored figure is `undefined` — the first
+ * sync after this field was introduced, or an account that has never been
+ * synced. Never skip on ABSENT state, only on a confirmed repeat.
+ *
+ * Uses `signedCents`, deliberately NOT the sign-insensitive `cents()` used
+ * elsewhere in this file — a balance is signed (an overdrawn account is
+ * genuinely negative; see `signedCents`'s doc comment), and `+X` must never
+ * compare equal to `-X` here. Do not "simplify" this back to `cents()`.
+ */
+export function emailAddsNothingNew(input: EmailAddsNothingNewInput): boolean {
+  const { withdrawalCount, incomingAvailable, incomingEnding, storedAvailable, storedEnding } =
+    input;
+  if (withdrawalCount !== 0) return false;
+  if (storedAvailable === undefined || storedEnding === undefined) return false;
+  return (
+    signedCents(incomingAvailable) === signedCents(storedAvailable) &&
+    signedCents(incomingEnding) === signedCents(storedEnding)
+  );
 }

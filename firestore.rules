@@ -644,10 +644,14 @@ service cloud.firestore {
 
         allow update: if isMemberOf(householdId) &&
                       isValidAccountUpdate() &&
-                      // balanceAsOf is server-only (bankEmailSync stamps it via the
-                      // Admin SDK, which bypasses rules): a client-written future date
-                      // would permanently suppress the nightly balance overwrite.
-                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy', 'id', 'balanceAsOf']);
+                      // balanceAsOf/lastSyncedAvailableBalance/lastSyncedEndingBalance
+                      // are server-only (bankEmailSync stamps all three together via
+                      // the Admin SDK, which bypasses rules): a client-written
+                      // balanceAsOf could permanently suppress the nightly overwrite,
+                      // and a client-written lastSynced* figure could make a stale
+                      // email look like a repeat (emailAddsNothingNew) and suppress it
+                      // too.
+                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy', 'id', 'balanceAsOf', 'lastSyncedAvailableBalance', 'lastSyncedEndingBalance']);
 
         allow delete: if isMemberOf(householdId);
       }
