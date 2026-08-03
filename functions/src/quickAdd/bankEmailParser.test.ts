@@ -622,4 +622,110 @@ As of 07/21/2026 at 01:50 a.m., Central Time
     // ("260718") must be the one used.
     expect(result.withdrawals[0]?.date).toBe("2026-07-18");
   });
+
+  describe("dateless ACH/biller line falls back to the email's coverage day (as-of minus one)", () => {
+    // Production repro (2026-07-31): "CPENERGY MNGCO ACH" and "Xcel Energy"
+    // both carry no date token, so before this fix they were stored under
+    // `today` — the day the sync RAN — rather than the day the money moved.
+    // Wells Fargo cuts this email at ~1:50am and it covers the PREVIOUS day,
+    // so the correct fallback is `asOf` minus one, not `today`.
+    const NO_TOKEN_LINE = "CPENERGY MNGCO ACH PMT JENNIFER IVERS $89.32";
+
+    it("dates a dateless ACH line to asOf minus one, not the run date", () => {
+      const body = `
+for account ...5581
+Balance summary
+Ending balance: $500.00
+Available balance1: $500.00
+Withdrawals
+${NO_TOKEN_LINE}
+As of 07/28/2026 at 01:50 a.m., Central Time
+`;
+      // "today" stands in for the day the nightly sync ran, which is one day
+      // AFTER the email's coverage day — exactly the production scenario.
+      const result = parseBankEmail({ subject: "x", rawBody: body, today: "2026-07-28" });
+      if ("error" in result) throw new Error(result.error);
+      expect(result.withdrawals).toHaveLength(1);
+      expect(result.withdrawals[0]?.date).toBe("2026-07-27");
+    });
+
+    it("falls back to today (unchanged behavior) when the \"As of\" footer is absent", () => {
+      const body = `
+for account ...5581
+Balance summary
+Ending balance: $500.00
+Available balance1: $500.00
+Withdrawals
+${NO_TOKEN_LINE}
+`;
+      const result = parseBankEmail({ subject: "x", rawBody: body, today: "2026-07-28" });
+      if ("error" in result) throw new Error(result.error);
+      expect(result.withdrawals).toHaveLength(1);
+      expect(result.withdrawals[0]?.date).toBe("2026-07-28");
+    });
+
+    it("rolls back across a month boundary (As of 08/01 -> 07/31)", () => {
+      const body = `
+for account ...5581
+Balance summary
+Ending balance: $500.00
+Available balance1: $500.00
+Withdrawals
+${NO_TOKEN_LINE}
+As of 08/01/2026 at 01:50 a.m., Central Time
+`;
+      const result = parseBankEmail({ subject: "x", rawBody: body, today: "2026-08-01" });
+      if ("error" in result) throw new Error(result.error);
+      expect(result.withdrawals[0]?.date).toBe("2026-07-31");
+    });
+
+    it("rolls back across a year boundary (As of 01/01/2026 -> 2025-12-31)", () => {
+      const body = `
+for account ...5581
+Balance summary
+Ending balance: $500.00
+Available balance1: $500.00
+Withdrawals
+${NO_TOKEN_LINE}
+As of 01/01/2026 at 01:50 a.m., Central Time
+`;
+      const result = parseBankEmail({ subject: "x", rawBody: body, today: "2026-01-01" });
+      if ("error" in result) throw new Error(result.error);
+      expect(result.withdrawals[0]?.date).toBe("2025-12-31");
+    });
+
+    it("leaves a card line's own AUTHORIZED ON date untouched", () => {
+      const body = `
+for account ...5581
+Balance summary
+Ending balance: $500.00
+Available balance1: $500.00
+Withdrawals
+PURCHASE AUTHORIZED ON 07/20 TARGET T-2189 Minneapolis MN P000000551051569 CARD 2115 $18.86
+As of 07/28/2026 at 01:50 a.m., Central Time
+`;
+      // asOf minus one would be 07/27 — the card line must still resolve to
+      // its own 07/20 token, never the ACH fallback.
+      const result = parseBankEmail({ subject: "x", rawBody: body, today: "2026-07-28" });
+      if ("error" in result) throw new Error(result.error);
+      expect(result.withdrawals[0]?.date).toBe("2026-07-20");
+    });
+
+    it("leaves an ACH line that DOES carry its own YYMMDD token untouched", () => {
+      const body = `
+for account ...5581
+Balance summary
+Ending balance: $500.00
+Available balance1: $500.00
+Withdrawals
+AMERICAN EXPRESS ACH PMT 260720 M6486 JENNIFER IVERS $372.00
+As of 07/28/2026 at 01:50 a.m., Central Time
+`;
+      // The descriptor's own "260720" token (2026-07-20) must win over the
+      // asOf-minus-one fallback (2026-07-27).
+      const result = parseBankEmail({ subject: "x", rawBody: body, today: "2026-07-28" });
+      if ("error" in result) throw new Error(result.error);
+      expect(result.withdrawals[0]?.date).toBe("2026-07-20");
+    });
+  });
 });
