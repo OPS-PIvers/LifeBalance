@@ -1848,6 +1848,16 @@ describe('FirebaseHouseholdContext — batch commit REJECTION (atomic rollback)'
     // reset them here before asserting.
     vi.mocked(toast.error).mockClear();
     vi.mocked(toast.success).mockClear();
+    // TZ-1: the member doc seeded above has no notificationPreferences, so
+    // hooks/useTimezoneAutoHeal.ts fires an UNRELATED single updateDoc once
+    // per session to backfill it. Flush that pending write (a macrotask tick
+    // clears the whole microtask queue, including its multi-hop await chain)
+    // and clear the mock before asserting on the batch-rejection's OWN writes.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    updateDocMock.mockClear();
+
     commitController.failNextCommit = true;
     await act(async () => {
       await captured.value!.gamification.toggleHabit('hb1', 'up');
@@ -1907,6 +1917,15 @@ describe('FirebaseHouseholdContext — batch commit REJECTION (atomic rollback)'
     emitCollection(`${householdPath}/transactions`, [
       docSnap('tx1', { amount: 2500, category: 'Dining', status: 'verified' }),
     ]);
+
+    // TZ-1: the member doc seeded above has no notificationPreferences, so
+    // hooks/useTimezoneAutoHeal.ts fires an UNRELATED single updateDoc once
+    // per session to backfill it. Flush that pending write and clear the mock
+    // before asserting on the batch-rejection's OWN writes below.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    updateDocMock.mockClear();
 
     commitController.failNextCommit = true;
     await act(async () => {
