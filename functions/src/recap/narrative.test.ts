@@ -353,6 +353,19 @@ describe("buildTemplateNarrative", () => {
     expect(text).not.toContain("came out behind");
   });
 
+  it("does not narrate a $0.00-against-$0.00 comparison on an all-bills week", () => {
+    const text = buildTemplateNarrative({
+      ...BILL_HEAVY_WEEK,
+      totalSpend: 1600,
+      priorWeekSpend: 0,
+      dayToDaySpend: 0,
+      priorWeekDayToDaySpend: 0,
+    });
+    expect(text).toContain("No day-to-day spending was logged this week.");
+    expect(text).toContain("Bills took another $1,600.00");
+    expect(text).not.toContain("$0.00");
+  });
+
   it("produces valid prose with no undefined/NaN when every optional field is absent", () => {
     for (const fixture of [SAMPLE, EMPTY_SAMPLE]) {
       const text = buildTemplateNarrative(fixture);

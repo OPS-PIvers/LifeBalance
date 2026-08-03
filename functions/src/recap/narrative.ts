@@ -647,7 +647,11 @@ function spendSentences(verdicts: RecapVerdicts, recap: RecapNumericFields): str
   }
 
   const sentences: string[] = [];
-  if (spend.material && spend.direction === "up") {
+  if (spend.basis === "dayToDay" && cents(spend.current) === 0 && cents(spend.prior) === 0) {
+    // An all-bills week: "Day-to-day spending was $0.00 this week against $0.00
+    // last week" is true but says nothing. The bills sentence below carries it.
+    sentences.push("No day-to-day spending was logged this week.");
+  } else if (spend.material && spend.direction === "up") {
     sentences.push(`${noun} rose to ${money(spend.current)}, up from ${money(spend.prior)} last week.`);
   } else if (spend.material && spend.direction === "down") {
     sentences.push(`${noun} fell to ${money(spend.current)}, down from ${money(spend.prior)} last week.`);
