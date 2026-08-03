@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AVATAR_COLORS } from '@/utils/avatarColor';
+import { AA_NORMAL_TEXT_CONTRAST, avatarTextColor, contrastRatio } from '@/utils/contrastColor';
 import {
   MEMBER_COLOR_SEQUENCE,
   buildMemberColorMap,
@@ -84,5 +85,34 @@ describe('memberColors — unknown uids', () => {
     const gone = memberColorFor(colors, 'departed-uid');
     expect(gone).toMatch(/^#[0-9a-f]{6}$/);
     expect(memberColorFor(colors, 'departed-uid')).toBe(gone);
+  });
+});
+
+describe('memberColors — avatar-initial contrast (WCAG AA, both themes)', () => {
+  // Every color either palette can ever hand to `MemberAvatar` — the adult
+  // sequence (buildMemberColorMap step 2) and the hashed/legacy-mapped
+  // palette (buildMemberColorMap steps 1 and 3, via resolveAvatarColor/
+  // pickAvatarColor in utils/avatarColor.ts). None of these tokens are
+  // theme-split in index.css (no `.dark` override for warm-*/the palette
+  // hexes), so one computed ratio covers light AND dark.
+  const ALL_MEMBER_FILL_COLORS = [...new Set([...MEMBER_COLOR_SEQUENCE, ...AVATAR_COLORS])];
+
+  it.each(ALL_MEMBER_FILL_COLORS)(
+    'the initial rendered on %s clears WCAG AA (4.5:1) against its own fill',
+    (fill) => {
+      const foreground = avatarTextColor(fill);
+      const ratio = contrastRatio(foreground, fill);
+      expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL_TEXT_CONTRAST);
+    }
+  );
+
+  it('the amber pole specifically fails against white — proving the picker actually does something', () => {
+    // A regression guard for the picker itself: if this ever starts passing,
+    // the "every fill clears AA" test above would pass even with a
+    // do-nothing `avatarTextColor` that always returned white, silently
+    // losing the darker-foreground behavior it exists to provide.
+    const amber = MEMBER_COLOR_SEQUENCE[1];
+    expect(contrastRatio(amber, '#ffffff')).toBeLessThan(AA_NORMAL_TEXT_CONTRAST);
+    expect(avatarTextColor(amber)).not.toBe('#ffffff');
   });
 });
