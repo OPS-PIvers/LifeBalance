@@ -381,14 +381,21 @@ async function generateRecap(
     bucketNames,
   });
 
+  // `weekEnd` is passed to the narrative but deliberately NOT spread into the
+  // recap doc below: it is not a `WeeklyRecap` field. The narrative needs it
+  // only to date an upcoming bill relative to the Monday the recap is READ, so
+  // a bill due that same morning reads "due today" instead of being pitched as
+  // next week's planning.
+  const narrativeInput = { ...assembled, weekEnd };
+
   let narrative: string;
   let narrativeSource: "ai" | "template";
   if (premium) {
-    const result = await generateNarrative(assembled, geminiApiKey.value(), ceremonyTone);
+    const result = await generateNarrative(narrativeInput, geminiApiKey.value(), ceremonyTone);
     narrative = result.text;
     narrativeSource = result.source;
   } else {
-    narrative = buildTemplateNarrative(assembled, ceremonyTone);
+    narrative = buildTemplateNarrative(narrativeInput, ceremonyTone);
     narrativeSource = "template";
   }
 
