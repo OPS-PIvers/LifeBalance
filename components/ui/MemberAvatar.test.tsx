@@ -27,6 +27,16 @@ describe('MemberAvatar', () => {
     expect(avatar).toHaveStyle({ backgroundColor: '#b87a29' });
   });
 
+  it('uses a dark initial on the amber fill (warm-500 is 3.59:1 vs white — below WCAG AA)', () => {
+    render(<MemberAvatar name="Jen" color="#b87a29" size={30} data-testid="avatar" />);
+    expect(screen.getByTestId('avatar')).toHaveStyle({ color: '#161512' });
+  });
+
+  it('keeps a white initial on the evergreen fill, which clears WCAG AA against white', () => {
+    render(<MemberAvatar name="Paul" color="#285742" size={30} data-testid="avatar" />);
+    expect(screen.getByTestId('avatar')).toHaveStyle({ color: '#ffffff' });
+  });
+
   it('falls back to the initial circle when the photo fails to load', () => {
     render(
       <MemberAvatar

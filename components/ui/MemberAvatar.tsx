@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { cn } from '@/utils/cn';
+import { avatarTextColor } from '@/utils/contrastColor';
 
 /**
  * One member's avatar, everywhere in the app.
@@ -20,6 +21,12 @@ import { cn } from '@/utils/cn';
  *   `memberColorFor(colorMap, uid)` from `utils/memberColors.ts` so one
  *   member is one color on every surface that shares a `MemberColorMap`
  *   built from the same roster.
+ * - The initial's own color is NOT always white: `utils/contrastColor.ts`'s
+ *   `avatarTextColor` picks a dark near-black initial instead whenever
+ *   `color` doesn't clear WCAG AA (4.5:1) against white — today only the
+ *   amber pole (`warm-500`, `#b87a29`, 3.59:1) — so the fill stays the
+ *   member's true identity color (shared with the recap deck's chart/legend)
+ *   while the text on top of it stays readable.
  * - `size` is a plain pixel number so every call site's existing footprint
  *   (30px scoreboard rows, 22px picker rows, 16px chips, ~15px flame-ring
  *   avatars) is reproducible exactly, rather than picking from a fixed set.
@@ -144,13 +151,13 @@ const MemberAvatar: React.FC<MemberAvatarProps> = ({
       aria-hidden={alt ? undefined : true}
       title={title}
       data-testid={dataTestId}
-      className={cn(
-        'flex items-center justify-center font-bold text-white shrink-0',
-        radiusClass,
-        ringClass,
-        className
-      )}
-      style={{ ...sizeStyle, backgroundColor: color, fontSize: Math.round(size * 0.44) }}
+      className={cn('flex items-center justify-center font-bold shrink-0', radiusClass, ringClass, className)}
+      style={{
+        ...sizeStyle,
+        backgroundColor: color,
+        color: avatarTextColor(color),
+        fontSize: Math.round(size * 0.44),
+      }}
     >
       {icon ?? initial}
     </span>
