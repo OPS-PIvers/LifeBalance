@@ -634,7 +634,18 @@ service cloud.firestore {
                  (!data.keys().hasAny(['balance']) || isValidNumber(data.balance)) &&
                  (!data.keys().hasAny(['lastUpdated']) || data.lastUpdated is timestamp || (data.lastUpdated is string && isValidString(data.lastUpdated, 50))) &&
                  (!data.keys().hasAny(['monthlyGoal']) || isValidOptionalNumber(data.monthlyGoal)) &&
-                 (!data.keys().hasAny(['order']) || isValidOptionalNumber(data.order));
+                 (!data.keys().hasAny(['order']) || isValidOptionalNumber(data.order)) &&
+                 // CARD-1: `cardOwners` (card last-4 -> member uid) decides who a
+                 // transaction-fired habit is attributed to, so an unbounded map
+                 // here is an unbounded write. This rule bounds SHAPE and SIZE
+                 // only -- it deliberately does NOT check the uids against
+                 // `memberUids`, which would cost a `get()` on every account
+                 // write. Membership is enforced consumer-side in
+                 // `utils/habitCardAttribution.ts` (`currentMemberPredicate`,
+                 // fails CLOSED), and `accountConverter.fromFirestore`
+                 // normalizes malformed entries away on read.
+                 (!data.keys().hasAny(['cardOwners']) ||
+                   (data.cardOwners is map && data.cardOwners.size() <= 20));
         }
 
         // 🛡️ SENTINEL SECURITY FIX: Enforce schema validation for accounts
