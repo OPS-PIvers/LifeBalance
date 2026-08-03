@@ -88,6 +88,7 @@ import { migrateDuplicateMeals, needsMealDedup } from '@/utils/migrations/mealDe
 import { repairNegativePointsCorruption, needsNegativePointsRepair } from '@/utils/migrations/negativePointsRepair';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 import { usePointsSync, type PointsSyncUpdate } from '@/hooks/usePointsSync';
+import { useTimezoneAutoHeal } from '@/hooks/useTimezoneAutoHeal';
 import { useTodoAutoReschedule } from '@/hooks/useTodoAutoReschedule';
 import { useHabitActions } from '@/hooks/useHabitActions';
 import { expandCalendarItems } from '@/utils/calendarRecurrence';
@@ -213,7 +214,7 @@ import {
   makeMerchantRuleMutations,
   type MerchantRuleDraft,
 } from '@/contexts/household/mutations/merchantRuleMutations';
-import { makeNotificationMutations } from '@/contexts/household/mutations/notificationMutations';
+import { makeNotificationMutations, makeHealMemberTimezone } from '@/contexts/household/mutations/notificationMutations';
 import {
   makeAddMember,
   makeMemberCrudMutations,
@@ -1814,6 +1815,23 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     getHabitSubmissions: habitActions.getHabitSubmissions,
   });
 
+  // TZ-1: heal the signed-in member's stored notification timezone once per
+  // session, but only when it's missing/empty — a stored value that merely
+  // differs from the browser's currently-detected zone is left alone (an
+  // explicit override set via Settings → Notifications must not be silently
+  // reverted). See makeHealMemberTimezone for the dot-path write discipline;
+  // resilient by construction (a failed write is caught and logged there,
+  // never thrown, so it can't block app boot).
+  const healMemberTimezone = useCallback(async (memberUid: string, timezone: string) => {
+    await makeHealMemberTimezone({ db, householdId }).healMemberTimezone(memberUid, timezone);
+  }, [householdId]);
+
+  useTimezoneAutoHeal({
+    householdId,
+    currentUser,
+    healTimezone: healMemberTimezone,
+  });
+
   // Refresh FCM token periodically to prevent token staleness
   // iOS/Safari is particularly sensitive to stale tokens and will stop receiving notifications
   // See: https://github.com/firebase/firebase-js-sdk/issues/8013
@@ -2028,7 +2046,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       // off the shim to avoid exactly that. Read through refs instead: they are
       // evaluated when a transaction is actually added, so the fire still sees
       // fresh values. Same pattern as the midnight scheduler's `habitsRef`.
+      // ATTR-1 reads the roster through the same ref, for the same reason: a
+      // card owner must be a CURRENT member to be credited, and keying this
+      // callback on `members` would re-create it (and re-render every finance
+      // consumer) every time a member's points move.
       habits: habitsRef.current, freezeBank: freezeBankRef.current,
+      members: membersRef.current,
     }).addTransaction(tx);
   }, [householdId, user, householdSettings, accounts]);
 
@@ -2049,6 +2072,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   ) => {
     await makeUpdateTransactionCategory({
       db, householdId, currentUser, habits, transactions, accounts, householdSettings, freezeBank,
+      // ATTR-1 roster check, read through the ref so a member's points moving
+      // can't churn this callback's identity.
+      members: membersRef.current,
     }).updateTransactionCategory(id, category, relatedHabitIds, accountId, overrides);
   }, [householdId, currentUser, habits, transactions, accounts, householdSettings, freezeBank]);
 
@@ -2059,6 +2085,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   ) => {
     await makeReverseTransactionApproval({
       db, householdId, habits, transactions, accounts, calendarItems,
+      // ATTR-1: the undo debits the credited member's own points, so it needs
+      // the roster to know whose doc it may safely write.
+      members: membersRef.current,
     }).reverseTransactionApproval(id, prior, firedHabitIds);
   }, [householdId, habits, transactions, accounts, calendarItems]);
 

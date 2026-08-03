@@ -74,6 +74,29 @@ function omitKey<T extends object, K extends keyof T>(obj: T, key: K): Omit<T, K
   return rest as Omit<T, K>;
 }
 
+/**
+ * Per-card owner tagging (CARD-1): normalise `Account.cardOwners` on read.
+ *
+ * The `accounts` collection's Firestore rules carry no key-level allowlist
+ * for this field, so any household member can write an arbitrary map to it.
+ * Absent (every account that predates the feature) or malformed → `{}`,
+ * mirroring `normalizeCompletedBy`/`normalizeFrozenDatesBy` below. A key must
+ * look like a normalized 4-digit card last-4 — the same shape
+ * `normalizeCardDigits` (client) / `normalizeCardLast4` (server) produce —
+ * and its value must be a non-empty string (a member uid); anything else is
+ * dropped rather than trusted.
+ */
+const normalizeCardOwners = (raw: unknown): Record<string, string> => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!/^\d{4}$/.test(key)) continue;
+    if (typeof value !== 'string' || value === '') continue;
+    out[key] = value;
+  }
+  return out;
+};
+
 // ---------------------------------------------------------------------------
 // Account
 // ---------------------------------------------------------------------------
@@ -90,6 +113,7 @@ export const accountConverter: FirestoreDataConverter<Account> = {
         d['lastUpdated'] instanceof Timestamp
           ? d['lastUpdated'].toDate().toISOString()
           : d['lastUpdated'],
+      cardOwners: normalizeCardOwners(d['cardOwners']),
     } as Account;
   },
 };

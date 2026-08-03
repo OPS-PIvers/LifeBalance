@@ -45,3 +45,36 @@ export function makeNotificationMutations(deps: {
 
   return { markNotificationRead, markAllNotificationsRead };
 }
+
+/**
+ * TZ-1: heals a signed-in member's `notificationPreferences.timezone` — see
+ * `hooks/useTimezoneAutoHeal.ts` for when this fires (once per session, only
+ * when missing/empty — an explicit stored value is never overwritten). A
+ * **dot-path** update only — `notificationPreferences`
+ * is a Map with several independent sections (habitReminders, billReminders,
+ * dailyBriefing, …), and a whole-map write here would clobber all of them with
+ * whatever stale snapshot this callback happened to close over. Same write
+ * discipline as `completedBy`/`freezeBanksByMember` (see CLAUDE.md).
+ */
+export function makeHealMemberTimezone(deps: {
+  db: Firestore;
+  householdId: string | null;
+}) {
+  const { db, householdId } = deps;
+
+  const healMemberTimezone = async (memberUid: string, timezone: string): Promise<void> => {
+    if (!householdId) return;
+    try {
+      await updateDoc(doc(db, `households/${householdId}/members`, memberUid), {
+        'notificationPreferences.timezone': timezone,
+      });
+    } catch (error) {
+      // Never allowed to block app boot — log and move on, matching
+      // writeSyncedPoints and every other write* callback in
+      // FirebaseHouseholdContext.
+      console.error('[healMemberTimezone] Failed to heal member timezone:', error);
+    }
+  };
+
+  return { healMemberTimezone };
+}

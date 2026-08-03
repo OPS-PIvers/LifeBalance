@@ -6,6 +6,7 @@ import {
   memberDatesFor,
   memberPointsOnDate,
   unattributedPointsOnDate,
+  unattributedSplitForDate,
   weekDates,
   weekPointsTotal,
   type CeremonyMember,
@@ -442,5 +443,158 @@ describe("assembleCeremony", () => {
       ["u1", 10],
       ["u2", 0],
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RECAP-MATH — WHY a chunk of points belongs to nobody
+// ---------------------------------------------------------------------------
+
+describe("unattributedSplitForDate", () => {
+  it("routes a creditMode: 'household' habit to householdCredit", () => {
+    const h = habit({ creditMode: "household", basePoints: 12, completedDates: [MON] });
+    expect(unattributedSplitForDate([h], MON, WEEK_END)).toEqual({
+      householdCredit: 12,
+      unclaimed: 0,
+    });
+  });
+
+  it("routes an explicit creditMode: 'members' habit with NO attribution to unclaimed", () => {
+    // The real gap: a habit fired by something that never recorded a person.
+    const h = habit({
+      creditMode: "members",
+      basePoints: 7,
+      completedDates: [MON],
+      completedBy: attribution({}),
+    });
+    expect(unattributedSplitForDate([h], MON, WEEK_END)).toEqual({
+      householdCredit: 0,
+      unclaimed: 7,
+    });
+  });
+
+  it("routes a habit with NO creditMode at all to unclaimed (grandfathered history)", () => {
+    // Absent reads as 'members', so there is deliberately no third bucket:
+    // legacy history and a real gap are the same shape on the document.
+    const h = habit({ basePoints: 10, completedDates: [MON] });
+    expect(unattributedSplitForDate([h], MON, WEEK_END)).toEqual({
+      householdCredit: 0,
+      unclaimed: 10,
+    });
+  });
+
+  it("keeps both apart on the SAME day", () => {
+    const habits = [
+      habit({
+        title: "Homemade dinner",
+        creditMode: "household",
+        basePoints: 12,
+        completedDates: [MON],
+      }),
+      habit({
+        title: "Go into Target",
+        creditMode: "members",
+        basePoints: 7,
+        completedDates: [MON],
+      }),
+    ];
+    expect(unattributedSplitForDate(habits, MON, WEEK_END)).toEqual({
+      householdCredit: 12,
+      unclaimed: 7,
+    });
+  });
+
+  it("splits only the REMAINDER when a household-credit habit carries stale attribution", () => {
+    const h = habit({
+      creditMode: "household",
+      scoringType: "incremental",
+      basePoints: 5,
+      targetCount: 3,
+      completedDates: [MON],
+      completedBy: attribution({ [MON]: { u1: 1 } }),
+    });
+    const split = unattributedSplitForDate([h], MON, WEEK_END);
+    expect(split.householdCredit + split.unclaimed).toBe(
+      unattributedPointsOnDate(h, MON, WEEK_END)
+    );
+  });
+
+  it("ignores creditMode on an ASSIGNED chore — it never reaches the household pool", () => {
+    const h = habit({
+      assignedTo: LEO.uid,
+      creditMode: "household",
+      basePoints: 5,
+      completedDates: [MON],
+    });
+    expect(unattributedSplitForDate([h], MON, WEEK_END)).toEqual({
+      householdCredit: 0,
+      unclaimed: 0,
+    });
+  });
+
+  it("carries the sign of a negative household-credit habit", () => {
+    const h = habit({
+      creditMode: "household",
+      type: "negative",
+      basePoints: 8,
+      completedDates: [MON],
+    });
+    expect(unattributedSplitForDate([h], MON, WEEK_END)).toEqual({
+      householdCredit: -8,
+      unclaimed: 0,
+    });
+  });
+});
+
+describe("buildDailyPoints / assembleCeremony unattributedSplit", () => {
+  const habits = [
+    habit({
+      title: "Homemade dinner",
+      creditMode: "household",
+      basePoints: 12,
+      completedDates: [MON, TUE],
+    }),
+    habit({
+      title: "Go into Target",
+      creditMode: "members",
+      basePoints: 7,
+      completedDates: [TUE],
+      completedBy: attribution({}),
+    }),
+    habit({
+      title: "Morning walk",
+      basePoints: 10,
+      completedDates: [MON],
+      completedBy: attribution({ [MON]: { u1: 1 } }),
+    }),
+  ];
+
+  it("decomposes every day without changing the day's own figures", () => {
+    const days = buildDailyPoints(habits, MEMBERS, WEEK_START, WEEK_END);
+    expect(days[0]?.unattributedSplit).toEqual({ householdCredit: 12, unclaimed: 0 });
+    expect(days[0]?.unattributed).toBe(12);
+    expect(days[0]?.byMember).toEqual({ u1: 10 });
+    expect(days[0]?.total).toBe(22);
+
+    expect(days[1]?.unattributedSplit).toEqual({ householdCredit: 12, unclaimed: 7 });
+    expect(days[1]?.unattributed).toBe(19);
+
+    for (const day of days) {
+      const split = day.unattributedSplit;
+      expect((split?.householdCredit ?? 0) + (split?.unclaimed ?? 0)).toBe(day.unattributed);
+    }
+  });
+
+  it("sums the week's split to Σ dailyPoints[].unattributed", () => {
+    const { dailyPoints, unattributedSplit } = assembleCeremony({
+      habits,
+      members: MEMBERS,
+      weekStart: WEEK_START,
+      weekEnd: WEEK_END,
+    });
+    expect(unattributedSplit).toEqual({ householdCredit: 24, unclaimed: 7 });
+    expect(unattributedSplit.householdCredit + unattributedSplit.unclaimed).toBe(
+      dailyPoints.reduce((sum, d) => sum + d.unattributed, 0)
+    );
   });
 });

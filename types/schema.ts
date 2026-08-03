@@ -278,6 +278,25 @@ export interface Account {
    *  Readers should treat the legacy `cardLast4` as an extra (deduped) entry
    *  of this list rather than a separate value — see `accountMatch.ts`. */
   cardLast4s?: string[];
+  /** Per-card owner tagging (CARD-1): maps a tagged card's last-4 (a key that
+   *  appears in `cardLast4s`, or the legacy `cardLast4`) to the household
+   *  member `uid` who holds that physical card — e.g. two adults with
+   *  separate debit cards on one SHARED checking account, where the card
+   *  used is the only available signal for who actually spent the money.
+   *  Orthogonal to routing: `functions/src/quickAdd/accountMatch.ts`'s last-4
+   *  → ACCOUNT matching reads only `cardLast4`/`cardLast4s` and is completely
+   *  untouched by this field. Absent on every account that predates this
+   *  field (no migration needed) and absent per-card until a member
+   *  explicitly tags one — an untagged card is "unknown owner", never an
+   *  error. ATTR-1 consumes this: a transaction-fired habit completion is
+   *  credited to the card's owner (`utils/habitCardAttribution.ts`), so tagging
+   *  a card now decides who earns the points and penalties for purchases on it.
+   *  This field only stores the tagging — no attribution logic lives here.
+   *  🛡️ `firestore.rules` carries NO key allowlist for the `accounts`
+   *  collection, so any member can write any string here; every consumer must
+   *  verify the uid is a CURRENT member before crediting it. See the lookup
+   *  helper in `utils/cardOwnership.ts`. */
+  cardOwners?: Record<string, string>;
   /** Last 4 digits of the bank ACCOUNT number itself (distinct from a card),
    *  e.g. parsed from a bank email header like "for account ...5581". Used to
    *  route nightly bank-email sync rows to the right account. */
@@ -405,6 +424,31 @@ export interface Transaction {
   firedHabitIds?: string[];
   store?: string;
   accountId?: string;
+  /** Card last-4 that produced this transaction (CARD-1), when known — the
+   *  digits `quickAddExpense` used to route the purchase via
+   *  `functions/src/quickAdd/accountMatch.ts` (an explicit `cardLast4` body
+   *  field, or one extracted from `emailText` by `emailParser.ts`), persisted
+   *  onto the row instead of being discarded once routing is done.
+   *  Normalized to exactly 4 digits, matching the keys of
+   *  `Account.cardLast4s`/`cardOwners` — see `utils/cardOwnership.ts` for the
+   *  owner lookup this enables.
+   *
+   *  WRITTEN BY every capture path that sees a card digit: `quickAddExpense`'s
+   *  primary create, all three reconcile builders in
+   *  `functions/src/quickAdd/reconcile.ts` (stub fill + both duplicate-merge
+   *  directions), and the nightly `bankEmailSync` on BOTH its `create` and
+   *  `fill_stub` branches. When a merge finds the target already carrying a
+   *  DIFFERENT value, `resolveCardLast4Update` applies "bank wins" — a
+   *  bank-sourced incoming (`fromBankNotification`) overwrites, anything else
+   *  only fills an empty value. Adding a new capture path? Write this field
+   *  there too; a path that silently skips it reads as "unknown card" and its
+   *  transactions go unattributed with no error.
+   *
+   *  ABSENT on paths that never capture a card digit (manual entry,
+   *  receipt/statement scans, Plaid) and on ALL historical rows — the field
+   *  postdates them and there is no migration, so attribution built on it is
+   *  forward-only. */
+  cardLast4?: string;
   /** When the transaction is tagged to a CREDIT account, marks it as a PAYMENT
    *  toward the card (reduces the credit balance) rather than a charge (which
    *  increases it). Meaningless / ignored for checking & savings accounts.
@@ -931,9 +975,10 @@ export interface HabitSubmission {
    * previous assignee actually earned.
    *
    * 🛡️ ABSENT means "credits NOBODY" — never "credits `createdBy`". Besides
-   * pre-attribution history, three live writers produce a doc with neither this
-   * field nor `creditsHousehold` (`transactionMutations`' keyword fire,
-   * `noSpendFire`, the backfill script) and none of them writes `completedBy`.
+   * pre-attribution history, live writers still produce a doc with neither this
+   * field nor `creditsHousehold` (`noSpendFire`, the backfill script, and every
+   * UNATTRIBUTED `transactionMutations` keyword fire — see ATTR-1 below) and
+   * none of them writes `completedBy`.
    * `createdBy` is the OPERATOR, and on a keyword fire that is a real member
    * uid, so an `?? createdBy` fallback hands a reversal a creditee the doc never
    * had: it debits that member's own genuine attribution, or — once
@@ -942,6 +987,15 @@ export interface HabitSubmission {
    * `attributedTo` against the POOL alone, at its stored `pointsEarned`.
    * `updateHabitSubmission` applies the same rule to a count edit: such a doc
    * moves no member in either direction, only the pool.
+   *
+   * ATTR-1: a TRANSACTION-fired completion now sets this to the owner of the
+   * card that produced the row (`Account.cardOwners[Transaction.cardLast4]`,
+   * via `utils/habitCardAttribution.ts`) — NOT to `createdBy`, since the person
+   * approving the nightly bank sync is rarely the person who spent the money.
+   * It stays absent whenever that resolver declines: a `creditMode: 'household'`
+   * habit, an assigned chore, a row with no `cardLast4` (every transaction
+   * predating that field — attribution is deliberately forward-only, with no
+   * backfill), an untagged card, or a uid no longer on the member roster.
    */
   attributedTo?: string;
   /**
@@ -1690,6 +1744,38 @@ export interface RecapMemberFacts {
 }
 
 /**
+ * WHY a chunk of points belongs to no individual member — the decomposition of
+ * `RecapDayPoints.unattributed` (RECAP-MATH).
+ *
+ * 🛡️ `householdCredit + unclaimed === unattributed`, BY CONSTRUCTION: both
+ * halves are summed from the same `unattributedPointsOnDate` walk that produces
+ * `unattributed` itself, partitioned per habit — never by subtracting one
+ * displayed figure from another.
+ *
+ * The split exists because `unattributed` conflates two genuinely different
+ * things, and the recap was reporting them as one number:
+ *
+ *  1. DELIBERATE household credit (`Habit.creditMode === 'household'`) — the
+ *     household earned these together on purpose, and a household-credit
+ *     completion writes NO `completedBy` entry by design. Worth celebrating,
+ *     not apologising for.
+ *  2. Everything else with no holder — pre-attribution (grandfathered) history,
+ *     or a real gap (a `creditMode: 'members'` habit fired by something that
+ *     never recorded a person).
+ *
+ * There is deliberately no THIRD bucket splitting grandfathered history from a
+ * real gap: `Habit.creditMode` is absent on every pre-feature habit and "reads
+ * as `'members'`" (see its doc comment), so the two shapes are structurally
+ * identical on the document and cannot be told apart after the fact.
+ */
+export interface RecapUnattributedSplit {
+  /** Signed points from `creditMode: 'household'` habits — together, by design. */
+  householdCredit: number;
+  /** Signed points nobody holds for any other reason (legacy history or a gap). */
+  unclaimed: number;
+}
+
+/**
  * One day of the ceremony's 7-day stacked chart (Monday-first).
  * `total = Σ byMember + unattributed` and that total IS the household figure,
  * so `byMember` holds each member's SHARED-habit share only (chores assigned to
@@ -1705,14 +1791,36 @@ export interface RecapDayPoints {
   unattributed: number;
   /** Signed household points for the day. */
   total: number;
+  /**
+   * Why that day's `unattributed` belongs to nobody (RECAP-MATH). OPTIONAL:
+   * absent on every recap written before the split shipped, so read it as
+   * "unknown", never as "zero household credit".
+   */
+  unattributedSplit?: RecapUnattributedSplit;
 }
 
 export interface WeeklyRecap {
   id: string;
   isoWeek: string; // e.g. '2026-W27'
   generatedAt: string; // ISO timestamp
+  /**
+   * ALL counted spend for the recap week (decimal dollars) — bills included.
+   *
+   * "Counted" excludes income AND the `CREDIT_CARD_CATEGORY` account-routing
+   * sentinel, which is not real spending (RECAP-MATH; mirrors
+   * `utils/bucketSpentCalculator.ts`). Recaps written before that fix counted
+   * the sentinel, so an old document's figure is not comparable to a new one's.
+   */
   totalSpend: number; // decimal dollars
   priorWeekSpend: number;
+  /**
+   * Up to 3 categories with the largest week-over-week spend swing.
+   *
+   * Excludes the `BUDGETED_IN_CALENDAR` calendar-bill sentinel (RECAP-MATH):
+   * it is a routing tag, not a category, and a heavy bill week made it win this
+   * list every time — reporting "Budgeted in Calendar" as a household's #1
+   * category insight.
+   */
   topCategoryDeltas: Array<{ category: string; current: number; prior: number }>;
   habitCompletions: number;
   streaksAtRisk: Array<{ habitTitle: string; streakDays: number }>;
@@ -1737,6 +1845,36 @@ export interface WeeklyRecap {
   priorWeekPoints?: number;
   /** The household's ceremony tone at generation time (drives the deck order). */
   ceremonyTone?: CeremonyTone;
+
+  // --- Spend decomposition (RECAP-MATH) -----------------------------------
+  // ALL OPTIONAL: absent on every recap written before the split shipped.
+  //
+  // 🛡️ `billsSpend + dayToDaySpend === totalSpend`, by construction — each is
+  // its own filter over the same counted-spend predicate, never a subtraction.
+  // The split exists because lumping them together made the week-over-week
+  // headline meaningless: a heavy bill week reads as a 3x "spending increase"
+  // when day-to-day spending was actually flat.
+
+  /**
+   * Counted spend the calendar already budgeted (decimal dollars) — the
+   * `Budgeted in Calendar` sentinel `payCalendarItem` files a paid bill under,
+   * plus the legacy `Bills` tag. Real outflows, just not discretionary ones.
+   */
+  billsSpend?: number;
+  /** The same figure for the week BEFORE the recap week. */
+  priorWeekBillsSpend?: number;
+  /** Counted spend that is NOT a paid calendar bill (decimal dollars). */
+  dayToDaySpend?: number;
+  /** The same figure for the week BEFORE the recap week. */
+  priorWeekDayToDaySpend?: number;
+
+  /**
+   * Week totals of `dailyPoints[].unattributedSplit` — how much of the week's
+   * unattributed pool was DELIBERATE household credit versus genuinely
+   * unclaimed (RECAP-MATH). `householdCredit + unclaimed === Σ
+   * dailyPoints[].unattributed`.
+   */
+  unattributedSplit?: RecapUnattributedSplit;
 }
 
 /**

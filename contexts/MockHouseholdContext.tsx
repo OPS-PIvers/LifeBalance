@@ -33,6 +33,10 @@ import {
   withDatesUnattributed,
   type PointsBuckets,
 } from '@/utils/habitAttribution';
+import {
+  currentMemberPredicate,
+  resolveCardFireAttribution,
+} from '@/utils/habitCardAttribution';
 import { computeBackdatedHabitFire, computeHabitTriggerFire, computeHabitTriggerReverse } from '@/utils/habitTriggerFire';
 import { evaluateTodoSubtaskGate, TodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import { setSubtaskDone, subtaskProgress } from '@/utils/subtasks';
@@ -674,6 +678,55 @@ const affectedPeriodMembers = (
 ];
 
 /**
+ * ATTR-1 mock parity: the points ONE transaction-fired habit moves, decomposed
+ * into the POOL's share and every affected member's own — the mock twin of
+ * production `fireHabitsIntoBatch`'s `periodPointsMove` decomposition, and the
+ * same shape `addHabitSubmission`'s mock already uses.
+ *
+ * 🛡️ AN ATTRIBUTED MOVE MUST NOT USE THE HABIT-LEVEL FIGURE. `fire.pointsDelta`
+ * applies the HABIT's streak multiplier, while an attributed completion is paid
+ * at the credited MEMBER's own — so the moment the two differ (a habit with a
+ * long legacy streak meeting a member's first attributed completion) the pool is
+ * credited more than the sum of what its members received. Test Mode has NO
+ * corrective recompute — `totalPoints` is a bare `useState` and it gates reward
+ * redemption — so that error persists for the whole session.
+ *
+ * `actors` is the uid(s) this move is FOR (the card owner on a fire, the members
+ * an undo takes units back from). `null` means the move was unattributed — a
+ * household-credit habit, a chore, an untagged card, a uid off the roster — and
+ * then `legacyDelta` is returned untouched with no member half at all, which is
+ * bit-for-bit both production's fallback and the mock's pre-ATTR-1 behaviour.
+ *
+ * The member scope is `affectedPeriodMembers`, never just `actors`: a threshold
+ * period's completion flips an EARLIER member's award on as a side effect, and
+ * paying the pool for it while skipping that member is exactly the drift this
+ * helper exists to prevent.
+ */
+const transactionHabitPointsMove = (
+  before: Habit,
+  after: Habit,
+  fireDate: string,
+  today: string,
+  actors: readonly string[] | null,
+  legacyDelta: PointsBuckets,
+): { pool: PointsBuckets; perMember: Map<string, PointsBuckets> } => {
+  if (actors === null) return { pool: legacyDelta, perMember: new Map() };
+  // Same gating as `addHabitSubmission`'s mock: a back-dated move credits the
+  // lifetime total but not a day/week it did not land in.
+  const gate = (amount: number): PointsBuckets => ({
+    daily: fireDate === today ? amount : 0,
+    weekly:
+      habitPeriodStart('weekly', fireDate) === habitPeriodStart('weekly', today) ? amount : 0,
+    total: amount,
+  });
+  const perMember = new Map<string, PointsBuckets>();
+  for (const uid of affectedPeriodMembers(before, after, fireDate, actors)) {
+    perMember.set(uid, gate(memberPeriodPointsDelta(before, after, uid, fireDate, today)));
+  }
+  return { pool: gate(householdPeriodPointsDelta(before, after, fireDate, today)), perMember };
+};
+
+/**
  * The UNATTRIBUTED remainder over a set of dates — the grandfathering /
  * household-credit term of production's `household = Σ members + unattributed`.
  *
@@ -1002,57 +1055,91 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       };
     });
   });
-  // One canned weekly recap (Plan 02, ceremony stage 5) so Test Mode renders
-  // the Dashboard recap card AND the full 4-card story deck. Anchored to the
-  // PREVIOUS ISO week — which is what the server now writes, since generation
-  // moved to Monday morning and the recap describes the week that just CLOSED
-  // — with a fresh `generatedAt` so the card's 4-day freshness window passes.
+  // TWO canned weekly recaps, so BOTH rendering paths are reachable in Test
+  // Mode (Plan 02, ceremony stage 5, rebuilt by DECK-1):
   //
-  // The per-member numbers are deliberately coherent — and deliberately BELOW
-  // the live week. `SEED_MEMBERS`' two adults hold 150 / 95 = 245 for the
-  // IN-PROGRESS week; this closed week seeds 120 / 76 = 196, so the scoreboard
-  // widget's trend chip actually renders (+25%) instead of computing a 0% delta
-  // and hiding itself. The internal invariants still hold for the recap's own
-  // week: household `totalPoints` = Σ adults, `pointsByMember` = `memberFacts`
-  // points, and the day split sums to each member's weekly figure.
+  //  [0] the PREVIOUS ISO week, carrying the full ceremony payload — opens as
+  //      the story deck. Fresh `generatedAt` so the Dashboard card's 4-day
+  //      freshness window passes and the card is tappable.
+  //  [1] the week BEFORE that, with NO `memberFacts`/`dailyPoints` — the shape
+  //      of every stored recap W27–W30. `hasCeremonyData` reads false and the
+  //      drawer renders its PRE-DECK layout. Reachable at
+  //      `#/?recap=<isoWeek>`; its own card is deliberately stale so it never
+  //      competes for the Dashboard slot.
+  //
+  // The ceremony week's numbers are deliberately coherent — and deliberately
+  // BELOW the live week. `SEED_MEMBERS`' two adults hold 150 / 95 = 245 for the
+  // IN-PROGRESS week; this closed week seeds 102 / 68, so the scoreboard
+  // widget's trend chip actually renders instead of computing a 0% delta and
+  // hiding itself. The internal invariants still hold for the recap's own week:
+  // household `totalPoints` = Σ adults + Σ unattributed, `pointsByMember` =
+  // `memberFacts` points, `billsSpend + dayToDaySpend = totalSpend`, and
+  // `householdCredit + unclaimed = Σ dailyPoints[].unattributed`.
   const [recaps] = useState<WeeklyRecap[]>(() => {
     const closedWeek = new Date(Date.now() - 7 * 86400000);
     const isoWeek = format(closedWeek, "RRRR-'W'II");
     const monday = startOfWeek(closedWeek, { weekStartsOn: 1 });
     const day = (i: number) => getLocalDateString(new Date(monday.getTime() + i * 86400000));
-    // Mon–Sun, Test User then Jordan: sums to 120 / 76 (196 together).
+    // Mon–Sun, Test User then Jordan: sums to 102 / 68.
+    //
+    // 🛡️ WEDNESDAY IS DELIBERATELY NEGATIVE (-6 / -4, netting -10). Pre-DECK-1
+    // a losing day drew a zero-height column — literally nothing — so the seed
+    // has to contain one for the deficit gutter to be verifiable at all.
     const split: Array<[number, number]> = [
       [20, 8],
       [16, 16],
-      [12, 4],
+      [-6, -4],
       [20, 12],
       [16, 8],
       [24, 20],
       [12, 8],
     ];
-    return [{
+    // Points from `creditMode: 'household'` habits (groceries, homemade
+    // dinners) plus one genuinely unclaimed remainder — the pair the week card
+    // now names instead of apologising for. 16 + 3 = 19 unattributed.
+    const shared: Array<[number, number]> = [
+      [0, 0],
+      [5, 0],
+      [0, 0],
+      [8, 0],
+      [0, 0],
+      [3, 3],
+      [0, 0],
+    ];
+    const ceremony: WeeklyRecap = {
       id: isoWeek,
       isoWeek,
       generatedAt: new Date().toISOString(),
       totalSpend: 187.45,
       priorWeekSpend: 243.1,
+      // 🛡️ The split the money card leads with. Day-to-day is essentially flat
+      // ($122.45 vs $123.10) while the TOTAL fell 23% — purely because last
+      // week carried $120 of bills and this one carries $65. Reporting the
+      // total alone would credit the household with restraint it never showed.
+      billsSpend: 65.0,
+      priorWeekBillsSpend: 120.0,
+      dayToDaySpend: 122.45,
+      priorWeekDayToDaySpend: 123.1,
       topCategoryDeltas: [
         { category: 'Groceries', current: 92.5, prior: 128.2 },
         { category: 'Entertainment', current: 45.0, prior: 62.4 },
         { category: 'Gas', current: 49.95, prior: 52.5 },
       ],
       habitCompletions: 9,
-      streaksAtRisk: [{ habitTitle: 'Exercise 30min', streakDays: 5 }],
+      streaksAtRisk: [
+        { habitTitle: 'Exercise 30min', streakDays: 5 },
+        { habitTitle: 'Read 30 minutes', streakDays: 9 },
+      ],
       pointsByMember: [
-        { memberId: 'test-user-id', name: 'Test User', points: 120 },
-        { memberId: 'test-partner-id', name: 'Jordan', points: 76 },
+        { memberId: 'test-user-id', name: 'Test User', points: 102 },
+        { memberId: 'test-partner-id', name: 'Jordan', points: 68 },
       ],
       upcomingBills: [
         { title: 'Rent', amount: 1200, date: getLocalDateString(new Date(Date.now() + 3 * 86400000)) },
         { title: 'Internet', amount: 65, date: getLocalDateString(new Date(Date.now() + 5 * 86400000)) },
       ],
       narrative:
-        'Test Mode: You spent 23% less than last week — groceries did the heavy lifting. Keep the exercise streak alive tonight to lock in your multiplier.',
+        'Test Mode: day-to-day spending held flat while the bill load lightened. Keep the exercise streak alive tonight to lock in your multiplier.',
       narrativeSource: 'template',
       premium: true,
       // --- Ceremony fields (stage 5) ---
@@ -1060,33 +1147,70 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         {
           memberId: 'test-user-id',
           name: 'Test User',
-          points: 120,
+          points: 102,
           completions: 12,
           bestDay: { date: day(5), points: 24 },
           topStreak: { habitTitle: 'Read 30 minutes', days: 9, period: 'daily' },
           perfectHabits: ['Read 30 minutes'],
         },
         {
+          // 🛡️ NO perfect habit — the personal card that used to render a bare
+          // `0` / "Nothing perfect this week" tile. Act as Jordan to see the
+          // tiles that replaced it.
           memberId: 'test-partner-id',
           name: 'Jordan',
-          points: 76,
+          points: 68,
           completions: 8,
           bestDay: { date: day(5), points: 20 },
           topStreak: { habitTitle: 'Exercise 30min', days: 4, period: 'daily' },
           perfectHabits: [],
         },
       ],
-      dailyPoints: split.map(([mine, theirs], i) => ({
-        date: day(i),
-        byMember: { 'test-user-id': mine, 'test-partner-id': theirs },
-        unattributed: 0,
-        total: mine + theirs,
-      })),
-      totalPoints: 196,
-      // 196 vs 175 → the deck's own trend band reads +12%.
+      dailyPoints: split.map(([mine, theirs], i) => {
+        const [credit, unclaimed] = shared[i] ?? [0, 0];
+        const unattributed = credit + unclaimed;
+        return {
+          date: day(i),
+          byMember: { 'test-user-id': mine, 'test-partner-id': theirs },
+          unattributed,
+          total: mine + theirs + unattributed,
+          unattributedSplit: { householdCredit: credit, unclaimed },
+        };
+      }),
+      totalPoints: 189, // 102 + 68 + 19
       priorWeekPoints: 175,
+      unattributedSplit: { householdCredit: 16, unclaimed: 3 },
       ceremonyTone: 'household_first',
-    }];
+    };
+
+    // The PRE-DECK shape: everything a W27–W30 document carries, and none of
+    // the ceremony fields. Do NOT add them here — this entry is the graceful
+    // degrade, and it is only proof of that while it stays this shape.
+    const priorWeek = new Date(Date.now() - 14 * 86400000);
+    const legacy: WeeklyRecap = {
+      id: format(priorWeek, "RRRR-'W'II"),
+      isoWeek: format(priorWeek, "RRRR-'W'II"),
+      generatedAt: new Date(Date.now() - 7 * 86400000).toISOString(),
+      totalSpend: 243.1,
+      priorWeekSpend: 198.0,
+      topCategoryDeltas: [
+        { category: 'Groceries', current: 128.2, prior: 96.4 },
+        { category: 'Gas', current: 52.5, prior: 48.0 },
+      ],
+      habitCompletions: 7,
+      streaksAtRisk: [{ habitTitle: 'Read 30 minutes', streakDays: 3 }],
+      pointsByMember: [
+        { memberId: 'test-user-id', name: 'Test User', points: 95 },
+        { memberId: 'test-partner-id', name: 'Jordan', points: 55 },
+      ],
+      upcomingBills: [{ title: 'Internet', amount: 65, date: getLocalDateString(priorWeek) }],
+      narrative:
+        'Test Mode (pre-ceremony recap): this document carries no per-member fields, so it renders the original drawer layout.',
+      narrativeSource: 'template',
+      premium: true,
+    };
+
+    return [ceremony, legacy];
   });
   // F-NOTIF-02 (in-app notification inbox) — a few canned entries, mixed
   // read/unread, so Test Mode renders the bell badge + inbox drawer. Mirrors
@@ -1275,6 +1399,60 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const unarchiveAccount = useCallback(async (id: string) => {
     setAccounts(prev => prev.map(a => (a.id === id ? { ...a, archived: false } : a)));
     toast.success('Mock: Account unarchived');
+  }, []);
+
+  // CARD-1 (finding 5): mirrors financeMutations.ts#setAccountCardDetails —
+  // same digit-cleaning and cardOwners pruning — but writing to mock state
+  // instead of a Firestore updateDoc, so the "tag an owner, Save, reopen"
+  // round-trip this drawer exists for is actually observable in Test Mode
+  // (this was `noOp` before, so the drawer silently reset on reopen).
+  const setAccountCardDetails = useCallback(async (
+    id: string,
+    details: { accountLast4?: string; cardLast4s: string[]; cardOwners?: Record<string, string> }
+  ) => {
+    const cleanLast4 = (raw: string): string | null => {
+      const digits = raw.replace(/\D/g, '').slice(-4);
+      return digits.length === 4 ? digits : null;
+    };
+    const accountLast4 = details.accountLast4 ? cleanLast4(details.accountLast4) : null;
+    const cardLast4s = Array.from(
+      new Set(details.cardLast4s.map(cleanLast4).filter((v): v is string => v !== null))
+    );
+    // Prune the owner map to cards that actually survive into the final
+    // cardLast4s list — a card removed in this same save (or whose digits
+    // failed cleaning) must not leave an orphaned owner entry behind.
+    const cardOwners: Record<string, string> = {};
+    if (details.cardOwners) {
+      for (const [rawDigits, uid] of Object.entries(details.cardOwners)) {
+        const digits = cleanLast4(rawDigits);
+        if (digits && uid && cardLast4s.includes(digits)) {
+          cardOwners[digits] = uid;
+        }
+      }
+    }
+    setAccounts(prev => prev.map(a => {
+      if (a.id !== id) return a;
+      const next: Account = { ...a };
+      if (accountLast4) {
+        next.accountLast4 = accountLast4;
+      } else {
+        delete next.accountLast4;
+      }
+      if (cardLast4s.length > 0) {
+        next.cardLast4s = cardLast4s;
+      } else {
+        delete next.cardLast4s;
+      }
+      // Migrate the legacy single-card field away, matching the real mutation.
+      delete next.cardLast4;
+      if (Object.keys(cardOwners).length > 0) {
+        next.cardOwners = cardOwners;
+      } else {
+        delete next.cardOwners;
+      }
+      return next;
+    }));
+    toast.success('Mock: Account details saved');
   }, []);
 
   // Savings goal operations (Plan 24) — v1 manual contributions only, mirrors
@@ -1526,6 +1704,64 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Funds reallocated');
   }, [buckets]);
 
+  // Credit (or debit, negative delta) the HOUSEHOLD pool ONLY — the redeemable
+  // lifetime total (`totalPoints`). Production writes a shared habit's pool
+  // share to a SEPARATE `households/{id}.points` document that no member doc
+  // ever mirrors, so this must not touch `members` either.
+  //
+  // 🛡️ This USED TO also mirror `delta` onto the signed-in test user's own
+  // three point windows, on the theory that "the pool and the tapper move by
+  // the same number." That happens to be true for an ORDINARY members-mode tap
+  // (the pool figure IS that lone credited member's own award) but is wrong in
+  // two ways it papered over: a `creditMode: 'household'` completion has NO
+  // actor at all — the pool moves, the tapper must not — and every OTHER
+  // credited member's own award ALSO reaches the pool through this function,
+  // so mirroring only the test user double-counted whichever of them happened
+  // to be MOCK_USER_UID. Every caller that needs a member's own score to move
+  // now does so explicitly via `creditMemberPoints`, the same pattern
+  // `addHabitSubmission`/`deleteHabitSubmission` already used unmodified.
+  const creditHouseholdPool = useCallback((
+    delta: { daily: number; weekly: number; total: number },
+  ) => {
+    if (delta.total === 0) return;
+    setTotalPoints(prev => prev + delta.total);
+  }, []);
+
+  /**
+   * Per-member points (stage 1): move ONE member's own score, without touching
+   * the household pool — the member half of the two-layer model. Buckets are
+   * pre-gated by the caller (a back-dated credit moves total only).
+   */
+  const creditMemberPoints = useCallback((
+    memberId: string,
+    delta: { daily: number; weekly: number; total: number },
+  ) => {
+    if (delta.daily === 0 && delta.weekly === 0 && delta.total === 0) return;
+    setMembers(prev => prev.map(m => m.uid === memberId
+      ? { ...m, points: {
+          daily: m.points.daily + delta.daily,
+          weekly: m.points.weekly + delta.weekly,
+          total: m.points.total + delta.total,
+        } }
+      : m));
+  }, []);
+
+  /**
+   * Route a habit's POOL points exactly as production's `habitPointsTargets`
+   * does (Plan 080c): an ASSIGNED chore credits its assignee's own member doc
+   * and the shared household pool receives nothing; a shared habit credits the
+   * pool. Test Mode previously sent every habit — assigned chores included — to
+   * `creditPoints`, so a kid's chore silently paid the test user and inflated
+   * the redeemable pool, which production never does.
+   */
+  const creditHabitPool = useCallback((
+    habit: Pick<Habit, 'assignedTo'>,
+    delta: { daily: number; weekly: number; total: number },
+  ) => {
+    if (habit.assignedTo) creditMemberPoints(habit.assignedTo, delta);
+    else creditHouseholdPool(delta);
+  }, [creditHouseholdPool, creditMemberPoints]);
+
   // Transaction operations
   const addTransaction = useCallback(async (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => {
     // Assign the mock pay period (the real context derives one via
@@ -1545,12 +1781,61 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       [],
     );
     const addToday = getLocalDateString();
-    const addFires = new Map<string, NonNullable<ReturnType<typeof computeBackdatedHabitFire>>>();
+    // ATTR-1 parity with `makeAddTransaction`: the manual-entry path attributes
+    // by CARD exactly as the review path does, so a hand-entered row on a tagged
+    // card credits its owner rather than landing in the recap's unattributed
+    // bucket. Resolved OUTSIDE the setState updaters (StrictMode double-invokes
+    // them), along with the whole post-fire habit and its points decomposition.
+    const addCardAccount = resolveTargetAccount(tx.accountId, accounts);
+    const addIsCurrentMember = currentMemberPredicate(membersRef.current);
+    const addFires = new Map<string, Habit>();
+    const addPool: PointsBuckets = { daily: 0, weekly: 0, total: 0 };
+    const addMemberPoints = new Map<string, PointsBuckets>();
     for (const habitId of habitIdsToFire) {
       const habit = habits.find(h => h.id === habitId);
       if (!habit) continue;
       const fire = computeBackdatedHabitFire(habit, tx.date, addToday);
-      if (fire) addFires.set(habitId, fire);
+      if (!fire) continue;
+      const attributedTo = resolveCardFireAttribution({
+        habit,
+        account: addCardAccount,
+        cardLast4: tx.cardLast4,
+        isCurrentMember: addIsCurrentMember,
+      });
+      const firedHabit: Habit = {
+        ...habit,
+        count: fire.resetCount ? fire.count : habit.count + fire.countDelta,
+        totalCount: habit.totalCount + fire.totalCountDelta,
+        ...(fire.addedDate ? { completedDates: [...habit.completedDates, fire.addedDate] } : {}),
+        ...(fire.unfrozenDate
+          ? { frozenDates: (habit.frozenDates ?? []).filter(d => d !== fire.unfrozenDate) }
+          : {}),
+        streakDays: fire.streakDays,
+        hasSubmissionTracking: true,
+        lastUpdated: new Date().toISOString(),
+      };
+      const after = attributedTo
+        ? withAttributionDelta(firedHabit, tx.date, attributedTo, 1)
+        : firedHabit;
+      addFires.set(habitId, after);
+      const move = transactionHabitPointsMove(
+        habit,
+        after,
+        tx.date,
+        addToday,
+        attributedTo ? [attributedTo] : null,
+        fire.pointsDelta,
+      );
+      addPool.daily += move.pool.daily;
+      addPool.weekly += move.pool.weekly;
+      addPool.total += move.pool.total;
+      for (const [uid, delta] of move.perMember) {
+        const acc = addMemberPoints.get(uid) ?? { daily: 0, weekly: 0, total: 0 };
+        acc.daily += delta.daily;
+        acc.weekly += delta.weekly;
+        acc.total += delta.total;
+        addMemberPoints.set(uid, acc);
+      }
     }
     const newTx = {
       ...tx,
@@ -1590,30 +1875,16 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       }));
     }
     if (addFires.size > 0) {
-      setHabits(prev => prev.map(h => {
-        const fire = addFires.get(h.id);
-        if (!fire) return h;
-        return {
-          ...h,
-          count: fire.resetCount ? fire.count : h.count + fire.countDelta,
-          totalCount: h.totalCount + fire.totalCountDelta,
-          ...(fire.addedDate ? { completedDates: [...h.completedDates, fire.addedDate] } : {}),
-          ...(fire.unfrozenDate
-            ? { frozenDates: (h.frozenDates ?? []).filter(d => d !== fire.unfrozenDate) }
-            : {}),
-          streakDays: fire.streakDays,
-          hasSubmissionTracking: true,
-          lastUpdated: new Date().toISOString(),
-        };
-      }));
-      // Only the lifetime total is mirrored (same simplification the mock's
-      // updateTransactionCategory makes): pointsDelta.total is the bucket every
-      // fire credits, while daily/weekly are date-gated.
-      const pointsChange = [...addFires.values()].reduce((sum, f) => sum + f.pointsDelta.total, 0);
-      if (pointsChange !== 0) setTotalPoints(prev => prev + pointsChange);
+      setHabits(prev => prev.map(h => addFires.get(h.id) ?? h));
+      // The pool and every affected member, from the ONE decomposition computed
+      // above — never two figures that could disagree. A transaction fire always
+      // credits the shared pool (`creditHouseholdPool`, matching production's
+      // transaction path), never an assignee's own doc.
+      creditHouseholdPool(addPool);
+      for (const [uid, delta] of addMemberPoints) creditMemberPoints(uid, delta);
     }
     toast.success('Mock: Transaction added');
-  }, [accounts, habits]);
+  }, [accounts, habits, creditHouseholdPool, creditMemberPoints]);
 
   // F-DASH-04 parity: add several transactions (e.g. a receipt split into
   // category transactions) with their combined verified-only balance effects.
@@ -1733,32 +2004,69 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       // habits and out-of-window dates return null and never fire.
       const fireDate = overrides?.date ?? existing?.date ?? getLocalDateString();
       const today = getLocalDateString();
-      let pointsChange = 0;
-      setHabits(prev => prev.map(h => {
-        if (!habitIdsToFire.includes(h.id)) return h;
-        const fire = computeBackdatedHabitFire(h, fireDate, today);
-        if (!fire) return h;
-        pointsChange += fire.pointsDelta.total;
-        return {
-          ...h,
-          count: fire.resetCount ? fire.count : h.count + fire.countDelta,
-          totalCount: h.totalCount + fire.totalCountDelta,
-          ...(fire.addedDate ? { completedDates: [...h.completedDates, fire.addedDate] } : {}),
+      // ATTR-1 parity: the completion is credited to the owner of the CARD that
+      // produced the row, so Test Mode's recap shows the same attributed /
+      // unattributed split production does. Same resolver, same four decline
+      // cases (household credit, chore, no/untagged card, uid off the roster).
+      const cardAccount = resolveTargetAccount(existing?.accountId, accounts);
+      const isCurrentMember = currentMemberPredicate(membersRef.current);
+      // Resolved OUTSIDE the setState updater, which StrictMode double-invokes —
+      // accumulating points inside it credits them twice in dev.
+      const firedHabits = new Map<string, Habit>();
+      const pool: PointsBuckets = { daily: 0, weekly: 0, total: 0 };
+      const memberPoints = new Map<string, PointsBuckets>();
+      for (const habitId of habitIdsToFire) {
+        const habit = habits.find(h => h.id === habitId);
+        if (!habit) continue;
+        const fire = computeBackdatedHabitFire(habit, fireDate, today);
+        if (!fire) continue;
+        const attributedTo = resolveCardFireAttribution({
+          habit,
+          account: cardAccount,
+          cardLast4: existing?.cardLast4,
+          isCurrentMember,
+        });
+        const fired: Habit = {
+          ...habit,
+          count: fire.resetCount ? fire.count : habit.count + fire.countDelta,
+          totalCount: habit.totalCount + fire.totalCountDelta,
+          ...(fire.addedDate ? { completedDates: [...habit.completedDates, fire.addedDate] } : {}),
           ...(fire.unfrozenDate
-            ? { frozenDates: (h.frozenDates ?? []).filter(d => d !== fire.unfrozenDate) }
+            ? { frozenDates: (habit.frozenDates ?? []).filter(d => d !== fire.unfrozenDate) }
             : {}),
           streakDays: fire.streakDays,
           hasSubmissionTracking: true,
           lastUpdated: new Date().toISOString(),
         };
-      }));
-      // Only the lifetime total is mirrored here: pointsDelta.total is the
-      // bucket a back-dated fire always credits, while daily/weekly are gated by
-      // date and would be 0 for the common overnight-sync case anyway.
-      if (pointsChange !== 0) setTotalPoints(prev => prev + pointsChange);
+        const after = attributedTo
+          ? withAttributionDelta(fired, fireDate, attributedTo, 1)
+          : fired;
+        firedHabits.set(habitId, after);
+        const move = transactionHabitPointsMove(
+          habit,
+          after,
+          fireDate,
+          today,
+          attributedTo ? [attributedTo] : null,
+          fire.pointsDelta,
+        );
+        pool.daily += move.pool.daily;
+        pool.weekly += move.pool.weekly;
+        pool.total += move.pool.total;
+        for (const [uid, delta] of move.perMember) {
+          const acc = memberPoints.get(uid) ?? { daily: 0, weekly: 0, total: 0 };
+          acc.daily += delta.daily;
+          acc.weekly += delta.weekly;
+          acc.total += delta.total;
+          memberPoints.set(uid, acc);
+        }
+      }
+      setHabits(prev => prev.map(h => firedHabits.get(h.id) ?? h));
+      creditHouseholdPool(pool);
+      for (const [uid, delta] of memberPoints) creditMemberPoints(uid, delta);
     }
     toast.success('Mock: Verified & Categorized!');
-  }, [transactions, accounts]);
+  }, [transactions, accounts, habits, creditHouseholdPool, creditMemberPoints]);
 
   // Habit Automations (PRD #1065): mock parity for the atomic undo. Reverses the
   // transaction to pending_review, restores prior category/account/relatedHabitIds,
@@ -1791,11 +2099,102 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       return next;
     }));
     if (firedHabitIds.length > 0) {
-      setHabits(prev => prev.map(h => firedHabitIds.includes(h.id)
-        ? { ...h, count: Math.max(0, h.count - 1), totalCount: Math.max(0, h.totalCount - 1) }
-        : h));
+      // 🛡️ ATTR-1: the fire now writes `completedBy.<date>.<uid>`, so an undo
+      // that only decremented the counters left a PHANTOM attribution entry
+      // behind — a completion credited to somebody with no completion under it,
+      // which the recap would keep scoring. Un-write it the same way production
+      // does: bounded by `resolveReversalSources`, so a member who no longer
+      // holds units on that date has nothing taken back rather than being driven
+      // negative, and the points follow the same holders.
+      //
+      // Computed OUTSIDE the setState updater (StrictMode double-invokes it).
+      const undoDate = existing?.date ?? getLocalDateString();
+      const undoToday = getLocalDateString();
+      const undoCardAccount = resolveTargetAccount(existing?.accountId, accounts);
+      const undoIsCurrentMember = currentMemberPredicate(membersRef.current);
+      const undone = new Map<string, Habit>();
+      const undoPool: PointsBuckets = { daily: 0, weekly: 0, total: 0 };
+      const undoMemberPoints = new Map<string, PointsBuckets>();
+      for (const habitId of firedHabitIds) {
+        const habit = habits.find(h => h.id === habitId);
+        if (!habit) continue;
+        // The uid the fire credited, re-resolved from the same inputs — the mock
+        // writes no submission doc to snapshot it on, unlike production.
+        const attributedTo = resolveCardFireAttribution({
+          habit,
+          account: undoCardAccount,
+          cardLast4: existing?.cardLast4,
+          isCurrentMember: undoIsCurrentMember,
+        });
+        const sources = attributedTo
+          ? resolveReversalSources(habit, attributedTo, undoDate, 1)
+          : [];
+        // The date leaves `completedDates` only if no hand-logged submission
+        // still justifies it — the mock's stand-in for production's
+        // remaining-submissions scan.
+        const stillLogged = habitSubmissions.some(
+          s => s.habitId === habitId && s.date === undoDate,
+        );
+        let after: Habit = {
+          ...habit,
+          count: Math.max(0, habit.count - 1),
+          totalCount: Math.max(0, habit.totalCount - 1),
+          completedDates: stillLogged
+            ? habit.completedDates
+            : habit.completedDates.filter(d => d !== undoDate),
+          lastUpdated: new Date().toISOString(),
+        };
+        for (const source of sources) {
+          after = withAttributionDelta(after, undoDate, source.memberId, -source.units);
+        }
+        after = { ...after, streakDays: streakForHabit(after) };
+        undone.set(habitId, after);
+        // The BRANCH is decided by whether the fire attributed, not by whether
+        // `sources` found anything — production's `anyAttributed` rule. With no
+        // units left to take back the derived move still reverses the completion
+        // itself and moves nobody, which is exactly right.
+        const move = transactionHabitPointsMove(
+          habit,
+          after,
+          undoDate,
+          undoToday,
+          attributedTo ? [attributedTo] : null,
+          // Unattributed: no member half, and the pool gives back the habit-level
+          // figure. The mock writes no submission doc, so unlike production this
+          // is reconstructed from the period rather than read off a stored
+          // `pointsEarned` — the closest available stand-in.
+          {
+            daily: 0,
+            weekly: 0,
+            total:
+              legacyPeriodPoints(after, undoDate, undoToday) -
+              legacyPeriodPoints(habit, undoDate, undoToday),
+          },
+        );
+        undoPool.daily += move.pool.daily;
+        undoPool.weekly += move.pool.weekly;
+        undoPool.total += move.pool.total;
+        for (const [uid, delta] of move.perMember) {
+          const acc = undoMemberPoints.get(uid) ?? { daily: 0, weekly: 0, total: 0 };
+          acc.daily += delta.daily;
+          acc.weekly += delta.weekly;
+          acc.total += delta.total;
+          undoMemberPoints.set(uid, acc);
+        }
+      }
+      setHabits(prev => prev.map(h => undone.get(h.id) ?? h));
+      creditHouseholdPool(undoPool);
+      for (const [uid, delta] of undoMemberPoints) creditMemberPoints(uid, delta);
     }
-  }, [transactions, calendarItems]);
+  }, [
+    transactions,
+    calendarItems,
+    habits,
+    habitSubmissions,
+    accounts,
+    creditHouseholdPool,
+    creditMemberPoints,
+  ]);
 
   // F-XCUT-03: push a soft-deleted record into the in-memory trash mirror so
   // Test Mode exercises the same restore/purge flow as the real listener.
@@ -2114,63 +2513,6 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Habits reordered');
   }, []);
 
-  // Credit (or debit, negative delta) the HOUSEHOLD pool ONLY — the redeemable
-  // lifetime total (`totalPoints`). Production writes a shared habit's pool
-  // share to a SEPARATE `households/{id}.points` document that no member doc
-  // ever mirrors, so this must not touch `members` either.
-  //
-  // 🛡️ This USED TO also mirror `delta` onto the signed-in test user's own
-  // three point windows, on the theory that "the pool and the tapper move by
-  // the same number." That happens to be true for an ORDINARY members-mode tap
-  // (the pool figure IS that lone credited member's own award) but is wrong in
-  // two ways it papered over: a `creditMode: 'household'` completion has NO
-  // actor at all — the pool moves, the tapper must not — and every OTHER
-  // credited member's own award ALSO reaches the pool through this function,
-  // so mirroring only the test user double-counted whichever of them happened
-  // to be MOCK_USER_UID. Every caller that needs a member's own score to move
-  // now does so explicitly via `creditMemberPoints`, the same pattern
-  // `addHabitSubmission`/`deleteHabitSubmission` already used unmodified.
-  const creditHouseholdPool = useCallback((
-    delta: { daily: number; weekly: number; total: number },
-  ) => {
-    if (delta.total === 0) return;
-    setTotalPoints(prev => prev + delta.total);
-  }, []);
-
-  /**
-   * Per-member points (stage 1): move ONE member's own score, without touching
-   * the household pool — the member half of the two-layer model. Buckets are
-   * pre-gated by the caller (a back-dated credit moves total only).
-   */
-  const creditMemberPoints = useCallback((
-    memberId: string,
-    delta: { daily: number; weekly: number; total: number },
-  ) => {
-    if (delta.daily === 0 && delta.weekly === 0 && delta.total === 0) return;
-    setMembers(prev => prev.map(m => m.uid === memberId
-      ? { ...m, points: {
-          daily: m.points.daily + delta.daily,
-          weekly: m.points.weekly + delta.weekly,
-          total: m.points.total + delta.total,
-        } }
-      : m));
-  }, []);
-
-  /**
-   * Route a habit's POOL points exactly as production's `habitPointsTargets`
-   * does (Plan 080c): an ASSIGNED chore credits its assignee's own member doc
-   * and the shared household pool receives nothing; a shared habit credits the
-   * pool. Test Mode previously sent every habit — assigned chores included — to
-   * `creditPoints`, so a kid's chore silently paid the test user and inflated
-   * the redeemable pool, which production never does.
-   */
-  const creditHabitPool = useCallback((
-    habit: Pick<Habit, 'assignedTo'>,
-    delta: { daily: number; weekly: number; total: number },
-  ) => {
-    if (habit.assignedTo) creditMemberPoints(habit.assignedTo, delta);
-    else creditHouseholdPool(delta);
-  }, [creditHouseholdPool, creditMemberPoints]);
 
   // Habit Automations (PRD #1065): fire (or reverse) the habit a to-do is linked
   // to, mirroring the real fireLinkedHabitInBatch — same pure scoring helper
@@ -3926,7 +4268,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateAccountBalance,
     setAccountGoal: noOp,
     setAccountCardLast4: noOp,
-    setAccountCardDetails: noOp,
+    setAccountCardDetails,
     updateAccountOrder: noOp,
     reorderAccounts: noOp,
     defaultAccountId,

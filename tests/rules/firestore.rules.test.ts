@@ -696,6 +696,47 @@ describe('member self-update allowlist (2G.1 — dashboard/notification fields)'
   });
 });
 
+// TZ-1 review, Finding 7: notificationPreferences.timezone is written by TWO
+// paths — a whole-map Save from NotificationSettings (already covered above
+// as part of the generic notificationPreferences allowlist entry) and the
+// auto-heal hook's own dot-path write (contexts/household/mutations/
+// notificationMutations.ts's healMemberTimezone). Neither had a dedicated
+// rules regression before this PR added the auto-heal feature. BOB's seeded
+// doc (see seed() above) carries no notificationPreferences map at all, so
+// this exercises the exact "first write ever" shape the auto-heal hook hits
+// for a member who never opened Settings → Notifications.
+describe('notificationPreferences.timezone dot-path write (TZ-1 auto-heal)', () => {
+  it('a member can heal their OWN timezone via a dot-path write with no existing notificationPreferences map', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        'notificationPreferences.timezone': 'America/Chicago',
+      }),
+    );
+  });
+
+  it("a non-admin cannot heal ANOTHER member's timezone", async () => {
+    // BOB is a plain member, not an admin, and ALICE is not BOB — Case 1
+    // (self-update) requires request.auth.uid == memberId, and Case 2
+    // (admin) requires the ACTING user to be an admin, neither of which BOB
+    // satisfies here.
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', ALICE), {
+        'notificationPreferences.timezone': 'America/Chicago',
+      }),
+    );
+  });
+
+  it("an admin CAN heal another member's timezone (Case 2)", async () => {
+    // Confirms the denial above is specifically about BOB not being an
+    // admin/self, not some blanket rejection of a dot-path timezone write.
+    await assertSucceeds(
+      updateDoc(doc(dbFor(ALICE), 'households', H1, 'members', BOB), {
+        'notificationPreferences.timezone': 'America/Chicago',
+      }),
+    );
+  });
+});
+
 // Per-member habit points (stage 1). A completion is credited by whoever taps, on
 // whichever phone, so ANY member must be able to move ANY member's points — and
 // the midnight rollover writes every member's daily/weekly from whichever device

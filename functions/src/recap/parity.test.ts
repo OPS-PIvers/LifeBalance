@@ -35,6 +35,7 @@ import {
   memberPointsOnDate,
   shiftDay,
   unattributedPointsOnDate,
+  unattributedSplitForDate,
   weekDates,
   weekPointsTotal,
   type CeremonyMember,
@@ -50,6 +51,7 @@ import {
   memberPointsOnDate as clientMemberPointsOnDate,
   shiftDay as clientShiftDay,
   unattributedPointsOnDate as clientUnattributedPointsOnDate,
+  unattributedSplitForDate as clientUnattributedSplitForDate,
   weekDates as clientWeekDates,
   weekPointsTotal as clientWeekPointsTotal,
 } from "@/utils/recapAssembly";
@@ -300,6 +302,73 @@ const HABIT_CASES: HabitCase[] = [
     name: "no completions at all",
     habit: habit({ title: "Idle", completedDates: [] }),
   },
+  // --- creditMode (RECAP-MATH) ---------------------------------------------
+  // A `creditMode: 'household'` completion writes NO `completedBy` entry BY
+  // DESIGN, so on the document it is indistinguishable from grandfathered
+  // history — which is exactly why the recap has to read the flag to tell the
+  // two apart. Production shapes: the Ivers household runs 15 of these.
+  {
+    name: "household credit — creditMode 'household', completions, no completedBy",
+    habit: habit({
+      title: "Homemade dinner",
+      creditMode: "household",
+      basePoints: 12,
+      completedDates: [MON, TUE, WED, THU],
+    }),
+  },
+  {
+    name: "household credit, weekly threshold",
+    habit: habit({
+      title: "Go to liquor store",
+      creditMode: "household",
+      period: "weekly",
+      basePoints: 20,
+      completedDates: [P_TUE, WED],
+    }),
+  },
+  {
+    name: "household credit habit carrying STALE attribution (mode flipped later)",
+    habit: habit({
+      title: "Grocery Store",
+      creditMode: "household",
+      scoringType: "incremental",
+      basePoints: 5,
+      targetCount: 2,
+      completedDates: [MON, WED],
+      completedBy: { [MON]: { u1: 1 } },
+    }),
+  },
+  {
+    name: "household credit, NEGATIVE habit (signed points land in householdCredit)",
+    habit: habit({
+      title: "Go out to dinner",
+      creditMode: "household",
+      type: "negative",
+      basePoints: 8,
+      completedDates: [TUE, SAT],
+    }),
+  },
+  {
+    name: "creditMode 'members' with completions but EMPTY completedBy — a REAL gap",
+    habit: habit({
+      title: "Go into Target",
+      creditMode: "members",
+      scoringType: "incremental",
+      basePoints: 7,
+      completedDates: [TUE, FRI],
+      completedBy: {},
+    }),
+  },
+  {
+    name: "assigned chore with creditMode 'household' — the mode is INERT on a chore",
+    habit: habit({
+      title: "Take out trash",
+      assignedTo: LEO.uid,
+      creditMode: "household",
+      basePoints: 5,
+      completedDates: [MON, TUE],
+    }),
+  },
 ];
 
 const MEMBER_IDS = [JEN.uid, PAUL.uid, LEO.uid];
@@ -332,9 +401,24 @@ const MONEY_FIXTURE: DataAssemblyInput = input({
     { amount: 2400, category: "Income", date: FRI, status: "verified" }, // excluded
     { amount: 99.01, category: "income", date: FRI, status: "verified" }, // excluded (casing)
     { amount: 500, category: "Shopping", date: SAT, status: "pending_review" }, // excluded
+    // RECAP-MATH sentinels — counted-spend exclusions and the bills slice.
+    { amount: 220.89, category: "Credit Card", date: TUE, status: "verified" }, // excluded (exact sentinel)
+    // The EXACT-match fix (RECAP-MATH finding A): a differently-cased
+    // "credit card" is a real, non-sentinel category and counts as ordinary
+    // day-to-day spend, unlike the "income" casing variant below.
+    { amount: 11.11, category: "credit card", date: THU, status: "verified" }, // counted
+    { amount: 1200, category: "Budgeted in Calendar", date: MON, status: "verified" }, // bills
+    { amount: 106.77, category: "Bills", date: THU, status: "verified" }, // bills (legacy tag)
+    // 🛡️ TRAILING SPACE — real production data ("Grocery & Misc. "). The
+    // grouping key is lowercased but NOT trimmed, so this is its own category;
+    // both copies must agree on that, whichever way it is decided.
+    { amount: 55.05, category: "Grocery & Misc. ", date: WED, status: "verified" },
+    { amount: 5.05, category: "Grocery & Misc.", date: THU, status: "verified" },
     // Prior week
     { amount: 61.11, category: "Groceries", date: P_MON, status: "verified" },
     { amount: 3.33, category: "Gas", date: P_WED, status: "verified" },
+    { amount: 300, category: "Budgeted in Calendar", date: P_TUE, status: "verified" },
+    { amount: 40, category: "Credit Card", date: P_TUE, status: "verified" }, // excluded
     // Outside both windows
     { amount: 999.99, category: "Travel", date: "2026-05-01", status: "verified" },
     { amount: 12.34, category: "Travel", date: "2026-07-09", status: "verified" },
@@ -352,6 +436,84 @@ const FULL_FIXTURE: DataAssemblyInput = input({
   ...MONEY_FIXTURE,
   members: [JEN, PAUL, LEO],
   habits: HABIT_CASES.map((c, i) => ({ ...c.habit, streakDays: i % 5 })),
+});
+
+// ---------------------------------------------------------------------------
+// 🛡️ THE PRODUCTION REGRESSION — the Ivers household's real 2026-W31 recap
+//
+// What the shipped document said, and why every number in it was wrong or
+// misleading:
+//
+//   totalSpend       $2,649.89   ← included $220.89 of `Credit Card` SENTINEL,
+//                                  which is account routing, not spending
+//   priorWeekSpend     $803.12
+//   ⇒ headline: "3.3x more than last week"
+//
+//   ...but $1,306.77 of the week was BILLS (rent/insurance/utilities, the
+//   `Budgeted in Calendar` sentinel `payCalendarItem` files paid bills under).
+//   Day-to-day spending was $1,122.23 against $803.12 — a real but ordinary
+//   week, reported as a blowout. That same sentinel also swung $1,306.77 in
+//   `topCategoryDeltas`, so the recap's #1 "category insight" was a routing tag.
+//
+// The amounts below reproduce those four figures exactly; the assertions on
+// them live in the "2026-W31 regression" describe block at the bottom.
+// ---------------------------------------------------------------------------
+const W31_START = "2026-07-27";
+const W31_END = "2026-08-02";
+const [W31_MON, W31_TUE, W31_WED, W31_THU, W31_FRI, W31_SAT] = weekDates(W31_START) as [
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+];
+const [W30_MON, W30_TUE, W30_WED, W30_THU] = weekDates(shiftDay(W31_START, -7)) as [
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+];
+
+/** $1,306.77 of bills + $220.89 of card sentinel + $1,122.23 of day-to-day. */
+const W31_FIXTURE: DataAssemblyInput = input({
+  weekStart: W31_START,
+  weekEnd: W31_END,
+  transactions: [
+    // --- Bills: 950.00 + 231.50 + 125.27 = 1306.77 -------------------------
+    { amount: 950, category: "Budgeted in Calendar", date: W31_MON, status: "verified" },
+    { amount: 231.5, category: "Budgeted in Calendar", date: W31_WED, status: "verified" },
+    // Legacy tag from an older paid bill — still a bill.
+    { amount: 125.27, category: "Bills", date: W31_FRI, status: "verified" },
+    // --- Credit-card SENTINEL: 180.00 + 40.89 = 220.89 (never spend) -------
+    { amount: 180, category: "Credit Card", date: W31_TUE, status: "verified" },
+    { amount: 40.89, category: "Credit Card", date: W31_SAT, status: "verified" },
+    // --- Day-to-day: 412.55 + 88.00 + 210.18 + 96.50 + 315.00 = 1122.23 ----
+    // The trailing space is real production data and is NOT trimmed, so these
+    // two grocery rows are deliberately two separate categories.
+    { amount: 412.55, category: "Grocery & Misc. ", date: W31_MON, status: "verified" },
+    { amount: 88, category: "Grocery & Misc.", date: W31_THU, status: "verified" },
+    { amount: 210.18, category: "Dining", date: W31_WED, status: "verified" },
+    { amount: 96.5, category: "Gas", date: W31_THU, status: "verified" },
+    { amount: 315, category: "Shopping", date: W31_SAT, status: "verified" },
+    // --- Prior week (2026-W30): 380.12 + 165.00 + 88.00 + 170.00 = 803.12 --
+    { amount: 380.12, category: "Grocery & Misc. ", date: W30_MON, status: "verified" },
+    { amount: 165, category: "Dining", date: W30_TUE, status: "verified" },
+    { amount: 88, category: "Gas", date: W30_WED, status: "verified" },
+    { amount: 170, category: "Shopping", date: W30_THU, status: "verified" },
+  ],
+  members: [JEN, PAUL],
+  habits: [
+    // A household-credit habit (one of the 15 the household actually runs) next
+    // to an attributed one and a per-member habit that never got a person.
+    { ...habit({ title: "Homemade dinner", creditMode: "household", basePoints: 12, completedDates: [W31_MON, W31_TUE, W31_WED] }), streakDays: 3 },
+    { ...habit({ title: "Morning walk", basePoints: 10, completedDates: [W31_MON, W31_TUE], completedBy: { [W31_MON]: { u1: 1 }, [W31_TUE]: { u2: 1 } } }), streakDays: 2 },
+    { ...habit({ title: "Go into Target", creditMode: "members", scoringType: "incremental", basePoints: 7, completedDates: [W31_THU, W31_FRI], completedBy: {} }), streakDays: 2 },
+  ],
 });
 
 const ASSEMBLY_FIXTURES: Array<{ name: string; input: DataAssemblyInput }> = [
@@ -404,6 +566,53 @@ const ASSEMBLY_FIXTURES: Array<{ name: string; input: DataAssemblyInput }> = [
     }),
   },
   { name: "everything at once", input: FULL_FIXTURE },
+  { name: "the real 2026-W31 week", input: W31_FIXTURE },
+  // --- bucketNames (RECAP-MATH bucket-name guard) --------------------------
+  // A household with a budget bucket named "Bills" — without the guard,
+  // `LEGACY_BILLS_CATEGORY` being the literal string "Bills" reclassified
+  // every one of that bucket's transactions as a paid calendar bill instead
+  // of the discretionary spend it actually is. The SAME household has no
+  // bucket named "Budgeted in Calendar", so that sentinel still runs through
+  // the legacy fallback classifier normally — both resolution paths pinned
+  // side by side.
+  {
+    name: "household with a budget bucket named \"Bills\" (bucket wins) alongside an unshadowed bill",
+    input: input({
+      bucketNames: ["Bills", "Groceries"],
+      transactions: [
+        // Filed to the "Bills" bucket → day-to-day, NOT bills (bucket wins).
+        { amount: 75, category: "Bills", date: MON, status: "verified" },
+        // No bucket named "Budgeted in Calendar" → legacy classifier still
+        // applies normally; a genuine paid bill.
+        { amount: 40, category: "Budgeted in Calendar", date: WED, status: "verified" },
+        { amount: 30, category: "Groceries", date: TUE, status: "verified" },
+      ],
+    }),
+  },
+  // A bucket literally named "Budgeted in Calendar" — bucket-wins is
+  // UNCONDITIONAL, so this claims the spend as day-to-day too, same as the
+  // "Bills" case above (see the dedicated unit test for the full reasoning).
+  {
+    name: 'a bucket literally named "Budgeted in Calendar" (bucket-wins is unconditional)',
+    input: input({
+      bucketNames: ["Budgeted in Calendar"],
+      transactions: [{ amount: 40, category: "Budgeted in Calendar", date: MON, status: "verified" }],
+    }),
+  },
+  // --- Credit Card exact-match (RECAP-MATH finding A) -----------------------
+  // A household whose bucket is literally named "credit card" (lowercase) —
+  // real discretionary spend, counted normally. The capitalized system
+  // sentinel stays excluded.
+  {
+    name: 'a bucket literally named "credit card" (lowercase, not the sentinel)',
+    input: input({
+      bucketNames: ["credit card"],
+      transactions: [
+        { amount: 75, category: "credit card", date: MON, status: "verified" }, // counted
+        { amount: 220.89, category: "Credit Card", date: TUE, status: "verified" }, // excluded
+      ],
+    }),
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -444,6 +653,42 @@ describe("recap assembly parity — client vs server", () => {
         expect(clientUnattributedPointsOnDate(h, date, WEEK_END)).toBe(
           unattributedPointsOnDate(h, date, WEEK_END)
         );
+      }
+    });
+
+    it("unattributedSplitForDate agrees, and sums back to unattributedPointsOnDate", () => {
+      for (const date of ALL_DATES) {
+        const serverSplit = unattributedSplitForDate([h], date, WEEK_END);
+        expect(clientUnattributedSplitForDate([h], date, WEEK_END)).toEqual(serverSplit);
+
+        // 🛡️ THE INVARIANT the split exists to keep: it decomposes the figure it
+        // explains, never re-derives it. An assigned chore contributes to
+        // neither side (its points never reach the household pool).
+        // `+ 0` collapses the negative zero `unattributedPointsOnDate` can
+        // return for a zero-unit negative habit (`0 * -10 === -0`); the split
+        // accumulates from a positive zero, and `Object.is(-0, 0)` is false.
+        const expected = h.assignedTo ? 0 : unattributedPointsOnDate(h, date, WEEK_END) + 0;
+        expect(serverSplit.householdCredit + serverSplit.unclaimed).toBe(expected);
+      }
+    });
+
+    it("household credit lands on the RIGHT side of the split", () => {
+      // The whole point of the field: a `creditMode: 'household'` habit's
+      // unattributed points are DELIBERATE, and a members-mode one's are not.
+      // Both look identical on the document (no `completedBy` either way), so a
+      // scorer that ignored `creditMode` would put them in the same bucket.
+      const householdCredit = ALL_DATES.reduce(
+        (sum, date) => sum + unattributedSplitForDate([h], date, WEEK_END).householdCredit,
+        0
+      );
+      const unclaimed = ALL_DATES.reduce(
+        (sum, date) => sum + unattributedSplitForDate([h], date, WEEK_END).unclaimed,
+        0
+      );
+      if (!h.assignedTo && h.creditMode === "household") {
+        expect(unclaimed).toBe(0);
+      } else {
+        expect(householdCredit).toBe(0);
       }
     });
 
@@ -544,5 +789,158 @@ describe("recap assembly parity — client vs server", () => {
     expect(result.totalSpend).toBeGreaterThan(0);
     expect(result.topCategoryDeltas.length).toBeGreaterThan(0);
     expect(result.upcomingBills.length).toBeGreaterThan(0);
+    // RECAP-MATH: BOTH halves of each new decomposition are non-zero, so a
+    // fixture that quietly stopped covering one side fails here rather than
+    // leaving a new branch untested.
+    expect(result.billsSpend).toBeGreaterThan(0);
+    expect(result.dayToDaySpend).toBeGreaterThan(0);
+    expect(result.priorWeekBillsSpend).toBeGreaterThan(0);
+    expect(result.unattributedSplit.householdCredit).not.toBe(0);
+    expect(result.unattributedSplit.unclaimed).not.toBe(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // 🛡️ RECAP-MATH invariants — asserted on the SERVER copy, while the
+  // `assembleWeeklyRecap parity` block above pins the client to it byte-for-byte.
+  // -------------------------------------------------------------------------
+  describe.each(ASSEMBLY_FIXTURES)("RECAP-MATH invariants — $name", ({ input: fixture }) => {
+    it("billsSpend + dayToDaySpend === totalSpend (both weeks)", () => {
+      const r = assembleWeeklyRecap(fixture);
+      expect(r.billsSpend + r.dayToDaySpend).toBeCloseTo(r.totalSpend, 10);
+      expect(r.priorWeekBillsSpend + r.priorWeekDayToDaySpend).toBeCloseTo(r.priorWeekSpend, 10);
+    });
+
+    it("unattributedSplit sums to Σ dailyPoints[].unattributed", () => {
+      const r = assembleWeeklyRecap(fixture);
+      const seriesTotal = r.dailyPoints.reduce((sum, d) => sum + d.unattributed, 0);
+      expect(r.unattributedSplit.householdCredit + r.unattributedSplit.unclaimed).toBe(seriesTotal);
+      // ...and each day's own split does the same, so the chart can stack it.
+      for (const day of r.dailyPoints) {
+        const split = day.unattributedSplit;
+        expect(split).toBeDefined();
+        expect((split?.householdCredit ?? 0) + (split?.unclaimed ?? 0)).toBe(day.unattributed);
+      }
+    });
+
+    it("no true sentinel category ever reaches topCategoryDeltas", () => {
+      const r = assembleWeeklyRecap(fixture);
+      // A category shadowed by a REAL bucket of the same name is no longer a
+      // sentinel for this household — it's that bucket's spend, and may
+      // legitimately reach this list (the bucket-name guard's whole point).
+      const bucketKeys = new Set((fixture.bucketNames ?? []).map((n) => n.toLowerCase()));
+      for (const delta of r.topCategoryDeltas) {
+        const key = delta.category.toLowerCase();
+        if (!bucketKeys.has(key)) {
+          expect(key).not.toBe("budgeted in calendar");
+          expect(key).not.toBe("bills");
+        }
+        expect(key).not.toBe("income");
+        // `Credit Card` matches EXACTLY, case-sensitively (RECAP-MATH finding
+        // A) — a differently-cased "credit card" bucket is real spend and MAY
+        // legitimately reach this list, so only the exact sentinel string is
+        // disallowed here.
+        expect(delta.category).not.toBe("Credit Card");
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 🛡️ THE PRODUCTION REGRESSION — 2026-W31, the week this work was specified
+  // against. Numbers are the household's real ones (see the fixture's header).
+  // -------------------------------------------------------------------------
+  describe("2026-W31 regression", () => {
+    const result = assembleWeeklyRecap(W31_FIXTURE);
+
+    it("drops the $220.89 Credit Card sentinel from totalSpend", () => {
+      // Before: $2,649.89. The sentinel is account routing, not spending.
+      expect(result.totalSpend).toBe(2429.0);
+      expect(2429.0 + 220.89).toBeCloseTo(2649.89, 10);
+    });
+
+    it("splits the week into $1,306.77 of bills and $1,122.23 day-to-day", () => {
+      expect(result.billsSpend).toBe(1306.77);
+      expect(result.dayToDaySpend).toBe(1122.23);
+      expect(result.billsSpend + result.dayToDaySpend).toBe(result.totalSpend);
+    });
+
+    it("does NOT report a misleading week-over-week increase", () => {
+      expect(result.priorWeekSpend).toBe(803.12);
+      expect(result.priorWeekBillsSpend).toBe(0);
+      expect(result.priorWeekDayToDaySpend).toBe(803.12);
+
+      // The shipped headline compared $2,649.89 to $803.12 — a 3.3x "increase"
+      // that was almost entirely a heavy bill week.
+      expect(2649.89 / result.priorWeekSpend).toBeGreaterThan(3);
+      // The honest comparison, which is what the day-to-day pair is FOR.
+      expect(result.dayToDaySpend / result.priorWeekDayToDaySpend).toBeLessThan(1.5);
+    });
+
+    it("no longer crowns 'Budgeted in Calendar' the #1 category insight", () => {
+      // It swung $1,306.77 — larger than every real category combined — so
+      // before RECAP-MATH it won this list outright.
+      expect(result.topCategoryDeltas.map((d) => d.category)).toEqual([
+        "Shopping",
+        "Grocery & Misc.",
+        "Dining",
+      ]);
+      expect(result.topCategoryDeltas[0]).toEqual({
+        category: "Shopping",
+        current: 315,
+        prior: 170,
+      });
+    });
+
+    it("keeps the trailing-space category separate from its trimmed twin", () => {
+      // "Grocery & Misc. " is real stored data. The grouping key is lowercased
+      // but NOT trimmed, so the two are two categories — pinned here so a future
+      // trim is a deliberate, visible decision rather than a silent one.
+      const spaced = result.topCategoryDeltas.find((d) => d.category === "Grocery & Misc. ");
+      const trimmed = result.topCategoryDeltas.find((d) => d.category === "Grocery & Misc.");
+      expect(trimmed).toEqual({ category: "Grocery & Misc.", current: 88, prior: 0 });
+      // The spaced one's $32.43 swing didn't make the top 3 — which it would
+      // have, at $500.55 vs $380.12, had the two been merged.
+      expect(spaced).toBeUndefined();
+    });
+
+    it("tells deliberate household credit apart from a real attribution gap", () => {
+      // "Homemade dinner" is creditMode: 'household' — earned together, on
+      // purpose. "Go into Target" is creditMode: 'members' with an EMPTY
+      // completedBy — a genuine gap. Before RECAP-MATH both were one number.
+      expect(result.unattributedSplit.householdCredit).toBeGreaterThan(0);
+      expect(result.unattributedSplit.unclaimed).toBeGreaterThan(0);
+      expect(
+        result.unattributedSplit.householdCredit + result.unattributedSplit.unclaimed
+      ).toBe(result.dailyPoints.reduce((sum, d) => sum + d.unattributed, 0));
+    });
+
+    it("mixes household credit and a real gap on the SAME day without conflating them", () => {
+      const mixed = assembleWeeklyRecap({
+        ...W31_FIXTURE,
+        habits: [
+          {
+            ...habit({
+              title: "Homemade dinner",
+              creditMode: "household",
+              basePoints: 12,
+              completedDates: [W31_MON],
+            }),
+            streakDays: 1,
+          },
+          {
+            ...habit({
+              title: "Go into Target",
+              creditMode: "members",
+              basePoints: 7,
+              completedDates: [W31_MON],
+              completedBy: {},
+            }),
+            streakDays: 1,
+          },
+        ],
+      });
+      const monday = mixed.dailyPoints.find((d) => d.date === W31_MON);
+      expect(monday?.unattributedSplit).toEqual({ householdCredit: 12, unclaimed: 7 });
+      expect(monday?.unattributed).toBe(19);
+    });
   });
 });

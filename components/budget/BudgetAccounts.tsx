@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { useFinance, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Pencil, Plus, Target, Star, GripVertical, Trash2, MoreVertical, Landmark, CreditCard, Banknote, Archive, ArchiveRestore, ChevronDown, X } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -26,6 +26,15 @@ import SavingsGoals from '@/components/budget/SavingsGoals';
 
 const BudgetAccounts: React.FC = () => {
   const { accounts, updateAccountBalance, addAccount, setAccountGoal, setAccountCardDetails, deleteAccount, archiveAccount, unarchiveAccount, reorderAccounts, defaultAccountId, setDefaultAccountId } = useFinance();
+  // Household members, for the card-owner picker (CARD-1) in the Account
+  // Number & Cards drawer — a narrow slice read so this page doesn't pull in
+  // the rest of useHouseholdCore's surface.
+  const { members } = useHouseholdCore();
+  // The picker only ever offers non-managed (adult) members — a managed kid
+  // has no card of their own to tag as an owner. Memoized and shared with the
+  // section's visibility gate below so the gate can never say "yes" while the
+  // picker itself has nothing but "Unassigned" to offer.
+  const assignableMembers = useMemo(() => members.filter(m => !m.isManaged), [members]);
   const [showArchived, setShowArchived] = useState(false);
   const fmt = useFormatCurrency();
 
@@ -55,6 +64,11 @@ const BudgetAccounts: React.FC = () => {
   const [accountLast4Digits, setAccountLast4Digits] = useState('');
   const [cardChips, setCardChips] = useState<string[]>([]);
   const [cardChipDraft, setCardChipDraft] = useState('');
+  // CARD-1: draft owner assignment per card chip (last-4 -> member uid), so a
+  // household with two adults holding separate debit cards on one shared
+  // checking account can tag who's whose. Seeded from `account.cardOwners`
+  // when the drawer opens; '' means "unassigned".
+  const [cardOwnerDrafts, setCardOwnerDrafts] = useState<Record<string, string>>({});
 
   // Delete confirmation
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -195,6 +209,12 @@ const BudgetAccounts: React.FC = () => {
 
   const handleRemoveCardChip = (digits: string) => {
     setCardChips(chips => chips.filter(c => c !== digits));
+    // Drop the now-orphaned owner draft along with its card.
+    setCardOwnerDrafts(owners => {
+      if (!(digits in owners)) return owners;
+      const { [digits]: _removed, ...rest } = owners;
+      return rest;
+    });
   };
 
   const handleSetCard = async () => {
@@ -226,11 +246,13 @@ const BudgetAccounts: React.FC = () => {
       await setAccountCardDetails(isCardModalOpen, {
         accountLast4: rawAccountDigits.slice(-4),
         cardLast4s: finalCardChips,
+        cardOwners: cardOwnerDrafts,
       });
       setIsCardModalOpen(null);
       setAccountLast4Digits('');
       setCardChips([]);
       setCardChipDraft('');
+      setCardOwnerDrafts({});
     } catch (error) {
       console.error('Failed to save account details', error);
       toast.error('Failed to save account details. Please try again.');
@@ -936,6 +958,54 @@ const BudgetAccounts: React.FC = () => {
             <p className="text-xs text-brand-500 dark:text-brand-400">
               Bank-alert Shortcuts (e.g. Wells Fargo purchase emails) use these to route transactions to the right account.
             </p>
+
+            {/* CARD-1: per-card owner tagging — quiet configuration, not a
+                feature, so it only appears once there's a card to tag and
+                someone to tag it to. A pick-one field per card, so `Select`
+                per DESIGN.md's picker rule (never chips-as-radio). */}
+            {cardChips.length > 0 && assignableMembers.length > 0 && (
+              <div className="space-y-2 pt-1">
+                <label className="text-xs font-semibold text-brand-600 dark:text-brand-300 uppercase tracking-wide">
+                  Card owners (optional)
+                </label>
+                <div className="space-y-2">
+                  {cardChips.map(digits => (
+                    <div key={digits} className="flex items-center gap-2">
+                      <span className="inline-flex w-16 shrink-0 items-center gap-1 text-xs font-mono text-brand-500 dark:text-brand-400">
+                        <CreditCard size={11} aria-hidden />
+                        ···{digits}
+                      </span>
+                      <Select
+                        value={cardOwnerDrafts[digits] ?? ''}
+                        onChange={e => {
+                          const uid = e.target.value;
+                          setCardOwnerDrafts(owners => {
+                            if (!uid) {
+                              const { [digits]: _removed, ...rest } = owners;
+                              return rest;
+                            }
+                            return { ...owners, [digits]: uid };
+                          });
+                        }}
+                        className="flex-1"
+                        aria-label={`Owner of card ending ${digits}`}
+                      >
+                        <option value="">Unassigned</option>
+                        {assignableMembers.map(m => (
+                          <option key={m.uid} value={m.uid}>{m.displayName}</option>
+                        ))}
+                      </Select>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-brand-500 dark:text-brand-400">
+                  Tag who holds each card, so a shared account still shows who spent the money.
+                  <span className="block">
+                    Purchases on a tagged card earn that person the habit points — and the penalties.
+                  </span>
+                </p>
+              </div>
+            )}
           </div>
         )}
       </Drawer>
@@ -992,6 +1062,9 @@ const BudgetAccounts: React.FC = () => {
                     ])
                   ));
                   setCardChipDraft('');
+                  // CARD-1: seed owner drafts from the account's saved tags
+                  // (absent on every pre-CARD-1 account — an empty object).
+                  setCardOwnerDrafts({ ...(actionAccount.cardOwners ?? {}) });
                   setIsCardModalOpen(actionAccount.id);
                   setActionAccount(null);
                 }}

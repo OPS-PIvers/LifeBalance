@@ -51,6 +51,22 @@
  * So `Σ memberFacts[].points ≠ totalPoints` in a household with chores, and that
  * is deliberate.
  *
+ * 🛡️ TWO DECOMPOSITIONS, BOTH ADDITIVE (RECAP-MATH). `totalSpend` and
+ * `unattributed` each kept their exact meaning and gained a sibling breakdown:
+ *
+ *   - `billsSpend + dayToDaySpend === totalSpend` — bills (the calendar-bill
+ *     sentinel) split out from discretionary spending, because a heavy bill week
+ *     otherwise reads as a 3x day-to-day blowout. `totalSpend` itself is now
+ *     correct too: the `Credit Card` ACCOUNT-ROUTING sentinel is excluded, as it
+ *     always has been in `utils/bucketSpentCalculator.ts`.
+ *   - `unattributedSplit.householdCredit + .unclaimed === unattributed` —
+ *     deliberate `creditMode: 'household'` credit split from genuinely unheld
+ *     points, because "the household earned this together on purpose" and "we
+ *     don't know who did this" were being reported as one number.
+ *
+ * Neither is computed by subtracting one displayed figure from another: each is
+ * its own filter/partition over the same walk the parent figure came from.
+ *
  * 🛡️ NO `points.weekly` ANYWHERE. Generation runs Monday morning, after the
  * client's midnight weekly rollover, so `HouseholdMember.points.weekly` describes
  * the BRAND-NEW week and structurally cannot describe the week being recapped.
@@ -58,14 +74,18 @@
  * to fall back to.
  */
 import {
+  CREDIT_CARD_CATEGORY,
   INCOME_CATEGORY,
   type Habit,
   type HabitCompletedBy,
   type HabitFrozenDatesBy,
   type RecapDayPoints,
   type RecapMemberFacts,
+  type RecapUnattributedSplit,
   type WeeklyRecap,
 } from '@/types/schema';
+import { isCalendarBudgetedCategory } from '@/utils/categories';
+import { isHouseholdCreditHabit } from '@/utils/habitAttribution';
 import {
   calculateStreak,
   calculateWeeklyStreak,
@@ -106,6 +126,12 @@ export interface RecapScoringHabit {
   /** date → uids a per-member freeze was spent for (`freezeMode: 'per_member'`). */
   frozenDatesBy?: HabitFrozenDatesBy;
   pausedUntil?: string;
+  /**
+   * `'household'` ⇒ a completion deliberately credits the household and writes
+   * NO `completedBy` entry. Absent reads as `'members'` (see `Habit.creditMode`),
+   * which is why the unattributed split has no third "legacy" bucket.
+   */
+  creditMode?: Habit['creditMode'];
 }
 
 /** Minimal member shape the ceremony needs. */
@@ -129,6 +155,8 @@ export interface AssembledCeremony {
   memberFacts: RecapMemberFacts[];
   dailyPoints: RecapDayPoints[];
   totalPoints: number;
+  /** Week totals of `dailyPoints[].unattributedSplit` (RECAP-MATH). */
+  unattributedSplit: RecapUnattributedSplit;
 }
 
 /** Minimal transaction shape this module needs (subset of `Transaction`). */
@@ -182,6 +210,24 @@ export interface DataAssemblyInput {
   weekStart: string;
   /** yyyy-MM-dd, local — the last day of the recap week (a Sunday, inclusive). */
   weekEnd: string;
+  /**
+   * The household's budget bucket names, in any casing.
+   *
+   * Consulted BEFORE `isCalendarBudgetedCategory` when classifying a
+   * transaction into the bills/day-to-day spend slices, mirroring
+   * `BudgetBuckets.tsx`'s own resolution order: a transaction whose category
+   * exactly matches a real bucket name belongs to that bucket, and the
+   * calendar-budgeted fallback (`utils/categories.ts`) is consulted ONLY when
+   * it doesn't. Without this, a household with a bucket literally named
+   * "Bills" (or "Budgeted in Calendar") had every one of that bucket's
+   * genuinely discretionary transactions reclassified as a paid calendar
+   * bill, because `LEGACY_BILLS_CATEGORY` IS the string `"Bills"`.
+   *
+   * OPTIONAL and defaulted to an empty list, so a caller that hasn't been
+   * updated to supply bucket names degrades to the pre-existing (legacy
+   * classifier only) behavior rather than throwing.
+   */
+  bucketNames?: string[];
 }
 
 export type AssembledRecap = Pick<
@@ -194,7 +240,20 @@ export type AssembledRecap = Pick<
   | 'pointsByMember'
   | 'upcomingBills'
 > &
-  Required<Pick<WeeklyRecap, 'memberFacts' | 'dailyPoints' | 'totalPoints' | 'priorWeekPoints'>>;
+  Required<
+    Pick<
+      WeeklyRecap,
+      | 'memberFacts'
+      | 'dailyPoints'
+      | 'totalPoints'
+      | 'priorWeekPoints'
+      | 'billsSpend'
+      | 'priorWeekBillsSpend'
+      | 'dayToDaySpend'
+      | 'priorWeekDayToDaySpend'
+      | 'unattributedSplit'
+    >
+  >;
 
 // ---------------------------------------------------------------------------
 // Dates
@@ -522,18 +581,44 @@ export function memberPointsOnDate(
   );
 }
 
-/** Signed points on one date that no member holds (assigned chores excluded). */
-function unattributedPointsForDate(
+/**
+ * WHY one date's unattributed points belong to nobody (RECAP-MATH).
+ *
+ * 🛡️ ONE WALK, PARTITIONED — not two scorers and not a subtraction. Every
+ * habit's `unattributedPointsOnDate` lands in exactly one bucket, so
+ * `householdCredit + unclaimed` reproduces `unattributedPointsForDate` exactly,
+ * and the split can never disagree with the figure it explains.
+ *
+ * `isHouseholdCreditHabit` is the SAME predicate the client's attribution layer
+ * uses (`utils/habitAttribution.ts`) — household credit is not a second scoring
+ * path, just a reason the existing unattributed path was taken on purpose.
+ */
+export function unattributedSplitForDate(
   habits: RecapScoringHabit[],
   date: string,
   anchor: string,
-): number {
-  let total = 0;
+): RecapUnattributedSplit {
+  let householdCredit = 0;
+  let unclaimed = 0;
   for (const habit of habits) {
     if (habit.assignedTo) continue;
-    total += unattributedPointsOnDate(habit, date, anchor);
+    const points = unattributedPointsOnDate(habit, date, anchor);
+    if (points === 0) continue;
+    if (isHouseholdCreditHabit(habit)) householdCredit += points;
+    else unclaimed += points;
   }
-  return total;
+  return { householdCredit, unclaimed };
+}
+
+/** Σ of a week's per-day splits — the `AssembledCeremony` week total. */
+function sumUnattributedSplits(days: RecapDayPoints[]): RecapUnattributedSplit {
+  let householdCredit = 0;
+  let unclaimed = 0;
+  for (const day of days) {
+    householdCredit += day.unattributedSplit?.householdCredit ?? 0;
+    unclaimed += day.unattributedSplit?.unclaimed ?? 0;
+  }
+  return { householdCredit, unclaimed };
 }
 
 // ---------------------------------------------------------------------------
@@ -567,8 +652,11 @@ export function buildDailyPoints(
         memberSum += points;
       }
     }
-    const unattributed = unattributedPointsForDate(habits, date, anchor);
-    return { date, byMember, unattributed, total: memberSum + unattributed };
+    // ONE walk: the split IS the source of the day's `unattributed` figure, so
+    // the two cannot drift apart (RECAP-MATH).
+    const unattributedSplit = unattributedSplitForDate(habits, date, anchor);
+    const unattributed = unattributedSplit.householdCredit + unattributedSplit.unclaimed;
+    return { date, byMember, unattributed, total: memberSum + unattributed, unattributedSplit };
   });
 }
 
@@ -713,6 +801,7 @@ export function assembleCeremony(input: CeremonyInput): AssembledCeremony {
     memberFacts: hasMemberData ? facts : [],
     dailyPoints,
     totalPoints: dailyPoints.reduce((sum, d) => sum + d.total, 0),
+    unattributedSplit: sumUnattributedSplits(dailyPoints),
   };
 }
 
@@ -720,36 +809,111 @@ export function assembleCeremony(input: CeremonyInput): AssembledCeremony {
 // Money
 // ---------------------------------------------------------------------------
 
+/**
+ * Does this transaction count as spend at all?
+ *
+ * TWO sentinels are excluded, not one:
+ *  - `INCOME_CATEGORY` — money in, obviously not spend;
+ *  - `CREDIT_CARD_CATEGORY` — an ACCOUNT-ROUTING tag, not real spending. A
+ *    transaction tagged to a credit account carries it instead of a bucket
+ *    name, and `utils/bucketSpentCalculator.ts` has always excluded it from
+ *    spend math. The recap did not, so a household's card activity inflated its
+ *    weekly headline (RECAP-MATH: $220.89 of a real $2,649.89 week).
+ *
+ * The two matches are DELIBERATELY asymmetric:
+ *  - `CREDIT_CARD_CATEGORY` matches EXACTLY, case-sensitively — mirroring
+ *    `utils/bucketSpentCalculator.ts` (the source of truth this exclusion is
+ *    supposed to track) precisely. `Credit Card` is a system-written sentinel
+ *    a transaction carries INSTEAD OF a bucket name, but a free-text bucket
+ *    can legitimately be named "credit card" (tracking card payments as a
+ *    discretionary category; `BucketFormModal` has no collision guard against
+ *    it) and its spend must count normally, exactly as it does in the
+ *    Money/Budget tab.
+ *  - `INCOME_CATEGORY` stays case-insensitive, matching this function's
+ *    pre-existing behavior — that predates the bills/day-to-day split and is
+ *    left as-is pending a separate decision, not changed here.
+ */
 function isCountedSpend(t: RecapTransaction, start: string, end: string): boolean {
   return (
     t.status === 'verified' &&
     t.category.toLowerCase() !== INCOME_CATEGORY.toLowerCase() &&
+    t.category !== CREDIT_CARD_CATEGORY &&
     t.date >= start &&
     t.date <= end
   );
 }
 
 /**
- * Sums verified, non-income transaction amounts within [start, end] inclusive.
- * Summed in integer cents via `sumMoney`, returned as decimal dollars.
+ * Which slice of counted spend a sum covers (RECAP-MATH).
+ *
+ * `'bills'` and `'dayToDay'` PARTITION `'all'`: every counted transaction is in
+ * exactly one of them, so `billsSpend + dayToDaySpend === totalSpend` holds by
+ * construction rather than by a subtraction that could absorb drift.
  */
-function sumVerifiedSpend(transactions: RecapTransaction[], start: string, end: string): number {
-  return sumMoney(transactions.filter(t => isCountedSpend(t, start, end)).map(t => t.amount));
+type SpendSlice = 'all' | 'bills' | 'dayToDay';
+
+/**
+ * Is this a paid calendar bill rather than day-to-day spending?
+ *
+ * A real bucket name wins FIRST — matching `BudgetBuckets.tsx`'s own
+ * resolution order (a transaction whose category matches a bucket is that
+ * bucket's spend, and the calendar-budgeted fallback only fires when it
+ * doesn't). Only once the category matches no bucket does this delegate to
+ * `utils/categories.ts`'s shared classifier, which recognises both the
+ * `Budgeted in Calendar` sentinel `payCalendarItem` files paid bills under AND
+ * the legacy `Bills` tag older paid bills still carry — the exact tag a
+ * household naming a bucket "Bills" would otherwise be shadowed by.
+ *
+ * `bucketNameSet` is pre-lowercased, matching the case-insensitive bucket
+ * lookup `BudgetBuckets.tsx` already does.
+ */
+const inSlice = (
+  t: RecapTransaction,
+  slice: SpendSlice,
+  bucketNameSet: ReadonlySet<string>,
+): boolean => {
+  if (slice === 'all') return true;
+  const isBill = !bucketNameSet.has(t.category.toLowerCase()) && isCalendarBudgetedCategory(t.category);
+  return slice === 'bills' ? isBill : !isBill;
+};
+
+/**
+ * Sums counted transaction amounts within [start, end] inclusive, restricted to
+ * one spend slice. Summed in integer cents via `sumMoney`, returned as decimal
+ * dollars.
+ */
+function sumSpend(
+  transactions: RecapTransaction[],
+  start: string,
+  end: string,
+  slice: SpendSlice,
+  bucketNameSet: ReadonlySet<string>,
+): number {
+  return sumMoney(
+    transactions
+      .filter(t => isCountedSpend(t, start, end) && inSlice(t, slice, bucketNameSet))
+      .map(t => t.amount),
+  );
 }
 
 /**
- * Verified, non-income spend within [start, end], grouped by LOWERCASED category
+ * DAY-TO-DAY counted spend within [start, end], grouped by LOWERCASED category
  * so mixed casing ("Groceries" vs "groceries") can't split one category into two;
  * the first-seen casing is kept for display. Amounts are decimal dollars.
+ *
+ * Bills are excluded on purpose: `Budgeted in Calendar` is a routing sentinel,
+ * not a category, and it out-swings every real category on any week carrying
+ * rent — which made it the recap's #1 "category insight" (RECAP-MATH).
  */
 function sumVerifiedSpendByCategory(
   transactions: RecapTransaction[],
   start: string,
   end: string,
+  bucketNameSet: ReadonlySet<string>,
 ): Map<string, { display: string; amount: number }> {
   const amountsByCategory = new Map<string, { display: string; amounts: number[] }>();
   for (const t of transactions) {
-    if (!isCountedSpend(t, start, end)) continue;
+    if (!isCountedSpend(t, start, end) || !inSlice(t, 'dayToDay', bucketNameSet)) continue;
     const key = t.category.toLowerCase();
     const existing = amountsByCategory.get(key);
     if (existing) {
@@ -776,16 +940,37 @@ function sumVerifiedSpendByCategory(
  * narrative/narrativeSource/premium/generatedAt/isoWeek fields.
  */
 export function assembleWeeklyRecap(input: DataAssemblyInput): AssembledRecap {
-  const { transactions, habits, members, calendarItems, weekStart, weekEnd } = input;
+  const { transactions, habits, members, calendarItems, weekStart, weekEnd, bucketNames } = input;
+
+  // Pre-lowercased once so every `inSlice` call does a plain Set lookup — same
+  // case-insensitive semantics `BudgetBuckets.tsx` uses for its own bucket-name
+  // lookup, and the same lowercasing convention this module already uses for
+  // category grouping.
+  const bucketNameSet = new Set((bucketNames ?? []).map(name => name.toLowerCase()));
 
   const priorWeekStart = shiftDay(weekStart, -7);
   const priorWeekEnd = shiftDay(weekEnd, -7);
 
-  const totalSpend = sumVerifiedSpend(transactions, weekStart, weekEnd);
-  const priorWeekSpend = sumVerifiedSpend(transactions, priorWeekStart, priorWeekEnd);
+  const totalSpend = sumSpend(transactions, weekStart, weekEnd, 'all', bucketNameSet);
+  const priorWeekSpend = sumSpend(transactions, priorWeekStart, priorWeekEnd, 'all', bucketNameSet);
+  const billsSpend = sumSpend(transactions, weekStart, weekEnd, 'bills', bucketNameSet);
+  const priorWeekBillsSpend = sumSpend(transactions, priorWeekStart, priorWeekEnd, 'bills', bucketNameSet);
+  const dayToDaySpend = sumSpend(transactions, weekStart, weekEnd, 'dayToDay', bucketNameSet);
+  const priorWeekDayToDaySpend = sumSpend(
+    transactions,
+    priorWeekStart,
+    priorWeekEnd,
+    'dayToDay',
+    bucketNameSet,
+  );
 
-  const currentByCategory = sumVerifiedSpendByCategory(transactions, weekStart, weekEnd);
-  const priorByCategory = sumVerifiedSpendByCategory(transactions, priorWeekStart, priorWeekEnd);
+  const currentByCategory = sumVerifiedSpendByCategory(transactions, weekStart, weekEnd, bucketNameSet);
+  const priorByCategory = sumVerifiedSpendByCategory(
+    transactions,
+    priorWeekStart,
+    priorWeekEnd,
+    bucketNameSet,
+  );
 
   const allCategories = new Set([...currentByCategory.keys(), ...priorByCategory.keys()]);
   const topCategoryDeltas = Array.from(allCategories)
@@ -841,6 +1026,10 @@ export function assembleWeeklyRecap(input: DataAssemblyInput): AssembledRecap {
   return {
     totalSpend,
     priorWeekSpend,
+    billsSpend,
+    priorWeekBillsSpend,
+    dayToDaySpend,
+    priorWeekDayToDaySpend,
     topCategoryDeltas,
     habitCompletions,
     streaksAtRisk,
@@ -850,5 +1039,6 @@ export function assembleWeeklyRecap(input: DataAssemblyInput): AssembledRecap {
     dailyPoints: ceremony.dailyPoints,
     totalPoints: ceremony.totalPoints,
     priorWeekPoints,
+    unattributedSplit: ceremony.unattributedSplit,
   };
 }

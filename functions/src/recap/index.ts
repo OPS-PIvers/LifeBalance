@@ -285,7 +285,7 @@ async function generateRecap(
   const { isoWeek, weekStart, weekEnd } = week;
 
   const transactionsStart = shiftDate(weekStart, -7);
-  const [transactionsSnap, habitsSnap, calendarSnap] = await Promise.all([
+  const [transactionsSnap, habitsSnap, calendarSnap, bucketsSnap] = await Promise.all([
     db
       .collection(`households/${householdId}/transactions`)
       .where("date", ">=", transactionsStart)
@@ -297,6 +297,13 @@ async function generateRecap(
       .where("date", ">", weekEnd)
       .where("date", "<=", shiftDate(weekEnd, 7))
       .get(),
+    // Bucket names feed `assembleWeeklyRecap`'s bills/day-to-day classifier: a
+    // transaction whose category exactly matches a real bucket name is that
+    // bucket's spend, never the calendar-budgeted fallback, mirroring the
+    // client's `BudgetBuckets.tsx` resolution order (see `dataAssembly.ts`'s
+    // `bucketNames` doc comment). Same collection path the client subscribes
+    // to (`contexts/household/listeners/financeListeners.ts`).
+    db.collection(`households/${householdId}/buckets`).get(),
   ]);
 
   const transactions: RecapTransaction[] = transactionsSnap.docs.map((d) => {
@@ -328,6 +335,9 @@ async function generateRecap(
       frozenDates: data.frozenDates,
       frozenDatesBy: data.frozenDatesBy,
       pausedUntil: data.pausedUntil,
+      // Only `'household'` is meaningful; anything else (including absent) reads
+      // as per-member credit, matching `Habit.creditMode`'s "no migration" rule.
+      creditMode: data.creditMode === "household" ? "household" : "members",
     };
   });
 
@@ -340,6 +350,10 @@ async function generateRecap(
       type: data.type,
     };
   });
+
+  const bucketNames: string[] = bucketsSnap.docs
+    .map((d) => d.data().name)
+    .filter((name): name is string => typeof name === "string");
 
   // The recap's per-member stats must cover ALL household members — the
   // collection-group list processHousehold works from is filtered to
@@ -364,16 +378,24 @@ async function generateRecap(
     calendarItems,
     weekStart,
     weekEnd,
+    bucketNames,
   });
+
+  // `weekEnd` is passed to the narrative but deliberately NOT spread into the
+  // recap doc below: it is not a `WeeklyRecap` field. The narrative needs it
+  // only to date an upcoming bill relative to the Monday the recap is READ, so
+  // a bill due that same morning reads "due today" instead of being pitched as
+  // next week's planning.
+  const narrativeInput = { ...assembled, weekEnd };
 
   let narrative: string;
   let narrativeSource: "ai" | "template";
   if (premium) {
-    const result = await generateNarrative(assembled, geminiApiKey.value(), ceremonyTone);
+    const result = await generateNarrative(narrativeInput, geminiApiKey.value(), ceremonyTone);
     narrative = result.text;
     narrativeSource = result.source;
   } else {
-    narrative = buildTemplateNarrative(assembled, ceremonyTone);
+    narrative = buildTemplateNarrative(narrativeInput, ceremonyTone);
     narrativeSource = "template";
   }
 
