@@ -2234,6 +2234,94 @@ describe('ATTR-1 — transaction-fired habits credit the card owner', () => {
     expect(commitCount).toBe(1);
   });
 
+  // 🛡️ The pool and the credited member get DIFFERENT figures when a threshold
+  // period's crossing also flips a second member's award on: the pool pays
+  // both, the submission stores the creditee's own. Without
+  // `householdPointsEarned` the undo would debit the pool the smaller figure
+  // and leave it permanently over-credited.
+  describe('a threshold period that also flips a second member’s award on', () => {
+    // targetCount 2: the APPROVER already banked the period's first unit
+    // (attributed to them), and the CARDHOLDER's card crosses the target now,
+    // so BOTH earn a full award at their own multiplier. Both units sit on
+    // `today`, which keeps the fixture free of any weekday dependence.
+    const twoStepHabit: Habit = {
+      ...baseHabit,
+      targetCount: 2,
+      count: 1,
+      completedBy: { [today]: { [APPROVER]: 1 } },
+    };
+
+    it('pays the pool BOTH awards while the submission stores only the creditee’s', async () => {
+      const { updateTransactionCategory } = makeUpdateTransactionCategory(deps([twoStepHabit]));
+      await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
+
+      const submission = capturedSets.find(s => s.ref.__path.startsWith(submissionsPath('h1')))!;
+      const memberAward = submission.data!.pointsEarned as number;
+      const pooled = submission.data!.householdPointsEarned as number;
+      const hh = capturedUpdates.find(u => u.ref.__path === householdPath)!;
+
+      // Both members earn; the pool receives the sum, the doc stores one share.
+      expect(pooled).toBeGreaterThan(memberAward);
+      expect(hh.data!['points.total']).toEqual({ __increment: pooled });
+      expect(capturedUpdates.find(u => u.ref.__path === memberPath(APPROVER))).toBeDefined();
+      expect(capturedUpdates.find(u => u.ref.__path === memberPath(CARDHOLDER))).toBeDefined();
+    });
+
+    it('the undo debits the pool that SAME figure, not the member’s share', async () => {
+      // Replay the fire's own record, as the undo reads it back.
+      submissionDocs[submissionsPath('h1')] = [{
+        id: 'sub-1',
+        habitId: 'h1',
+        habitTitle: baseHabit.title,
+        timestamp: `${today}T12:00:00.000Z`,
+        date: today,
+        count: 1,
+        pointsEarned: 10,
+        householdPointsEarned: 20,
+        streakDaysAtTime: 1,
+        multiplierApplied: 1,
+        createdBy: APPROVER,
+        attributedTo: CARDHOLDER,
+        createdAt: `${today}T12:00:00.000Z`,
+        sourceTransactionId: 'tx-card',
+      }];
+      const firedTwoStep: Habit = {
+        ...twoStepHabit,
+        count: 2,
+        totalCount: 5,
+        completedDates: [today, '2020-01-01'],
+        completedBy: { [today]: { [APPROVER]: 1, [CARDHOLDER]: 1 } },
+      };
+      const { reverseTransactionApproval } = makeReverseTransactionApproval({
+        db,
+        householdId: HOUSEHOLD_ID,
+        habits: [firedTwoStep],
+        transactions: [{ ...cardTx, status: 'verified', firedHabitIds: ['h1'] }],
+        accounts: cardAccounts,
+        members: [{ uid: APPROVER }, { uid: CARDHOLDER }],
+        calendarItems: [] as CalendarItem[],
+      });
+      await reverseTransactionApproval('tx-card', { category: 'Uncategorized' }, ['h1']);
+
+      const hh = capturedUpdates.find(u => u.ref.__path === householdPath)!;
+      // The POOL figure, in every bucket — not the member's 10.
+      expect(hh.data!['points.total']).toEqual({ __increment: -20 });
+      expect(hh.data!['points.daily']).toEqual({ __increment: -20 });
+      expect(hh.data!['points.weekly']).toEqual({ __increment: -20 });
+      // The creditee still gets debited their OWN share.
+      const memberWrite = capturedUpdates.find(u => u.ref.__path === memberPath(CARDHOLDER))!;
+      expect(memberWrite.data!['points.total']).toEqual({ __increment: -10 });
+    });
+  });
+
+  it('records no householdPointsEarned when the pool and the member agree', async () => {
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(deps([baseHabit]));
+    await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
+
+    const submission = capturedSets.find(s => s.ref.__path.startsWith(submissionsPath('h1')))!;
+    expect(submission.data).not.toHaveProperty('householdPointsEarned');
+  });
+
   it('back-dates the attribution to the TRANSACTION date, never today', async () => {
     const backDate = format(subDays(parseISO(today), 3), 'yyyy-MM-dd');
     const oldTx: Transaction = { ...cardTx, date: backDate };

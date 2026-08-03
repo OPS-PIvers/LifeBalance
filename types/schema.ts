@@ -960,6 +960,31 @@ export interface HabitSubmission {
   date: string; // YYYY-MM-DD for grouping
   count: number; // Number of completions in this submission
   pointsEarned: number; // Points earned at time of submission
+  /**
+   * ATTR-1: the figure credited to the HOUSEHOLD POOL by the fire that wrote
+   * this doc, when that differs from `pointsEarned`.
+   *
+   * 🛡️ WHY IT EXISTS. An attributed transaction fire credits the pool
+   * `periodPointsMove().household.total` (Σ member awards + the unattributed
+   * remainder — by construction what the corrective recompute derives) while
+   * `pointsEarned` stores the credited member's OWN award. The two are equal
+   * whenever exactly one member holds attribution in the period, which is the
+   * ordinary case — but a THRESHOLD period whose crossing also flips a second
+   * member's award on pays the pool BOTH, and a reversal that debited only
+   * `pointsEarned` would leave the pool permanently over-credited.
+   *
+   * Absent means "the pool got `pointsEarned`", which is true of every
+   * unattributed fire and every submission written before ATTR-1 — so
+   * `householdPointsEarned ?? pointsEarned` is always the pool-facing figure.
+   *
+   * KNOWN NARROWING: the SIDE-EFFECT member's own award in that same rare case
+   * is credited forward (`periodPointsMove().perMember`) but has no submission
+   * of its own to reverse from, so an undo leaves their doc over-credited until
+   * the login/midnight recompute corrects it. Recording it exactly would mean
+   * abandoning `periodPointsMove`'s deliberate per-DATE bucket gating (a
+   * member's award is gated by THEIR own day, which this doc does not store).
+   */
+  householdPointsEarned?: number;
   streakDaysAtTime: number; // Snapshot of streak when submitted
   multiplierApplied: number; // 1.0, 1.5, or 2.0
   createdBy: string; // uid of member who submitted
