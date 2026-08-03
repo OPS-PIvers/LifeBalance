@@ -78,6 +78,7 @@ import { type ReconcileCandidate, buildFillUpdates } from "./reconcile";
 import {
   decideWithdrawal,
   buildBalanceUpdate,
+  buildCreateCardLast4Update,
   matchAccountByAccountLast4,
   getBillPayPeriodId,
   computeBalanceAsOf,
@@ -1019,7 +1020,7 @@ export const bankEmailSync = onRequest(
               payPeriodId,
               accountId: resolvedAccountId,
               bankRef: w.bankRef,
-              ...(w.cardLast4 ? { cardLast4Hint: w.cardLast4 } : {}),
+              ...buildCreateCardLast4Update(w.cardLast4),
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
             });
             counts.created++;
