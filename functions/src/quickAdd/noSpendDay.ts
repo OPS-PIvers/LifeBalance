@@ -232,3 +232,68 @@ export function weekendPartnerDate(date: string): string | null {
   if (isoDayOfWeek(date) !== ISO_SUNDAY) return null;
   return format(subDays(parseISO(date), 1), "yyyy-MM-dd");
 }
+
+// ---------------------------------------------------------------------------
+// Multi-day catch-up window
+// ---------------------------------------------------------------------------
+
+/**
+ * Nightly catch-up window: how many days back of history one email may
+ * settle. Four, not three.
+ *
+ * Wells Fargo never sends a Saturday or Sunday email, so even a ROUTINE
+ * Monday email must already reach back two days (asOf - 2 = Saturday). A
+ * holiday Monday — no email at all that day — pushes it further: by the time
+ * Wednesday's email arrives, Saturday, Sunday, Monday AND Tuesday are all
+ * still unjudged. A 3-day window would silently drop Saturday again, which
+ * is the exact failure this whole catch-up mechanism exists to remove (the
+ * "Clean weekend" habit can never fire without a Saturday verdict). See
+ * `bankEmailSync.ts`'s `MAX_WITHDRAWALS` doc comment for the Firestore
+ * batch-size cost of raising this further.
+ */
+export const MAX_NO_SPEND_CATCHUP_DAYS = 4;
+
+/**
+ * The full catch-up window an email with as-of date `asOf` COULD judge:
+ * every day from `asOf - maxDays` through `asOf - 1`, ascending — regardless
+ * of whether any of those days already has a verdict. Exists so a caller can
+ * check Firestore for which of these days are already settled before asking
+ * `datesToJudge` which ones are actually left to do.
+ */
+export function noSpendCatchupWindow(
+  asOf: string,
+  maxDays: number = MAX_NO_SPEND_CATCHUP_DAYS
+): string[] {
+  const dates: string[] = [];
+  for (let daysBack = maxDays; daysBack >= 1; daysBack--) {
+    dates.push(format(subDays(parseISO(asOf), daysBack), "yyyy-MM-dd"));
+  }
+  return dates;
+}
+
+/**
+ * Which of the catch-up window's days does an email with as-of date `asOf`
+ * actually need to judge? Every day from `noSpendCatchupWindow(asOf,
+ * maxDays)`, ascending, EXCEPT any day already present in `alreadyJudged`.
+ *
+ * "Already judged" means "already has a `noSpendDays/{date}` verdict doc" —
+ * i.e. a day some earlier email already settled CLEAN. Skipping it avoids
+ * fighting the "a later charge does not revoke the credit" rule (see this
+ * module's header) for a day whose verdict is already final, and saves a
+ * transactions query the answer wouldn't change.
+ *
+ * `alreadyJudged` only ever needs to name CLEAN days: a dirty day writes NO
+ * verdict doc at all (the caller's habit-firing step returns before staging
+ * one), so it is never "already judged" in this sense — it is correctly
+ * re-evaluated by every subsequent email until a night finally comes back
+ * clean. That re-evaluation is harmless and intentional: the per-habit
+ * `sourceNoSpendDate` submission check, not this skip, is what prevents a
+ * double credit once a day finally does qualify.
+ */
+export function datesToJudge(
+  asOf: string,
+  alreadyJudged: ReadonlySet<string>,
+  maxDays: number = MAX_NO_SPEND_CATCHUP_DAYS
+): string[] {
+  return noSpendCatchupWindow(asOf, maxDays).filter((date) => !alreadyJudged.has(date));
+}

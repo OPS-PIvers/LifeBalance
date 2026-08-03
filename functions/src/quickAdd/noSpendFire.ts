@@ -131,6 +131,22 @@ export interface ApplyNoSpendDayDeps {
    * Omit for the pre-rules behaviour.
    */
   merchantRules?: readonly MerchantRule[];
+  /**
+   * Dates already judged CLEAN earlier in this SAME batch (ascending order,
+   * caller-maintained across a multi-day catch-up run — see
+   * `bankEmailSync.ts`). These days' verdict docs are only STAGED on the
+   * batch, not yet committed, so a plain Firestore `.get()` for them would
+   * come back empty.
+   *
+   * Exists so a Saturday+Sunday pair settled by ONE catch-up email lets
+   * Sunday's weekend check see Saturday's in-flight verdict — without this,
+   * a single email judging both days of a weekend would silently miss the
+   * weekend rule every time, reintroducing the exact bug the catch-up window
+   * exists to fix. Omit when judging a single day (the pre-catch-up
+   * behaviour): a plain Firestore read is then always correct, since
+   * Saturday, if judged at all, was judged and committed by an EARLIER email.
+   */
+  stagedCleanDates?: ReadonlySet<string>;
 }
 
 /** A habit that survived the read phase and is ready to be scored + staged. */
@@ -155,8 +171,17 @@ interface ReadyFire {
  * the fire is all-or-nothing along with the rest of the email.
  */
 export async function applyNoSpendDay(deps: ApplyNoSpendDayDeps): Promise<NoSpendOutcome> {
-  const { db, householdId, batch, targetDate, today, extraSpend, householdData, merchantRules } =
-    deps;
+  const {
+    db,
+    householdId,
+    batch,
+    targetDate,
+    today,
+    extraSpend,
+    householdData,
+    merchantRules,
+    stagedCleanDates,
+  } = deps;
   const notNoSpend: NoSpendOutcome = {
     targetDate,
     isNoSpendDay: false,
@@ -209,8 +234,15 @@ export async function applyNoSpendDay(deps: ApplyNoSpendDayDeps): Promise<NoSpen
     //    have no evidence, and no evidence must not win a weekend.
     const saturday = weekendPartnerDate(targetDate);
     if (saturday) {
-      const satDoc = await db.doc(`households/${householdId}/noSpendDays/${saturday}`).get();
-      weekendClean = satDoc.exists;
+      if (stagedCleanDates?.has(saturday)) {
+        // Saturday was judged clean earlier in THIS SAME BATCH — its verdict
+        // doc is staged but not yet committed, so skip the read that would
+        // otherwise miss it. See `ApplyNoSpendDayDeps.stagedCleanDates`.
+        weekendClean = true;
+      } else {
+        const satDoc = await db.doc(`households/${householdId}/noSpendDays/${saturday}`).get();
+        weekendClean = satDoc.exists;
+      }
       if (!weekendClean) {
         logger.info(
           `noSpend: ${targetDate} (Sunday) was clean but ${saturday} has no no-spend ` +
