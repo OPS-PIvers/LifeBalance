@@ -880,7 +880,18 @@ export const quickAddExpense = onRequest(
           if (target && targetRef) {
             await targetRef.update(
               buildFillUpdates(
-                { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId, cardLast4: persistedCardLast4 },
+                {
+                  amount,
+                  merchant: merchant.trim(),
+                  category,
+                  accountId: resolvedAccountId,
+                  cardLast4: persistedCardLast4,
+                  // CARD-1 (finding 3): this branch is gated on
+                  // `fromBankNotification && amount > 0`, so the incoming
+                  // record IS the bank notification — "bank wins" the
+                  // cardLast4 conflict policy.
+                  fromBankNotification,
+                },
                 target
               )
             );
@@ -917,7 +928,17 @@ export const quickAddExpense = onRequest(
           const dupRef = dupTarget ? refById.get(dupTarget.id) : undefined;
           if (dupTarget && dupRef) {
             const mergeUpdates = buildDuplicateMergeUpdates(
-              { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId, cardLast4: persistedCardLast4 },
+              {
+                amount,
+                merchant: merchant.trim(),
+                category,
+                accountId: resolvedAccountId,
+                cardLast4: persistedCardLast4,
+                // CARD-1 (finding 3): same "bank wins" reasoning as the
+                // stub-fill call above — this branch is also gated on
+                // `fromBankNotification && amount > 0`.
+                fromBankNotification,
+              },
               dupTarget
             );
             if (Object.keys(mergeUpdates).length > 0) {
@@ -961,7 +982,20 @@ export const quickAddExpense = onRequest(
           const reverseRef = reverseTarget ? refById.get(reverseTarget.id) : undefined;
           if (reverseTarget && reverseRef) {
             const mergeUpdates = buildReverseDuplicateMergeUpdates(
-              { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId, cardLast4: persistedCardLast4 },
+              {
+                amount,
+                merchant: merchant.trim(),
+                category,
+                accountId: resolvedAccountId,
+                cardLast4: persistedCardLast4,
+                // CARD-1 (finding 3): this branch is gated on
+                // `!fromBankNotification && amount > 0` — the incoming
+                // record is the NON-bank Apple Pay capture, so it must
+                // never win a cardLast4 conflict against `reverseTarget`'s
+                // bank-resolved value. Explicit for clarity even though
+                // `false` is already the default.
+                fromBankNotification,
+              },
               reverseTarget
             );
             // No Object.keys guard here (unlike the forward path above): unlike

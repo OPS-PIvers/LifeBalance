@@ -98,6 +98,17 @@ export interface IncomingExpense {
    *  to attribute a transaction-fired habit completion to whoever's card was
    *  charged. Never consulted by the `pick*` matching functions. */
   cardLast4?: string;
+  /** CARD-1 (finding 3): true when this incoming record IS the bank
+   *  notification itself — the same signal the caller already gates the
+   *  amount/merchant overwrite decision on (`fromBankNotification` on the
+   *  quickAddExpense request body; always true for the nightly Wells Fargo
+   *  sync, which is bank data by construction). Used ONLY by the
+   *  `build*Updates` functions below to decide the `cardLast4` conflict
+   *  policy — bank-sourced data overwrites a differing existing value,
+   *  anything else only fills an absent one. Deliberately NOT consulted by
+   *  any `pick*` matching function, so it can never change which row a
+   *  merge targets. */
+  fromBankNotification?: boolean;
 }
 
 /**
@@ -117,6 +128,36 @@ export function normalizeMerchant(name: string): string {
 
 /** Convert a stored (always-positive) dollar amount to integer cents, avoiding float drift. */
 const amountCents = (amount: number): number => Math.round(Math.abs(amount) * 100);
+
+/**
+ * CARD-1 (finding 3): the single `cardLast4` conflict-resolution rule shared
+ * by all three `build*Updates` functions below — "bank wins".
+ *
+ *  - No incoming card digit → nothing to write.
+ *  - Incoming matches the target's existing value → no-op (nothing to write;
+ *    re-stamping an identical value is pointless churn).
+ *  - Incoming differs from an existing value (including "target has none"):
+ *    - the incoming record is itself bank-sourced (`fromBankNotification`) →
+ *      it WINS and overwrites, matching this module's existing convention
+ *      that bank data always overwrites `amount`/`merchant` too. Bank data is
+ *      the more trustworthy source: unlike `accountId` (resolved server-side
+ *      from a matched card), `cardLast4` is a raw field ANY capture path can
+ *      supply, so an early Apple-Pay-side value can be wrong.
+ *    - otherwise → only fill when the target had no value at all (the prior,
+ *      conservative "never clobber an existing value" behavior).
+ *
+ * Returns the value to write, or `undefined` when nothing should be written.
+ */
+function resolveCardLast4Update(
+  incoming: IncomingExpense,
+  target: ReconcileCandidate | undefined,
+): string | undefined {
+  if (!incoming.cardLast4) return undefined;
+  const existing = target?.cardLast4;
+  if (existing === incoming.cardLast4) return undefined; // identical → no-op
+  if (incoming.fromBankNotification || !existing) return incoming.cardLast4;
+  return undefined; // non-bank incoming, existing value present → never clobber
+}
 
 /**
  * Choose the awaiting-amount stub a real bank amount should fill, or `null` to
@@ -194,14 +235,14 @@ export function buildFillUpdates(
   if (incoming.accountId) {
     updates.accountId = incoming.accountId;
   }
-  // CARD-1 (finding 1): carry the resolved card last-4 through the fill so a
-  // later PR can attribute the purchase. Conservative merge policy: only
-  // write when the stub does NOT already carry a cardLast4 — unlike
-  // accountId, pickFillTarget does not itself gate on cardLast4 compatibility,
-  // so an existing (possibly different) value is preserved rather than
-  // silently overwritten.
-  if (incoming.cardLast4 && !target?.cardLast4) {
-    updates.cardLast4 = incoming.cardLast4;
+  // CARD-1 (finding 1 + finding 3): carry the resolved card last-4 through
+  // the fill so a later PR can attribute the purchase. Conflict policy is
+  // "bank wins" — see {@link resolveCardLast4Update}: a bank-sourced incoming
+  // value overwrites a differing existing one; anything else only fills an
+  // absent value, never clobbering it.
+  const cardLast4Update = resolveCardLast4Update(incoming, target);
+  if (cardLast4Update !== undefined) {
+    updates.cardLast4 = cardLast4Update;
   }
   return updates;
 }
@@ -273,11 +314,14 @@ export function buildDuplicateMergeUpdates(
   if (incoming.accountId && !target.accountId) {
     updates.accountId = incoming.accountId;
   }
-  // CARD-1 (finding 1): same conservative back-fill as accountId above — only
-  // write when the surviving row doesn't already carry a cardLast4, so a
-  // differing existing value is never clobbered.
-  if (incoming.cardLast4 && !target.cardLast4) {
-    updates.cardLast4 = incoming.cardLast4;
+  // CARD-1 (finding 1 + finding 3): "bank wins" conflict policy — see
+  // {@link resolveCardLast4Update}. This builder is only ever invoked on the
+  // forward (bank-arrives-second) path, where the incoming record IS the
+  // bank notification, so a differing existing value is overwritten rather
+  // than preserved.
+  const cardLast4Update = resolveCardLast4Update(incoming, target);
+  if (cardLast4Update !== undefined) {
+    updates.cardLast4 = cardLast4Update;
   }
   return updates;
 }
@@ -369,11 +413,16 @@ export function buildReverseDuplicateMergeUpdates(
   if (incoming.accountId && !target.accountId) {
     updates.accountId = incoming.accountId;
   }
-  // CARD-1 (finding 1): same conservative back-fill as accountId above — only
-  // write when the surviving (bank) row doesn't already carry a cardLast4, so
-  // a differing existing value is never clobbered.
-  if (incoming.cardLast4 && !target.cardLast4) {
-    updates.cardLast4 = incoming.cardLast4;
+  // CARD-1 (finding 1 + finding 3): "bank wins" conflict policy — see
+  // {@link resolveCardLast4Update}. This builder is only ever invoked on the
+  // reverse (bank-arrives-first) path, where the incoming record is the
+  // NON-bank Apple Pay capture and `target` is the existing bank row — so
+  // `incoming.fromBankNotification` is false/absent here and the surviving
+  // row's bank-resolved cardLast4 is never clobbered by the less-reliable
+  // Apple Pay data; a differing value is only ever a fill of an absent one.
+  const cardLast4Update = resolveCardLast4Update(incoming, target);
+  if (cardLast4Update !== undefined) {
+    updates.cardLast4 = cardLast4Update;
   }
   return updates;
 }
