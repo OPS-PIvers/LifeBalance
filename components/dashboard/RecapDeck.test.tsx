@@ -362,6 +362,140 @@ describe('RecapDeck — the household week', () => {
 
 // ---------------------------------------------------------------------------
 
+describe('RecapDeck — the Household legend never contradicts the chart', () => {
+  // 🛡️ `chartHasHouseholdBar` is a NARROWER truth than "the household holds
+  // any points this week": it requires a household segment to land on a bar
+  // the chart actually DRAWS (`heightPct > 0`), not merely to exist somewhere
+  // in `dailyPoints`. A legend gated on existence alone would advertise a
+  // series the chart never drew — exactly the contradiction `unattributedSplit`
+  // and the deleted `householdShareCopy` both existed to paper over. These four
+  // cases pin both directions of the gate at `RecapDeck.tsx`'s `chartHasHouseholdBar &&`.
+  // The positive control is load-bearing: without it, three negative
+  // assertions would still pass if the legend were deleted outright.
+
+  it('shows the legend when a household segment lands on a DRAWN bar (positive control)', async () => {
+    renderDeck({
+      dailyPoints: DAYS.map((date, i) => ({
+        date,
+        byMember: { jen: 50, paul: 45 },
+        unattributed: i === 0 ? 20 : 0,
+        total: i === 0 ? 115 : 95,
+      })),
+    });
+    await advance([MONEY, WEEK_CARD]);
+    expect(screen.getByText('Household')).toBeInTheDocument();
+  });
+
+  it('hides the legend on a MIXED-SIGN week — the only household segment sits on a day that nets negative', async () => {
+    renderDeck({
+      dailyPoints: DAYS.map((date, i) => ({
+        date,
+        byMember: i === 0 ? { jen: -30, paul: -5 } : { jen: 50, paul: 45 },
+        unattributed: i === 0 ? 10 : 0,
+        total: i === 0 ? -25 : 95,
+      })),
+    });
+    await advance([MONEY, WEEK_CARD]);
+    expect(screen.queryByText('Household')).not.toBeInTheDocument();
+  });
+
+  it('hides the legend for an ALL-NEGATIVE unattributed week — no household segment ever qualifies', async () => {
+    renderDeck({
+      dailyPoints: DAYS.map(date => ({
+        date,
+        byMember: { jen: 50, paul: 45 },
+        unattributed: -5,
+        total: 90,
+      })),
+    });
+    await advance([MONEY, WEEK_CARD]);
+    expect(screen.queryByText('Household')).not.toBeInTheDocument();
+  });
+
+  it('hides the legend when the household segment sits on a ZERO-HEIGHT column', async () => {
+    renderDeck({
+      dailyPoints: DAYS.map((date, i) => ({
+        date,
+        byMember: i === 0 ? { jen: -30, paul: 10 } : { jen: 50, paul: 45 },
+        unattributed: i === 0 ? 20 : 0,
+        total: i === 0 ? 0 : 95,
+      })),
+    });
+    await advance([MONEY, WEEK_CARD]);
+    expect(screen.queryByText('Household')).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('RecapDeck — accessibility (visual/a11y review)', () => {
+  it('gives the 7-day chart a text alternative that names every day AND calls out the negative one', async () => {
+    // 🛡️ The below-baseline deficit stub is this PR's own fix for a losing day
+    // drawing nothing — but a screen reader hears nothing from an unlabelled
+    // chart of plain `<div>`s either, hitting the identical bug through a
+    // different modality. `role="img"` collapses the whole chart to ONE
+    // accessible name so the per-column weekday letters aren't announced a
+    // second time.
+    renderDeck({
+      dailyPoints: DAYS.map((date, i) => ({
+        date,
+        byMember: i === 2 ? { jen: -6, paul: -4 } : { jen: 50, paul: 45 },
+        unattributed: 0,
+        total: i === 2 ? -10 : 95,
+      })),
+    });
+    await advance([MONEY, WEEK_CARD]);
+
+    const chart = screen.getByRole('img', { name: /Points by day/ });
+    const label = chart.getAttribute('aria-label') ?? '';
+    // Every winning day states just its total — no "net loss" tacked on.
+    expect(label).toContain('Monday: 95 points;');
+    expect(label).toContain('Sunday: 95 points.');
+    // The one losing day is called out explicitly, by name and amount.
+    expect(label).toContain('Wednesday: -10 points, a net loss;');
+  });
+
+  it('conveys the trend chip\'s direction to assistive tech, not just via the hidden icon', async () => {
+    // The `Icon` is `aria-hidden` and the number was always unsigned — a
+    // screen reader heard "1% vs $123 last week" with no way to tell which
+    // way it moved. The added word is DIRECTION only, never a value judgment
+    // (spending "up" is not "good", so the sr-only text can't say either).
+    renderDeck();
+    await advance([MONEY]);
+    // Day-to-day spend ROSE 40% — the chip must say "up" for AT, regardless
+    // of its (negative/bad) visual tone.
+    const upChip = screen.getByText('40%').closest('span');
+    expect(upChip).toHaveTextContent(/^up\s*40%$/);
+  });
+
+  it('says "down" for a decreasing trend', async () => {
+    renderDeck({ dayToDaySpend: 400, priorWeekDayToDaySpend: 803.12 });
+    await advance([MONEY]);
+    const downChip = screen.getByText('50%').closest('span');
+    expect(downChip).toHaveTextContent(/^down\s*50%$/);
+  });
+
+  it('wraps the Money card hero figure instead of clipping it for a long currency-formatted value', async () => {
+    // 🛡️ `HeroNumber` previously had no `flex-wrap`, and its only prior callers
+    // fed it 3-digit point totals. `MoneyCard` is the first caller to feed it
+    // a currency-formatted string, and a two-char prefix (`CA$1,234`) or an
+    // unconverted 5-6 digit JPY amount (`¥1,234,567`) can outgrow the card's
+    // fixed mobile viewport width the single-character `$` assumed — measured
+    // live in Test Mode, the unit label's right edge landed outside the
+    // deck's `overflow-hidden` wrapper. jsdom does no real layout, so this
+    // pins the STRUCTURAL fix (the row wraps rather than staying nowrap) —
+    // the actual pixel measurement was done in a live browser, not here.
+    renderDeck();
+    await advance([MONEY]);
+    const heroValue = screen.getByText('$1,122');
+    const heroRow = heroValue.parentElement;
+    expect(heroRow?.className).toContain('flex-wrap');
+    expect(heroRow?.className).not.toMatch(/\bflex-nowrap\b/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
 describe('RecapDeck — the personal card', () => {
   it('never renders a bare 0 tile for a member with no perfect habit', async () => {
     // The shipped defect verbatim: `0` / "Every day" / "Nothing perfect this
@@ -373,6 +507,19 @@ describe('RecapDeck — the personal card', () => {
     expect(screen.queryByText('Every day')).not.toBeInTheDocument();
     expect(screen.getByText('Day streak')).toBeInTheDocument();
     expect(screen.getByText('Habits logged')).toBeInTheDocument();
+
+    // 🛡️ POSITIVE CONTROL for the streak prose line. Every OTHER test that
+    // touches "longest run" only asserts its ABSENCE (the zero-day case
+    // below) — nothing in this suite previously proved the sentence renders
+    // at all when a real streak exists, so deleting the whole `streak &&`
+    // branch in `PersonalCard` would have left every assertion in the file
+    // green. Paul's default fixture already carries a 9-day streak.
+    const prose = screen.getByText(
+      (_, element) => element?.tagName === 'P' && /longest run/.test(element.textContent ?? '')
+    );
+    expect(prose).toHaveTextContent('Morning walk');
+    expect(prose).toHaveTextContent('longest run');
+    expect(prose).toHaveTextContent('9 days');
   });
 
   it('shows the perfect-habit tile when there IS one', async () => {

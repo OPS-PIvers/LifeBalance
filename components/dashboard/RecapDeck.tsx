@@ -78,6 +78,14 @@ const CardEyebrow: React.FC<{ children: React.ReactNode; tone?: 'warm' | 'accent
  * pre-DECK-1 chip hard-coded "positive ⇒ green", which is right for the points
  * trend and exactly backwards for the money card it now also serves — a 40%
  * jump in day-to-day spending would have been painted as a win.
+ *
+ * 🛡️ DIRECTION IS TEXT, NOT JUST AN ICON+COLOR. The up/down `Icon` is
+ * `aria-hidden` and the number was always unsigned, so a screen reader heard
+ * "1% vs $123 last week" with no way to tell which way it moved — on the
+ * Money card this is now the ceremony's headline financial claim, load-bearing
+ * twice. The added word is DIRECTION only ("up"/"down"), never "good"/"bad":
+ * that judgment is `polarity`-dependent (up is bad for spending) and stays out
+ * of the announced text so it can't contradict the visual tone.
  */
 const TrendChip: React.FC<{ pct: number; polarity?: 'more-is-good' | 'more-is-bad' }> = ({
   pct,
@@ -95,18 +103,31 @@ const TrendChip: React.FC<{ pct: number; polarity?: 'more-is-good' | 'more-is-ba
       )}
     >
       <Icon size={12} aria-hidden="true" />
+      <span className="sr-only">{pct >= 0 ? 'up ' : 'down '}</span>
       {Math.abs(pct)}%
     </span>
   );
 };
 
-/** The big serif figure the deck anchors a card on. */
+/**
+ * The big serif figure the deck anchors a card on.
+ *
+ * 🛡️ WRAPS, NEVER CLIPS. `WeekCard`/`PersonalCard` only ever fed this "pts",
+ * but `MoneyCard` is the first caller to feed it a currency-formatted value —
+ * and a two-char prefix (`CA$1,234`) or an unconverted 5-6 digit JPY amount
+ * (`¥1,234,567`) can outgrow the card's fixed 375px/390px viewport width the
+ * single-character `$` assumed. Without `flex-wrap` the unit label's right
+ * edge silently exceeded the deck's `overflow-hidden rounded-card` wrapper —
+ * clipped, not wrapped. Same fix as `WeeklyRecapCard.tsx`'s headline row:
+ * let the row wrap so the unit drops to its own line instead of running off
+ * the card.
+ */
 const HeroNumber: React.FC<{ value: string; unit: string; className?: string }> = ({
   value,
   unit,
   className,
 }) => (
-  <div className="flex items-baseline gap-2">
+  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
     <span
       className={cn(
         'font-display font-semibold leading-none tracking-[-0.03em] text-brand-900 dark:text-brand-50',
@@ -229,6 +250,28 @@ const MoneyCard: React.FC<{ deck: RecapDeckModel }> = ({ deck }) => {
 // ---------------------------------------------------------------------------
 
 /**
+ * A screen-reader equivalent for the day-by-day chart (a11y).
+ *
+ * 🛡️ THE DEFICIT REGISTER IS 100% VISUAL. The below-baseline stub two doc
+ * blocks down is this PR's own headline fix for a losing day drawing nothing
+ * — but an unlabelled chart of plain `<div>`s still draws literally nothing
+ * for a screen-reader user, who hits the identical bug through a different
+ * modality. Every day is read out by name and total, and a negative day is
+ * called out explicitly rather than left to a bar (and a stub) nobody who
+ * needs this text can see. `role="img"` on the chart container collapses the
+ * whole subtree to this one accessible name, so the per-column weekday
+ * letters underneath aren't announced a second time.
+ */
+function chartAccessibleSummary(chart: readonly RecapChartDay[]): string {
+  return chart
+    .map(day => {
+      const name = weekdayNameOf(day.date) || day.label;
+      return day.negative ? `${name}: ${day.total} points, a net loss` : `${name}: ${day.total} points`;
+    })
+    .join('; ');
+}
+
+/**
  * One day of the 7-day chart.
  *
  * 🛡️ TWO REGISTERS, ONE BASELINE (DECK-1). The stack ABOVE the baseline is
@@ -322,7 +365,11 @@ const WeekCard: React.FC<{ deck: RecapDeckModel }> = ({ deck }) => {
         <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-brand-450 dark:text-brand-400">
           Points by day
         </span>
-        <div className={cn('mt-2.5 flex items-stretch gap-2.5', showDeficit ? 'h-[132px]' : 'h-[110px]')}>
+        <div
+          className={cn('mt-2.5 flex items-stretch gap-2.5', showDeficit ? 'h-[132px]' : 'h-[110px]')}
+          role="img"
+          aria-label={`Points by day. ${chartAccessibleSummary(deck.chart)}.`}
+        >
           {deck.chart.map(day => (
             <DayColumn key={day.date} day={day} showDeficit={showDeficit} />
           ))}
