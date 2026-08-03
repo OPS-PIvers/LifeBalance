@@ -25,6 +25,7 @@ import {
   insightConverter,
   mealConverter,
   groceryCatalogItemConverter,
+  weeklyRecapConverter,
 } from '@/utils/firestoreConverters';
 import { db } from '@/firebase.config';
 import { useAuth } from '@/contexts/AuthContext';
@@ -1272,6 +1273,24 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       setHasMoreInsights(false);
     } catch (error) {
       console.error('[loadAllInsights] Failed:', error);
+    }
+  }, [householdId]);
+
+  // ARCH-1 — on-demand lookup of ONE stored recap doc by ISO week, for a week
+  // outside the bounded `recaps` live listener window (RECAPS_LIMIT). A plain
+  // `getDoc` by id (the doc id IS the isoWeek — see coreListeners.ts), not a
+  // query, so this never needs its own loading/cursor state the way the
+  // "load older" paginators above do.
+  const fetchStoredRecap = useCallback(async (isoWeek: string): Promise<WeeklyRecap | null> => {
+    if (!householdId) return null;
+    try {
+      const snap = await getDoc(
+        doc(db, `households/${householdId}/recaps/${isoWeek}`).withConverter(weeklyRecapConverter)
+      );
+      return snap.exists() ? snap.data() : null;
+    } catch (error) {
+      console.error('[fetchStoredRecap] Failed:', error);
+      return null;
     }
   }, [householdId]);
 
@@ -2874,6 +2893,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     actAs,
     exitToParent,
     recaps,
+    fetchStoredRecap,
     moneyRecaps,
     trashedItems,
     restoreTrashedItem,
@@ -2892,6 +2912,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addMerchantRule, updateMerchantRule, deleteMerchantRule,
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
     recaps,
+    fetchStoredRecap,
     moneyRecaps,
     trashedItems, restoreTrashedItem, purgeTrashedItem,
     activityLog,

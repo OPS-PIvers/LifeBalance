@@ -135,6 +135,17 @@ export interface HouseholdContextType {
   bucketHistory: BucketPeriodSnapshot[];
   /** Weekly recaps (Plan 02) — newest first, bounded live window (RECAPS_LIMIT). */
   recaps: WeeklyRecap[];
+  /**
+   * On-demand lookup of ONE stored recap doc by ISO week (ARCH-1), for a week
+   * outside the bounded `recaps` live window (older than `RECAPS_LIMIT`
+   * weeks). The server document remains the source of truth for the AI
+   * narrative no matter how old the week is — the client-side derivation
+   * (`utils/recapCompose.ts`) is only a fallback for weeks that were never
+   * generated at all. Resolves `null` when no doc exists for that week
+   * (the common case; not an error). Idempotent from the caller's
+   * perspective — safe to call repeatedly for the same week.
+   */
+  fetchStoredRecap: (isoWeek: string) => Promise<WeeklyRecap | null>;
   /** Monthly money recaps (F-MONEY-06) — newest first, bounded live window
    *  (MONEY_RECAPS_LIMIT). */
   moneyRecaps: MonthlyMoneyRecap[];
@@ -772,7 +783,7 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'addMerchantRule' | 'updateMerchantRule' | 'deleteMerchantRule'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
-  | 'recaps' | 'moneyRecaps' | 'activityLog'
+  | 'recaps' | 'fetchStoredRecap' | 'moneyRecaps' | 'activityLog'
   | 'trashedItems' | 'restoreTrashedItem' | 'purgeTrashedItem'
   | 'notificationLog' | 'unreadNotificationCount' | 'markNotificationRead' | 'markAllNotificationsRead'
 >;
