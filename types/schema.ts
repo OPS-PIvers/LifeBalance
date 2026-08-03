@@ -303,6 +303,22 @@ export interface Account {
    *  Function's only-if-newer overwrite guard (Firestore rules reject client
    *  writes) — informational, not read by any client formula. */
   balanceAsOf?: string;
+  /** The email's AVAILABLE balance figure from the LAST bank-email sync that
+   *  actually overwrote `balance` — i.e. a snapshot of what was just written,
+   *  not a live mirror of `balance` (which drifts from it as the user reviews
+   *  transactions client-side). Set only by the server-side `bankEmailSync`
+   *  Cloud Function in the same write as `balanceAsOf` (Firestore rules reject
+   *  client writes); exists solely so the next night's email can detect it is
+   *  a repeat of one already applied (`emailAddsNothingNew` in
+   *  `functions/src/quickAdd/bankSyncMatch.ts`) — never read by any client
+   *  formula. */
+  lastSyncedAvailableBalance?: number;
+  /** The email's ENDING (posted-only) balance figure from the LAST bank-email
+   *  sync that actually overwrote `balance`. Same provenance, same
+   *  server-only-write discipline, and same sole purpose as
+   *  `lastSyncedAvailableBalance` above — the two together are what
+   *  `emailAddsNothingNew` compares a new email against. */
+  lastSyncedEndingBalance?: number;
 }
 
 /**

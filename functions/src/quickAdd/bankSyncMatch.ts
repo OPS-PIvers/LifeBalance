@@ -564,3 +564,54 @@ export function shouldSkipBalanceOverwrite(
 ): boolean {
   return storedBalanceAsOf !== undefined && storedBalanceAsOf > incomingBalanceAsOf;
 }
+
+// ---------------------------------------------------------------------------
+// No-new-information balance overwrite guard (stale-but-newer-footer email)
+// ---------------------------------------------------------------------------
+
+export interface EmailAddsNothingNewInput {
+  /** Count of parsed withdrawal lines in the incoming email. */
+  withdrawalCount: number;
+  /** Decimal dollars — the incoming email's available/ending balance figures. */
+  incomingAvailable: number;
+  incomingEnding: number;
+  /** Decimal dollars — the figures the LAST email that actually overwrote the
+   *  balance wrote (`Account.lastSyncedAvailableBalance`/`lastSyncedEndingBalance`).
+   *  `undefined` when the account has never been synced under this scheme. */
+  storedAvailable: number | undefined;
+  storedEnding: number | undefined;
+}
+
+/**
+ * True when this email carries literally NO new information: it parsed to
+ * ZERO withdrawal lines AND both its ending and available balances are
+ * cent-exact matches of the figures the last applied email wrote.
+ *
+ * This exists because `shouldSkipBalanceOverwrite`'s ordering guard is
+ * defeated by the email's own format — its "as of" date is a SEND TIMESTAMP
+ * (the footer date), not a data-freshness stamp, so it advances every
+ * morning whether or not the bank posted anything. A quiet-weekend email can
+ * carry a newer footer than the last APPLIED email while still telling us
+ * nothing we didn't already know, and without this guard it would overwrite
+ * `Account.balance` anyway — wiping out any balance movement the user
+ * recorded client-side in the meantime (the whole reason `Account.balance`,
+ * rather than the stored figures here, can't be used for this comparison).
+ *
+ * BOTH conditions are required. Zero withdrawals alone is not enough — a
+ * genuinely quiet day can still see the available balance move (a deposit
+ * lands, a card hold drops off), and that movement must still be applied.
+ *
+ * Returns FALSE whenever either stored figure is `undefined` — the first
+ * sync after this field was introduced, or an account that has never been
+ * synced. Never skip on ABSENT state, only on a confirmed repeat.
+ */
+export function emailAddsNothingNew(input: EmailAddsNothingNewInput): boolean {
+  const { withdrawalCount, incomingAvailable, incomingEnding, storedAvailable, storedEnding } =
+    input;
+  if (withdrawalCount !== 0) return false;
+  if (storedAvailable === undefined || storedEnding === undefined) return false;
+  return (
+    cents(incomingAvailable) === cents(storedAvailable) &&
+    cents(incomingEnding) === cents(storedEnding)
+  );
+}
