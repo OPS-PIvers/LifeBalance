@@ -100,6 +100,39 @@ describe("matchAccountByLast4", () => {
     ];
     expect(matchAccountByLast4("9999", dupes)).toBeNull();
   });
+
+  // CARD-1: per-card owner tagging (Account.cardOwners) is a display/
+  // attribution-only concern layered on top of routing, never consulted by
+  // this module. These pin that an account carrying an (unrelated) owner map
+  // routes IDENTICALLY to one without — legacy-only cardLast4, cardLast4s-only,
+  // and a mix — so a future accountMatch.ts change can't accidentally start
+  // reading (or being perturbed by) card ownership.
+  interface AccountWithOwners extends AccountLike {
+    cardOwners?: Record<string, string>;
+  }
+
+  it("routing ignores an unrelated cardOwners map — legacy cardLast4 only", () => {
+    const accounts: AccountWithOwners[] = [
+      { id: "chk", cardLast4: "1234", cardOwners: { "1234": "uid-paul" } },
+    ];
+    expect(matchAccountByLast4("1234", accounts)).toBe("chk");
+  });
+
+  it("routing ignores an unrelated cardOwners map — cardLast4s with no owners tagged", () => {
+    const accounts: AccountWithOwners[] = [
+      { id: "chk", cardLast4s: ["1111", "2222"] }, // cardOwners absent entirely
+    ];
+    expect(matchAccountByLast4("2222", accounts)).toBe("chk");
+  });
+
+  it("routing ignores an unrelated cardOwners map — cardLast4s with a partially-tagged owner map", () => {
+    const accounts: AccountWithOwners[] = [
+      { id: "chk", cardLast4s: ["1111", "2222"], cardOwners: { "1111": "uid-paul" } },
+    ];
+    // 2222 is untagged (no owner entry) but must still route normally.
+    expect(matchAccountByLast4("2222", accounts)).toBe("chk");
+    expect(matchAccountByLast4("1111", accounts)).toBe("chk");
+  });
 });
 
 describe("normalizeUsDate", () => {

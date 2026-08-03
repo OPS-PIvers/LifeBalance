@@ -161,6 +161,144 @@ describe("buildFillUpdates", () => {
     const updates = buildFillUpdates({ amount: 13.31, merchant: "Amatista" });
     expect(updates).not.toHaveProperty("accountId");
   });
+
+  // CARD-1 (finding 1): cardLast4 must survive the stub-fill merge instead of
+  // being dropped on the floor — this is the Apple Pay $0 stub -> bank-fill
+  // production path, so losing it here silently breaks card attribution for a
+  // large share of real transactions.
+  it("CARD-1: carries the resolved cardLast4 through the stub fill", () => {
+    const target = stub("s1", "Amatista");
+    const updates = buildFillUpdates(
+      { amount: 13.31, merchant: "Amatista", cardLast4: "8899" },
+      target,
+    );
+    expect(updates).toMatchObject({ cardLast4: "8899" });
+  });
+
+  it("CARD-1: omits cardLast4 when the incoming event has none", () => {
+    const target = stub("s1", "Amatista");
+    const updates = buildFillUpdates({ amount: 13.31, merchant: "Amatista" }, target);
+    expect(updates).not.toHaveProperty("cardLast4");
+  });
+
+  it("CARD-1: does NOT overwrite a cardLast4 the stub already carries when the incoming record is NOT bank-sourced (conservative merge)", () => {
+    const target: ReconcileCandidate = {
+      id: "s1",
+      merchant: "Amatista",
+      amount: 0,
+      needsAmount: true,
+      cardLast4: "1234",
+    };
+    const updates = buildFillUpdates(
+      { amount: 13.31, merchant: "Amatista", cardLast4: "8899" },
+      target,
+    );
+    expect(updates).not.toHaveProperty("cardLast4");
+  });
+
+  // CARD-1 (finding 3): "bank wins" — the concrete failure the re-reviewer
+  // constructed. A stale Apple Pay Shortcut default posts a stub tagged with
+  // the WRONG card ("1111"); the real bank notification later arrives with
+  // the correct card ("8899") and must overwrite it, not defer to the
+  // earlier (wrong) value.
+  it("CARD-1 (finding 3): a bank-sourced incoming cardLast4 OVERWRITES a differing existing stub value", () => {
+    const target: ReconcileCandidate = {
+      id: "s1",
+      merchant: "Amatista",
+      amount: 0,
+      needsAmount: true,
+      cardLast4: "1111",
+    };
+    const updates = buildFillUpdates(
+      { amount: 13.31, merchant: "Amatista", cardLast4: "8899", fromBankNotification: true },
+      target,
+    );
+    expect(updates).toMatchObject({ cardLast4: "8899" });
+  });
+
+  it("CARD-1 (finding 3): a bank-sourced incoming cardLast4 fills an absent target value", () => {
+    const target = stub("s1", "Amatista"); // no cardLast4
+    const updates = buildFillUpdates(
+      { amount: 13.31, merchant: "Amatista", cardLast4: "8899", fromBankNotification: true },
+      target,
+    );
+    expect(updates).toMatchObject({ cardLast4: "8899" });
+  });
+
+  it("CARD-1 (finding 3): identical cardLast4 values are a no-op regardless of source", () => {
+    const target: ReconcileCandidate = {
+      id: "s1",
+      merchant: "Amatista",
+      amount: 0,
+      needsAmount: true,
+      cardLast4: "8899",
+    };
+    const bankSourced = buildFillUpdates(
+      { amount: 13.31, merchant: "Amatista", cardLast4: "8899", fromBankNotification: true },
+      target,
+    );
+    const nonBankSourced = buildFillUpdates(
+      { amount: 13.31, merchant: "Amatista", cardLast4: "8899" },
+      target,
+    );
+    expect(bankSourced).not.toHaveProperty("cardLast4");
+    expect(nonBankSourced).not.toHaveProperty("cardLast4");
+  });
+
+  it("CARD-1: still sets cardLast4 when called without a target (backward-compatible signature)", () => {
+    const updates = buildFillUpdates({ amount: 13.31, merchant: "Amatista", cardLast4: "8899" });
+    expect(updates).toMatchObject({ cardLast4: "8899" });
+  });
+
+  it("CARD-1: does not change WHICH target is chosen — pickFillTarget's decision is unaffected by cardLast4", () => {
+    const candidates = [stub("s1", "Gas Station"), stub("s2", "Coffee Shop")];
+    const withoutCard = pickFillTarget({ amount: 40, merchant: "gas station" }, candidates);
+    const withCard = pickFillTarget(
+      { amount: 40, merchant: "gas station", cardLast4: "8899" },
+      candidates,
+    );
+    expect(withCard?.id).toBe(withoutCard?.id);
+    expect(withCard?.id).toBe("s1");
+  });
+
+  // CARD-1 (finding 2): the test above only puts cardLast4 on the INCOMING
+  // side, so a mutation that ALSO filters candidates on cardLast4 (e.g.
+  // rejecting a candidate whose stored card conflicts with the incoming one)
+  // slips past it — the candidates here never carry the field, so that branch
+  // is never even reached. This one puts a CONFLICTING cardLast4 on the
+  // merchant-matching candidate itself and asserts matching stays entirely
+  // card-blind: the strong merchant match still wins on a card mismatch.
+  it("CARD-1 (finding 2): a candidate's CONFLICTING cardLast4 does not affect which stub is chosen", () => {
+    const candidates: ReconcileCandidate[] = [
+      { id: "s1", merchant: "Gas Station", amount: 0, needsAmount: true, cardLast4: "1111" },
+      { id: "s2", merchant: "Coffee Shop", amount: 0, needsAmount: true, cardLast4: "2222" },
+    ];
+    const target = pickFillTarget(
+      { amount: 40, merchant: "gas station", cardLast4: "9999" },
+      candidates,
+    );
+    expect(target?.id).toBe("s1");
+  });
+
+  // Same idea for the cross-system TIME-ONLY fallback path (no merchant
+  // match at all) — a lone stub must still be chosen even when its stored
+  // card conflicts with the incoming one.
+  it("CARD-1 (finding 2): a conflicting cardLast4 does not block the time-only fallback", () => {
+    const candidates: ReconcileCandidate[] = [
+      {
+        id: "s1",
+        merchant: "Loews Sapphire Falls Fb",
+        amount: 0,
+        needsAmount: true,
+        cardLast4: "1111",
+      },
+    ];
+    const target = pickFillTarget(
+      { amount: 13.31, merchant: "Amatista Cookhouse", cardLast4: "9999" },
+      candidates,
+    );
+    expect(target?.id).toBe("s1");
+  });
 });
 
 describe("pickFillTarget — account awareness", () => {
@@ -328,6 +466,33 @@ describe("pickDuplicateShortcutRow", () => {
     );
     expect(target?.id).toBe("ap1");
   });
+
+  it("CARD-1: does not change WHICH target is chosen — the merge decision is unaffected by cardLast4", () => {
+    const candidates = [applePay("ap1", "Target", 18.86)];
+    const withoutCard = pickDuplicateShortcutRow(
+      { amount: 18.86, merchant: "TARGET T-2189" },
+      candidates,
+    );
+    const withCard = pickDuplicateShortcutRow(
+      { amount: 18.86, merchant: "TARGET T-2189", cardLast4: "8899" },
+      candidates,
+    );
+    expect(withCard?.id).toBe(withoutCard?.id);
+    expect(withCard?.id).toBe("ap1");
+  });
+
+  // CARD-1 (finding 2): mirrors the pickFillTarget strengthening above — put
+  // a CONFLICTING cardLast4 on the CANDIDATE (not just the incoming record)
+  // so a mutation that filters eligibility on card compatibility is actually
+  // exercised. Matching must stay entirely card-blind.
+  it("CARD-1 (finding 2): a candidate's CONFLICTING cardLast4 does not affect which row is chosen", () => {
+    const candidates = [applePay("ap1", "Target", 18.86, { cardLast4: "1111" })];
+    const target = pickDuplicateShortcutRow(
+      { amount: 18.86, merchant: "TARGET T-2189", cardLast4: "9999" },
+      candidates,
+    );
+    expect(target?.id).toBe("ap1");
+  });
 });
 
 describe("buildDuplicateMergeUpdates", () => {
@@ -360,6 +525,60 @@ describe("buildDuplicateMergeUpdates", () => {
         applePay("ap1", "Target", 18.86, { accountId: "credit" }),
       ),
     ).toEqual({});
+  });
+
+  // CARD-1 (finding 1): cardLast4 must survive this merge path too.
+  it("CARD-1: back-fills cardLast4 onto an untagged Apple Pay row", () => {
+    const target = applePay("ap1", "Target", 18.86);
+    const updates = buildDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "TARGET T-2189", cardLast4: "8899" },
+      target,
+    );
+    expect(updates).toMatchObject({ cardLast4: "8899" });
+  });
+
+  it("CARD-1: does NOT overwrite a cardLast4 the target already carries when the incoming record is NOT bank-sourced (conservative merge)", () => {
+    const target = applePay("ap1", "Target", 18.86, { cardLast4: "1234" });
+    const updates = buildDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "TARGET T-2189", cardLast4: "8899" },
+      target,
+    );
+    expect(updates).not.toHaveProperty("cardLast4");
+  });
+
+  // CARD-1 (finding 3): this builder is only ever invoked on the forward
+  // (bank-arrives-second) path, so the incoming record IS the bank
+  // notification — a differing existing cardLast4 must be overwritten.
+  it("CARD-1 (finding 3): a bank-sourced incoming cardLast4 OVERWRITES a differing existing value", () => {
+    const target = applePay("ap1", "Target", 18.86, { cardLast4: "1111" });
+    const updates = buildDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "TARGET T-2189", cardLast4: "8899", fromBankNotification: true },
+      target,
+    );
+    expect(updates).toMatchObject({ cardLast4: "8899" });
+  });
+
+  it("CARD-1 (finding 3): a bank-sourced incoming cardLast4 fills an absent target value", () => {
+    const target = applePay("ap1", "Target", 18.86); // no cardLast4
+    const updates = buildDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "TARGET T-2189", cardLast4: "8899", fromBankNotification: true },
+      target,
+    );
+    expect(updates).toMatchObject({ cardLast4: "8899" });
+  });
+
+  it("CARD-1 (finding 3): identical cardLast4 values are a no-op regardless of source", () => {
+    const target = applePay("ap1", "Target", 18.86, { cardLast4: "8899" });
+    const bankSourced = buildDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "TARGET T-2189", cardLast4: "8899", fromBankNotification: true },
+      target,
+    );
+    const nonBankSourced = buildDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "TARGET T-2189", cardLast4: "8899" },
+      target,
+    );
+    expect(bankSourced).not.toHaveProperty("cardLast4");
+    expect(nonBankSourced).not.toHaveProperty("cardLast4");
   });
 });
 
@@ -460,6 +679,20 @@ describe("pickReverseDuplicateRow", () => {
     );
     expect(target?.id).toBe("bn1");
   });
+
+  // CARD-1 (finding 2): mirrors the same strengthening applied to
+  // pickFillTarget/pickDuplicateShortcutRow — this picker shares the exact
+  // same candidate-filter shape, so it is equally exposed to a mutation that
+  // starts filtering eligibility on cardLast4 compatibility. Matching must
+  // stay card-blind here too.
+  it("CARD-1 (finding 2): a candidate's CONFLICTING cardLast4 does not affect which row is chosen", () => {
+    const candidates = [bankRow("bn1", "TARGET T-2189", 18.86, { cardLast4: "1111" })];
+    const target = pickReverseDuplicateRow(
+      { amount: 18.86, merchant: "Target", cardLast4: "9999" },
+      candidates,
+    );
+    expect(target?.id).toBe("bn1");
+  });
 });
 
 describe("buildReverseDuplicateMergeUpdates", () => {
@@ -525,5 +758,65 @@ describe("buildReverseDuplicateMergeUpdates", () => {
       target,
     );
     expect(updates).not.toHaveProperty("status");
+  });
+
+  // CARD-1 (finding 1): cardLast4 must survive this merge path too.
+  it("CARD-1: back-fills cardLast4 when the surviving bank row was captured untagged", () => {
+    const target = bankRow("bn1", "TARGET T-2189", 18.86);
+    const updates = buildReverseDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "Target", cardLast4: "8899" },
+      target,
+    );
+    expect(updates).toMatchObject({ cardLast4: "8899" });
+  });
+
+  it("CARD-1: does NOT overwrite a cardLast4 the bank row already carries when the incoming (Apple Pay) capture is NOT bank-sourced (conservative merge)", () => {
+    const target = bankRow("bn1", "TARGET T-2189", 18.86, { cardLast4: "1234" });
+    const updates = buildReverseDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "Target", cardLast4: "8899" },
+      target,
+    );
+    expect(updates).not.toHaveProperty("cardLast4");
+  });
+
+  // CARD-1 (finding 3): the real caller of this builder never marks the
+  // incoming capture bank-sourced (it's always the reverse path's non-bank
+  // Apple Pay side folding into an existing bank row), but the conflict rule
+  // itself is generic — prove it still applies correctly here too.
+  it("CARD-1 (finding 3): a bank-sourced incoming cardLast4 OVERWRITES a differing existing value", () => {
+    const target = bankRow("bn1", "TARGET T-2189", 18.86, { cardLast4: "1111" });
+    const updates = buildReverseDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "Target", cardLast4: "8899", fromBankNotification: true },
+      target,
+    );
+    expect(updates).toMatchObject({ cardLast4: "8899" });
+  });
+
+  it("CARD-1 (finding 3): a cardLast4 fills an absent target value from either source", () => {
+    const target = bankRow("bn1", "TARGET T-2189", 18.86); // no cardLast4
+    const bankSourced = buildReverseDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "Target", cardLast4: "8899", fromBankNotification: true },
+      target,
+    );
+    const nonBankSourced = buildReverseDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "Target", cardLast4: "8899" },
+      target,
+    );
+    expect(bankSourced).toMatchObject({ cardLast4: "8899" });
+    expect(nonBankSourced).toMatchObject({ cardLast4: "8899" });
+  });
+
+  it("CARD-1 (finding 3): identical cardLast4 values are a no-op regardless of source", () => {
+    const target = bankRow("bn1", "TARGET T-2189", 18.86, { cardLast4: "8899" });
+    const bankSourced = buildReverseDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "Target", cardLast4: "8899", fromBankNotification: true },
+      target,
+    );
+    const nonBankSourced = buildReverseDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "Target", cardLast4: "8899" },
+      target,
+    );
+    expect(bankSourced).not.toHaveProperty("cardLast4");
+    expect(nonBankSourced).not.toHaveProperty("cardLast4");
   });
 });

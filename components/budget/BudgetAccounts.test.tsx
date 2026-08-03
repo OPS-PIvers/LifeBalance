@@ -3,7 +3,7 @@ import { render, screen, waitFor, within, fireEvent } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import BudgetAccounts from './BudgetAccounts';
-import { Account } from '@/types/schema';
+import { Account, HouseholdMember } from '@/types/schema';
 
 // Mock dependencies
 const {
@@ -50,6 +50,11 @@ const mockAccounts: Account[] = [
   }
 ];
 
+// CARD-1: mutated in-test (push/length=0, mirroring how `mockAccounts[n]`
+// fields are mutated above) so the owner-picker tests can supply members
+// without disturbing every other test's `members: []` default.
+const mockMembers: HouseholdMember[] = [];
+
 vi.mock('@/contexts/FirebaseHouseholdContext', () => {
   // BudgetAccounts reads useFinance; alias every hook to the same value so the
   // mock data resolves regardless of which slice hook the component uses.
@@ -72,7 +77,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => {
     updateSavingsGoal: vi.fn(),
     deleteSavingsGoal: vi.fn(),
     contributeToGoal: vi.fn(),
-    members: [],
+    members: mockMembers,
   });
   return {
     useHousehold: value,
@@ -500,6 +505,131 @@ describe('BudgetAccounts', () => {
       expect(screen.getByText('···9034')).toBeInTheDocument();
     } finally {
       delete acc.cardLast4s;
+    }
+  });
+
+  // ---- CARD-1: per-card owner tagging ----
+
+  it('does not show a card-owner picker when the household has no members loaded', async () => {
+    const user = userEvent.setup();
+    render(<BudgetAccounts />);
+
+    await user.click(screen.getByLabelText('Options for Main Checking'));
+    await user.click(screen.getByRole('button', { name: /Account Number & Cards/i }));
+    await user.type(screen.getByPlaceholderText('Add card last 4 (e.g. 8899)'), '8899');
+    await user.click(screen.getByRole('button', { name: /^Add$/i }));
+
+    expect(screen.queryByText('Card owners (optional)')).not.toBeInTheDocument();
+  });
+
+  it('does not show a card-owner picker when every loaded member is managed (a kid with no card)', async () => {
+    // Finding 4: the gate must use the SAME filtered set the <option> list is
+    // built from (non-managed members) — otherwise a household of only
+    // managed kids would render the section with nothing but "Unassigned".
+    const kid: HouseholdMember = {
+      uid: 'uid-kid', displayName: 'Kid', role: 'member', isManaged: true,
+      points: { daily: 0, weekly: 0, total: 0 },
+    };
+    mockMembers.push(kid);
+    try {
+      const user = userEvent.setup();
+      render(<BudgetAccounts />);
+
+      await user.click(screen.getByLabelText('Options for Main Checking'));
+      await user.click(screen.getByRole('button', { name: /Account Number & Cards/i }));
+      await user.type(screen.getByPlaceholderText('Add card last 4 (e.g. 8899)'), '8899');
+      await user.click(screen.getByRole('button', { name: /^Add$/i }));
+
+      expect(screen.queryByText('Card owners (optional)')).not.toBeInTheDocument();
+    } finally {
+      mockMembers.length = 0;
+    }
+  });
+
+  it('lets a member tag a card owner, saved as part of the details write', async () => {
+    const paul: HouseholdMember = {
+      uid: 'uid-paul', displayName: 'Paul', role: 'admin', points: { daily: 0, weekly: 0, total: 0 },
+    };
+    const jen: HouseholdMember = {
+      uid: 'uid-jen', displayName: 'Jen', role: 'admin', points: { daily: 0, weekly: 0, total: 0 },
+    };
+    mockMembers.push(paul, jen);
+    try {
+      const user = userEvent.setup();
+      render(<BudgetAccounts />);
+
+      await user.click(screen.getByLabelText('Options for Main Checking'));
+      await user.click(screen.getByRole('button', { name: /Account Number & Cards/i }));
+      await user.type(screen.getByPlaceholderText('Add card last 4 (e.g. 8899)'), '8899');
+      await user.click(screen.getByRole('button', { name: /^Add$/i }));
+
+      expect(screen.getByText('Card owners (optional)')).toBeInTheDocument();
+      const ownerSelect = screen.getByLabelText('Owner of card ending 8899');
+      await user.selectOptions(ownerSelect, 'uid-jen');
+
+      await user.click(screen.getByRole('button', { name: /^Save$/i }));
+
+      expect(setAccountCardDetailsMock).toHaveBeenCalledWith('acc1', expect.objectContaining({
+        cardLast4s: ['8899'],
+        cardOwners: { '8899': 'uid-jen' },
+      }));
+    } finally {
+      mockMembers.length = 0;
+    }
+  });
+
+  it('seeds the owner picker from the account\'s already-saved cardOwners', async () => {
+    const paul: HouseholdMember = {
+      uid: 'uid-paul', displayName: 'Paul', role: 'admin', points: { daily: 0, weekly: 0, total: 0 },
+    };
+    mockMembers.push(paul);
+    const acc = mockAccounts[0];
+    if (!acc) throw new Error('missing mock account');
+    acc.cardLast4s = ['8899'];
+    acc.cardOwners = { '8899': 'uid-paul' };
+    try {
+      const user = userEvent.setup();
+      render(<BudgetAccounts />);
+
+      await user.click(screen.getByLabelText('Options for Main Checking'));
+      await user.click(screen.getByRole('button', { name: /Account Number & Cards/i }));
+
+      const ownerSelect = screen.getByLabelText('Owner of card ending 8899') as HTMLSelectElement;
+      expect(ownerSelect.value).toBe('uid-paul');
+    } finally {
+      mockMembers.length = 0;
+      delete acc.cardLast4s;
+      delete acc.cardOwners;
+    }
+  });
+
+  it('drops the owner tag when its card is removed before saving', async () => {
+    const paul: HouseholdMember = {
+      uid: 'uid-paul', displayName: 'Paul', role: 'admin', points: { daily: 0, weekly: 0, total: 0 },
+    };
+    mockMembers.push(paul);
+    const acc = mockAccounts[0];
+    if (!acc) throw new Error('missing mock account');
+    acc.cardLast4s = ['8899'];
+    acc.cardOwners = { '8899': 'uid-paul' };
+    try {
+      const user = userEvent.setup();
+      render(<BudgetAccounts />);
+
+      await user.click(screen.getByLabelText('Options for Main Checking'));
+      await user.click(screen.getByRole('button', { name: /Account Number & Cards/i }));
+
+      await user.click(screen.getByLabelText('Remove card ending 8899'));
+      await user.click(screen.getByRole('button', { name: /^Save$/i }));
+
+      expect(setAccountCardDetailsMock).toHaveBeenCalledWith('acc1', expect.objectContaining({
+        cardLast4s: [],
+        cardOwners: {},
+      }));
+    } finally {
+      mockMembers.length = 0;
+      delete acc.cardLast4s;
+      delete acc.cardOwners;
     }
   });
 

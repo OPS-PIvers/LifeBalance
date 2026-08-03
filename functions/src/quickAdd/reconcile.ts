@@ -70,6 +70,13 @@ export interface ReconcileCandidate {
    *  purchases captured via the bank-only shortcut would collapse into one and
    *  lose spend data. */
   fromBankNotification?: boolean;
+  /** CARD-1: the card last-4 already persisted on this row, if any. Used ONLY
+   *  by the `build*Updates` functions below to decide whether an incoming
+   *  card digit is safe to write (never overwrite a differing existing
+   *  value) — deliberately NOT consulted by any of the `pick*` matching
+   *  functions, so adding this field cannot change which row a merge
+   *  targets or whether a merge happens at all. */
+  cardLast4?: string;
 }
 
 /** The incoming capture, already parsed/normalized. Depending on the call site
@@ -85,6 +92,23 @@ export interface IncomingExpense {
    *  When set, a candidate tagged to a *different* account is ineligible, and
    *  a filled stub inherits this account. */
   accountId?: string;
+  /** CARD-1: the normalized card last-4 parsed from this event, if any (see
+   *  `accountMatch.ts#normalizeCardLast4`). Threaded through the reconcile
+   *  builders below so a fill/merge doesn't discard it — a later PR uses it
+   *  to attribute a transaction-fired habit completion to whoever's card was
+   *  charged. Never consulted by the `pick*` matching functions. */
+  cardLast4?: string;
+  /** CARD-1 (finding 3): true when this incoming record IS the bank
+   *  notification itself — the same signal the caller already gates the
+   *  amount/merchant overwrite decision on (`fromBankNotification` on the
+   *  quickAddExpense request body; always true for the nightly Wells Fargo
+   *  sync, which is bank data by construction). Used ONLY by the
+   *  `build*Updates` functions below to decide the `cardLast4` conflict
+   *  policy — bank-sourced data overwrites a differing existing value,
+   *  anything else only fills an absent one. Deliberately NOT consulted by
+   *  any `pick*` matching function, so it can never change which row a
+   *  merge targets. */
+  fromBankNotification?: boolean;
 }
 
 /**
@@ -104,6 +128,36 @@ export function normalizeMerchant(name: string): string {
 
 /** Convert a stored (always-positive) dollar amount to integer cents, avoiding float drift. */
 const amountCents = (amount: number): number => Math.round(Math.abs(amount) * 100);
+
+/**
+ * CARD-1 (finding 3): the single `cardLast4` conflict-resolution rule shared
+ * by all three `build*Updates` functions below — "bank wins".
+ *
+ *  - No incoming card digit → nothing to write.
+ *  - Incoming matches the target's existing value → no-op (nothing to write;
+ *    re-stamping an identical value is pointless churn).
+ *  - Incoming differs from an existing value (including "target has none"):
+ *    - the incoming record is itself bank-sourced (`fromBankNotification`) →
+ *      it WINS and overwrites, matching this module's existing convention
+ *      that bank data always overwrites `amount`/`merchant` too. Bank data is
+ *      the more trustworthy source: unlike `accountId` (resolved server-side
+ *      from a matched card), `cardLast4` is a raw field ANY capture path can
+ *      supply, so an early Apple-Pay-side value can be wrong.
+ *    - otherwise → only fill when the target had no value at all (the prior,
+ *      conservative "never clobber an existing value" behavior).
+ *
+ * Returns the value to write, or `undefined` when nothing should be written.
+ */
+function resolveCardLast4Update(
+  incoming: IncomingExpense,
+  target: ReconcileCandidate | undefined,
+): string | undefined {
+  if (!incoming.cardLast4) return undefined;
+  const existing = target?.cardLast4;
+  if (existing === incoming.cardLast4) return undefined; // identical → no-op
+  if (incoming.fromBankNotification || !existing) return incoming.cardLast4;
+  return undefined; // non-bank incoming, existing value present → never clobber
+}
 
 /**
  * Choose the awaiting-amount stub a real bank amount should fill, or `null` to
@@ -157,9 +211,14 @@ export function pickFillTarget(
  * Status is intentionally left untouched (stays `pending_review`) so the merged
  * row still surfaces in the review/Action-Queue path. Category is only
  * overwritten when the incoming event carries a non-default one.
+ *
+ * `target` (optional, the {@link ReconcileCandidate} `pickFillTarget` chose)
+ * is used ONLY to decide the `cardLast4` write below — omitting it keeps this
+ * function's existing signature/behavior for any caller that predates CARD-1.
  */
 export function buildFillUpdates(
   incoming: IncomingExpense,
+  target?: ReconcileCandidate,
 ): Record<string, unknown> {
   const updates: Record<string, unknown> = {
     amount: incoming.amount,
@@ -175,6 +234,15 @@ export function buildFillUpdates(
   // or re-affirms the correct account for the review/verify step.
   if (incoming.accountId) {
     updates.accountId = incoming.accountId;
+  }
+  // CARD-1 (finding 1 + finding 3): carry the resolved card last-4 through
+  // the fill so a later PR can attribute the purchase. Conflict policy is
+  // "bank wins" — see {@link resolveCardLast4Update}: a bank-sourced incoming
+  // value overwrites a differing existing one; anything else only fills an
+  // absent value, never clobbering it.
+  const cardLast4Update = resolveCardLast4Update(incoming, target);
+  if (cardLast4Update !== undefined) {
+    updates.cardLast4 = cardLast4Update;
   }
   return updates;
 }
@@ -245,6 +313,15 @@ export function buildDuplicateMergeUpdates(
   const updates: Record<string, unknown> = {};
   if (incoming.accountId && !target.accountId) {
     updates.accountId = incoming.accountId;
+  }
+  // CARD-1 (finding 1 + finding 3): "bank wins" conflict policy — see
+  // {@link resolveCardLast4Update}. This builder is only ever invoked on the
+  // forward (bank-arrives-second) path, where the incoming record IS the
+  // bank notification, so a differing existing value is overwritten rather
+  // than preserved.
+  const cardLast4Update = resolveCardLast4Update(incoming, target);
+  if (cardLast4Update !== undefined) {
+    updates.cardLast4 = cardLast4Update;
   }
   return updates;
 }
@@ -335,6 +412,17 @@ export function buildReverseDuplicateMergeUpdates(
   }
   if (incoming.accountId && !target.accountId) {
     updates.accountId = incoming.accountId;
+  }
+  // CARD-1 (finding 1 + finding 3): "bank wins" conflict policy — see
+  // {@link resolveCardLast4Update}. This builder is only ever invoked on the
+  // reverse (bank-arrives-first) path, where the incoming record is the
+  // NON-bank Apple Pay capture and `target` is the existing bank row — so
+  // `incoming.fromBankNotification` is false/absent here and the surviving
+  // row's bank-resolved cardLast4 is never clobbered by the less-reliable
+  // Apple Pay data; a differing value is only ever a fill of an absent one.
+  const cardLast4Update = resolveCardLast4Update(incoming, target);
+  if (cardLast4Update !== undefined) {
+    updates.cardLast4 = cardLast4Update;
   }
   return updates;
 }

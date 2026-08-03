@@ -579,6 +579,21 @@ export function buildBalanceUpdate(availableBalance: number): { balance: number 
   return { balance: availableBalance };
 }
 
+/**
+ * CARD-1: the card-last4 field for a brand-new bank-sync transaction (the
+ * `create` branch in bankEmailSync.ts, for a withdrawal CARD_LINE_RE matched
+ * — an ACH/biller line carries no card digit at all). Writes onto the real,
+ * declared `Transaction.cardLast4` (types/schema.ts), the same field the
+ * quickAddExpense primary-create path and the reconcile stub-fill/duplicate
+ * paths (`reconcile.ts`) write — never the now-removed `cardLast4Hint`, which
+ * predated this PR (PR #1045) and had no reader anywhere in the repo. The
+ * digits are already normalized to exactly 4 by `CARD_LINE_RE` at parse time
+ * (`bankEmailParser.ts`), so no further normalization is needed here.
+ */
+export function buildCreateCardLast4Update(cardLast4?: string): { cardLast4?: string } {
+  return cardLast4 ? { cardLast4 } : {};
+}
+
 // ---------------------------------------------------------------------------
 // Only-if-newer balance overwrite guard (out-of-order email safeguard)
 // ---------------------------------------------------------------------------

@@ -107,6 +107,45 @@ describe('accountConverter', () => {
     expect(out['accountLast4']).toBe('5581');
     expect(out['cardLast4s']).toEqual(['1111', '2222']);
   });
+
+  // CARD-1 (finding 2): defensive normalization of cardOwners on read — the
+  // `accounts` rules carry no key-level allowlist, so a malformed map must
+  // never reach app code typed as Record<string, string>.
+  it('(a) well-formed cardOwners map passes through unchanged', () => {
+    const withOwners = { ...wellFormed, cardOwners: { '8899': 'uid-1', '1234': 'uid-2' } };
+    const result = accountConverter.fromFirestore(fakeSnap('acc-5', withOwners));
+    expect(result.cardOwners).toEqual({ '8899': 'uid-1', '1234': 'uid-2' });
+  });
+
+  it('(b) malformed cardOwners entries are dropped rather than trusted', () => {
+    const malformed = {
+      ...wellFormed,
+      cardOwners: {
+        '8899': 'uid-1', // valid — kept
+        '12': 'uid-2', // key too short — dropped
+        '123456': 'uid-3', // key too long — dropped
+        abcd: 'uid-4', // non-digit key — dropped
+        '4321': '', // empty string value — dropped
+        '5555': 42, // non-string value — dropped
+        '6666': null, // null value — dropped
+      },
+    };
+    const result = accountConverter.fromFirestore(fakeSnap('acc-6', malformed));
+    expect(result.cardOwners).toEqual({ '8899': 'uid-1' });
+  });
+
+  it('(b) a non-object cardOwners value normalizes to an empty map', () => {
+    const badShape = { ...wellFormed, cardOwners: 'not-an-object' };
+    const result = accountConverter.fromFirestore(fakeSnap('acc-7', badShape));
+    expect(result.cardOwners).toEqual({});
+  });
+
+  it('(b) legacy doc with no cardOwners field at all normalizes to an empty map', () => {
+    const legacy = { name: 'Savings', type: 'savings', balance: 500, lastUpdated: '2024-01-01' };
+    expect(() => accountConverter.fromFirestore(fakeSnap('acc-8', legacy))).not.toThrow();
+    const result = accountConverter.fromFirestore(fakeSnap('acc-8', legacy));
+    expect(result.cardOwners).toEqual({});
+  });
 });
 
 // ---------------------------------------------------------------------------

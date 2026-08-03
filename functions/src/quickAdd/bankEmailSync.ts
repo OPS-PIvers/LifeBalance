@@ -78,6 +78,7 @@ import { type ReconcileCandidate, buildFillUpdates } from "./reconcile";
 import {
   decideWithdrawal,
   buildBalanceUpdate,
+  buildCreateCardLast4Update,
   matchAccountByAccountLast4,
   getBillPayPeriodId,
   computeBalanceAsOf,
@@ -606,6 +607,11 @@ export const bankEmailSync = onRequest(
           needsAmount: data.needsAmount === true,
           accountId: typeof data.accountId === "string" ? data.accountId : undefined,
           fromBankNotification: data.fromBankNotification === true,
+          // CARD-1 (finding 1): so buildFillUpdates below can tell whether
+          // this stub already carries a card digit before deciding whether
+          // an incoming one is safe to write — mirrors index.ts's
+          // reconcileCandidates construction (the quickAddExpense endpoint).
+          cardLast4: typeof data.cardLast4 === "string" ? data.cardLast4 : undefined,
           date,
         });
       }
@@ -872,12 +878,30 @@ export const bankEmailSync = onRequest(
             // it pending_review would let a later client categorize double-debit
             // it (verified delta) and double-count it in Safe-to-Spend. accountId
             // is stamped by buildFillUpdates from the resolved account.
+            //
+            // CARD-1 (finding 1): this is the LIVE nightly Wells Fargo sync path
+            // — the primary way this household's transactions arrive — so it
+            // must thread cardLast4 through exactly like the quickAddExpense
+            // endpoint does. `fillTargetStub` is looked up from the pool
+            // `decision.stubId` was chosen from (pickFillTarget, inside
+            // decideWithdrawal) so buildFillUpdates can see whatever cardLast4
+            // the stub already carries; `fromBankNotification: true` because
+            // every withdrawal in this loop was parsed out of the bank's own
+            // email — that's "bank wins" the cardLast4 conflict policy (finding
+            // 3), matching the quickAddExpense endpoint's `fromBankNotification`
+            // gate on this same call.
+            const fillTargetStub = stubPool.find((s) => s.id === decision.stubId);
             batch.update(db.doc(`${transactionsPath}/${decision.stubId}`), {
-              ...buildFillUpdates({
-                amount: w.amount,
-                merchant: w.descriptor,
-                accountId: resolvedAccountId,
-              }),
+              ...buildFillUpdates(
+                {
+                  amount: w.amount,
+                  merchant: w.descriptor,
+                  accountId: resolvedAccountId,
+                  cardLast4: w.cardLast4,
+                  fromBankNotification: true,
+                },
+                fillTargetStub
+              ),
               status: "verified",
               bankRef: w.bankRef,
             });
@@ -996,7 +1020,7 @@ export const bankEmailSync = onRequest(
               payPeriodId,
               accountId: resolvedAccountId,
               bankRef: w.bankRef,
-              ...(w.cardLast4 ? { cardLast4Hint: w.cardLast4 } : {}),
+              ...buildCreateCardLast4Update(w.cardLast4),
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
             });
             counts.created++;

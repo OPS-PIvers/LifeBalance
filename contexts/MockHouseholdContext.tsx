@@ -1171,6 +1171,60 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Account unarchived');
   }, []);
 
+  // CARD-1 (finding 5): mirrors financeMutations.ts#setAccountCardDetails —
+  // same digit-cleaning and cardOwners pruning — but writing to mock state
+  // instead of a Firestore updateDoc, so the "tag an owner, Save, reopen"
+  // round-trip this drawer exists for is actually observable in Test Mode
+  // (this was `noOp` before, so the drawer silently reset on reopen).
+  const setAccountCardDetails = useCallback(async (
+    id: string,
+    details: { accountLast4?: string; cardLast4s: string[]; cardOwners?: Record<string, string> }
+  ) => {
+    const cleanLast4 = (raw: string): string | null => {
+      const digits = raw.replace(/\D/g, '').slice(-4);
+      return digits.length === 4 ? digits : null;
+    };
+    const accountLast4 = details.accountLast4 ? cleanLast4(details.accountLast4) : null;
+    const cardLast4s = Array.from(
+      new Set(details.cardLast4s.map(cleanLast4).filter((v): v is string => v !== null))
+    );
+    // Prune the owner map to cards that actually survive into the final
+    // cardLast4s list — a card removed in this same save (or whose digits
+    // failed cleaning) must not leave an orphaned owner entry behind.
+    const cardOwners: Record<string, string> = {};
+    if (details.cardOwners) {
+      for (const [rawDigits, uid] of Object.entries(details.cardOwners)) {
+        const digits = cleanLast4(rawDigits);
+        if (digits && uid && cardLast4s.includes(digits)) {
+          cardOwners[digits] = uid;
+        }
+      }
+    }
+    setAccounts(prev => prev.map(a => {
+      if (a.id !== id) return a;
+      const next: Account = { ...a };
+      if (accountLast4) {
+        next.accountLast4 = accountLast4;
+      } else {
+        delete next.accountLast4;
+      }
+      if (cardLast4s.length > 0) {
+        next.cardLast4s = cardLast4s;
+      } else {
+        delete next.cardLast4s;
+      }
+      // Migrate the legacy single-card field away, matching the real mutation.
+      delete next.cardLast4;
+      if (Object.keys(cardOwners).length > 0) {
+        next.cardOwners = cardOwners;
+      } else {
+        delete next.cardOwners;
+      }
+      return next;
+    }));
+    toast.success('Mock: Account details saved');
+  }, []);
+
   // Savings goal operations (Plan 24) — v1 manual contributions only, mirrors
   // savingsGoalMutations.ts's cents-safe math and completedAt transition.
   const addSavingsGoal = useCallback(async (goal: Omit<SavingsGoal, 'id' | 'createdAt' | 'completedAt'>) => {
@@ -3811,7 +3865,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateAccountBalance,
     setAccountGoal: noOp,
     setAccountCardLast4: noOp,
-    setAccountCardDetails: noOp,
+    setAccountCardDetails,
     updateAccountOrder: noOp,
     reorderAccounts: noOp,
     defaultAccountId,

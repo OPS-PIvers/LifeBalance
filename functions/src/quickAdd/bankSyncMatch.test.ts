@@ -15,6 +15,7 @@ import {
   matchAccountByAccountLast4,
   isMessageAlreadyProcessed,
   buildBalanceUpdate,
+  buildCreateCardLast4Update,
   getBillPayPeriodId,
   computeBalanceAsOf,
   shouldSkipBalanceOverwrite,
@@ -731,6 +732,21 @@ describe("isMessageAlreadyProcessed", () => {
 describe("buildBalanceUpdate", () => {
   it("returns an absolute balance overwrite (never an increment)", () => {
     expect(buildBalanceUpdate(1165.82)).toEqual({ balance: 1165.82 });
+  });
+});
+
+describe("buildCreateCardLast4Update", () => {
+  it("writes cardLast4 (the real, declared Transaction field) when the withdrawal carries a card digit", () => {
+    // Regression guard for the CARD-1 gap: bankEmailSync.ts's `create` branch
+    // — the DOMINANT bank-sync path, hit by every brand-new Wells Fargo email
+    // row — once wrote an undeclared, unread `cardLast4Hint` field instead of
+    // this one, silently defeating per-card attribution for most real
+    // transactions.
+    expect(buildCreateCardLast4Update("2115")).toEqual({ cardLast4: "2115" });
+  });
+
+  it("omits the field entirely for an ACH/biller withdrawal with no card digit", () => {
+    expect(buildCreateCardLast4Update(undefined)).toEqual({});
   });
 });
 
