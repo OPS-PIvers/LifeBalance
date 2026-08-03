@@ -47,7 +47,7 @@ describe('useTimezoneAutoHeal', () => {
     expect(healTimezone).toHaveBeenCalledWith('member-1', 'America/Chicago');
   });
 
-  it('heals when the stored timezone differs from the detected zone', async () => {
+  it('does NOT heal when the stored timezone differs from the detected zone (explicit override respected)', async () => {
     renderHook(() =>
       useTimezoneAutoHeal({
         householdId: 'hh1',
@@ -58,8 +58,10 @@ describe('useTimezoneAutoHeal', () => {
     );
     await flush();
 
-    expect(healTimezone).toHaveBeenCalledTimes(1);
-    expect(healTimezone).toHaveBeenCalledWith('member-1', 'America/Chicago');
+    // A member who set an explicit override in the Settings picker must not
+    // have it silently reverted the next time they open the app from a
+    // device reporting a different zone — only missing/empty is healed.
+    expect(healTimezone).not.toHaveBeenCalled();
   });
 
   it('does NOT write when the stored timezone already matches the detected zone', async () => {

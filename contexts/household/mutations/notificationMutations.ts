@@ -48,8 +48,9 @@ export function makeNotificationMutations(deps: {
 
 /**
  * TZ-1: heals a signed-in member's `notificationPreferences.timezone` — see
- * `hooks/useTimezoneAutoHeal.ts` for when this fires (once per session, on
- * missing/empty/stale). A **dot-path** update only — `notificationPreferences`
+ * `hooks/useTimezoneAutoHeal.ts` for when this fires (once per session, only
+ * when missing/empty — an explicit stored value is never overwritten). A
+ * **dot-path** update only — `notificationPreferences`
  * is a Map with several independent sections (habitReminders, billReminders,
  * dailyBriefing, …), and a whole-map write here would clobber all of them with
  * whatever stale snapshot this callback happened to close over. Same write

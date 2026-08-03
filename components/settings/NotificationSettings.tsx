@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 import { Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info, Newspaper, NotebookPen, Wallet, Layers, Sunrise, Landmark, Globe } from 'lucide-react';
 import { NotificationPreferences } from '@/types/schema';
 import toast from 'react-hot-toast';
@@ -7,7 +7,7 @@ import { isIOSDevice, isPWA, supportsPush } from '@/utils/platform';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { Switch } from '@/components/ui/Switch';
 import { Button } from '@/components/ui/Button';
-import { getTimezoneOptionsIncluding } from '@/utils/timezoneOptions';
+import { getTimezoneSelectOptions } from '@/utils/timezoneOptions';
 
 interface NotificationSettingsProps {
   userId?: string;
@@ -106,7 +106,20 @@ const getHourOptions = () => {
 // shallow spread of such a doc would leave those sections undefined and crash
 // the render on `.enabled`. Also falls back to the browser timezone so
 // existing users don't silently default to UTC.
+//
+// `...current` comes FIRST so any section this component doesn't render or
+// know about — e.g. F-HABITS-03's `perHabitReminders`, or any field a future
+// app version adds — survives the round trip untouched. This matters because
+// `pages/Settings.tsx`'s `handleSaveNotificationPreferences` persists this
+// function's return value as a FULL-MAP `updateDoc` replace, not a dot-path
+// merge: without the leading spread, opening this screen and hitting Save for
+// any reason would silently delete every section the enumerated keys below
+// don't list (this is exactly the whole-map-write class of bug CLAUDE.md
+// flags for `completedBy`/`freezeBanksByMember` — see
+// NotificationSettings.test.tsx's "preserves an unknown/future preference
+// section" cases).
 const mergePreferences = (current?: NotificationPreferences): NotificationPreferences => ({
+  ...current,
   habitReminders: { ...DEFAULT_PREFERENCES.habitReminders, ...current?.habitReminders },
   actionQueueReminders: { ...DEFAULT_PREFERENCES.actionQueueReminders, ...current?.actionQueueReminders },
   budgetAlerts: { ...DEFAULT_PREFERENCES.budgetAlerts, ...current?.budgetAlerts },
@@ -199,15 +212,17 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
   };
 
   // TZ-1: the timezone row. `detectedTimezone` is computed once per mount —
-  // it doesn't change during a session — and drives both the "differs from
-  // your device" callout and the auto-heal hook's own comparison (this row
-  // is a manual override of the same field the app already auto-heals to
-  // the detected zone on open; see hooks/useTimezoneAutoHeal.ts).
+  // it doesn't change during a session — and drives the "differs from your
+  // device" callout below. The auto-heal hook (hooks/useTimezoneAutoHeal.ts)
+  // only backfills a MISSING/empty stored zone, never one that merely differs
+  // from the detected zone, so this picker is a real, persistent override —
+  // picking a zone here is never silently reverted by auto-heal.
   const [detectedTimezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
   const timezoneOptions = useMemo(
-    () => getTimezoneOptionsIncluding(preferences.timezone),
-    [preferences.timezone]
+    () => getTimezoneSelectOptions(preferences.timezone, detectedTimezone),
+    [preferences.timezone, detectedTimezone]
   );
+  const timezoneStatusId = useId();
 
   const handleTimezoneChange = (timezone: string) => {
     setPreferences(prev => ({ ...prev, timezone }));
@@ -305,10 +320,11 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
 
       <SurfaceList>
         {/* Timezone (TZ-1) — every scheduled job below (habit reminders, streak
-            warnings, bill reminders, the weekly recap, the daily briefing)
-            decides "today" from this field, so it's shown first. Auto-healed to
-            the detected zone on app open when missing/stale (see
-            hooks/useTimezoneAutoHeal.ts); this picker is the explicit override. */}
+            warnings, bill reminders, the weekly recap, the monthly money
+            recap, the daily briefing) decides "today" from this field, so
+            it's shown first. Auto-healed to the detected zone on app open only
+            when missing/empty (see hooks/useTimezoneAutoHeal.ts); this picker
+            is a persistent, explicit override that auto-heal never reverts. */}
         <Row className="items-start">
           <div className="w-10 h-10 bg-accent-50 dark:bg-accent-500/15 rounded-btn flex items-center justify-center shrink-0">
             <Globe className="w-5 h-5 text-accent-600 dark:text-accent-300" />
@@ -318,7 +334,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
               <div className="flex-1 min-w-0">
                 <h4 className="font-semibold text-brand-900 dark:text-brand-100">Timezone</h4>
                 <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">
-                  Scheduled reminders and your weekly recap fire based on this zone.
+                  All your scheduled reminders, recaps, and the daily briefing are timed to this zone.
                 </p>
               </div>
             </div>
@@ -328,28 +344,31 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 onChange={(e) => handleTimezoneChange(e.target.value)}
                 className={inlineControlClass}
                 aria-label="Timezone"
+                aria-describedby={timezoneStatusId}
               >
                 {timezoneOptions.map((tz) => (
-                  <option key={tz} value={tz}>{tz}</option>
+                  <option key={tz.value} value={tz.value}>{tz.label}</option>
                 ))}
               </select>
             </div>
-            {preferences.timezone && preferences.timezone !== detectedTimezone ? (
-              <p className="text-xs text-warm-600 dark:text-warm-300 mt-2">
-                This differs from your device&apos;s detected zone ({detectedTimezone}).{' '}
-                <button
-                  type="button"
-                  onClick={() => handleTimezoneChange(detectedTimezone)}
-                  className="underline underline-offset-2 hover:text-warm-700 dark:hover:text-warm-200"
-                >
-                  Use detected zone
-                </button>
-              </p>
-            ) : (
-              <p className="text-xs text-brand-400 dark:text-brand-450 mt-2">
-                Matches your device&apos;s detected zone.
-              </p>
-            )}
+            <div aria-live="polite">
+              {preferences.timezone && preferences.timezone !== detectedTimezone ? (
+                <p id={timezoneStatusId} className="text-xs text-warm-600 dark:text-warm-300 mt-2">
+                  This differs from your device&apos;s detected zone ({detectedTimezone}).{' '}
+                  <button
+                    type="button"
+                    onClick={() => handleTimezoneChange(detectedTimezone)}
+                    className="underline underline-offset-2 hover:text-warm-700 dark:hover:text-warm-200"
+                  >
+                    Use detected zone
+                  </button>
+                </p>
+              ) : (
+                <p id={timezoneStatusId} className="text-xs text-brand-400 dark:text-brand-450 mt-2">
+                  Matches your device&apos;s detected zone.
+                </p>
+              )}
+            </div>
           </div>
         </Row>
 

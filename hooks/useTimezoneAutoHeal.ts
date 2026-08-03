@@ -23,10 +23,18 @@ interface UseTimezoneAutoHealParams {
   detectTimezone?: () => string;
 }
 
+/** Stable default for `detectTimezone` — a module-level const rather than a
+ * default-parameter arrow so its identity never changes across renders (it
+ * still lands in the effect's dep array below). The "once per session" guard
+ * currently short-circuits before that dependency matters, but a future
+ * refactor that reorders the effect body should not be able to silently
+ * reopen a write loop just because this function got a fresh identity every
+ * render. Kept injectable via the `detectTimezone` param for tests. */
+const defaultDetectTimezone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 /**
  * TZ-1: auto-heals a signed-in member's `notificationPreferences.timezone`
- * once per session when it's missing/empty or stale against the browser's
- * currently-detected IANA zone.
+ * once per session when it's missing or empty.
  *
  * Every scheduled Cloud Function (habit reminders, streak warnings, bill
  * reminders, the weekly recap, the daily briefing) decides a member's local
@@ -38,6 +46,13 @@ interface UseTimezoneAutoHealParams {
  * Notifications, so a member who never opened that screen (confirmed in
  * production) had no timezone at all.
  *
+ * Deliberately does NOT heal a stored value that merely *differs* from the
+ * browser's currently-detected zone: `NotificationSettings`' timezone row
+ * lets a member set an explicit override (e.g. they travel but want reminders
+ * to keep firing on their home zone), and re-detecting on every open would
+ * silently revert that choice the next time they open the app from a device
+ * reporting a different zone. Only an empty/missing value is ever healed.
+ *
  * Mirrors the once-per-household-load pattern in `hooks/usePointsSync.ts`: a
  * ref keyed on `householdId:uid` guards the effect so it fires at most once
  * per (household, member) pair for the life of this mount, and re-fires for a
@@ -47,7 +62,7 @@ export const useTimezoneAutoHeal = ({
   householdId,
   currentUser,
   healTimezone,
-  detectTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+  detectTimezone = defaultDetectTimezone,
 }: UseTimezoneAutoHealParams): void => {
   const healedForRef = useRef<string | null>(null);
 
@@ -68,7 +83,7 @@ export const useTimezoneAutoHeal = ({
     healedForRef.current = sessionKey;
 
     const stored = currentUser.notificationPreferences?.timezone;
-    if (stored === detected) return; // already correct — nothing to heal
+    if (stored) return; // already has an explicit value — never overwritten by auto-heal
 
     // An async IIFE (rather than `Promise.resolve(healTimezone(...)).catch()`)
     // so a SYNCHRONOUS throw from `healTimezone` is caught too, not just a

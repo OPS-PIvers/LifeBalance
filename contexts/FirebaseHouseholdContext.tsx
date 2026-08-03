@@ -1755,10 +1755,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   });
 
   // TZ-1: heal the signed-in member's stored notification timezone once per
-  // session when it's missing/empty or stale vs. the browser's currently-
-  // detected IANA zone. See makeHealMemberTimezone for the dot-path write
-  // discipline; resilient by construction (a failed write is caught and
-  // logged there, never thrown, so it can't block app boot).
+  // session, but only when it's missing/empty — a stored value that merely
+  // differs from the browser's currently-detected zone is left alone (an
+  // explicit override set via Settings → Notifications must not be silently
+  // reverted). See makeHealMemberTimezone for the dot-path write discipline;
+  // resilient by construction (a failed write is caught and logged there,
+  // never thrown, so it can't block app boot).
   const healMemberTimezone = useCallback(async (memberUid: string, timezone: string) => {
     await makeHealMemberTimezone({ db, householdId }).healMemberTimezone(memberUid, timezone);
   }, [householdId]);
