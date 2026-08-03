@@ -65,6 +65,9 @@ describe('useRecapForWeek', () => {
     mockFinance.transactions = [...SEED_TRANSACTIONS];
     mockFinance.transactionWindowStart = null;
     mockFinance.hasMoreTransactions = false;
+    // Restored explicitly: one test below swaps in a delegating wrapper to
+    // change this dependency's IDENTITY without changing the spy it reports to.
+    mockFinance.loadAllTransactions = loadAllTransactions;
     mockGamification.habits = [];
     loadAllTransactions.mockImplementation(async () => {
       // The real mutation's success path always ends the "more to load"
@@ -294,15 +297,49 @@ describe('useRecapForWeek', () => {
       expect(loadAllTransactions).toHaveBeenCalledTimes(2);
     });
 
-    it('does NOT retry on its own — one attempt per user-initiated retry', async () => {
+    // The trigger guard (`triggeredAttemptRef.current === attempt`) only bites
+    // when the effect BODY actually re-runs on an unchanged `attempt`. A bare
+    // rerender() with untouched dependencies is no-oped by React's own
+    // dependency array, so it exercises nothing — these two drive real re-runs
+    // instead. Deleting the guard must fail them.
+
+    it('does NOT re-read the full history when the transactions listener re-delivers', async () => {
       failLoad();
       const { result, rerender } = renderHook(() => useRecapForWeek(ISO_WEEK));
       await waitFor(() => expect(result.current.status).toBe('error'));
+      expect(loadAllTransactions).toHaveBeenCalledTimes(1);
 
-      // Re-render a few times (a live listener delivering, an unrelated state
-      // change) — none of them may kick off another full-history read.
+      // A real re-subscribe (household re-attach / pay-period window change)
+      // drops `listenersReady.transactions` and raises it again — a genuine
+      // dependency change, so the effect body runs a second time with the SAME
+      // attempt. Only the guard stops a second full-history read.
+      mockCore.listenersReady = { ...ALL_LISTENERS_READY, transactions: false };
       rerender();
+      mockCore.listenersReady = { ...ALL_LISTENERS_READY };
       rerender();
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+      expect(loadAllTransactions).toHaveBeenCalledTimes(1);
+      // Positive control: the guard suppresses AUTOMATIC re-runs only — an
+      // explicit retry still gets through, so a passing assertion above can't
+      // just mean "the effect never ran again for any reason".
+      result.current.retry();
+      await waitFor(() => expect(loadAllTransactions).toHaveBeenCalledTimes(2));
+    });
+
+    it('does NOT re-read the full history when an unrelated dependency changes identity', async () => {
+      failLoad();
+      const { result, rerender } = renderHook(() => useRecapForWeek(ISO_WEEK));
+      await waitFor(() => expect(result.current.status).toBe('error'));
+      expect(loadAllTransactions).toHaveBeenCalledTimes(1);
+
+      // `loadAllTransactions` is a useCallback in the real provider; any of its
+      // deps changing hands this hook a fresh identity, re-running the effect
+      // with an unchanged `attempt`. The delegating wrapper keeps the call
+      // count observable on the same spy.
+      mockFinance.loadAllTransactions = vi.fn(async () => loadAllTransactions());
+      rerender();
+
       await new Promise(resolve => setTimeout(resolve, 10));
       expect(loadAllTransactions).toHaveBeenCalledTimes(1);
     });

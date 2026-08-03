@@ -651,9 +651,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // Per-listener FIRST-SNAPSHOT tracking (see `ListenerReadiness` in
   // contexts/household/types.ts for why `isLoading` cannot answer this).
   // Stores, per listener key, the household id its most recent first snapshot
-  // belonged to — the exact idiom `loadedHouseholdId`/`isLoading` already uses
-  // above, so a household switch invalidates every flag by comparison rather
-  // than needing an explicit reset. The marks are made from inside the
+  // belonged to — the same idiom `loadedHouseholdId`/`isLoading` uses above.
+  //
+  // The id comparison alone is NOT sufficient: it invalidates the marks when the
+  // household CHANGES, but a sign-out → sign-in cycle returns to the SAME
+  // household id (a household id is stable, and both adults share it on one
+  // device) while the provider — mounted above <Routes>, so alive through
+  // /login — tears down and re-attaches every listener underneath it. Stale
+  // marks would then read ready over freshly-emptied arrays. So the map is ALSO
+  // cleared explicitly in the listener effect's reset block, alongside
+  // `setLoadedHouseholdId(null)`. The marks themselves are made from inside the
   // onSnapshot callbacks (an external event), never from an effect body.
   const [listenerFirstSnapshot, setListenerFirstSnapshot] =
     useState<Partial<Record<keyof ListenerReadiness, string>>>({});
@@ -826,6 +833,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     processingItemIdsRef.current.clear();
     // Re-arms the isLoading skeleton until the new household's first snapshot lands.
     setLoadedHouseholdId(null);
+    // Re-arms per-listener readiness for the SAME reason, and for a case the
+    // household-id comparison in `listenersReady` cannot cover on its own: a
+    // sign-out → sign-in cycle returns to the same household id, so marks left
+    // over from the previous session would still match and report "delivered"
+    // over the arrays this very block just emptied — a confident, permanently
+    // recorded "$0 spent, 0 habits" weekly recap. Clearing HERE cannot race the
+    // new session's first snapshots: this runs at the top of the effect body,
+    // synchronously before any listener below is attached, and every mark is
+    // made from an onSnapshot callback (never synchronously during subscribe).
+    setListenerFirstSnapshot(prev => (Object.keys(prev).length === 0 ? prev : {}));
 
     if (!householdId) return;
 
@@ -2669,9 +2686,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // (pre-setup) is not a "loading" state.
   const isLoading = !!householdId && loadedHouseholdId !== householdId;
 
-  // Per-listener readiness, derived by comparing each recorded first-snapshot
-  // household against the CURRENT one — so switching households invalidates
-  // every flag without an explicit reset.
+  // Per-listener readiness. Two things hold it honest, and BOTH are needed:
+  // the recorded first-snapshot household must equal the CURRENT one (so a
+  // household switch invalidates every flag by comparison), and the map itself
+  // is cleared in the listener effect's reset block (so a sign-out → sign-in
+  // returning to the same id can't inherit the previous session's marks).
   const listenersReady = useMemo<ListenerReadiness>(() => {
     const delivered = (key: keyof ListenerReadiness) =>
       !!householdId && listenerFirstSnapshot[key] === householdId;

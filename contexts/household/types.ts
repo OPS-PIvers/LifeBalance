@@ -93,9 +93,24 @@ export interface MergeLearnAlias {
  * legitimately holds zero rows still resolves (honestly empty) the moment its
  * listener answers.
  *
- * Each flag flips true when its listener delivers, and back to false on a
- * household switch (they are compared against the CURRENT `householdId`). A
- * listener that ERRORS deliberately never marks itself ready: showing nothing
+ * A flag flips true when its listener delivers its first snapshot for the
+ * household currently loaded, and back to false in exactly two ways — both of
+ * which are required, because neither covers the other:
+ *
+ *  1. The recorded first-snapshot household no longer equals the CURRENT
+ *     `householdId`. This is what invalidates the flags on a household SWITCH,
+ *     with no write of any kind.
+ *  2. The provider's listener effect clears the whole map in its teardown/reset
+ *     block — the same place `loadedHouseholdId` is re-armed — which is what
+ *     covers a SIGN-OUT → SIGN-IN cycle. That path returns to the SAME
+ *     household id (ids are stable, and a shared device signs two adults into
+ *     one household), and the provider sits above `<Routes>` so it never
+ *     unmounts across it. Rule 1 alone would let the previous session's marks
+ *     match the re-attached listeners' household and report "delivered" over
+ *     arrays the reset had just emptied — precisely the confident "$0 spent, 0
+ *     habits" recap these flags exist to prevent.
+ *
+ * A listener that ERRORS deliberately never marks itself ready: showing nothing
  * is recoverable next session, whereas a confident wrong answer is not.
  */
 export interface ListenerReadiness {

@@ -86,6 +86,25 @@ vi.mock('@/components/dashboard/RecapArchiveDrawer', () => ({
 
 import { WeeklyRecapCard } from './WeeklyRecapCard';
 
+/**
+ * Drains the macrotask the auto-open arming is deferred to AND flushes the
+ * React updates it schedules.
+ *
+ * The `act()` wrapper is load-bearing, not decoration. A bare
+ * `await new Promise(r => setTimeout(r, 10))` drains the timer but leaves the
+ * resulting state updates unflushed, so the DOM and localStorage still show
+ * the pre-arming world — which made EVERY negative auto-open assertion below
+ * pass whether or not its guard existed. (Verified by mutation: deleting the
+ * `isLoading` guard, and deleting the resolved-recap gate, each failed zero
+ * of the tests named for them.) Anything asserting that the auto-open did NOT
+ * happen must flush first, or it is asserting nothing.
+ */
+const flushAutoOpen = async () => {
+  await act(async () => {
+    await new Promise(resolve => setTimeout(resolve, 10));
+  });
+};
+
 const makeRecap = (overrides: Partial<WeeklyRecap> = {}): WeeklyRecap => ({
   id: '2026-W27',
   isoWeek: '2026-W27',
@@ -253,7 +272,7 @@ describe('WeeklyRecapCard', () => {
       mockCore.isLoading = true;
       mockClosedWeekResolved(makeRecap({ id: AUTO_OPEN_WEEK, isoWeek: AUTO_OPEN_WEEK }));
       render(<WeeklyRecapCard />);
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await flushAutoOpen();
       expect(screen.queryByTestId('recap-drawer')).not.toBeInTheDocument();
       expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBeNull();
     });
@@ -262,7 +281,7 @@ describe('WeeklyRecapCard', () => {
       window.localStorage.setItem(AUTO_OPEN_KEY, '1');
       mockClosedWeekResolved(makeRecap({ id: AUTO_OPEN_WEEK, isoWeek: AUTO_OPEN_WEEK }));
       render(<WeeklyRecapCard />);
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await flushAutoOpen();
       expect(screen.queryByTestId('recap-drawer')).not.toBeInTheDocument();
     });
 
@@ -275,7 +294,7 @@ describe('WeeklyRecapCard', () => {
       // The push target opens as usual…
       expect(await screen.findByTestId('recap-drawer')).toHaveTextContent('2026-W27');
       // …but the auto-open target never got its turn.
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await flushAutoOpen();
       expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBeNull();
     });
 
@@ -283,7 +302,7 @@ describe('WeeklyRecapCard', () => {
     it('neither opens nor marks while the recap is still resolving', async () => {
       mockClosedWeekPending();
       render(<WeeklyRecapCard />);
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await flushAutoOpen();
       expect(screen.queryByTestId('recap-drawer')).not.toBeInTheDocument();
       // The critical half: marking here would permanently suppress the
       // CORRECT auto-open for this ISO week.
@@ -294,7 +313,7 @@ describe('WeeklyRecapCard', () => {
     it('fires exactly once, later, when the listeners finally deliver', async () => {
       mockClosedWeekPending();
       const { rerender } = render(<WeeklyRecapCard />);
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await flushAutoOpen();
       expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBeNull();
 
       mockClosedWeekResolved(makeRecap({ id: AUTO_OPEN_WEEK, isoWeek: AUTO_OPEN_WEEK }));
@@ -333,7 +352,7 @@ describe('WeeklyRecapCard', () => {
       mockClosedWeekResolved(makeRecap({ id: AUTO_OPEN_WEEK, isoWeek: AUTO_OPEN_WEEK }));
       render(<WeeklyRecapCard />);
 
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await flushAutoOpen();
       // Deferred — and crucially NOT marked, so the week isn't burned.
       expect(screen.queryByTestId('recap-drawer')).not.toBeInTheDocument();
       expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBeNull();

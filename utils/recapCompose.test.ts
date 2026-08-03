@@ -80,6 +80,11 @@ describe('deriveWeeklyRecap', () => {
   it('still emits the household daily-points series even with no per-member data', () => {
     // Mirrors assembleWeeklyRecap's own "household series is real even when
     // memberFacts is empty" contract (see recapAssembly.ts's doc comment).
+    // Positive control first: with the base fixture's attributed habit, this
+    // field is NOT empty — so the `toEqual([])` below is a real consequence of
+    // dropping the habits, not the function's answer for every input.
+    expect(deriveWeeklyRecap(RANGE, baseInput(), true).memberFacts?.length).toBeGreaterThan(0);
+
     const input = { ...baseInput(), habits: [] };
     const derived = deriveWeeklyRecap(RANGE, input, true);
     expect(derived.memberFacts).toEqual([]);
