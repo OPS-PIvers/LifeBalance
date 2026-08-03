@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { dismissAutoOpenedRecap } from './helpers';
 
 /**
  * LifeBalance end-to-end smoke skeleton.
@@ -60,6 +61,7 @@ test.describe('LifeBalance smoke (Test Mode)', () => {
 
   test('navigates to Budget and Habits via the bottom nav', async ({ page }) => {
     await enterTestMode(page);
+    await dismissAutoOpenedRecap(page);
 
     // Scope nav clicks to the bottom-nav landmark: the dashboard also renders
     // links to the same routes, so a page-wide `getByRole('link')` is ambiguous.

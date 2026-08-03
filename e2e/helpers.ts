@@ -122,3 +122,38 @@ export function reviewDrawer(page: Page) {
 export function bottomNav(page: Page) {
   return page.getByRole('navigation', { name: /main navigation/i });
 }
+
+/**
+ * Dismiss the auto-opened weekly recap drawer if Test Mode surfaced one on
+ * this app open (ARCH-1: `WeeklyRecapCard` opens the just-closed week's
+ * recap once per ISO week, Dashboard-only — see CLAUDE.md's Weekly Recap
+ * section). This is the app working as designed, not a bug: a real user in
+ * the way of it just closes it and gets on with what they came to do. Every
+ * spec that lands on the Dashboard first should call this immediately after
+ * `enterTestMode`, before its first real interaction — the drawer's backdrop
+ * covers the whole viewport and intercepts every click underneath it.
+ *
+ * Safe no-op when the recap never opens (a seed/timing combination that
+ * doesn't qualify): a bounded `waitFor` rather than an assertion, so a spec
+ * passes identically whether or not auto-open fired — this must never become
+ * a new source of flake by depending on the recap's presence.
+ *
+ * Waits for the drawer to be fully GONE, not just for the close click to
+ * register. framer-motion's exit animation keeps `drawer-content` painted
+ * (and still intercepting pointer events) for a beat after `onClose` fires,
+ * so returning right after the click reproduces the exact same "intercepts
+ * pointer events" failure, just moved one line later.
+ */
+export async function dismissAutoOpenedRecap(page: Page): Promise<void> {
+  const drawer = page.getByRole('dialog', { name: /Week in review/ });
+  const appeared = await drawer
+    .waitFor({ state: 'visible', timeout: 5000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!appeared) return;
+
+  // The drawer's own close affordance (Drawer.tsx's title-bar X button) —
+  // precise, unlike a blind Escape press or a backdrop click at coordinates.
+  await drawer.getByRole('button', { name: 'Close drawer' }).click();
+  await expect(drawer).toBeHidden();
+}
