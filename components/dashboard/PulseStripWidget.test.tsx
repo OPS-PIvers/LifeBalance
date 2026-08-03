@@ -92,6 +92,23 @@ const gridClass = (): string => {
   return grid?.className ?? '';
 };
 
+/**
+ * The labels of the cells the strip ACTUALLY rendered, in order — each cell's
+ * leading `Eyebrow`.
+ *
+ * This replaced four `expect(screen.queryByText('Points')).not.toBeInTheDocument()`
+ * assertions that could never fail: 'Points' is a label this widget has not
+ * rendered since the cell became 'Consistency', so the absence was true of
+ * every possible render and guarded nothing. An exact, ordered label list is
+ * the assertion those lines were reaching for — it fails on a missing cell, an
+ * extra cell, a renamed cell, and on the wrong cell surviving a module toggle,
+ * which is precisely what each test below is named for.
+ */
+const cellLabels = (): string[] =>
+  Array.from(document.querySelectorAll('div.grid > div')).map(
+    cell => cell.firstElementChild?.textContent?.trim() ?? ''
+  );
+
 describe('PulseStripWidget', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -103,9 +120,10 @@ describe('PulseStripWidget', () => {
 
   it('renders both cells with grid-cols-2 when money + habits are on', () => {
     render(<PulseStripWidget />);
-    expect(screen.queryByText('Points')).not.toBeInTheDocument();
     expect(screen.getByText('Spent')).toBeInTheDocument();
     expect(screen.getByText('Consistency')).toBeInTheDocument();
+    // Exactly these two cells, in this order — no third cell rides along.
+    expect(cellLabels()).toEqual(['Spent', 'Consistency']);
     expect(gridClass()).toContain('grid-cols-2');
   });
 
@@ -113,17 +131,17 @@ describe('PulseStripWidget', () => {
     setEnabledModules(['money', 'lists', 'todos']);
     render(<PulseStripWidget />);
     expect(screen.getByText('Spent')).toBeInTheDocument();
-    expect(screen.queryByText('Points')).not.toBeInTheDocument();
     expect(screen.queryByText('Consistency')).not.toBeInTheDocument();
+    expect(cellLabels()).toEqual(['Spent']);
     expect(gridClass()).toContain('grid-cols-1');
   });
 
   it('renders only Consistency with grid-cols-1 when money is off', () => {
     setEnabledModules(['habits', 'lists', 'todos']);
     render(<PulseStripWidget />);
-    expect(screen.queryByText('Points')).not.toBeInTheDocument();
     expect(screen.getByText('Consistency')).toBeInTheDocument();
     expect(screen.queryByText('Spent')).not.toBeInTheDocument();
+    expect(cellLabels()).toEqual(['Consistency']);
     expect(gridClass()).toContain('grid-cols-1');
   });
 
