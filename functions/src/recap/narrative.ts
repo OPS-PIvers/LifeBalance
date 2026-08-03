@@ -111,6 +111,25 @@ function sanitizeForPrompt(value: string, maxLen: number = PROMPT_VALUE_MAX_LEN)
   return JSON.stringify(truncated);
 }
 
+/**
+ * Trims a free-typed value (category/bucket name, habit title, bill title,
+ * member display name) before it is interpolated into prose or handed to
+ * `sanitizeForPrompt` — a real household has a budget bucket literally named
+ * `"Grocery & Misc. "` (trailing space), and without this the narrative
+ * rendered `"Grocery & Misc.  is where the increase came from"` (double
+ * space) and the prompt handed Gemini the same trailing space to faithfully
+ * reproduce.
+ *
+ * 🛡️ DISPLAY ONLY. Grouping/matching semantics are deliberately untouched:
+ * `"Grocery & Misc. "` and `"Grocery & Misc."` remain two distinct
+ * categories upstream, in the parity-tested `utils/recapAssembly.ts` /
+ * `functions/src/recap/dataAssembly.ts` pair — this file only decides how an
+ * already-grouped value is WORDED once it reaches a sentence.
+ */
+function trimDisplay(value: string): string {
+  return value.trim();
+}
+
 const MONTH_NAMES = [
   "January",
   "February",
@@ -294,8 +313,8 @@ export function selectNarrativeFraming(
 function standings(recap: RecapNumericFields): Array<{ name: string; points: number }> {
   const source: Array<{ name: string; points: number }> =
     recap.memberFacts && recap.memberFacts.length > 0
-      ? recap.memberFacts.filter((f) => !f.isManaged).map((f) => ({ name: f.name, points: f.points }))
-      : recap.pointsByMember.map((p) => ({ name: p.name, points: p.points }));
+      ? recap.memberFacts.filter((f) => !f.isManaged).map((f) => ({ name: trimDisplay(f.name), points: f.points }))
+      : recap.pointsByMember.map((p) => ({ name: trimDisplay(p.name), points: p.points }));
   return [...source].sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
 }
 
@@ -550,10 +569,14 @@ function derivePoints(recap: RecapNumericFields): PointsVerdict {
 }
 
 function deriveStreaks(recap: RecapNumericFields): StreakVerdict {
-  const top = recap.streaksAtRisk.reduce<StreakVerdict["top"]>(
-    (best, s) => (best === null || s.streakDays > best.streakDays ? s : best),
-    null
-  );
+  // `atRisk` is a plain count, unaffected by display trimming. `top`'s title
+  // is trimmed for DISPLAY (see `trimDisplay`); a streak whose title is
+  // nothing but whitespace is skipped as a candidate rather than named blank.
+  const top = recap.streaksAtRisk.reduce<StreakVerdict["top"]>((best, s) => {
+    const habitTitle = trimDisplay(s.habitTitle);
+    if (habitTitle === "") return best;
+    return best === null || s.streakDays > best.streakDays ? { habitTitle, streakDays: s.streakDays } : best;
+  }, null);
   return { atRisk: recap.streaksAtRisk.length, top };
 }
 
@@ -563,8 +586,14 @@ function deriveCategorySpike(recap: RecapNumericFields): CategoryVerdict | null 
     const deltaCents = cents(d.current) - cents(d.prior);
     if (deltaCents < cents(CATEGORY_SPIKE_DOLLARS)) continue;
     if (d.prior > 0 && cents(d.current) < cents(d.prior) * CATEGORY_SPIKE_RATIO) continue;
+    // Trimmed for DISPLAY only — `d.category` is the already-grouped key from
+    // upstream assembly (untouched), this is just how it's worded. A category
+    // that is nothing but whitespace has no usable display name, so it's
+    // skipped rather than rendered as a blank subject ("  is where...").
+    const category = trimDisplay(d.category);
+    if (category === "") continue;
     if (best === null || deltaCents > cents(best.delta)) {
-      best = { category: d.category, current: d.current, prior: d.prior, delta: deltaCents / 100 };
+      best = { category, current: d.current, prior: d.prior, delta: deltaCents / 100 };
     }
   }
   return best;
@@ -578,11 +607,16 @@ function selectHighlight(recap: RecapNumericFields): HighlightVerdict | null {
   const facts = recap.memberFacts ?? [];
 
   const perfect = facts.find((f) => f.perfectHabits.length > 0);
-  const perfectHabit = perfect?.perfectHabits[0];
-  if (perfect && perfectHabit) {
+  const perfectHabitRaw = perfect?.perfectHabits[0];
+  // Trimmed for DISPLAY (see `trimDisplay`); a name/habit that is nothing but
+  // whitespace has no usable display text, so this fact is skipped rather
+  // than rendered with a blank subject.
+  const perfectName = perfect ? trimDisplay(perfect.name) : "";
+  const perfectHabit = perfectHabitRaw !== undefined ? trimDisplay(perfectHabitRaw) : "";
+  if (perfect && perfectName !== "" && perfectHabit !== "") {
     return {
-      text: `${perfect.name} completed ${perfectHabit} every day of the week`,
-      promptText: `${sanitizeForPrompt(perfect.name)} completed ${sanitizeForPrompt(perfectHabit)} every day of the week`,
+      text: `${perfectName} completed ${perfectHabit} every day of the week`,
+      promptText: `${sanitizeForPrompt(perfectName)} completed ${sanitizeForPrompt(perfectHabit)} every day of the week`,
       kind: "perfect_week",
       notable: true,
     };
@@ -595,14 +629,18 @@ function selectHighlight(recap: RecapNumericFields): HighlightVerdict | null {
   const streak = best?.topStreak;
   if (!best || !streak) return null;
 
+  const bestName = trimDisplay(best.name);
+  const habitTitle = trimDisplay(streak.habitTitle);
+  if (bestName === "" || habitTitle === "") return null;
+
   // Singular inside the compound adjective ("a 5-day streak"), which is also a
   // grammar fix: this used to render "a 5-days streak".
   const unit = streak.period === "weekly" ? "week" : "day";
   const notable =
     streak.period === "weekly" ? streak.days >= NOTABLE_STREAK_WEEKS : streak.days >= NOTABLE_STREAK_DAYS;
   return {
-    text: `${best.name} is on a ${streak.days}-${unit} streak with ${streak.habitTitle}`,
-    promptText: `${sanitizeForPrompt(best.name)} is on a ${streak.days}-${unit} streak with ${sanitizeForPrompt(streak.habitTitle)}`,
+    text: `${bestName} is on a ${streak.days}-${unit} streak with ${habitTitle}`,
+    promptText: `${sanitizeForPrompt(bestName)} is on a ${streak.days}-${unit} streak with ${sanitizeForPrompt(habitTitle)}`,
     kind: notable ? "long_streak" : "short_streak",
     notable,
   };
@@ -644,6 +682,12 @@ function deriveAction(
   );
   if (!biggestBill) return null;
 
+  // Trimmed for DISPLAY (see `trimDisplay`); a whitespace-only title has no
+  // usable display text, so no bill fact is surfaced rather than one with a
+  // blank name.
+  const billTitle = trimDisplay(biggestBill.title);
+  if (billTitle === "") return null;
+
   // The recap is READ on the Monday after `weekEnd`, so a bill dated weekEnd+1
   // is due the same day the reader sees this sentence.
   const offset = recap.weekEnd === undefined ? null : daysBetween(recap.weekEnd, biggestBill.date);
@@ -656,8 +700,8 @@ function deriveAction(
         : `is due ${formatMonthDay(biggestBill.date)}`;
   return {
     kind: "bill",
-    text: `${biggestBill.title}, ${money(biggestBill.amount)}, ${when}.`,
-    promptText: `${sanitizeForPrompt(biggestBill.title)}, ${money(biggestBill.amount)}, ${when}.`,
+    text: `${billTitle}, ${money(biggestBill.amount)}, ${when}.`,
+    promptText: `${sanitizeForPrompt(billTitle)}, ${money(biggestBill.amount)}, ${when}.`,
   };
 }
 
@@ -774,9 +818,13 @@ function spendSentences(verdicts: RecapVerdicts, recap: RecapNumericFields): str
     // `heavy` requires a positive total swing that bills are the majority of,
     // so bills are always UP here — but "already budgeted" must not be the
     // only thing said about the figure: the reader is still owed what it grew
-    // from, so a doubled bill isn't invisible behind the reassurance.
+    // from, so a doubled bill isn't invisible behind the reassurance. The
+    // comparison is folded INTO the lead clause ("rose to X, up from Y last
+    // week"), matching the day-to-day spend sentence's own phrasing, instead
+    // of being tacked on after "already budgeted" as a second, comma-spliced
+    // afterthought that never resolves into a full sentence.
     sentences.push(
-      `Bills took another ${money(bills.current)} — most of the week's ${money(recap.totalSpend)} total, and already budgeted, up from ${money(bills.prior)} last week.`
+      `Bills rose to ${money(bills.current)}, up from ${money(bills.prior)} last week — most of the week's ${money(recap.totalSpend)} total and already budgeted.`
     );
   } else if (bills.known && cents(bills.current) > 0 && spend.basis === "dayToDay") {
     if (bills.material) {
@@ -871,7 +919,11 @@ export function buildTemplateNarrative(
 
   if (action) parts.push(action.text);
 
-  return parts.join(" ");
+  // Defensive: every free-typed value reaching a sentence is trimmed at its
+  // source (`trimDisplay`), but this is a second, cheap backstop — no
+  // combination of sentence fragments should ever leave a visible double
+  // space in copy a household reads.
+  return parts.join(" ").replace(/ {2,}/g, " ").trim();
 }
 
 interface NarrativeResult {
@@ -1062,5 +1114,9 @@ export function buildPrompt(
     );
   }
 
-  return lines.join("\n");
+  // Defensive: every free-typed value is trimmed at its source (`trimDisplay`)
+  // before it's JSON-encoded here, but this is a second, cheap backstop — the
+  // model should never be handed a stray double space to faithfully echo
+  // back. Only collapses spaces, never the newlines separating lines.
+  return lines.join("\n").replace(/ {2,}/g, " ");
 }
