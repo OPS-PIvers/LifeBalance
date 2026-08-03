@@ -742,10 +742,15 @@ export function buildRecapDeck(input: RecapDeckInput): RecapDeck {
   cards.push({ kind: 'finish', id: 'finish' });
 
   const best = chart.find(d => d.best && d.total > 0) ?? null;
-  // The DEEPEST loss, not merely the first — `deficitPct` is 100 on exactly
-  // that day, which is the one the gutter draws tallest and the one the card's
-  // sentence must name.
-  const worst = chart.find(d => d.negative && d.deficitPct === 100) ?? null;
+  // The DEEPEST loss, not merely the first — that is the day the gutter draws
+  // tallest and the one the card's sentence must name. Selected directly on the
+  // signed total (lowest wins, ties to the earliest day) rather than on
+  // `deficitPct === 100`: both pick the same day, but a minimum is checkable at
+  // a glance where "the one that happened to scale to 100%" is not.
+  const worst = chart.reduce<RecapChartDay | null>(
+    (lowest, day) => (day.negative && (!lowest || day.total < lowest.total) ? day : lowest),
+    null
+  );
 
   return {
     cards,
