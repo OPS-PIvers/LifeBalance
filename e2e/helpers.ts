@@ -133,10 +133,15 @@ export function bottomNav(page: Page) {
  * `enterTestMode`, before its first real interaction — the drawer's backdrop
  * covers the whole viewport and intercepts every click underneath it.
  *
- * Safe no-op when the recap never opens (a seed/timing combination that
- * doesn't qualify): a bounded `waitFor` rather than an assertion, so a spec
- * passes identically whether or not auto-open fired — this must never become
- * a new source of flake by depending on the recap's presence.
+ * Safe no-op when the recap never opens: a bounded `waitFor` rather than an
+ * assertion, so a spec passes identically whether or not auto-open fired —
+ * this must never become a new source of flake by depending on the recap's
+ * presence. That tolerance is load-bearing, not defensive padding: the
+ * auto-open SKIPS THE WHOLE SESSION when anything else already holds the
+ * drawer slot or when the app was opened from a notification deep link, so on
+ * a seed with pending rows to review (e.g. `transaction-review.spec.ts`'s
+ * 'stub') MainLayout's review drawer wins and the recap simply never appears
+ * — in this run or later in it.
  *
  * Waits for the drawer to be fully GONE, not just for the close click to
  * register. framer-motion's exit animation keeps `drawer-content` painted

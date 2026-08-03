@@ -39,12 +39,10 @@ test.describe('Transaction review drawer (Test Mode, stub seed)', () => {
     await drawer.getByRole('button', { name: 'Approve', exact: true }).click();
     await expect(drawer).not.toBeVisible();
 
-    // The review drawer occupied the app's one "auto-open slot" (see
-    // MainLayout/WeeklyRecapCard's DEFER-not-DROP rule), so a recap armed
-    // before it never got a turn to land at the top-of-test dismissal above —
-    // it lands only now, the moment this drawer's close frees the slot. Dismiss
-    // it again here, before the next click, for the same reason as above.
-    await dismissAutoOpenedRecap(page);
+    // No second `dismissAutoOpenedRecap` here. The review drawer held the
+    // app's one auto-open slot, and WeeklyRecapCard now SKIPS THE SESSION
+    // rather than deferring — so closing this drawer can no longer hand the
+    // user a late-landing recap on the way to their next tap.
 
     // It left the review queue: the Budget link's name is back to exactly "Budget".
     await expect(bottomNav(page).getByRole('link', { name: 'Budget', exact: true })).toBeVisible();

@@ -5,6 +5,8 @@ import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { useRecapForWeek } from '@/hooks/useRecapForWeek';
 import { consumeRecapParam } from '@/utils/recapParam';
+import { getNotificationOpenType } from '@/utils/notificationSource';
+import { getOpenDrawerCount } from '@/utils/openDrawerRegistry';
 import { lastClosedWeekRange } from '@/utils/recapWeek';
 import { track } from '@/services/analytics';
 import { roundMoney } from '@/utils/money';
@@ -49,26 +51,47 @@ import type { WeeklyRecap } from '@/types/schema';
  *    branch below, independent of the ephemeral card's freshness/dismissal
  *    state — opens `RecapArchiveDrawer`, a non-expiring browsable list.
  *
- * 🛡️ ARM, THEN LAND — the auto-open is one of only two surfaces in this app
- * that opens a bottom sheet WITHOUT the user asking (the other is
- * `MainLayout`'s `ReviewPendingDrawer`), so it obeys the same rule that
- * `utils/openDrawerRegistry.ts` was written for: consult `useOpenDrawerCount`
- * and wait your turn instead of slamming a second full-screen sheet over the
- * one the user is already reading. It DEFERS WITHIN THE SESSION rather than
- * giving up until the next app open — matching `MainLayout`'s choice, and for
- * a stronger reason here: this fires at most once per ISO week and the whole
- * point is that the week just closed, so "try again in a few days" is
- * effectively "never" for that week's ceremony. Resolution still starts the
- * moment the week is armed (so the recap is ready the instant the stack
- * empties); only the OPEN waits.
+ * 🛡️ OPEN CLEANLY OR SKIP THE SESSION — never defer. The auto-open is one of
+ * only two surfaces in this app that opens a bottom sheet WITHOUT the user
+ * asking (the other is `MainLayout`'s `ReviewPendingDrawer`), so it consults
+ * `utils/openDrawerRegistry.ts` before taking the slot. Where `MainLayout`
+ * DEFERS an occupied slot, this one ABANDONS the attempt for the whole
+ * session and re-tries on the next app open. That difference is deliberate,
+ * and it reverses this component's original choice: deferring meant that with
+ * pending rows to review, the review drawer took the slot first and the recap
+ * then landed *the instant the user closed it* — mid-task, right as they moved
+ * on to what they actually opened the app for. One interruption dismissed and
+ * a second immediately handed over is worse than a ceremony that waits a day.
+ * A recap is not time-critical the way a review prompt is; the week stays
+ * eligible, so tomorrow's open shows it properly.
+ *
+ * Two conditions suppress it, both meaning "the user is already somewhere":
+ *  1. Any other bottom sheet holds the slot (`openDrawerCount > 0`).
+ *  2. This app open was a deliberate notification arrival — the `?recap=`
+ *     deep link (which owns the open itself, via `hadPushParamRef`) or ANY
+ *     other push, which `getNotificationOpenType()` reports from the `nsrc`
+ *     tag the boot-time consumer already stripped. A bill reminder must land
+ *     on the bill, not on last week's ceremony.
+ *
+ * They are evaluated at BOTH decision points — arming and landing — because
+ * the two moments see different worlds. At arm time the transactions listener
+ * usually hasn't answered, so the review drawer it will open doesn't exist
+ * yet; the landing check is the load-bearing one precisely because the
+ * delivery that makes this recap resolvable is the same delivery that opens
+ * the competing sheet. The arm-time check is the cheap early-out that avoids
+ * starting resolution work we would only throw away. Neither one ever waits:
+ * once the outcome is `'skipped'` it is final for this mount, so a stack that
+ * empties later can no longer produce a late landing.
  *
  * 🛡️ AND MARK ONLY ON LANDING. `markRecapAutoOpened` is the permanent,
  * per-ISO-week "this has been shown" stamp, so it must never be written for a
  * recap that wasn't shown — or worse, one derived from listeners that hadn't
  * answered yet (which is a confident "$0 spent, 0 habits" ceremony). Landing
  * requires BOTH a `status: 'ready'` recap (`useRecapForWeek` gates that on
- * `listenersReady`) and an empty drawer stack, and the stamp is written in the
- * effect that observes the landing — never before it.
+ * `listenersReady`) and a free slot, and the stamp is written in the effect
+ * that observes the landing — never before it. Every SKIP path leaves the week
+ * unmarked and therefore still eligible; that is what makes "try again next
+ * app open" true rather than a promise the code doesn't keep.
  */
 
 // Freshness window + dismissal logic live in recapVisibility.ts, shared with
@@ -164,38 +187,54 @@ export const WeeklyRecapCard: React.FC<WeeklyRecapCardProps> = ({ drawerOnly = f
   // `autoOpenRecap` null until the numbers are trustworthy. Deferred to a
   // macrotask for the same reason the push-param consume above is: this must
   // not call `setState` synchronously inside the effect body.
+  //
+  // The two suppression checks run here as a cheap early-out (see the header):
+  // reading the registry and the recorded notification arrival directly is
+  // safe in a timer callback — the "never read module-mutable state in a
+  // render body" rule that `useOpenDrawerCount` exists for does not apply
+  // outside render.
   const autoOpenDecidedRef = useRef(false);
   const [autoOpenWeek, setAutoOpenWeek] = useState<string | null>(null);
   useEffect(() => {
     if (autoOpenDecidedRef.current || isLoading) return;
     autoOpenDecidedRef.current = true;
     window.setTimeout(() => {
-      if (hadPushParamRef.current) return; // the deep link already owns this open
+      if (hadPushParamRef.current) return; // the ?recap= deep link already owns this open
+      if (getNotificationOpenType() !== null) return; // a push sent the user somewhere specific
+      if (getOpenDrawerCount() > 0) return; // someone else already holds the slot
       const closed = lastClosedWeekRange();
       if (wasRecapAutoOpened(closed.isoWeek)) return;
       setAutoOpenWeek(closed.isoWeek);
     }, 0);
   }, [isLoading]);
-  // Resolution starts as soon as the week is armed, INDEPENDENT of whether the
-  // drawer may open yet — so a deferred auto-open lands instantly once the
-  // stack empties rather than starting its Firestore/derivation work then.
+  // Resolution starts as soon as the week is armed — the open/skip verdict
+  // below can only be reached once there is a trustworthy recap to open.
   const { recap: autoOpenRecap } = useRecapForWeek(autoOpenWeek);
 
-  // LAND. Guarded set-state-during-render (the documented React pattern, and
-  // exactly what `MainLayout`'s review auto-open does) — waits for a resolved
-  // recap AND an empty drawer stack. Once landed it latches, so the recap
-  // drawer's own registration (count 1) can't un-land it.
-  const [autoOpenLanded, setAutoOpenLanded] = useState(false);
-  if (autoOpenWeek && !autoOpenLanded && autoOpenRecap && openDrawerCount === 0) {
-    setAutoOpenLanded(true);
+  // LAND — or SKIP, once and for all. Guarded set-state-during-render (the
+  // documented React pattern, and exactly what `MainLayout`'s review auto-open
+  // does), evaluated at the FIRST render where the recap is resolvable: an
+  // empty slot opens it, an occupied one abandons this session's attempt. Both
+  // outcomes latch, which is what makes the skip a skip rather than a deferral
+  // — and on the landing side it also stops the recap drawer's own
+  // registration (count 1) from un-landing what it just opened.
+  const [autoOpenOutcome, setAutoOpenOutcome] = useState<'undecided' | 'landed' | 'skipped'>(
+    'undecided'
+  );
+  if (autoOpenWeek && autoOpenOutcome === 'undecided' && autoOpenRecap) {
+    setAutoOpenOutcome(openDrawerCount === 0 ? 'landed' : 'skipped');
   }
+  const autoOpenLanded = autoOpenOutcome === 'landed';
 
   // Marked on LANDING — i.e. once a recap built from delivered listener data
   // is actually being shown. Not on close (a user who dismisses it instantly
-  // should still never see it again) and never on the incomplete path: writing
-  // this stamp for a recap that was never shown, or one derived off listeners
-  // that hadn't answered, permanently suppresses the correct auto-open for
-  // that ISO week.
+  // should still never see it again), never on the incomplete path, and never
+  // on a SKIP: writing this stamp for a recap that was never shown, or one
+  // derived off listeners that hadn't answered, permanently suppresses the
+  // correct auto-open for that ISO week. `autoOpenLanded` is the only key that
+  // opens this door, and only `'landed'` sets it — a skipped session leaves
+  // the week eligible for the next app open, which is the entire premise of
+  // skipping instead of deferring.
   const autoOpenMarkedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!autoOpenLanded || !autoOpenWeek) return;
@@ -223,7 +262,7 @@ export const WeeklyRecapCard: React.FC<WeeklyRecapCardProps> = ({ drawerOnly = f
     setPushWeek(null);
     setArchiveSelection(null);
     setAutoOpenWeek(null);
-    setAutoOpenLanded(false);
+    setAutoOpenOutcome('undecided');
   };
 
   const drawer = (

@@ -3,6 +3,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { WeeklyRecap } from '@/types/schema';
 import { track } from '@/services/analytics';
 import { registerOpenDrawer, resetOpenDrawersForTest } from '@/utils/openDrawerRegistry';
+import {
+  resetNotificationOpenTypeForTest,
+  trackNotificationOpenFromUrl,
+} from '@/utils/notificationSource';
 
 // The card reads recaps from the core slice; useFormatCurrency reads the same
 // mocked context (householdSettings → default USD).
@@ -131,6 +135,7 @@ describe('WeeklyRecapCard', () => {
     mockCore.isLoading = false;
     retry.mockClear();
     resetOpenDrawersForTest();
+    resetNotificationOpenTypeForTest();
     mockUseRecapForWeek.mockReset();
     mockUseRecapForWeek.mockImplementation(() => unresolved('idle'));
   });
@@ -341,27 +346,118 @@ describe('WeeklyRecapCard', () => {
       await waitFor(() => expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBe('1'));
     });
 
-    // --- BLOCKING 2: wait your turn in the drawer registry -----------------
-    // Both halves live in ONE test on purpose: the "did not stack" assertion
-    // is a negative, and a negative alone can pass for the wrong reason (an
-    // auto-open that never armed at all looks identical to one that correctly
-    // deferred). Asserting the landing in the same test is the positive
-    // control that proves the open was genuinely pending the whole time.
-    it('waits its turn: no stack over an open drawer, then DEFERS-not-drops once the stack empties', async () => {
+    // --- BLOCKING 2: the slot is taken → SKIP THE SESSION, never defer -----
+    // Every negative below is paired with a positive control in the SAME
+    // test — a fresh mount that does open — because "it didn't open" and
+    // "auto-open is dead code" are indistinguishable assertions otherwise,
+    // and the positive control is simultaneously the proof that the skip left
+    // the week ELIGIBLE rather than burning it.
+
+    it('skips the session when another drawer already holds the slot, and closing it brings no late landing', async () => {
       const close = registerOpenDrawer(Symbol('some-other-sheet'));
       mockClosedWeekResolved(makeRecap({ id: AUTO_OPEN_WEEK, isoWeek: AUTO_OPEN_WEEK }));
-      render(<WeeklyRecapCard />);
+      const { unmount } = render(<WeeklyRecapCard />);
 
       await flushAutoOpen();
-      // Deferred — and crucially NOT marked, so the week isn't burned.
+      expect(screen.queryByTestId('recap-drawer')).not.toBeInTheDocument();
+      expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBeNull();
+      // The slot was already taken when we armed, so the week is never even
+      // REQUESTED — no derivation, and no `loadAllTransactions()` full-history
+      // read, for an open we already know we won't take. (This is what makes
+      // the arm-time check load-bearing rather than a duplicate of the
+      // landing check below, which would suppress the open either way.)
+      expect(mockUseRecapForWeek).not.toHaveBeenCalledWith(AUTO_OPEN_WEEK);
+
+      // THE REVERSAL. Under the old defer-within-the-session rule this is
+      // exactly where the recap landed — the instant the user dismissed the
+      // sheet they were already dealing with, handing them a second
+      // interruption mid-task. It must now stay shut for the rest of the
+      // session.
+      act(() => close());
+      await flushAutoOpen();
+      expect(screen.queryByTestId('recap-drawer')).not.toBeInTheDocument();
+      expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBeNull();
+      expect(track).not.toHaveBeenCalledWith(
+        'recap_viewed',
+        expect.objectContaining({ source: 'auto' })
+      );
+
+      // POSITIVE CONTROL — the next app open (fresh mount, nothing in the
+      // way) does show it, so the week was skipped and not burned.
+      unmount();
+      render(<WeeklyRecapCard />);
+      expect(await screen.findByTestId('recap-drawer')).toHaveTextContent(AUTO_OPEN_WEEK);
+      await waitFor(() => expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBe('1'));
+      expect(mockUseRecapForWeek).toHaveBeenCalledWith(AUTO_OPEN_WEEK);
+    });
+
+    it('skips the session when a drawer takes the slot while the recap is still resolving', async () => {
+      // The e2e-traced shape: at ARM time nothing is open (the transactions
+      // listener hasn't answered), so the arm-time check passes — and then the
+      // very delivery that resolves this recap is the one that opens
+      // MainLayout's review drawer. The LANDING check is what has to catch it.
+      mockClosedWeekPending();
+      const { rerender, unmount } = render(<WeeklyRecapCard />);
+      await flushAutoOpen();
+
+      const close = registerOpenDrawer(Symbol('review-drawer'));
+      mockClosedWeekResolved(makeRecap({ id: AUTO_OPEN_WEEK, isoWeek: AUTO_OPEN_WEEK }));
+      rerender(<WeeklyRecapCard />);
+      await flushAutoOpen();
+
       expect(screen.queryByTestId('recap-drawer')).not.toBeInTheDocument();
       expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBeNull();
 
       act(() => close());
+      await flushAutoOpen();
+      expect(screen.queryByTestId('recap-drawer')).not.toBeInTheDocument();
+      expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBeNull();
 
-      // Same session, no remount, no second app open.
+      // POSITIVE CONTROL — same mock, fresh session, empty slot.
+      unmount();
+      render(<WeeklyRecapCard />);
       expect(await screen.findByTestId('recap-drawer')).toHaveTextContent(AUTO_OPEN_WEEK);
       await waitFor(() => expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBe('1'));
+    });
+
+    // --- BLOCKING 3: don't hijack a deliberate deep-link arrival -----------
+    it('skips the session when a push deep-linked the user somewhere else', async () => {
+      // Reproduce boot faithfully: index.tsx consumes + strips `nsrc` BEFORE
+      // React mounts, so the card can never read it off the URL itself.
+      window.history.replaceState(null, '', '/?nsrc=bill_reminder#/budget');
+      trackNotificationOpenFromUrl();
+      expect(window.location.search).toBe('');
+
+      mockClosedWeekResolved(makeRecap({ id: AUTO_OPEN_WEEK, isoWeek: AUTO_OPEN_WEEK }));
+      const { unmount } = render(<WeeklyRecapCard />);
+      await flushAutoOpen();
+
+      expect(screen.queryByTestId('recap-drawer')).not.toBeInTheDocument();
+      expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBeNull();
+
+      // POSITIVE CONTROL — identical setup minus the notification arrival.
+      unmount();
+      resetNotificationOpenTypeForTest();
+      render(<WeeklyRecapCard />);
+      expect(await screen.findByTestId('recap-drawer')).toHaveTextContent(AUTO_OPEN_WEEK);
+      await waitFor(() => expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBe('1'));
+    });
+
+    it('still opens the recap push itself, which carries BOTH nsrc and ?recap=', async () => {
+      // The real weekly-recap notification URL. `nsrc` suppresses the
+      // auto-open path, but the `?recap=` deep link opens the drawer directly
+      // — so the one notification whose whole purpose is the recap must not be
+      // silenced by the guard written for every other notification.
+      window.history.replaceState(null, '', '/?recap=2026-W27&nsrc=weekly_recap');
+      trackNotificationOpenFromUrl();
+      mockCore.recaps = [makeRecap()];
+      mockClosedWeekResolved(makeRecap({ id: AUTO_OPEN_WEEK, isoWeek: AUTO_OPEN_WEEK }));
+      render(<WeeklyRecapCard />);
+
+      expect(await screen.findByTestId('recap-drawer')).toHaveTextContent('2026-W27');
+      // …and the auto-open never fired alongside it.
+      await flushAutoOpen();
+      expect(window.localStorage.getItem(AUTO_OPEN_KEY)).toBeNull();
     });
   });
 
