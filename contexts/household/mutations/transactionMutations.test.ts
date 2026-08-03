@@ -124,6 +124,11 @@ import type { Account, CalendarItem, FreezeBank, Habit, Household, Transaction }
 const HOUSEHOLD_ID = 'house1';
 const db = {} as never;
 
+// ATTR-1: the household roster every maker is handed. A card owner must be on
+// it to be credited (`currentMemberPredicate` fails CLOSED), so every existing
+// test below stays UNATTRIBUTED simply by tagging no card owner.
+const MEMBERS = [{ uid: 'user-1' }, { uid: 'user-2' }];
+
 const accounts: Account[] = [
   { id: 'acc-check', name: 'Checking', type: 'checking', balance: 500, lastUpdated: '' },
   { id: 'acc-save', name: 'Savings', type: 'savings', balance: 900, lastUpdated: '' },
@@ -140,6 +145,7 @@ function makeDeps() {
     // Habit-firing deps (see the manual-entry describe below). Empty here so
     // these balance/funding cases exercise the no-habit path unchanged.
     habits: [] as Habit[],
+    members: MEMBERS,
     freezeBank: null as FreezeBank | null,
     recentTransactionsRef: { current: [{ id: 'existing' } as Transaction] },
   };
@@ -613,6 +619,7 @@ describe('makeUpdateTransactionCategory — bank-email-sync needsCategory row', 
       habits: [],
       transactions,
       accounts,
+      members: MEMBERS,
       householdSettings: null,
       freezeBank: null,
     };
@@ -736,6 +743,7 @@ describe('habit firing writes DELTAS, never whole values', () => {
     habits,
     transactions,
     accounts,
+    members: MEMBERS,
     householdSettings: null,
     freezeBank: null,
   });
@@ -970,6 +978,7 @@ describe('habit firing writes DELTAS, never whole values', () => {
       habits: [firedHabit],
       transactions: [verifiedTx],
       accounts,
+      members: MEMBERS,
       calendarItems: [],
     });
     await reverseTransactionApproval('tx-9', { category: 'Uncategorized' }, ['h1']);
@@ -1023,6 +1032,7 @@ describe('habit firing writes DELTAS, never whole values', () => {
     habits,
     transactions,
     accounts,
+    members: MEMBERS,
     calendarItems,
   });
 
@@ -1493,6 +1503,7 @@ describe('settled-bill guard across every mutation that could orphan the bill', 
       habits: [],
       transactions: [settledTx],
       accounts,
+      members: MEMBERS,
       calendarItems: [paidBill],
     });
     await reverseTransactionApproval('tx-1', { category: 'Uncategorized' }, []);
@@ -1788,6 +1799,7 @@ describe('transaction habit fires under freezeMode: per_member', () => {
     habits,
     transactions: [pendingTx],
     accounts,
+    members: MEMBERS,
     householdSettings,
     freezeBank,
   });
@@ -1979,5 +1991,400 @@ describe('transaction habit fires under freezeMode: per_member', () => {
     expect(hh[0]!.data![`freezeBanksByMember.${ALICE}.tokens`]).toBe(1);
     expect(hh[0]!.data!['points.total']).toEqual({ __increment: 10 });
     expect(commitCount).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ATTR-1 — card-owner attribution of transaction-fired habit completions
+// ---------------------------------------------------------------------------
+
+/**
+ * The production symptom this closes: a week of 47 habit completions produced
+ * only 26 attributed, and the entire gap was AUTOMATED fires — a
+ * transaction-fired completion wrote no `Habit.completedBy` entry, so it landed
+ * in the weekly recap's "unattributed" bucket with nobody's name on it.
+ *
+ * The card is the only signal a transaction carries about who spent the money
+ * (two adults, separate debit cards, one shared checking account), so
+ * `Account.cardOwners[Transaction.cardLast4]` is the creditee — never the
+ * person who happened to approve the nightly sync.
+ */
+describe('ATTR-1 — transaction-fired habits credit the card owner', () => {
+  const APPROVER = 'user-1'; // the acting uid every maker below runs as
+  const CARDHOLDER = 'user-2';
+  const GHOST = 'user-departed';
+  const today = getLocalDateString();
+
+  const habitPath = (id: string) => `households/${HOUSEHOLD_ID}/habits/${id}`;
+  const submissionsPath = (id: string) => `${habitPath(id)}/submissions`;
+  const householdPath = `households/${HOUSEHOLD_ID}`;
+  const memberPath = (uid: string) => `households/${HOUSEHOLD_ID}/members/${uid}`;
+
+  // CARDHOLDER holds card ...8899 on the shared checking account; ...1234 is
+  // a second card on the SAME account with no owner tagged.
+  const cardAccounts: Account[] = [
+    {
+      id: 'acc-check',
+      name: 'Checking',
+      type: 'checking',
+      balance: 500,
+      lastUpdated: '',
+      cardLast4s: ['8899', '1234'],
+      cardOwners: { '8899': CARDHOLDER },
+    },
+  ];
+
+  const baseHabit: Habit = {
+    id: 'h1',
+    title: 'Order from Target/Amazon',
+    category: 'Finance',
+    type: 'positive',
+    scoringType: 'threshold',
+    period: 'daily',
+    basePoints: 10,
+    targetCount: 1,
+    count: 0,
+    totalCount: 4,
+    completedDates: ['2020-01-01'],
+    streakDays: 0,
+    // Non-stale so the fire takes the ordinary increment() path.
+    lastUpdated: new Date().toISOString(),
+  };
+
+  /** A pending bank-sync row on the CARDHOLDER's card, awaiting review. */
+  const cardTx: Transaction = {
+    id: 'tx-card',
+    amount: 30,
+    merchant: 'TARGET T-2189',
+    category: 'Uncategorized',
+    date: today,
+    status: 'pending_review',
+    isRecurring: false,
+    source: 'shortcut',
+    autoCategorized: false,
+    accountId: 'acc-check',
+    cardLast4: '8899',
+    createdAt: '',
+    createdBy: APPROVER,
+  };
+
+  const deps = (
+    habits: Habit[],
+    transactions: Transaction[] = [cardTx],
+    members: { uid: string }[] = [{ uid: APPROVER }, { uid: CARDHOLDER }],
+    accountList: Account[] = cardAccounts,
+  ) => ({
+    db,
+    householdId: HOUSEHOLD_ID,
+    currentUser: { uid: APPROVER },
+    habits,
+    transactions,
+    accounts: accountList,
+    members,
+    householdSettings: null,
+    freezeBank: null,
+  });
+
+  const habitData = () => capturedUpdates.find(u => u.ref.__path === habitPath('h1'))!.data!;
+  const attributionKeys = () =>
+    Object.keys(habitData()).filter(k => k === 'completedBy' || k.startsWith('completedBy.'));
+
+  beforeEach(() => {
+    capturedSets = [];
+    capturedUpdates = [];
+    capturedDeletes = [];
+    commitCount = 0;
+    commitErrors = [];
+    submissionDocs = {};
+    vi.clearAllMocks();
+  });
+
+  it('credits the CARD OWNER, not the approver, via a completedBy DOT PATH', async () => {
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(deps([baseHabit]));
+    await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
+
+    expect(habitData()[`completedBy.${today}.${CARDHOLDER}`]).toEqual({ __increment: 1 });
+    expect(habitData()[`completedBy.${today}.${APPROVER}`]).toBeUndefined();
+  });
+
+  // 🛡️ 2026-07-15 clobber class: a whole-map write from a stale offline cache
+  // wipes another device's attribution. Only dot paths may ever be written.
+  it('writes ONLY dot paths — never a bare `completedBy` key', async () => {
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(deps([baseHabit]));
+    await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
+
+    expect(attributionKeys()).toEqual([`completedBy.${today}.${CARDHOLDER}`]);
+    expect(habitData()).not.toHaveProperty('completedBy');
+  });
+
+  // 🏁 THE RULE MOST LIKELY TO REGRESS. Groceries and the liquor store are done
+  // FOR the household; pinning one spouse's name to them is the outcome
+  // `creditMode: 'household'` exists to prevent.
+  it('writes NO completedBy for a creditMode: "household" habit fired by the SAME card', async () => {
+    const shared: Habit = { ...baseHabit, title: 'Grocery Store', creditMode: 'household' };
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(deps([shared]));
+    await updateTransactionCategory('tx-card', 'Groceries', ['h1']);
+
+    // It still FIRES — it just credits nobody individually.
+    expect(habitData()['totalCount']).toEqual({ __increment: 1 });
+    expect(attributionKeys()).toEqual([]);
+    const submission = capturedSets.find(s => s.ref.__path.startsWith(submissionsPath('h1')))!;
+    expect(submission.data).not.toHaveProperty('attributedTo');
+    // Points stay on the pool at the habit-level figure, exactly as before.
+    const hh = capturedUpdates.find(u => u.ref.__path === householdPath)!;
+    expect(hh.data!['points.total']).toEqual({ __increment: 10 });
+    expect(capturedUpdates.find(u => u.ref.__path === memberPath(CARDHOLDER))).toBeUndefined();
+  });
+
+  it('an ASSIGNED chore is unchanged — creditMode is inert and no member is named', async () => {
+    const chore: Habit = { ...baseHabit, assignedTo: CARDHOLDER, creditMode: 'household' };
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(deps([chore]));
+    await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
+
+    expect(attributionKeys()).toEqual([]);
+    expect(capturedUpdates.find(u => u.ref.__path === memberPath(CARDHOLDER))).toBeUndefined();
+    const hh = capturedUpdates.find(u => u.ref.__path === householdPath)!;
+    expect(hh.data!['points.total']).toEqual({ __increment: 10 });
+  });
+
+  it('an UNTAGGED card credits nobody and does not crash', async () => {
+    const untagged: Transaction = { ...cardTx, cardLast4: '1234' };
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(
+      deps([baseHabit], [untagged]),
+    );
+    await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
+
+    expect(attributionKeys()).toEqual([]);
+    expect(habitData()['totalCount']).toEqual({ __increment: 1 });
+    expect(commitCount).toBe(1);
+  });
+
+  // Attribution is FORWARD-ONLY: every transaction written before
+  // `Transaction.cardLast4` shipped has no value, and nothing is inferred.
+  it('a row with NO cardLast4 (every legacy row) credits nobody and does not crash', async () => {
+    const legacy: Transaction = { ...cardTx };
+    delete legacy.cardLast4;
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(
+      deps([baseHabit], [legacy]),
+    );
+    await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
+
+    expect(attributionKeys()).toEqual([]);
+    expect(habitData()['totalCount']).toEqual({ __increment: 1 });
+    expect(commitCount).toBe(1);
+  });
+
+  // 🛡️ `cardOwners` is member-writable and `firestore.rules` carries no key
+  // allowlist for the accounts collection, so the roster is the only authority.
+  it('credits nobody when cardOwners names a uid that is NOT a current member', async () => {
+    const strangersCard: Account[] = [{ ...cardAccounts[0]!, cardOwners: { '8899': GHOST } }];
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(
+      deps([baseHabit], [cardTx], [{ uid: APPROVER }, { uid: CARDHOLDER }], strangersCard),
+    );
+    await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
+
+    expect(attributionKeys()).toEqual([]);
+    expect(capturedUpdates.find(u => u.ref.__path === memberPath(GHOST))).toBeUndefined();
+  });
+
+  it('credits nobody when the roster has not loaded (fails CLOSED)', async () => {
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(
+      deps([baseHabit], [cardTx], []),
+    );
+    await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
+
+    expect(attributionKeys()).toEqual([]);
+  });
+
+  it('snapshots attributedTo on the submission so the undo reverses the right member', async () => {
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(deps([baseHabit]));
+    await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
+
+    const submission = capturedSets.find(s => s.ref.__path.startsWith(submissionsPath('h1')))!;
+    expect(submission.data!.attributedTo).toBe(CARDHOLDER);
+    // `createdBy` stays the OPERATOR — the two legitimately differ here.
+    expect(submission.data!.createdBy).toBe(APPROVER);
+    expect(submission.data!.date).toBe(today);
+  });
+
+  it('commits the habit, its submission, household points AND the member points in ONE batch', async () => {
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(deps([baseHabit]));
+    await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
+
+    expect(commitCount).toBe(1);
+    expect(habitData()[`completedBy.${today}.${CARDHOLDER}`]).toEqual({ __increment: 1 });
+    expect(capturedSets.some(s => s.ref.__path.startsWith(submissionsPath('h1')))).toBe(true);
+    const hh = capturedUpdates.find(u => u.ref.__path === householdPath)!;
+    expect(hh.data!['points.total']).toEqual({ __increment: 10 });
+    const cardholderPoints = capturedUpdates.find(u => u.ref.__path === memberPath(CARDHOLDER))!;
+    expect(cardholderPoints.data!['points.total']).toEqual({ __increment: 10 });
+    expect(cardholderPoints.data!['points.daily']).toEqual({ __increment: 10 });
+  });
+
+  it('writes ONE member update even when the same card fires TWO habits', async () => {
+    const second: Habit = { ...baseHabit, id: 'h2', title: 'Impulse purchase' };
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(
+      deps([baseHabit, second]),
+    );
+    await updateTransactionCategory('tx-card', 'Shopping', ['h1', 'h2']);
+
+    const memberWrites = capturedUpdates.filter(u => u.ref.__path === memberPath(CARDHOLDER));
+    expect(memberWrites).toHaveLength(1);
+    expect(memberWrites[0]!.data!['points.total']).toEqual({ __increment: 20 });
+    expect(commitCount).toBe(1);
+  });
+
+  it('back-dates the attribution to the TRANSACTION date, never today', async () => {
+    const backDate = format(subDays(parseISO(today), 3), 'yyyy-MM-dd');
+    const oldTx: Transaction = { ...cardTx, date: backDate };
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(deps([baseHabit], [oldTx]));
+    await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
+
+    expect(habitData()[`completedBy.${backDate}.${CARDHOLDER}`]).toEqual({ __increment: 1 });
+    expect(habitData()[`completedBy.${today}.${CARDHOLDER}`]).toBeUndefined();
+  });
+
+  it('the manual-entry path (addTransaction) attributes by card too', async () => {
+    const { addTransaction } = makeAddTransaction({
+      db,
+      householdId: HOUSEHOLD_ID,
+      user: { uid: APPROVER },
+      householdSettings: null,
+      accounts: cardAccounts,
+      habits: [baseHabit],
+      members: [{ uid: APPROVER }, { uid: CARDHOLDER }],
+      freezeBank: null,
+      recentTransactionsRef: { current: [{ id: 'existing' } as Transaction] },
+    });
+    await addTransaction({
+      amount: 30,
+      merchant: 'Target',
+      category: 'Shopping',
+      date: today,
+      status: 'verified',
+      isRecurring: false,
+      source: 'manual',
+      autoCategorized: false,
+      accountId: 'acc-check',
+      cardLast4: '8899',
+      relatedHabitIds: ['h1'],
+    });
+
+    expect(habitData()[`completedBy.${today}.${CARDHOLDER}`]).toEqual({ __increment: 1 });
+    expect(commitCount).toBe(1);
+  });
+
+  describe('the undo un-writes exactly what the fire wrote', () => {
+    const firedHabit: Habit = {
+      ...baseHabit,
+      count: 1,
+      totalCount: 5,
+      completedDates: [today, '2020-01-01'],
+      streakDays: 1,
+      completedBy: { [today]: { [CARDHOLDER]: 1 } },
+    };
+    const verifiedTx: Transaction = {
+      ...cardTx,
+      status: 'verified',
+      category: 'Shopping',
+      relatedHabitIds: ['h1'],
+      firedHabitIds: ['h1'],
+    };
+
+    const seedSubmission = (over: Record<string, unknown> = {}) => {
+      submissionDocs[submissionsPath('h1')] = [{
+        id: 'sub-1',
+        habitId: 'h1',
+        habitTitle: baseHabit.title,
+        timestamp: `${today}T12:00:00.000Z`,
+        date: today,
+        count: 1,
+        pointsEarned: 10,
+        streakDaysAtTime: 1,
+        multiplierApplied: 1,
+        createdBy: APPROVER,
+        attributedTo: CARDHOLDER,
+        createdAt: `${today}T12:00:00.000Z`,
+        sourceTransactionId: 'tx-card',
+        ...over,
+      }];
+    };
+
+    const reverseDeps = (habits: Habit[]) => ({
+      db,
+      householdId: HOUSEHOLD_ID,
+      habits,
+      transactions: [verifiedTx],
+      accounts: cardAccounts,
+      members: [{ uid: APPROVER }, { uid: CARDHOLDER }],
+      calendarItems: [] as CalendarItem[],
+    });
+
+    it('decrements the credited member via a DOT PATH and debits their points', async () => {
+      seedSubmission();
+      const { reverseTransactionApproval } = makeReverseTransactionApproval(
+        reverseDeps([firedHabit]),
+      );
+      await reverseTransactionApproval('tx-card', { category: 'Uncategorized' }, ['h1']);
+
+      const data = habitData();
+      expect(data[`completedBy.${today}.${CARDHOLDER}`]).toEqual({ __increment: -1 });
+      expect(data).not.toHaveProperty('completedBy');
+      const memberWrite = capturedUpdates.find(u => u.ref.__path === memberPath(CARDHOLDER))!;
+      expect(memberWrite.data!['points.total']).toEqual({ __increment: -10 });
+      expect(commitCount).toBe(1);
+    });
+
+    // Bounded by the STORED attribution: a doc naming a member who holds no
+    // units on that date takes back nothing rather than driving a node negative.
+    it('takes back nothing — points included — when the habit records no attribution', async () => {
+      seedSubmission();
+      const noAttribution: Habit = { ...firedHabit, completedBy: {} };
+      const { reverseTransactionApproval } = makeReverseTransactionApproval(
+        reverseDeps([noAttribution]),
+      );
+      await reverseTransactionApproval('tx-card', { category: 'Uncategorized' }, ['h1']);
+
+      expect(Object.keys(habitData()).filter(k => k.startsWith('completedBy'))).toEqual([]);
+      // 🛡️ No member debit either: some other path already reversed them, and
+      // debiting again off `attributedTo` alone would double-charge.
+      expect(capturedUpdates.find(u => u.ref.__path === memberPath(CARDHOLDER))).toBeUndefined();
+    });
+
+    // `resolveReversalSources` falls through to the date's other holders when
+    // the named member holds nothing — the points must follow the same holder.
+    it('debits whoever the stored attribution actually names, not the submission', async () => {
+      seedSubmission();
+      const heldByApprover: Habit = {
+        ...firedHabit,
+        completedBy: { [today]: { [APPROVER]: 1 } },
+      };
+      const { reverseTransactionApproval } = makeReverseTransactionApproval(
+        reverseDeps([heldByApprover]),
+      );
+      await reverseTransactionApproval('tx-card', { category: 'Uncategorized' }, ['h1']);
+
+      expect(habitData()[`completedBy.${today}.${APPROVER}`]).toEqual({ __increment: -1 });
+      expect(habitData()[`completedBy.${today}.${CARDHOLDER}`]).toBeUndefined();
+      const approverWrite = capturedUpdates.find(u => u.ref.__path === memberPath(APPROVER))!;
+      expect(approverWrite.data!['points.total']).toEqual({ __increment: -10 });
+      expect(capturedUpdates.find(u => u.ref.__path === memberPath(CARDHOLDER))).toBeUndefined();
+    });
+
+    // Every fire written before ATTR-1, plus every household-credit / chore /
+    // untagged-card fire: no `attributedTo`, so no member moves either way.
+    it('moves no member for a submission with no attributedTo', async () => {
+      seedSubmission({ attributedTo: undefined });
+      const { reverseTransactionApproval } = makeReverseTransactionApproval(
+        reverseDeps([firedHabit]),
+      );
+      await reverseTransactionApproval('tx-card', { category: 'Uncategorized' }, ['h1']);
+
+      expect(Object.keys(habitData()).filter(k => k.startsWith('completedBy'))).toEqual([]);
+      expect(capturedUpdates.find(u => u.ref.__path === memberPath(CARDHOLDER))).toBeUndefined();
+      // The pool reversal is unchanged.
+      const hh = capturedUpdates.find(u => u.ref.__path === householdPath)!;
+      expect(hh.data!['points.total']).toEqual({ __increment: -10 });
+    });
   });
 });

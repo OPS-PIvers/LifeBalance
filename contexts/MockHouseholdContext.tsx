@@ -31,6 +31,10 @@ import {
   withDatesUnattributed,
   type PointsBuckets,
 } from '@/utils/habitAttribution';
+import {
+  currentMemberPredicate,
+  resolveCardFireAttribution,
+} from '@/utils/habitCardAttribution';
 import { computeBackdatedHabitFire, computeHabitTriggerFire, computeHabitTriggerReverse } from '@/utils/habitTriggerFire';
 import { evaluateTodoSubtaskGate, TodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import { setSubtaskDone, subtaskProgress } from '@/utils/subtasks';
@@ -1681,13 +1685,25 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       // habits and out-of-window dates return null and never fire.
       const fireDate = overrides?.date ?? existing?.date ?? getLocalDateString();
       const today = getLocalDateString();
+      // ATTR-1 parity: the completion is credited to the owner of the CARD that
+      // produced the row, so Test Mode's recap shows the same attributed /
+      // unattributed split production does. Same resolver, same four decline
+      // cases (household credit, chore, no/untagged card, uid off the roster).
+      const cardAccount = resolveTargetAccount(existing?.accountId, accounts);
+      const isCurrentMember = currentMemberPredicate(membersRef.current);
       let pointsChange = 0;
       setHabits(prev => prev.map(h => {
         if (!habitIdsToFire.includes(h.id)) return h;
         const fire = computeBackdatedHabitFire(h, fireDate, today);
         if (!fire) return h;
         pointsChange += fire.pointsDelta.total;
-        return {
+        const attributedTo = resolveCardFireAttribution({
+          habit: h,
+          account: cardAccount,
+          cardLast4: existing?.cardLast4,
+          isCurrentMember,
+        });
+        const fired: Habit = {
           ...h,
           count: fire.resetCount ? fire.count : h.count + fire.countDelta,
           totalCount: h.totalCount + fire.totalCountDelta,
@@ -1699,6 +1715,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
           hasSubmissionTracking: true,
           lastUpdated: new Date().toISOString(),
         };
+        return attributedTo
+          ? withAttributionDelta(fired, fireDate, attributedTo, 1)
+          : fired;
       }));
       // Only the lifetime total is mirrored here: pointsDelta.total is the
       // bucket a back-dated fire always credits, while daily/weekly are gated by

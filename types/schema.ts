@@ -288,10 +288,14 @@ export interface Account {
    *  untouched by this field. Absent on every account that predates this
    *  field (no migration needed) and absent per-card until a member
    *  explicitly tags one — an untagged card is "unknown owner", never an
-   *  error. A later PR uses this to attribute transaction-fired habit
-   *  completions to the member who made the purchase; this field only stores
-   *  the tagging — no attribution logic lives here. See the lookup helper in
-   *  `utils/cardOwnership.ts`. */
+   *  error. ATTR-1 consumes this: a transaction-fired habit completion is
+   *  credited to the card's owner (`utils/habitCardAttribution.ts`), so tagging
+   *  a card now decides who earns the points and penalties for purchases on it.
+   *  This field only stores the tagging — no attribution logic lives here.
+   *  🛡️ `firestore.rules` carries NO key allowlist for the `accounts`
+   *  collection, so any member can write any string here; every consumer must
+   *  verify the uid is a CURRENT member before crediting it. See the lookup
+   *  helper in `utils/cardOwnership.ts`. */
   cardOwners?: Record<string, string>;
   /** Last 4 digits of the bank ACCOUNT number itself (distinct from a card),
    *  e.g. parsed from a bank email header like "for account ...5581". Used to
@@ -971,9 +975,10 @@ export interface HabitSubmission {
    * previous assignee actually earned.
    *
    * 🛡️ ABSENT means "credits NOBODY" — never "credits `createdBy`". Besides
-   * pre-attribution history, three live writers produce a doc with neither this
-   * field nor `creditsHousehold` (`transactionMutations`' keyword fire,
-   * `noSpendFire`, the backfill script) and none of them writes `completedBy`.
+   * pre-attribution history, live writers still produce a doc with neither this
+   * field nor `creditsHousehold` (`noSpendFire`, the backfill script, and every
+   * UNATTRIBUTED `transactionMutations` keyword fire — see ATTR-1 below) and
+   * none of them writes `completedBy`.
    * `createdBy` is the OPERATOR, and on a keyword fire that is a real member
    * uid, so an `?? createdBy` fallback hands a reversal a creditee the doc never
    * had: it debits that member's own genuine attribution, or — once
@@ -982,6 +987,15 @@ export interface HabitSubmission {
    * `attributedTo` against the POOL alone, at its stored `pointsEarned`.
    * `updateHabitSubmission` applies the same rule to a count edit: such a doc
    * moves no member in either direction, only the pool.
+   *
+   * ATTR-1: a TRANSACTION-fired completion now sets this to the owner of the
+   * card that produced the row (`Account.cardOwners[Transaction.cardLast4]`,
+   * via `utils/habitCardAttribution.ts`) — NOT to `createdBy`, since the person
+   * approving the nightly bank sync is rarely the person who spent the money.
+   * It stays absent whenever that resolver declines: a `creditMode: 'household'`
+   * habit, an assigned chore, a row with no `cardLast4` (every transaction
+   * predating that field — attribution is deliberately forward-only, with no
+   * backfill), an untagged card, or a uid no longer on the member roster.
    */
   attributedTo?: string;
   /**

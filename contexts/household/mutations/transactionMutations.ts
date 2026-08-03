@@ -45,7 +45,19 @@ import {
   memberFreezeBankPatch,
   resolveFreezeMode,
 } from '@/utils/freezeSettings';
-import { frozenDatesByPath } from '@/utils/habitAttribution';
+import {
+  completedByPath,
+  frozenDatesByPath,
+  memberPeriodPointsDelta,
+  periodPointsMove,
+  resolveReversalSources,
+  withAttributionDelta,
+  type PointsBuckets,
+} from '@/utils/habitAttribution';
+import {
+  currentMemberPredicate,
+  resolveCardFireAttribution,
+} from '@/utils/habitCardAttribution';
 import { computeBackdatedHabitFire } from '@/utils/habitTriggerFire';
 import {
   isWithinBackdateWindow,
@@ -161,6 +173,27 @@ async function readPriorPeriodCounts(deps: {
   return priorPeriodCounts;
 }
 
+/**
+ * The Firestore payload that moves one points document by a bucket triple.
+ * Zero buckets are omitted entirely (mirrors `useHabitActions`' private
+ * `pointsIncrements`), so a delta belonging to a closed week writes
+ * `points.total` alone.
+ */
+function pointsIncrements(buckets: PointsBuckets): Record<string, unknown> {
+  return {
+    ...(buckets.total !== 0 ? { 'points.total': increment(buckets.total) } : {}),
+    ...(buckets.daily !== 0 ? { 'points.daily': increment(buckets.daily) } : {}),
+    ...(buckets.weekly !== 0 ? { 'points.weekly': increment(buckets.weekly) } : {}),
+  };
+}
+
+/** Accumulate `add` into the bucket triple `into`, in place. */
+function addBuckets(into: PointsBuckets, add: PointsBuckets): void {
+  into.daily += add.daily;
+  into.weekly += add.weekly;
+  into.total += add.total;
+}
+
 /** What `fireHabitsIntoBatch` accumulated across the habits it fired. */
 interface HabitFireBatchResult {
   /** The ids that actually fired — the transaction's dedup ledger for them. */
@@ -210,6 +243,31 @@ interface HabitFireBatchResult {
  * modes (including an absent setting) `freezeMode` changes nothing here: the
  * uid is used for `HabitSubmission.createdBy` exactly as before, the un-freeze
  * reads `frozenDates`, and the refund lands on the shared household bank.
+ *
+ * ── ATTR-1: CARD-OWNER ATTRIBUTION ──────────────────────────────────────────
+ *
+ * `createdByUid` is the OPERATOR and is deliberately NOT the credit target: the
+ * person who approves the nightly sync is not necessarily the person who made
+ * the purchase, and in this household it is the same person every night. The
+ * credit target is the owner of the CARD that produced the row
+ * (`resolveCardFireAttribution`, which also enforces the household-credit and
+ * roster rules); `cardAccount` + `cardLast4` are what that resolver reads.
+ *
+ * An attributed fire changes THREE things and nothing else:
+ *   1. the habit doc gains a `completedBy.<fireDate>.<uid>` dot-path
+ *      `increment(1)` — never a whole-map write (2026-07-15 clobber class);
+ *   2. its points are decomposed through `periodPointsMove`, so the POOL
+ *      receives what the corrective recompute will derive (Σ member awards +
+ *      the unattributed remainder) instead of the habit-level figure, and the
+ *      credited member's own award rides the SAME batch to their member doc;
+ *   3. the submission doc snapshots `attributedTo`, which is what makes the
+ *      undo (`reverseTransactionApproval`) and `deleteHabitSubmission` reverse
+ *      the member who was actually credited rather than re-deriving one.
+ *
+ * With NO attribution — a household-credit habit, a chore, a row with no
+ * `cardLast4`, an untagged card, a uid off the roster — every one of those
+ * collapses back to the pre-ATTR-1 code path exactly: habit-level
+ * `fire.pointsDelta` to the pool, no member write, no `attributedTo`.
  */
 function fireHabitsIntoBatch(
   batch: WriteBatch,
@@ -225,15 +283,27 @@ function fireHabitsIntoBatch(
     sourceTransactionId: string;
     /** RESOLVED via `resolveFreezeMode` — never the raw stored field. */
     freezeMode: FreezeMode;
+    /**
+     * ATTR-1. The account the transaction's money moved through (the same
+     * `resolveTargetAccount` result the balance delta uses) and the card that
+     * produced it. Both optional: absent means "no owner to find", which is
+     * every legacy row and every hand-entered one.
+     */
+    cardAccount?: Account | null;
+    cardLast4?: string | null;
+    /** ATTR-1. Fail-CLOSED roster predicate — see `currentMemberPredicate`. */
+    isCurrentMember: (uid: string) => boolean;
   },
 ): HabitFireBatchResult {
   const {
     db, householdId, habits, habitIdsToFire, fireDate, today,
     priorPeriodCounts, createdByUid, sourceTransactionId, freezeMode,
+    cardAccount, cardLast4, isCurrentMember,
   } = deps;
 
   const newlyFiredHabitIds: string[] = [];
   const pointsDelta = { daily: 0, weekly: 0, total: 0 };
+  const memberPointsDelta = new Map<string, PointsBuckets>();
   const freezeRefundEntries: FreezeBankHistoryEntry[] = [];
   let freezeTokensRefunded = 0;
   let freezeRefundMemberId: string | undefined;
@@ -269,10 +339,65 @@ function fireHabitsIntoBatch(
     );
     if (!fire) continue;
 
+    // ATTR-1: who this completion is FOR — the owner of the card that produced
+    // the transaction, or `null` (today's unattributed behaviour) for a
+    // household-credit habit, a chore, an untagged/absent card, or a uid that
+    // is not on the current roster. See `resolveCardFireAttribution`.
+    const attributedTo = resolveCardFireAttribution({
+      habit,
+      account: cardAccount,
+      cardLast4,
+      isCurrentMember,
+    });
+
+    // The post-fire view of the habit, used ONLY to compute the points
+    // decomposition below (the Firestore write is always the dot-path
+    // increment, never this object). Mirrors `addHabitSubmission`'s
+    // `submissionAfter`: a PAST-period fire leaves the live counter alone.
+    const after: Habit | null = attributedTo
+      ? withAttributionDelta(
+          {
+            ...habit,
+            count: fire.inCurrentPeriod ? fire.count : habit.count,
+            totalCount: habit.totalCount + fire.totalCountDelta,
+            // Sorted newest-first, matching `computeBackdatedHabitFire`'s own
+            // `nextCompletedDates` and `addHabitSubmission` — the scorers are
+            // order-independent, but keeping one convention means a future
+            // order-sensitive reader can't disagree with them.
+            completedDates: fire.addedDate !== undefined
+              ? [...habit.completedDates, fire.addedDate].sort((a, b) => (a < b ? 1 : -1))
+              : habit.completedDates,
+          },
+          fireDate,
+          attributedTo,
+          1,
+        )
+      : null;
+
+    // With attribution the pool receives the before/after difference of the
+    // HOUSEHOLD scorer (Σ member awards + the unattributed remainder) — by
+    // construction whatever the corrective recompute derives, so there is no
+    // login-time correction jump. Without it, the habit-level figure
+    // `computeBackdatedHabitFire` produced, exactly as before ATTR-1.
+    const move = after ? periodPointsMove(habit, after, fireDate, today) : null;
+
+    // The member's OWN award, at THEIR streak multiplier — the figure stored on
+    // the submission doc so the undo reverses precisely what was credited
+    // (`addHabitSubmission`'s `memberAward` fork, same reasoning).
+    const memberAward = after && attributedTo
+      ? memberPeriodPointsDelta(habit, after, attributedTo, fireDate, today)
+      : 0;
+
     // DELTA WRITE (never whole client-computed values): increment() counters +
     // arrayUnion/arrayRemove completion history, so a stale-cache device can't
     // clobber another device's completions (2026-07-15 incident).
     batch.update(doc(db, `households/${householdId}/habits`, habitId), {
+      // 🛡️ ATTR-1 attribution: a DOT-PATH increment on this one member's node,
+      // never a whole `completedBy` map write and never a derived
+      // `deleteField()` — an offline PWA's cached map can be arbitrarily stale
+      // and either would wipe another device's attribution. Same discipline as
+      // `useHabitActions`' `attributionUpdate`.
+      ...(attributedTo ? { [completedByPath(fireDate, attributedTo)]: increment(1) } : {}),
       // A past-period fire leaves the live counter alone entirely; a stale
       // current-period one writes it absolutely (see BackdatedHabitFireDelta).
       ...(fire.resetCount
@@ -319,10 +444,22 @@ function fireHabitsIntoBatch(
       timestamp: new Date(`${fireDate}T12:00:00`).toISOString(),
       date: fireDate,
       count: 1,
-      pointsEarned: fire.pointsEarned,
+      // 🛡️ `pointsEarned` SEMANTICS FORK (mirrors `addHabitSubmission`): an
+      // ATTRIBUTED doc stores the credited member's OWN award, so the undo
+      // debits exactly what that member was paid; an unattributed doc keeps the
+      // habit-level figure it always stored.
+      pointsEarned: attributedTo ? memberAward : fire.pointsEarned,
+      // Habit-level in BOTH cases, exactly as `addHabitSubmission` records them
+      // even for an explicitly attributed log — only `pointsEarned` forks.
       streakDaysAtTime: fire.streakAtFireDate,
       multiplierApplied: fire.multiplier,
+      // The OPERATOR (who approved/entered the row), never the creditee — the
+      // two legitimately differ here, which is the whole point of ATTR-1.
       createdBy: createdByUid,
+      // 🛡️ SNAPSHOT the credited uid: `reverseTransactionApproval` and
+      // `deleteHabitSubmission` both reverse against THIS field rather than
+      // re-deriving a creditee, and the card's owner can be re-tagged later.
+      ...(attributedTo ? { attributedTo } : {}),
       createdAt: new Date().toISOString(),
       sourceTransactionId,
     };
@@ -356,12 +493,40 @@ function fireHabitsIntoBatch(
       });
     }
 
-    pointsDelta.daily += fire.pointsDelta.daily;
-    pointsDelta.weekly += fire.pointsDelta.weekly;
-    pointsDelta.total += fire.pointsDelta.total;
-    totalPointsChange += fire.pointsEarned;
+    if (move) {
+      // ATTRIBUTED: pool gets the household scorer's own move; every member the
+      // move touches (the creditee, plus anyone whose threshold-period award
+      // this fire flipped on as a side effect) gets theirs. Accumulated rather
+      // than written per habit — a batch may not write the same member doc
+      // twice, and one transaction can fire several habits for one person.
+      addBuckets(pointsDelta, move.household);
+      for (const [memberId, buckets] of move.perMember) {
+        const acc = memberPointsDelta.get(memberId) ?? { daily: 0, weekly: 0, total: 0 };
+        addBuckets(acc, buckets);
+        memberPointsDelta.set(memberId, acc);
+      }
+      totalPointsChange += move.household.total;
+    } else {
+      pointsDelta.daily += fire.pointsDelta.daily;
+      pointsDelta.weekly += fire.pointsDelta.weekly;
+      pointsDelta.total += fire.pointsDelta.total;
+      totalPointsChange += fire.pointsEarned;
+    }
     successfulHabitsCount++;
     newlyFiredHabitIds.push(habitId);
+  }
+
+  // Every credited member's own points, in the SAME batch as the habit docs and
+  // the caller's household write — a habit and its points must never diverge.
+  // `isCurrentMember` already proved each uid has a live doc, so no
+  // `batch.update` here can reject NOT_FOUND and poison the all-or-nothing
+  // batch. (`periodPointsMove` can name a side-effect member the resolver never
+  // vetted, so each is re-checked.)
+  for (const [memberId, buckets] of memberPointsDelta) {
+    if (!isCurrentMember(memberId)) continue;
+    const updates = pointsIncrements(buckets);
+    if (Object.keys(updates).length === 0) continue;
+    batch.update(doc(db, `households/${householdId}/members`, memberId), updates);
   }
 
   return {
@@ -516,10 +681,13 @@ export function makeAddTransaction(deps: {
   householdSettings: Household | null;
   accounts: Account[];
   habits: Habit[];
+  /** ATTR-1: the roster a card owner must be on to be credited. */
+  members: { uid: string }[];
   freezeBank: FreezeBank | null;
   recentTransactionsRef: { current: Transaction[] };
 }) {
-  const { db, householdId, user, householdSettings, accounts, habits, freezeBank, recentTransactionsRef } = deps;
+  const { db, householdId, user, householdSettings, accounts, habits, members, freezeBank, recentTransactionsRef } = deps;
+  const isCurrentMember = currentMemberPredicate(members);
 
   const addTransaction = async (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => {
     if (!householdId) {
@@ -689,6 +857,13 @@ export function makeAddTransaction(deps: {
             // Resolved (never the raw field) so an absent/unknown setting maps
             // onto today's shared-bank behaviour.
             freezeMode: resolveFreezeMode(householdSettings),
+            // ATTR-1: the account the money moved through (same routing the
+            // balance delta uses) and the card that produced the row. A
+            // hand-entered transaction carries no card, so this path is
+            // normally unattributed — the resolver handles that as a no-op.
+            cardAccount: target,
+            cardLast4: tx.cardLast4,
+            isCurrentMember,
           })
         : null;
       // A plain ARRAY, not arrayUnion: this is a `set` on a brand-new document,
@@ -904,10 +1079,13 @@ export function makeUpdateTransactionCategory(deps: {
   habits: Habit[];
   transactions: Transaction[];
   accounts: Account[];
+  /** ATTR-1: the roster a card owner must be on to be credited. */
+  members: { uid: string }[];
   householdSettings: Household | null;
   freezeBank: FreezeBank | null;
 }) {
-  const { db, householdId, currentUser, habits, transactions, accounts, householdSettings, freezeBank } = deps;
+  const { db, householdId, currentUser, habits, transactions, accounts, members, householdSettings, freezeBank } = deps;
+  const isCurrentMember = currentMemberPredicate(members);
 
   const updateTransactionCategory = async (
     id: string,
@@ -1042,6 +1220,14 @@ export function makeUpdateTransactionCategory(deps: {
       // Resolved (never the raw field) so an absent/unknown setting maps onto
       // today's shared-bank behaviour.
       freezeMode: resolveFreezeMode(householdSettings),
+      // ATTR-1: the card owner is the creditee, not the approver. `newTarget`
+      // is the account the (possibly re-tagged) row now belongs to — the same
+      // routing the balance delta above uses — and `cardLast4` is written by
+      // every capture path that saw a card digit. Absent on every legacy row,
+      // which the resolver treats as "unattributed", exactly as today.
+      cardAccount: newTarget,
+      cardLast4: existingTx.cardLast4,
+      isCurrentMember,
     });
     const { newlyFiredHabitIds, pointsDelta, totalPointsChange, successfulHabitsCount } = fired;
 
@@ -1171,9 +1357,12 @@ export function makeReverseTransactionApproval(deps: {
   habits: Habit[];
   transactions: Transaction[];
   accounts: Account[];
+  /** ATTR-1: the roster whose docs this undo may safely `batch.update`. */
+  members: { uid: string }[];
   calendarItems: CalendarItem[];
 }) {
-  const { db, householdId, habits, transactions, accounts, calendarItems } = deps;
+  const { db, householdId, habits, transactions, accounts, members, calendarItems } = deps;
+  const isCurrentMember = currentMemberPredicate(members);
 
   const reverseTransactionApproval = async (
     id: string,
@@ -1241,6 +1430,11 @@ export function makeReverseTransactionApproval(deps: {
     const today = getLocalDateString();
     const weekStart = format(startOfWeek(parseISO(today), { weekStartsOn: 1 }), 'yyyy-MM-dd');
     const pointsDelta = { daily: 0, weekly: 0, total: 0 };
+    // ATTR-1: the per-member half of the reversal, accumulated across habits so
+    // one member doc is written at most once (a batch may not write the same
+    // document twice, and one transaction can fire several of a member's
+    // habits).
+    const memberPointsDelta = new Map<string, PointsBuckets>();
 
     for (const habitId of firedHabitIds) {
       const habit = habits.find(h => h.id === habitId);
@@ -1315,7 +1509,58 @@ export function makeReverseTransactionApproval(deps: {
       const datesToClear = [...reversedDates].filter(d => (remainingByDate.get(d) ?? 0) === 0);
       const nextCompletedDates = habit.completedDates.filter(d => !datesToClear.includes(d));
 
+      // 🛡️ ATTR-1: un-write the attribution the forward fire wrote. Bounded by
+      // `resolveReversalSources` — the STORED `Habit.completedBy` is the only
+      // record of who was actually credited, so a doc naming a member who no
+      // longer holds units there takes back nothing rather than driving someone
+      // else's node negative. Dot-path `increment(-n)` per member, never a
+      // whole-map write and never a derived `deleteField()`.
+      //
+      // A submission with NO `attributedTo` (every fire before ATTR-1, plus
+      // every household-credit / chore / untagged-card fire) moves no member in
+      // either direction — matching `deleteHabitSubmission`'s rule for such a
+      // doc, and the reason `attributedTo` is snapshotted rather than derived.
+      // Units accumulated per dot path FIRST (a habit fired by one transaction
+      // normally has exactly one submission, but two on the same date+member
+      // must collapse into ONE increment — a later object key would silently
+      // replace the earlier one rather than adding to it).
+      const reversedUnitsByPath = new Map<string, number>();
+      for (const s of fired) {
+        if (!s.attributedTo) continue;
+        const units = s.count ?? 0;
+        if (units <= 0) continue;
+        const sources = resolveReversalSources(habit, s.attributedTo, s.date, units);
+        for (const source of sources) {
+          const path = completedByPath(s.date, source.memberId);
+          reversedUnitsByPath.set(path, (reversedUnitsByPath.get(path) ?? 0) + source.units);
+        }
+        // Debit at the submission's STORED figure — exactly what was credited —
+        // but ONLY for the members the attribution reversal above actually took
+        // units back from, and in proportion to those units. Deriving the debit
+        // from `attributedTo` alone would double-debit a member whose node some
+        // other path had already cleared, and would miss the fall-through case
+        // where `resolveReversalSources` takes the units from a DIFFERENT holder.
+        // A transaction fire always writes `count: 1`, so the share is exact.
+        const earned = s.pointsEarned ?? 0;
+        if (earned === 0) continue;
+        for (const source of sources) {
+          if (!isCurrentMember(source.memberId)) continue;
+          const share = Math.round((earned * source.units) / units);
+          if (share === 0) continue;
+          const acc = memberPointsDelta.get(source.memberId) ?? { daily: 0, weekly: 0, total: 0 };
+          acc.total -= share;
+          if (s.date === today) acc.daily -= share;
+          if (s.date >= weekStart && s.date <= today) acc.weekly -= share;
+          memberPointsDelta.set(source.memberId, acc);
+        }
+      }
+      const attributionReversal: Record<string, unknown> = {};
+      for (const [path, units] of reversedUnitsByPath) {
+        if (units !== 0) attributionReversal[path] = increment(-units);
+      }
+
       batch.update(doc(db, `households/${householdId}/habits`, habitId), {
+        ...attributionReversal,
         ...(liveUnitsReversed > 0 ? { count: increment(-liveUnitsReversed) } : {}),
         totalCount: increment(-Math.min(unitsReversed, habit.totalCount)),
         ...(datesToClear.length > 0 ? { completedDates: arrayRemove(...datesToClear) } : {}),
@@ -1349,6 +1594,14 @@ export function makeReverseTransactionApproval(deps: {
     if (pointsDelta.total !== 0) householdUpdates['points.total'] = increment(pointsDelta.total);
     if (Object.keys(householdUpdates).length > 0) {
       batch.update(doc(db, `households/${householdId}`), householdUpdates);
+    }
+
+    // ATTR-1: the credited members' own debits, in the SAME batch as the habit
+    // docs, the household points and the transaction reversal.
+    for (const [memberId, buckets] of memberPointsDelta) {
+      const updates = pointsIncrements(buckets);
+      if (Object.keys(updates).length === 0) continue;
+      batch.update(doc(db, `households/${householdId}/members`, memberId), updates);
     }
 
     await batch.commit();
