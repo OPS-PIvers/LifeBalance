@@ -837,4 +837,60 @@ describe("emailAddsNothingNew", () => {
       })
     ).toBe(true);
   });
+
+  // Regression: cents() (used elsewhere in this file) is sign-insensitive
+  // (Math.abs), which is harmless for its existing amount-only callers but
+  // would be a real bug here — a balance can genuinely be negative
+  // (toSignedDollars in bankEmailParser.ts parses "($50.00)" / "-$50.00" for
+  // an overdrawn account), so +X must never compare equal to -X.
+  it("does NOT skip when the stored available balance is positive but the incoming one is the same magnitude negative", () => {
+    expect(
+      emailAddsNothingNew({
+        withdrawalCount: 0,
+        incomingAvailable: -949.51,
+        incomingEnding: 949.51,
+        storedAvailable: 949.51,
+        storedEnding: 949.51,
+      })
+    ).toBe(false);
+  });
+
+  it("does NOT skip on the mirrored sign-flip (stored negative, incoming positive)", () => {
+    expect(
+      emailAddsNothingNew({
+        withdrawalCount: 0,
+        incomingAvailable: 949.51,
+        incomingEnding: 949.51,
+        storedAvailable: -949.51,
+        storedEnding: 949.51,
+      })
+    ).toBe(false);
+  });
+
+  it("does NOT skip on a sign-flip of the ENDING balance alone (available equal)", () => {
+    expect(
+      emailAddsNothingNew({
+        withdrawalCount: 0,
+        incomingAvailable: 949.51,
+        incomingEnding: -949.51,
+        storedAvailable: 949.51,
+        storedEnding: 949.51,
+      })
+    ).toBe(false);
+  });
+
+  it("DOES skip when both figures are genuinely negative and equal (a real overdrawn repeat)", () => {
+    // The guard must still work for an overdrawn account whose balance
+    // genuinely hasn't moved — the fix must not make it never fire on
+    // negatives, only stop it from treating +X and -X as equal.
+    expect(
+      emailAddsNothingNew({
+        withdrawalCount: 0,
+        incomingAvailable: -50.0,
+        incomingEnding: -50.0,
+        storedAvailable: -50.0,
+        storedEnding: -50.0,
+      })
+    ).toBe(true);
+  });
 });
