@@ -38,10 +38,9 @@
  */
 
 import type { BankEmailWithdrawal } from "./bankEmailParser";
-import { merchantSimilar } from "./transactionIdentity";
+import { merchantSimilar, INCOME_CATEGORY } from "./transactionIdentity";
 import { pickFillTarget, type ReconcileCandidate } from "./reconcile";
 import { pickMerchantRule, type MerchantRule } from "./merchantRules";
-import { INCOME_CATEGORY } from "./noSpendDay";
 
 // ---------------------------------------------------------------------------
 // Candidate shapes (all pre-loaded by the endpoint; pure in, decision out)

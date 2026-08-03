@@ -159,7 +159,7 @@ describe("isVerifiedConfirmCandidate", () => {
   });
 
   it("rejects a $0 Apple Pay stub, which belongs to the FILL step", () => {
-    expect(isVerifiedConfirmCandidate({ ...verified, amount: 0, needsAmount: true })).toBe(false);
+    expect(isVerifiedConfirmCandidate({ ...verified, amount: 0 })).toBe(false);
     expect(isVerifiedConfirmCandidate({ ...verified, amount: -5 })).toBe(false);
   });
 
