@@ -949,57 +949,91 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       };
     });
   });
-  // One canned weekly recap (Plan 02, ceremony stage 5) so Test Mode renders
-  // the Dashboard recap card AND the full 4-card story deck. Anchored to the
-  // PREVIOUS ISO week — which is what the server now writes, since generation
-  // moved to Monday morning and the recap describes the week that just CLOSED
-  // — with a fresh `generatedAt` so the card's 4-day freshness window passes.
+  // TWO canned weekly recaps, so BOTH rendering paths are reachable in Test
+  // Mode (Plan 02, ceremony stage 5, rebuilt by DECK-1):
   //
-  // The per-member numbers are deliberately coherent — and deliberately BELOW
-  // the live week. `SEED_MEMBERS`' two adults hold 150 / 95 = 245 for the
-  // IN-PROGRESS week; this closed week seeds 120 / 76 = 196, so the scoreboard
-  // widget's trend chip actually renders (+25%) instead of computing a 0% delta
-  // and hiding itself. The internal invariants still hold for the recap's own
-  // week: household `totalPoints` = Σ adults, `pointsByMember` = `memberFacts`
-  // points, and the day split sums to each member's weekly figure.
+  //  [0] the PREVIOUS ISO week, carrying the full ceremony payload — opens as
+  //      the story deck. Fresh `generatedAt` so the Dashboard card's 4-day
+  //      freshness window passes and the card is tappable.
+  //  [1] the week BEFORE that, with NO `memberFacts`/`dailyPoints` — the shape
+  //      of every stored recap W27–W30. `hasCeremonyData` reads false and the
+  //      drawer renders its PRE-DECK layout. Reachable at
+  //      `#/?recap=<isoWeek>`; its own card is deliberately stale so it never
+  //      competes for the Dashboard slot.
+  //
+  // The ceremony week's numbers are deliberately coherent — and deliberately
+  // BELOW the live week. `SEED_MEMBERS`' two adults hold 150 / 95 = 245 for the
+  // IN-PROGRESS week; this closed week seeds 102 / 68, so the scoreboard
+  // widget's trend chip actually renders instead of computing a 0% delta and
+  // hiding itself. The internal invariants still hold for the recap's own week:
+  // household `totalPoints` = Σ adults + Σ unattributed, `pointsByMember` =
+  // `memberFacts` points, `billsSpend + dayToDaySpend = totalSpend`, and
+  // `householdCredit + unclaimed = Σ dailyPoints[].unattributed`.
   const [recaps] = useState<WeeklyRecap[]>(() => {
     const closedWeek = new Date(Date.now() - 7 * 86400000);
     const isoWeek = format(closedWeek, "RRRR-'W'II");
     const monday = startOfWeek(closedWeek, { weekStartsOn: 1 });
     const day = (i: number) => getLocalDateString(new Date(monday.getTime() + i * 86400000));
-    // Mon–Sun, Test User then Jordan: sums to 120 / 76 (196 together).
+    // Mon–Sun, Test User then Jordan: sums to 102 / 68.
+    //
+    // 🛡️ WEDNESDAY IS DELIBERATELY NEGATIVE (-6 / -4, netting -10). Pre-DECK-1
+    // a losing day drew a zero-height column — literally nothing — so the seed
+    // has to contain one for the deficit gutter to be verifiable at all.
     const split: Array<[number, number]> = [
       [20, 8],
       [16, 16],
-      [12, 4],
+      [-6, -4],
       [20, 12],
       [16, 8],
       [24, 20],
       [12, 8],
     ];
-    return [{
+    // Points from `creditMode: 'household'` habits (groceries, homemade
+    // dinners) plus one genuinely unclaimed remainder — the pair the week card
+    // now names instead of apologising for. 16 + 3 = 19 unattributed.
+    const shared: Array<[number, number]> = [
+      [0, 0],
+      [5, 0],
+      [0, 0],
+      [8, 0],
+      [0, 0],
+      [3, 3],
+      [0, 0],
+    ];
+    const ceremony: WeeklyRecap = {
       id: isoWeek,
       isoWeek,
       generatedAt: new Date().toISOString(),
       totalSpend: 187.45,
       priorWeekSpend: 243.1,
+      // 🛡️ The split the money card leads with. Day-to-day is essentially flat
+      // ($122.45 vs $123.10) while the TOTAL fell 23% — purely because last
+      // week carried $120 of bills and this one carries $65. Reporting the
+      // total alone would credit the household with restraint it never showed.
+      billsSpend: 65.0,
+      priorWeekBillsSpend: 120.0,
+      dayToDaySpend: 122.45,
+      priorWeekDayToDaySpend: 123.1,
       topCategoryDeltas: [
         { category: 'Groceries', current: 92.5, prior: 128.2 },
         { category: 'Entertainment', current: 45.0, prior: 62.4 },
         { category: 'Gas', current: 49.95, prior: 52.5 },
       ],
       habitCompletions: 9,
-      streaksAtRisk: [{ habitTitle: 'Exercise 30min', streakDays: 5 }],
+      streaksAtRisk: [
+        { habitTitle: 'Exercise 30min', streakDays: 5 },
+        { habitTitle: 'Read 30 minutes', streakDays: 9 },
+      ],
       pointsByMember: [
-        { memberId: 'test-user-id', name: 'Test User', points: 120 },
-        { memberId: 'test-partner-id', name: 'Jordan', points: 76 },
+        { memberId: 'test-user-id', name: 'Test User', points: 102 },
+        { memberId: 'test-partner-id', name: 'Jordan', points: 68 },
       ],
       upcomingBills: [
         { title: 'Rent', amount: 1200, date: getLocalDateString(new Date(Date.now() + 3 * 86400000)) },
         { title: 'Internet', amount: 65, date: getLocalDateString(new Date(Date.now() + 5 * 86400000)) },
       ],
       narrative:
-        'Test Mode: You spent 23% less than last week — groceries did the heavy lifting. Keep the exercise streak alive tonight to lock in your multiplier.',
+        'Test Mode: day-to-day spending held flat while the bill load lightened. Keep the exercise streak alive tonight to lock in your multiplier.',
       narrativeSource: 'template',
       premium: true,
       // --- Ceremony fields (stage 5) ---
@@ -1007,33 +1041,70 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         {
           memberId: 'test-user-id',
           name: 'Test User',
-          points: 120,
+          points: 102,
           completions: 12,
           bestDay: { date: day(5), points: 24 },
           topStreak: { habitTitle: 'Read 30 minutes', days: 9, period: 'daily' },
           perfectHabits: ['Read 30 minutes'],
         },
         {
+          // 🛡️ NO perfect habit — the personal card that used to render a bare
+          // `0` / "Nothing perfect this week" tile. Act as Jordan to see the
+          // tiles that replaced it.
           memberId: 'test-partner-id',
           name: 'Jordan',
-          points: 76,
+          points: 68,
           completions: 8,
           bestDay: { date: day(5), points: 20 },
           topStreak: { habitTitle: 'Exercise 30min', days: 4, period: 'daily' },
           perfectHabits: [],
         },
       ],
-      dailyPoints: split.map(([mine, theirs], i) => ({
-        date: day(i),
-        byMember: { 'test-user-id': mine, 'test-partner-id': theirs },
-        unattributed: 0,
-        total: mine + theirs,
-      })),
-      totalPoints: 196,
-      // 196 vs 175 → the deck's own trend band reads +12%.
+      dailyPoints: split.map(([mine, theirs], i) => {
+        const [credit, unclaimed] = shared[i] ?? [0, 0];
+        const unattributed = credit + unclaimed;
+        return {
+          date: day(i),
+          byMember: { 'test-user-id': mine, 'test-partner-id': theirs },
+          unattributed,
+          total: mine + theirs + unattributed,
+          unattributedSplit: { householdCredit: credit, unclaimed },
+        };
+      }),
+      totalPoints: 189, // 102 + 68 + 19
       priorWeekPoints: 175,
+      unattributedSplit: { householdCredit: 16, unclaimed: 3 },
       ceremonyTone: 'household_first',
-    }];
+    };
+
+    // The PRE-DECK shape: everything a W27–W30 document carries, and none of
+    // the ceremony fields. Do NOT add them here — this entry is the graceful
+    // degrade, and it is only proof of that while it stays this shape.
+    const priorWeek = new Date(Date.now() - 14 * 86400000);
+    const legacy: WeeklyRecap = {
+      id: format(priorWeek, "RRRR-'W'II"),
+      isoWeek: format(priorWeek, "RRRR-'W'II"),
+      generatedAt: new Date(Date.now() - 7 * 86400000).toISOString(),
+      totalSpend: 243.1,
+      priorWeekSpend: 198.0,
+      topCategoryDeltas: [
+        { category: 'Groceries', current: 128.2, prior: 96.4 },
+        { category: 'Gas', current: 52.5, prior: 48.0 },
+      ],
+      habitCompletions: 7,
+      streaksAtRisk: [{ habitTitle: 'Read 30 minutes', streakDays: 3 }],
+      pointsByMember: [
+        { memberId: 'test-user-id', name: 'Test User', points: 95 },
+        { memberId: 'test-partner-id', name: 'Jordan', points: 55 },
+      ],
+      upcomingBills: [{ title: 'Internet', amount: 65, date: getLocalDateString(priorWeek) }],
+      narrative:
+        'Test Mode (pre-ceremony recap): this document carries no per-member fields, so it renders the original drawer layout.',
+      narrativeSource: 'template',
+      premium: true,
+    };
+
+    return [ceremony, legacy];
   });
   // F-NOTIF-02 (in-app notification inbox) — a few canned entries, mixed
   // read/unread, so Test Mode renders the bell badge + inbox drawer. Mirrors

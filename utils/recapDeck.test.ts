@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   UNATTRIBUTED_SERIES,
   buildHeadToHead,
+  buildPersonalTiles,
   buildRecapChart,
   buildRecapDeck,
+  buildRecapMoney,
   hasCeremonyData,
   isBestWeekOfMonth,
   recapTotalPoints,
@@ -279,6 +281,205 @@ describe('buildRecapChart', () => {
     const chart = buildRecapChart(days, colors, '#a19b8c');
     expect(chart.every(d => d.heightPct === 0 && !d.best && !d.quiet)).toBe(true);
   });
+
+  // --- Negative days are LEGIBLE, not invisible (DECK-1) --------------------
+
+  it('gives a net-negative day a below-baseline deficit instead of drawing nothing at all', () => {
+    // The real 2026-W31 shape: Monday netted -5 while the rest of the week
+    // scored. Pre-DECK-1 that day had heightPct 0, no segments and no other
+    // signal whatsoever — the chart simply showed six days and a blank.
+    const days = [
+      { date: DAYS[0] as string, byMember: { jen: -5 }, unattributed: 0, total: -5 },
+      { date: DAYS[1] as string, byMember: { jen: 40 }, unattributed: 0, total: 40 },
+    ];
+    const chart = buildRecapChart(days, colors, '#a19b8c');
+
+    // The positive stack is UNCHANGED — the chart stays positive-only.
+    expect(chart[0]?.heightPct).toBe(0);
+    expect(chart[0]?.segments).toEqual([]);
+    // ...but the day is now marked and measurable.
+    expect(chart[0]?.negative).toBe(true);
+    expect(chart[0]?.deficitPct).toBe(100);
+    expect(chart[1]?.negative).toBe(false);
+    expect(chart[1]?.deficitPct).toBe(0);
+  });
+
+  it('scales deficits against the week\'s DEEPEST loss, never against the positive maximum', () => {
+    // A -5 day beside a +400 day would be 1.25% of the positive scale — a
+    // sub-pixel smear. Against the deficit scale it is a full-height stub.
+    const days = [
+      { date: DAYS[0] as string, byMember: { jen: -5 }, unattributed: 0, total: -5 },
+      { date: DAYS[1] as string, byMember: { jen: -20 }, unattributed: 0, total: -20 },
+      { date: DAYS[2] as string, byMember: { jen: 400 }, unattributed: 0, total: 400 },
+    ];
+    const chart = buildRecapChart(days, colors, '#a19b8c');
+    expect(chart[0]?.deficitPct).toBe(25); // 5 of 20
+    expect(chart[1]?.deficitPct).toBe(100); // the week's deepest
+  });
+
+  it('leaves deficitPct at 0 for a week with no losing day, so no gutter is drawn', () => {
+    const days = DAYS.map(date => ({ date, byMember: { jen: 10 }, unattributed: 0, total: 10 }));
+    const chart = buildRecapChart(days, colors, '#a19b8c');
+    expect(chart.every(d => !d.negative && d.deficitPct === 0)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Money (DECK-1)
+// ---------------------------------------------------------------------------
+
+describe('buildRecapMoney', () => {
+  /**
+   * 🛡️ THE REAL 2026-W31 FIGURES. Total $2,429.00 against a $803.12 prior week
+   * is a "3.3x blowout" headline — and a meaningless one, because $1,306.77 of
+   * it was bills the calendar had already budgeted. Day-to-day was $1,122.23
+   * vs $803.12: a 1.4x rise. This is the whole reason the money card leads with
+   * `dayToDay` and never with `totalSpend`.
+   */
+  const W31 = {
+    totalSpend: 2429.0,
+    priorWeekSpend: 803.12,
+    billsSpend: 1306.77,
+    priorWeekBillsSpend: 0,
+    dayToDaySpend: 1122.23,
+    priorWeekDayToDaySpend: 803.12,
+  };
+
+  it('leads with day-to-day and compares each half to its OWN prior week', () => {
+    const money = buildRecapMoney(recap(W31));
+    expect(money.hasSplit).toBe(true);
+    expect(money.dayToDay?.amount).toBe(1122.23);
+    expect(money.dayToDay?.prior).toBe(803.12);
+    // +40%, i.e. 1.4x — NOT the 202% the undivided total would have claimed.
+    expect(money.dayToDay?.changePct).toBe(40);
+    expect(money.bills?.amount).toBe(1306.77);
+    expect(money.total.amount).toBe(2429.0);
+    expect(money.total.changePct).toBe(202);
+  });
+
+  it('reports a bills week with no prior bills as "no percentage", never as an infinite spike', () => {
+    const money = buildRecapMoney(recap(W31));
+    // A prior of exactly 0 cannot yield a percentage — the card says
+    // "nothing here last week" rather than dividing by zero.
+    expect(money.bills?.prior).toBe(0);
+    expect(money.bills?.changePct).toBeNull();
+    expect(money.bills?.delta).toBe(1306.77);
+  });
+
+  it('degrades to the total-only story when the split is absent — never a confident $0 day-to-day', () => {
+    const money = buildRecapMoney(recap());
+    expect(money.hasSplit).toBe(false);
+    expect(money.dayToDay).toBeNull();
+    expect(money.bills).toBeNull();
+    expect(money.total.amount).toBe(412);
+    expect(money.total.prior).toBe(468);
+    expect(money.total.changePct).toBe(-12);
+  });
+
+  it('treats HALF a split as no split at all', () => {
+    // One half without the other is not a decomposition, and rendering the
+    // missing half as $0 would invent a figure the document never held.
+    expect(buildRecapMoney(recap({ billsSpend: 100 })).hasSplit).toBe(false);
+    expect(buildRecapMoney(recap({ dayToDaySpend: 100 })).hasSplit).toBe(false);
+  });
+
+  it('drops a prior figure the document does not carry, rather than reading it as zero', () => {
+    const money = buildRecapMoney(
+      recap({ billsSpend: 100, dayToDaySpend: 50, priorWeekDayToDaySpend: undefined })
+    );
+    expect(money.hasSplit).toBe(true);
+    expect(money.dayToDay?.prior).toBeNull();
+    expect(money.dayToDay?.delta).toBeNull();
+    expect(money.dayToDay?.changePct).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The personal card's tiles (DECK-1)
+// ---------------------------------------------------------------------------
+
+describe('buildPersonalTiles', () => {
+  it('never emits a zero tile for a member with no perfect habit', () => {
+    // The exact defect on the real W31 deck: a tile reading `0` / "Every day" /
+    // "Nothing perfect this week" — an absence formatted as a statistic.
+    const tiles = buildPersonalTiles(
+      facts('paul', 'Paul', 28, {
+        perfectHabits: [],
+        completions: 6,
+        topStreak: { habitTitle: 'Morning walk', days: 9, period: 'daily' },
+      })
+    );
+    expect(tiles.map(t => t.id)).toEqual(['streak', 'completions']);
+    expect(tiles.some(t => t.value === '0')).toBe(false);
+    expect(tiles.some(t => t.label === 'Every day')).toBe(false);
+  });
+
+  it('prefers the streak and the perfect habit when both are real', () => {
+    const tiles = buildPersonalTiles(
+      facts('jen', 'Jen', 410, {
+        perfectHabits: ['Reading', 'Water'],
+        topStreak: { habitTitle: 'Morning walk', days: 9, period: 'daily' },
+      })
+    );
+    expect(tiles.map(t => t.id)).toEqual(['streak', 'perfect']);
+    expect(tiles[0]?.value).toBe('9');
+    expect(tiles[1]?.value).toBe('7/7');
+    expect(tiles[1]?.detail).toBe('Reading +1 more');
+  });
+
+  it('treats a zero-day streak as no streak', () => {
+    const tiles = buildPersonalTiles(
+      facts('paul', 'Paul', 10, {
+        topStreak: { habitTitle: 'Morning walk', days: 0, period: 'daily' },
+        completions: 4,
+      })
+    );
+    expect(tiles.map(t => t.id)).toEqual(['completions']);
+  });
+
+  it('falls back to the best day when nothing else qualifies', () => {
+    const tiles = buildPersonalTiles(
+      facts('paul', 'Paul', 12, { completions: 0, bestDay: { date: '2026-07-04', points: 12 } })
+    );
+    expect(tiles.map(t => t.id)).toEqual(['bestDay']);
+    expect(tiles[0]?.value).toBe('12');
+    expect(tiles[0]?.detail).toBe('Saturday');
+  });
+
+  it('returns NO tiles for a genuinely empty week, rather than a row of zeroes', () => {
+    const tiles = buildPersonalTiles(
+      facts('paul', 'Paul', 0, { completions: 0, bestDay: null, topStreak: null, perfectHabits: [] })
+    );
+    expect(tiles).toEqual([]);
+  });
+
+  it('never emits a BLANK detail — the tile renders it unconditionally', () => {
+    // An untitled habit would otherwise leave an empty line of whitespace
+    // inside the tile. The streak is still real; only its name is missing.
+    const tiles = buildPersonalTiles(
+      facts('paul', 'Paul', 30, {
+        perfectHabits: [],
+        completions: 0,
+        topStreak: { habitTitle: '   ', days: 4, period: 'daily' },
+      })
+    );
+    expect(tiles[0]?.id).toBe('streak');
+    expect(tiles[0]?.detail).toBe('your longest run');
+    expect(tiles.every(t => t.detail.trim().length > 0)).toBe(true);
+    expect(tiles.every(t => t.value.trim().length > 0)).toBe(true);
+  });
+
+  it('never emits more than two tiles', () => {
+    const tiles = buildPersonalTiles(
+      facts('jen', 'Jen', 410, {
+        perfectHabits: ['Reading'],
+        completions: 20,
+        topStreak: { habitTitle: 'Walk', days: 9, period: 'daily' },
+        bestDay: { date: '2026-07-04', points: 40 },
+      })
+    );
+    expect(tiles).toHaveLength(2);
+  });
 });
 
 describe('buildRecapDeck', () => {
@@ -288,23 +489,91 @@ describe('buildRecapDeck', () => {
     unattributedColor: '#a19b8c',
   };
 
-  it('orders the four approved cards with the VIEWER\'s personal card third', () => {
+  /**
+   * 🛡️ ONE JOB PER CARD (DECK-1). Six cards, six questions, and — critically —
+   * the household total is the hero exactly once. The pre-DECK-1 deck was four
+   * cards carrying three ideas because `totalPoints` anchored both the week
+   * card and the finish card.
+   */
+  it('orders the DECK-1 sequence, with the VIEWER\'s personal card after the household week', () => {
     const deck = buildRecapDeck({ ...base, recap: recap(), viewerId: 'paul' });
-    expect(deck.cards.map(c => c.kind)).toEqual(['cover', 'week', 'personal', 'finish']);
-    expect(deck.cards[2]?.memberId).toBe('paul');
+    expect(deck.cards.map(c => c.kind)).toEqual([
+      'cover',
+      'money',
+      'week',
+      'personal',
+      'standings',
+      'finish',
+    ]);
+    expect(deck.cards[3]?.memberId).toBe('paul');
     expect(deck.viewer?.name).toBe('Paul');
   });
 
   it('shows the OTHER member their own card, from the same recap', () => {
     const deck = buildRecapDeck({ ...base, recap: recap(), viewerId: 'jen' });
-    expect(deck.cards[2]?.memberId).toBe('jen');
+    expect(deck.cards[3]?.memberId).toBe('jen');
     expect(deck.viewer?.name).toBe('Jen');
   });
 
   it('drops the personal card for a viewer with no facts, rather than showing an empty one', () => {
     const deck = buildRecapDeck({ ...base, recap: recap(), viewerId: 'someone-else' });
-    expect(deck.cards.map(c => c.kind)).toEqual(['cover', 'week', 'finish']);
+    expect(deck.cards.map(c => c.kind)).toEqual(['cover', 'money', 'week', 'standings', 'finish']);
     expect(deck.viewer).toBeNull();
+  });
+
+  it('drops the standings card entirely when there is no one to compare against', () => {
+    const solo = recap({ memberFacts: [facts('jen', 'Jen', 410)] });
+    const deck = buildRecapDeck({ ...base, recap: solo, viewerId: 'jen' });
+    expect(deck.cards.map(c => c.kind)).toEqual(['cover', 'money', 'week', 'personal', 'finish']);
+  });
+
+  it('drops the standings card when the only other member is a MANAGED kid (adults only)', () => {
+    // Leo's chore points are an allowance ledger, not a competitive score — a
+    // one-adult household has nothing to stand against, so no standings card.
+    const withKid = recap({
+      memberFacts: [facts('kid_leo', 'Leo', 900, { isManaged: true }), facts('jen', 'Jen', 410)],
+    });
+    const deck = buildRecapDeck({ ...base, recap: withKid, viewerId: 'jen' });
+    expect(deck.cards.map(c => c.kind)).toEqual(['cover', 'money', 'week', 'personal', 'finish']);
+  });
+
+  // --- The tone MOVES the head-to-head; it no longer duplicates a figure ----
+
+  it('PROMOTES the standings ahead of the household week under the podium tone', () => {
+    const deck = buildRecapDeck({ ...base, recap: recap(), viewerId: 'paul', tone: 'podium' });
+    expect(deck.cards.map(c => c.kind)).toEqual([
+      'cover',
+      'money',
+      'standings',
+      'week',
+      'personal',
+      'finish',
+    ]);
+    expect(deck.framing).toBe('podium');
+  });
+
+  it('DEMOTES the standings behind the personal card under household_first', () => {
+    const deck = buildRecapDeck({ ...base, recap: recap(), viewerId: 'paul', tone: 'household_first' });
+    expect(deck.cards.map(c => c.kind).indexOf('standings')).toBeGreaterThan(
+      deck.cards.map(c => c.kind).indexOf('personal')
+    );
+    expect(deck.framing).toBe('together');
+  });
+
+  it('adaptive promotes the standings only on a RUNAWAY week', () => {
+    const close = buildRecapDeck({ ...base, recap: recap(), viewerId: 'paul', tone: 'adaptive' });
+    expect(close.cards.map(c => c.kind).indexOf('standings')).toBeGreaterThan(
+      close.cards.map(c => c.kind).indexOf('week')
+    );
+    expect(close.framing).toBe('together');
+
+    // 600 vs 200: margin 400 clears both the 50-point floor and 25% of 200.
+    const runaway = recap({ memberFacts: [facts('jen', 'Jen', 600), facts('paul', 'Paul', 200)] });
+    const crowned = buildRecapDeck({ ...base, recap: runaway, viewerId: 'paul', tone: 'adaptive' });
+    expect(crowned.cards.map(c => c.kind).indexOf('standings')).toBeLessThan(
+      crowned.cards.map(c => c.kind).indexOf('week')
+    );
+    expect(crowned.framing).toBe('podium');
   });
 
   it('falls back to the recap\'s stored tone when the household passes none', () => {
@@ -422,20 +691,146 @@ describe('buildRecapDeck', () => {
     });
     expect(hasCeremonyData(withHousehold)).toBe(true);
     const deck = buildRecapDeck({ ...base, recap: withHousehold, viewerId: 'jen' });
-    expect(deck.cards.map(c => c.kind)).toEqual(['cover', 'week', 'personal', 'finish']);
+    expect(deck.cards.map(c => c.kind)).toEqual([
+      'cover',
+      'money',
+      'week',
+      'personal',
+      'standings',
+      'finish',
+    ]);
     expect(deck.householdSharePoints).toBe(15);
+  });
+
+  // --- The household series has a NAME now (DECK-1 / RECAP-MATH) ------------
+
+  it('reads the week-total unattributedSplit when the server wrote one', () => {
+    const withSplit = recap({
+      dailyPoints: DAYS.map((date, i) => ({
+        date,
+        byMember: { jen: 50, paul: 45 },
+        unattributed: i === 0 ? 20 : 5,
+        total: i === 0 ? 115 : 100,
+      })),
+      unattributedSplit: { householdCredit: 44, unclaimed: 6 },
+    });
+    const deck = buildRecapDeck({ ...base, recap: withSplit, viewerId: 'jen' });
+    expect(deck.householdSplit).toEqual({ householdCredit: 44, unclaimed: 6 });
+    expect(deck.householdSharePoints).toBe(50);
+  });
+
+  it('falls back to summing the PER-DAY splits when no week total was written', () => {
+    const perDay = recap({
+      dailyPoints: DAYS.map((date, i) => ({
+        date,
+        byMember: { jen: 50, paul: 45 },
+        unattributed: i === 0 ? 20 : 0,
+        total: i === 0 ? 115 : 95,
+        unattributedSplit: i === 0 ? { householdCredit: 15, unclaimed: 5 } : { householdCredit: 0, unclaimed: 0 },
+      })),
+    });
+    const deck = buildRecapDeck({ ...base, recap: perDay, viewerId: 'jen' });
+    expect(deck.householdSplit).toEqual({ householdCredit: 15, unclaimed: 5 });
+  });
+
+  it('REFUSES a partial per-day fallback rather than under-reporting the household credit', () => {
+    // Tuesday carries 30 unattributed points and no split. Summing only the
+    // days that explain themselves would report 15 + 5 = 20 against a
+    // householdSharePoints of 50 — breaking the one invariant the pair holds.
+    const partial = recap({
+      dailyPoints: DAYS.map((date, i) => ({
+        date,
+        byMember: { jen: 50, paul: 45 },
+        unattributed: i === 0 ? 20 : i === 1 ? 30 : 0,
+        total: 95,
+        ...(i === 0 ? { unattributedSplit: { householdCredit: 15, unclaimed: 5 } } : {}),
+      })),
+    });
+    const deck = buildRecapDeck({ ...base, recap: partial, viewerId: 'jen' });
+    expect(deck.householdSplit).toBeNull();
+    expect(deck.householdSharePoints).toBe(50);
+  });
+
+  it('reports NULL (unknown), never a confident zero, for a recap that predates the split', () => {
+    // 🛡️ The card must not render "0 household credit" for a week that never
+    // measured the question — that is the difference between "nobody earned
+    // points together" and "we don't know who earned them".
+    const deck = buildRecapDeck({ ...base, recap: recap(), viewerId: 'jen' });
+    expect(deck.householdSplit).toBeNull();
+  });
+
+  // --- Negative days, on the deck ------------------------------------------
+
+  it('names the week\'s DEEPEST losing day as worstDay, and nothing when the week never dipped', () => {
+    const withLoss = recap({
+      dailyPoints: DAYS.map((date, i) => ({
+        date,
+        byMember: { jen: i === 0 ? -5 : i === 1 ? -30 : 50 },
+        unattributed: 0,
+        total: i === 0 ? -5 : i === 1 ? -30 : 50,
+      })),
+    });
+    const deck = buildRecapDeck({ ...base, recap: withLoss, viewerId: 'jen' });
+    expect(deck.worstDay?.date).toBe(DAYS[1]);
+    expect(deck.worstDay?.total).toBe(-30);
+    expect(deck.chart[0]?.negative).toBe(true);
+
+    expect(buildRecapDeck({ ...base, recap: recap(), viewerId: 'jen' }).worstDay).toBeNull();
+  });
+
+  // --- The narrative is a THREE-state field (ARCH-1) ------------------------
+
+  it('reports hasNarrative independently of `premium`, so an absent narrative is its own state', () => {
+    expect(buildRecapDeck({ ...base, recap: recap(), viewerId: 'jen' }).hasNarrative).toBe(true);
+    expect(
+      buildRecapDeck({ ...base, recap: recap({ premium: false }), viewerId: 'jen' }).hasNarrative
+    ).toBe(true);
+    // A client-derived recap: real numbers, no prose. `premium` stays truthful.
+    expect(
+      buildRecapDeck({ ...base, recap: recap({ narrative: '' }), viewerId: 'jen' }).hasNarrative
+    ).toBe(false);
+    expect(
+      buildRecapDeck({ ...base, recap: recap({ narrative: '   ' }), viewerId: 'jen' }).hasNarrative
+    ).toBe(false);
+    expect(
+      buildRecapDeck({
+        ...base,
+        recap: recap({ narrative: undefined as unknown as string }),
+        viewerId: 'jen',
+      }).hasNarrative
+    ).toBe(false);
+  });
+
+  it('carries the money model onto the deck', () => {
+    const deck = buildRecapDeck({
+      ...base,
+      recap: recap({
+        totalSpend: 2429.0,
+        priorWeekSpend: 803.12,
+        billsSpend: 1306.77,
+        priorWeekBillsSpend: 0,
+        dayToDaySpend: 1122.23,
+        priorWeekDayToDaySpend: 803.12,
+      }),
+      viewerId: 'jen',
+    });
+    expect(deck.money.hasSplit).toBe(true);
+    expect(deck.money.dayToDay?.changePct).toBe(40);
   });
 });
 
 /**
- * TODO §3 "Recap chart hides non-positive unattributed days": `buildRecapChart`
- * clamps every segment to its positive share, so a week whose household share
- * nets negative draws no Household bar. The product decision is that the
- * chart STAYS positive-only (a stacked bar can't honestly show a negative
- * slice) — the fix is on the household card's LABEL, which must never assert
- * a figure the rest of the card gives no visible cause for. These cases walk
- * the state space of `dailyPoints[].unattributed` signs across a week, plus
- * the case where a segment's EXISTENCE and its column's HEIGHT disagree.
+ * `buildRecapChart` clamps every segment to its positive share, so a week whose
+ * household share nets negative draws no Household bar. The chart STAYS
+ * positive-only (a stacked bar can't honestly show a negative slice) — DECK-1
+ * gives losing DAYS their own below-baseline register instead, and the LEGEND
+ * still may not advertise a series with nothing drawn for it. These cases walk
+ * the state space of `dailyPoints[].unattributed` signs across a week, plus the
+ * case where a segment's EXISTENCE and its column's HEIGHT disagree.
+ *
+ * 🛡️ The gate is now `deck.chartHasHouseholdBar`, computed IN THE MODEL — the
+ * component used to re-derive the expression, which meant this suite could only
+ * mirror it and hope. One source, asserted directly.
  */
 describe('household share vs. chart consistency (recap-chart-negative-days)', () => {
   const base = {
@@ -444,15 +839,7 @@ describe('household share vs. chart consistency (recap-chart-negative-days)', ()
     unattributedColor: '#a19b8c',
   };
 
-  /**
-   * Mirrors the exact expression `RecapDeck.tsx`'s `WeekCard` uses to gate the
-   * chart legend and the household-share wording. A Household bar is DRAWN
-   * only when a positive `unattributed` segment sits on a column that has
-   * height: segment existence follows from `day.unattributed`, height from
-   * `day.total`, and those are independent figures — see case (g).
-   */
-  const hasHouseholdBar = (deck: ReturnType<typeof buildRecapDeck>): boolean =>
-    deck.chart.some(d => d.heightPct > 0 && d.segments.some(s => s.key === UNATTRIBUTED_SERIES));
+  const hasHouseholdBar = (deck: ReturnType<typeof buildRecapDeck>): boolean => deck.chartHasHouseholdBar;
 
   it('(a) all-positive unattributed week: every day draws a Household segment, matching a positive card figure', () => {
     const allPositive = recap({
