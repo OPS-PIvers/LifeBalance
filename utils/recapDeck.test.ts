@@ -453,6 +453,22 @@ describe('buildPersonalTiles', () => {
     expect(tiles).toEqual([]);
   });
 
+  it('never emits a BLANK detail — the tile renders it unconditionally', () => {
+    // An untitled habit would otherwise leave an empty line of whitespace
+    // inside the tile. The streak is still real; only its name is missing.
+    const tiles = buildPersonalTiles(
+      facts('paul', 'Paul', 30, {
+        perfectHabits: [],
+        completions: 0,
+        topStreak: { habitTitle: '   ', days: 4, period: 'daily' },
+      })
+    );
+    expect(tiles[0]?.id).toBe('streak');
+    expect(tiles[0]?.detail).toBe('your longest run');
+    expect(tiles.every(t => t.detail.trim().length > 0)).toBe(true);
+    expect(tiles.every(t => t.value.trim().length > 0)).toBe(true);
+  });
+
   it('never emits more than two tiles', () => {
     const tiles = buildPersonalTiles(
       facts('jen', 'Jen', 410, {

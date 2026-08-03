@@ -593,7 +593,11 @@ export function buildPersonalTiles(facts: RecapMemberFacts): RecapPersonalTile[]
       id: 'streak',
       value: String(streak.days),
       label: streak.period === 'weekly' ? 'Week streak' : 'Day streak',
-      detail: streak.habitTitle,
+      // `detail` is REQUIRED and rendered unconditionally, so it must never be
+      // blank — an untitled habit would otherwise leave an empty line of
+      // whitespace inside the tile. The streak itself is still real; only its
+      // name is missing, so fall back rather than dropping the tile.
+      detail: streak.habitTitle.trim() || 'your longest run',
     });
   }
 
