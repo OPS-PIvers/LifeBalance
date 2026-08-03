@@ -161,6 +161,21 @@ function resolveMonthDay(monthDay: string, today: string): string | null {
   return ymd(candidate);
 }
 
+/**
+ * The calendar day before `date` (yyyy-MM-dd in, yyyy-MM-dd out), rolling
+ * back across month/year boundaries via UTC `Date` arithmetic — the same
+ * approach `ymd`/`resolveYyMmDd` already use in this file, so this stays a
+ * small local helper rather than pulling in date-fns (unused elsewhere in
+ * this module) for one subtraction.
+ */
+function dayBefore(date: string): string {
+  const m = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return date; // callers only ever pass an already-validated yyyy-MM-dd
+  const d = new Date(Date.UTC(+m[1]!, +m[2]! - 1, +m[3]!));
+  d.setUTCDate(d.getUTCDate() - 1);
+  return ymd(d);
+}
+
 /** "260720" (YYMMDD) → "2026-07-20", or null if not a valid calendar date. */
 function resolveYyMmDd(token: string): string | null {
   const m = token.match(/^(\d{2})(\d{2})(\d{2})$/);
@@ -518,7 +533,28 @@ export function parseBankEmail(input: BankEmailParseInput): BankEmailParseResult
       if (!normalizedDescriptor) {
         return { error: `Could not parse the withdrawal line: "${item}"` };
       }
-      const date = firstValidYyMmDdInDescriptor(normalizedDescriptor) || today;
+      // ACH/biller lines carry no date token of their own (unlike card lines,
+      // which always have their own AUTHORIZED ON MM/DD), so the fallback here
+      // matters a lot more than the `|| today` shape suggests. Wells Fargo cuts
+      // this email at ~1:50am and it COVERS THE PREVIOUS DAY, so `today` (the
+      // day the sync runs) is one day late for every dateless ACH line. The
+      // correct fallback is the email's own coverage day: `asOf` minus one —
+      // the same reasoning bankEmailSync.ts already applies to derive its
+      // no-spend-day `noSpendTargetDate` (`parsed.asOf ?? today` minus a day).
+      // `today` survives only as the last resort for the rare email with no
+      // "As of" footer at all, so that case's behavior is unchanged.
+      //
+      // Consequence: `synthRef` below hashes the date into an ACH line's
+      // bankRef, so this changes the generated ref for every dateless ACH
+      // line (previously hashed on the run date, now on the coverage day).
+      // That's a net improvement — the ref becomes stable across re-processing
+      // instead of drifting with whenever the sync happened to run — but it
+      // does mean a line already stored under the old run-date-hashed ref
+      // won't be recognised by its new coverage-date-hashed ref. That's fine:
+      // each ACH line appears in exactly one nightly email, and the
+      // per-messageId ledger (see bankEmailSync.ts) already stops that email
+      // from being processed twice, so there's no double-file risk either way.
+      const date = firstValidYyMmDdInDescriptor(normalizedDescriptor) || (asOf ? dayBefore(asOf) : today);
       const amount = toDollars(amountRaw);
       withdrawals.push({
         descriptor: normalizedDescriptor,

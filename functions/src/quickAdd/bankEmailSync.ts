@@ -83,6 +83,8 @@ import {
   computeBalanceAsOf,
   shouldSkipBalanceOverwrite,
   emailAddsNothingNew,
+  CONFIRM_DATE_TOLERANCE_DAYS,
+  isVerifiedConfirmCandidate,
   type PendingConfirmCandidate,
   type BillPayCandidate,
   type PaidIncomeLike,
@@ -552,6 +554,53 @@ export const bankEmailSync = onRequest(
         };
       });
 
+      // 8d. ALREADY-VERIFIED confirm candidates — the reviewed-row blind spot.
+      //
+      // 8b loads only `pending_review` rows, which silently made review speed
+      // the enemy of correctness: the moment a user reviews an Apple Pay /
+      // Shortcut capture it becomes `verified` and vanishes from the confirm
+      // pool, so the bank email that arrives AFTERWARDS cannot recognise the
+      // purchase and files a second copy of it. In production this never once
+      // matched — every ledger entry since activation reads `confirmed: 0,
+      // filled: 0`, with every line falling through to CREATE.
+      //
+      // Reviewing a row does not change WHAT it is, so a verified row is an
+      // equally valid CONFIRM target — see `isVerifiedConfirmCandidate` for
+      // the eligibility rule and every exclusion it makes. No balance
+      // consequence: CONFIRM applies no delta in either direction (the email's
+      // available balance is authoritative), so re-marking an already-verified
+      // row `verified` moves no money; the write that matters is the `bankRef`.
+      //
+      // The `pending_review` pool keeps its own unbounded status query; this
+      // one is date-windowed to the confirm tolerance so it stays a small read
+      // on an auto-indexed single field, needing no composite index.
+      if (parsed.withdrawals.length > 0) {
+        const confirmStart = format(
+          subDays(parseISO(minDate), CONFIRM_DATE_TOLERANCE_DAYS),
+          "yyyy-MM-dd"
+        );
+        const confirmEnd = format(
+          addDays(parseISO(maxDate), CONFIRM_DATE_TOLERANCE_DAYS),
+          "yyyy-MM-dd"
+        );
+        const verifiedSnap = await db
+          .collection(`households/${householdId}/transactions`)
+          .where("date", ">=", confirmStart)
+          .where("date", "<=", confirmEnd)
+          .get();
+        for (const d of verifiedSnap.docs) {
+          const data = d.data() as Record<string, unknown>;
+          if (!isVerifiedConfirmCandidate(data)) continue;
+          pendingCandidates.push({
+            id: d.id,
+            amount: data.amount as number,
+            date: typeof data.date === "string" ? data.date : today,
+            merchant: typeof data.merchant === "string" ? data.merchant : "",
+            accountId: typeof data.accountId === "string" ? data.accountId : undefined,
+          });
+        }
+      }
+
       // 9. Decide + stage all writes in ONE atomic batch.
       const batch = db.batch();
       const transactionsPath = `households/${householdId}/transactions`;
@@ -697,6 +746,12 @@ export const bankEmailSync = onRequest(
             // Verify only — NO balance delta (ending-balance overwrite is
             // authoritative). Stamp bankRef for idempotency and stamp the
             // resolved account so the row is anchored to THIS account (item 3).
+            //
+            // The target may ALREADY be verified (see 8d): a row the user
+            // reviewed before this email arrived is still the same purchase.
+            // Re-writing `verified` onto it is a no-op; the write that matters
+            // is the `bankRef`, which is what stops a later email creating a
+            // duplicate of a row someone had already dealt with.
             batch.update(db.doc(`${transactionsPath}/${decision.transactionId}`), {
               status: "verified",
               bankRef: w.bankRef,

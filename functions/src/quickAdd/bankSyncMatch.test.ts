@@ -7,6 +7,7 @@ import {
   significantTokens,
   shareSignificantToken,
   matchesAlias,
+  isVerifiedConfirmCandidate,
   pickPendingToConfirm,
   billAmountWithinTolerance,
   pickBillToPay,
@@ -119,6 +120,62 @@ describe("matchesAlias", () => {
 // ---------------------------------------------------------------------------
 // CONFIRM (4c)
 // ---------------------------------------------------------------------------
+
+describe("isVerifiedConfirmCandidate", () => {
+  const verified = {
+    status: "verified",
+    amount: 18.86,
+    merchant: "TARGET T-2189",
+    category: "Groceries",
+  };
+
+  it("accepts a reviewed row that carries no bank reference", () => {
+    // The regression this whole predicate exists for: reviewing an Apple Pay /
+    // Shortcut capture flips it to `verified`, and before this it dropped out
+    // of the confirm pool entirely, so the nightly email filed a duplicate.
+    expect(isVerifiedConfirmCandidate(verified)).toBe(true);
+  });
+
+  it("rejects a row that already carries a bankRef", () => {
+    // Already a bank line: covered by the 4a skip, and re-matching it could
+    // steal the target from a genuinely new purchase of the same amount.
+    expect(isVerifiedConfirmCandidate({ ...verified, bankRef: "P000000551051569" })).toBe(false);
+    expect(isVerifiedConfirmCandidate({ ...verified, bankRef: "synth:9f3a" })).toBe(false);
+  });
+
+  it("treats an empty-string bankRef as absent", () => {
+    // Mirrors isBankSyncTransaction's truthy check — a malformed empty string
+    // must not lock a row out of matching.
+    expect(isVerifiedConfirmCandidate({ ...verified, bankRef: "" })).toBe(true);
+  });
+
+  it("rejects income", () => {
+    // Deposits are stored positive exactly like withdrawals, so without this a
+    // $372.00 debit could "confirm" a $372.00 paycheck.
+    expect(isVerifiedConfirmCandidate({ ...verified, category: "Income" })).toBe(false);
+  });
+
+  it("rejects a credit-card payment", () => {
+    expect(isVerifiedConfirmCandidate({ ...verified, creditPayment: true })).toBe(false);
+  });
+
+  it("rejects a $0 Apple Pay stub, which belongs to the FILL step", () => {
+    expect(isVerifiedConfirmCandidate({ ...verified, amount: 0 })).toBe(false);
+    expect(isVerifiedConfirmCandidate({ ...verified, amount: -5 })).toBe(false);
+  });
+
+  it("rejects anything not verified", () => {
+    // pending_review rows reach the pool through the endpoint's own status
+    // query; this predicate only widens it to settled rows.
+    expect(isVerifiedConfirmCandidate({ ...verified, status: "pending_review" })).toBe(false);
+    expect(isVerifiedConfirmCandidate({ ...verified, status: undefined })).toBe(false);
+  });
+
+  it("rejects a malformed amount", () => {
+    expect(isVerifiedConfirmCandidate({ ...verified, amount: "18.86" })).toBe(false);
+    expect(isVerifiedConfirmCandidate({ ...verified, amount: NaN })).toBe(false);
+  });
+});
 
 describe("pickPendingToConfirm", () => {
   it("confirms a lone cent-exact candidate within ±3 days", () => {
