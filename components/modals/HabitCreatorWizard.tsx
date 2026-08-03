@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useId } from 'react';
 import { X, Plus, ChevronRight } from 'lucide-react';
-import { Habit, EffortLevel } from '@/types/schema';
+import { Habit } from '@/types/schema';
 import { useGamification, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import {
   PresetHabit,
@@ -14,12 +14,6 @@ import PresetHabitList from '@/components/habits/PresetHabitList';
 import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { generateId } from '@/utils/id';
-
-// Helper to calculate basePoints based on type and effort level
-const calculateBasePoints = (type: 'positive' | 'negative', effortLevel: EffortLevel): number => {
-  const points = EFFORT_POINTS[effortLevel];
-  return type === 'negative' ? -points : points;
-};
 
 // Validate and parse target count
 const parseTargetCount = (value: string): number => {
@@ -101,7 +95,15 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
           title: preset.title,
           category: preset.category,
           type: preset.type,
-          basePoints: calculateBasePoints(preset.type, preset.effortLevel),
+          // basePoints is always a positive magnitude — the sign is conveyed
+          // entirely by `type` (see habitSign/signedHabitPoints in
+          // utils/habitLogic.ts). This wizard used to negate the magnitude for
+          // `type: 'negative'` habits, storing a "double negative" alongside
+          // HabitFormModal's convention (positive basePoints + type
+          // 'negative'). Both conventions score identically today —
+          // habitSign/Math.abs canonicalize either shape — but only ONE
+          // should be creatable going forward.
+          basePoints: EFFORT_POINTS[preset.effortLevel],
           scoringType: preset.scoringType,
           period: preset.period,
           targetCount: preset.targetCount,
@@ -201,7 +203,8 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       title: formData.title.trim(),
       category: formData.category,
       type: formData.type,
-      basePoints: calculateBasePoints(formData.type, formData.effortLevel),
+      // See the positive-magnitude comment on the preset-toggle path above.
+      basePoints: EFFORT_POINTS[formData.effortLevel],
       scoringType: formData.scoringType,
       period: formData.period,
       targetCount,

@@ -4,8 +4,10 @@
 import { EffortLevel } from '@/types/schema';
 
 // Consolidated effort level configuration
-// Points scale: easy = 1, medium = 2, hard = 3, very_hard = 5
-// For negative habits, these become -1, -2, -3, -5
+// Points scale: easy = 1, medium = 2, hard = 3, very_hard = 5 — always a
+// positive magnitude. For a negative habit, `habitSign`/`signedHabitPoints`
+// (utils/habitLogic.ts) apply the sign from `Habit.type` at scoring time;
+// EFFORT_POINTS itself is never negated for a negative habit.
 interface EffortConfig {
   points: number;
   label: string;

@@ -347,7 +347,13 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       type,
       scoringType,
       period,
-      basePoints: parseInt(basePoints),
+      // Sign is conveyed entirely by `type` (see habitSign/signedHabitPoints in
+      // utils/habitLogic.ts) — basePoints is always stored as a positive
+      // magnitude so this form never re-introduces the "opposite convention"
+      // that HabitCreatorWizard historically used (negative basePoints on a
+      // negative-type habit). Math.abs guards a user typing a negative number
+      // even though the input also carries `min="0"`.
+      basePoints: Math.abs(parseInt(basePoints)),
       targetCount: parseInt(targetCount),
       // Preserve or Init State
       count: editingHabit ? editingHabit.count : 0,
@@ -664,15 +670,21 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label={showAssignControl ? 'Chore Points' : 'Points'}
-              type="number"
-              inputMode="numeric"
-              value={basePoints}
-              onChange={e => setBasePoints(e.target.value)}
-              className="text-center font-mono font-bold"
-              disabled={isSaving}
-            />
+            <div>
+              <Input
+                label={showAssignControl ? 'Chore Points (magnitude)' : 'Points (magnitude)'}
+                type="number"
+                inputMode="numeric"
+                min="0"
+                value={basePoints}
+                onChange={e => setBasePoints(e.target.value)}
+                className="text-center font-mono font-bold"
+                disabled={isSaving}
+              />
+              <p className="text-xxs text-brand-400 dark:text-brand-400 mt-1">
+                Always a positive number — the Good/Bad type above sets the direction.
+              </p>
+            </div>
             <div>
               <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase" htmlFor="habit-target">Target ({period})</label>
               <div className="flex items-center gap-2 mt-1">
