@@ -33,9 +33,16 @@ export type NoSpendScope = "day" | "weekend";
 
 /**
  * Cap on habits fired from one email. Keeps `bankEmailSync`'s Firestore
- * batch-size proof intact: this stages 1 (the verdict doc) + 2 per fired habit
- * (habit doc + submission doc) + 1 (the merged household update), so the worst
- * case adds 1 + 2*10 + 1 = 22 writes on top of the withdrawal budget.
+ * batch-size proof intact: ONE call to `applyNoSpendDay` (i.e. one judged
+ * day) stages at most 1 (the verdict doc) + `MAX_NO_SPEND_HABITS * 2` (a
+ * habit-doc update + a submission-doc set, per fired habit) = 1 + 20 = 21
+ * writes. The household update (points + freezeBank) is NOT part of this
+ * per-day cost — `applyNoSpendDay` never writes to the household doc; the
+ * caller (`bankEmailSync.ts`) stages exactly ONE combined household update
+ * for the whole email, after its judging loop, so it belongs in that
+ * proof's fixed overhead, not multiplied per day here. See
+ * `bankEmailSync.ts`'s `MAX_WITHDRAWALS` doc comment for the full
+ * multi-day expression this constant feeds.
  *
  * A household with more than ten habits wired to the same trigger is
  * pathological; the excess is logged rather than silently dropped.

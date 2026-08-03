@@ -97,7 +97,6 @@ import {
   BUDGETED_IN_CALENDAR as NO_SPEND_BILL_CATEGORY,
   datesToJudge,
   noSpendCatchupWindow,
-  shouldDeclareToNoSpend,
   type SpendCandidate,
 } from "./noSpendDay";
 import {
@@ -136,19 +135,33 @@ const UNCATEGORIZED = "Uncategorized";
  * (the pay_bill branch: a paid-instance/calendar write + the transaction row +
  * the alias arrayUnion, three distinct docs). Every other branch stages 1 or 0.
  * The email also stages a fixed overhead of 2 writes (the account ending-balance
- * overwrite + the ledger record), plus AT MOST `MAX_NO_SPEND_CATCHUP_DAYS * 22`
- * for the no-spend catch-up (one email can now judge several unjudged days —
- * see noSpendDay.ts's `datesToJudge` — and each day costs at most 22 writes:
- * `MAX_NO_SPEND_HABITS * 2` for the habit + submission docs, the verdict doc,
- * and the merged household update — see noSpendFire.ts). Worst-case batch:
- *   MAX_WITHDRAWALS * 3 + 2 + MAX_NO_SPEND_CATCHUP_DAYS * 22
- *     = 100 * 3 + 2 + 4 * 22 = 300 + 2 + 88 = 390 < 500 (the hard limit).
+ * overwrite + the ledger record), plus the no-spend catch-up term (one email
+ * can now judge several unjudged days — see noSpendDay.ts's `datesToJudge`):
+ *   - PER JUDGED DAY, up to `MAX_NO_SPEND_CATCHUP_DAYS` (4) of them: at most
+ *     1 (the verdict doc) + `MAX_NO_SPEND_HABITS * 2` (a habit-doc update +
+ *     a submission-doc set, per fired habit) = 1 + 20 = 21 — see
+ *     noSpendFire.ts's `MAX_NO_SPEND_HABITS` doc for why this figure is
+ *     per-day, not per-email.
+ *   - PLUS exactly 1 more: the household update (points + freezeBank) is
+ *     staged ONCE for the WHOLE EMAIL, after the judging loop — not once per
+ *     day. `applyNoSpendDay` never writes the household doc itself (a
+ *     per-day write there was the actual bug a stale-snapshot freezeBank
+ *     clobber came from); see `NoSpendOutcome.freezeTokensRefunded`'s doc in
+ *     noSpendFire.ts.
+ * Worst-case batch:
+ *   MAX_WITHDRAWALS * 3 + 2
+ *     + (MAX_NO_SPEND_CATCHUP_DAYS * (1 + MAX_NO_SPEND_HABITS * 2) + 1)
+ *   = 100 * 3 + 2 + (4 * (1 + 20) + 1)
+ *   = 300 + 2 + (84 + 1)
+ *   = 300 + 2 + 85
+ *   = 387 < 500 (the hard limit).
  * Each term is kept separate so any one factor can be changed independently:
- * withdrawals, the fixed email overhead, and the no-spend catch-up window.
+ * withdrawals, the fixed email overhead, the per-day catch-up cost, and the
+ * single whole-email household write.
  *
- * `MAX_WITHDRAWALS` was deliberately lowered from 150 to 100 to buy this
- * headroom for the catch-up window — see the paragraph above for why 100 is
- * still an enormous margin over what a real email ever carries. */
+ * `MAX_WITHDRAWALS` was deliberately lowered from 150 to 100 to buy headroom
+ * for the catch-up window — see the paragraph above for why 100 is still an
+ * enormous margin over what a real email ever carries. */
 const MAX_WITHDRAWALS = 100;
 
 /** Max length for bank-derived error text echoed into a push body (item 7). */
@@ -812,33 +825,29 @@ export const bankEmailSync = onRequest(
         const createCategory = ruleCreateCategory(rule, UNCATEGORIZED);
 
         // Declare a BRAND-NEW row landing on a day THIS EMAIL is actually
-        // going to judge to that day's no-spend judgement — see
-        // `shouldDeclareToNoSpend` for why only a `create` decision qualifies.
-        // It carries the rule's category so the declaration and the stored row
-        // are the same row: a rule filing a charge as e.g. a card payment must
-        // exempt it here exactly as the stored row will be exempted tomorrow.
-        // (A rule's `exempt` flag is honoured independently — `spendExemption`
-        // re-derives it from the raw merchant, which this row carries.)
+        // going to judge to that day's no-spend judgement — only a `create`
+        // decision qualifies (see `shouldDeclareToNoSpend`'s doc in
+        // noSpendDay.ts for the full reasoning: every other decision
+        // resolves to a row that already exists and is already authoritative
+        // about its own exemption status). It carries the rule's category so
+        // the declaration and the stored row are the same row: a rule filing
+        // a charge as e.g. a card payment must exempt it here exactly as the
+        // stored row will be exempted tomorrow. (A rule's `exempt` flag is
+        // honoured independently — `spendExemption` re-derives it from the
+        // raw merchant, which this row carries.)
         //
-        // Gated on `noSpendDatesToJudgeSet` (not just the decision kind) so a
-        // CREATE dated to a day already settled clean by an earlier email
-        // doesn't get queued for a judgement that will never run.
-        //
-        // `shouldDeclareToNoSpend`'s date-equality check (`withdrawalDate !==
-        // targetDate`) is deliberately passed `w.date` for BOTH arguments —
-        // trivially true, so it degrades to a pure `kind === "create"` check.
-        // That's intentional, not a mistake: with one judged day per email,
-        // this call compared the withdrawal's date against THAT single day;
-        // now that a withdrawal can be declared to any of several judged
-        // days, the date scoping has moved entirely to the
-        // `noSpendDatesToJudgeSet.has(w.date)` check above — a withdrawal is
-        // only ever considered for the day it's actually dated on, so by the
-        // time this line runs, "does this withdrawal's date match the day
-        // being judged" is already guaranteed by construction.
-        if (
-          noSpendDatesToJudgeSet.has(w.date) &&
-          shouldDeclareToNoSpend(decision.kind, w.date, w.date)
-        ) {
+        // Tested directly on `decision.kind` rather than through
+        // `shouldDeclareToNoSpend(decision.kind, w.date, targetDate)`: that
+        // function's date-equality check made sense when one email judged a
+        // single target date, but a withdrawal can now be declared to any of
+        // several judged days, so ALL date scoping lives in the
+        // `noSpendDatesToJudgeSet.has(w.date)` check below — passing `w.date`
+        // as both of the helper's date arguments would make its own
+        // `withdrawalDate !== targetDate` guard permanently false (never
+        // taken), silently degrading it to this exact `kind === "create"`
+        // test while reading as if it still filtered by date. Calling it out
+        // directly here is the honest version of that.
+        if (noSpendDatesToJudgeSet.has(w.date) && decision.kind === "create") {
           const entry: SpendCandidate = {
             amount: w.amount,
             merchant: w.descriptor,
