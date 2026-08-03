@@ -191,6 +191,83 @@ function describeNoSpendFires(outcome: { fired: NoSpendHabitFire[] }): string {
   return `${fired.length} habits logged${pts}. `;
 }
 
+/** The subset of `counts` the ordinary sync tally reads. */
+export interface SyncTallyCounts {
+  created: number;
+  confirmed: number;
+  filled: number;
+  billsPaid: number;
+}
+
+/**
+ * The ordinary "N new, N confirmed, N filled, N bills paid." tally.
+ *
+ * `condensed: false` (the historical shape) always lists all four categories,
+ * even the zero ones — kept exactly as before so a run with no fires-sentence
+ * to share the body with is byte-for-byte unchanged.
+ *
+ * `condensed: true` drops zero categories and singularizes "1 bill paid" —
+ * used ONLY when a fires sentence is also going into the same push body (see
+ * `composeBankSyncSummaryBody`), so two full sentences plus the balance don't
+ * risk running past what iOS renders before truncating. Returns "" when every
+ * count is zero (a quiet email whose only news is the fires sentence).
+ */
+function describeSyncCounts(counts: SyncTallyCounts, condensed: boolean): string {
+  if (!condensed) {
+    return (
+      `${counts.created} new, ${counts.confirmed} confirmed, ${counts.filled} filled, ` +
+      `${counts.billsPaid} bills paid. `
+    );
+  }
+  const parts: string[] = [];
+  if (counts.created > 0) parts.push(`${counts.created} new`);
+  if (counts.confirmed > 0) parts.push(`${counts.confirmed} confirmed`);
+  if (counts.filled > 0) parts.push(`${counts.filled} filled`);
+  if (counts.billsPaid > 0) {
+    parts.push(`${counts.billsPaid} bill${counts.billsPaid === 1 ? "" : "s"} paid`);
+  }
+  return parts.length === 0 ? "" : `${parts.join(", ")}. `;
+}
+
+/**
+ * Compose the push (and ledger/response) summary body from the aggregated
+ * multi-day no-spend outcome. Pure — no Firestore, no dates — so it's unit
+ * tested directly in `bankEmailSync.test.ts`.
+ *
+ * THE BUG THIS FUNCTION FIXES: with a catch-up window judging several days
+ * per email, the MOST RECENT judged day can be dirty (today's charge) even
+ * though an EARLIER judged day in the same run was clean and fired a habit
+ * (a "No spend weekend" that a Monday purchase doesn't retroactively undo).
+ * The push must still announce that fire — silently omitting it means a
+ * habit fires and earns points with nobody told.
+ *
+ * The trap: `describeNoSpendFires` returns "Nothing unplanned left your
+ * account. " when `fired` is empty. That's a TRUE statement on a day that
+ * really was clean (the `mostRecentIsNoSpendDay` branch below, unchanged from
+ * before this fix), but it would be a FALSE CLAIM prepended to the dirty
+ * branch — the most recent day demonstrably was NOT clean. So the dirty
+ * branch only ever gets a fires sentence when `allFired` is non-empty (some
+ * OTHER judged day in this run fired something), and never calls the
+ * unconditional form.
+ */
+export function composeBankSyncSummaryBody(params: {
+  mostRecentIsNoSpendDay: boolean;
+  allFired: NoSpendHabitFire[];
+  counts: SyncTallyCounts;
+  ruleSummary: string;
+  balanceSummary: string;
+}): string {
+  const { mostRecentIsNoSpendDay, allFired, counts, ruleSummary, balanceSummary } = params;
+  if (mostRecentIsNoSpendDay) {
+    return `${describeNoSpendFires({ fired: allFired })}${ruleSummary}${balanceSummary}`;
+  }
+  const firesSummary = allFired.length > 0 ? describeNoSpendFires({ fired: allFired }) : "";
+  // Condensed only when actually sharing the body with a fires sentence —
+  // the common dirty-with-no-catch-up-fires case keeps the exact pre-fix text.
+  const countsSummary = describeSyncCounts(counts, firesSummary.length > 0);
+  return `${firesSummary}${countsSummary}${ruleSummary}${balanceSummary}`;
+}
+
 /** Minimal subset of the Express/Firebase response object used below. */
 interface HttpResponse {
   status(code: number): { json(body: unknown): void; send(body: string): void };
@@ -1080,10 +1157,16 @@ export const bankEmailSync = onRequest(
       // household without rules sees the exact push it saw before — the body is
       // already close to what iOS will truncate.
       const ruleSummary = describeRuleEffects(counts);
-      const summaryBody = mostRecentNoSpend.isNoSpendDay
-        ? `${describeNoSpendFires({ fired: allFiredNoSpendHabits })}${ruleSummary}${balanceSummary}`
-        : `${counts.created} new, ${counts.confirmed} confirmed, ${counts.filled} filled, ` +
-          `${counts.billsPaid} bills paid. ${ruleSummary}${balanceSummary}`;
+      // See `composeBankSyncSummaryBody`'s doc: this is what makes a habit
+      // fired on an EARLIER judged day still show up in the push even when
+      // the most recent judged day was dirty.
+      const summaryBody = composeBankSyncSummaryBody({
+        mostRecentIsNoSpendDay: mostRecentNoSpend.isNoSpendDay,
+        allFired: allFiredNoSpendHabits,
+        counts,
+        ruleSummary,
+        balanceSummary,
+      });
       await pushToBankSyncMembers(householdId, summaryTitle, summaryBody);
       await logApiCall(householdId, apiKey.substring(0, 16), "bankSync", req.body, 200);
       jsonResponse(res, 200, {
