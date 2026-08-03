@@ -9,6 +9,31 @@ import { WeeklyRecap } from "./types";
  */
 const INCOME_CATEGORY = "Income";
 
+/**
+ * Mirrors `types/schema.ts`'s `CREDIT_CARD_CATEGORY` — the ACCOUNT-ROUTING
+ * sentinel a transaction tagged to a credit account carries instead of a bucket
+ * name. It is NOT real spending, and the client's
+ * `utils/bucketSpentCalculator.ts` has always excluded it from spend math; the
+ * recap did not, so a household's card activity inflated its weekly headline
+ * (RECAP-MATH). Duplicated here for the same cross-package reason as
+ * `INCOME_CATEGORY` above — keep in sync with the client constant.
+ */
+const CREDIT_CARD_CATEGORY = "Credit Card";
+
+/**
+ * Mirrors `utils/categories.ts`'s `BUDGETED_IN_CALENDAR` + `LEGACY_BILLS_CATEGORY`
+ * and the `isCalendarBudgetedCategory` classifier built from them: the sentinel
+ * `payCalendarItem` files a paid calendar bill under, plus the legacy `Bills`
+ * tag older paid bills still carry. Same cross-package duplication rule.
+ */
+const CALENDAR_BUDGETED_SET = new Set(["budgeted in calendar", "bills"]);
+
+/** True when a category marks the transaction as an already-budgeted calendar bill. */
+function isCalendarBudgetedCategory(category: string | null | undefined): boolean {
+  if (!category) return false;
+  return CALENDAR_BUDGETED_SET.has(category.toLowerCase());
+}
+
 /** Minimal transaction shape this module needs (subset of `types/schema.ts`'s `Transaction`). */
 export interface RecapTransaction {
   amount: number;
@@ -80,7 +105,20 @@ export type AssembledRecap = Pick<
   | "pointsByMember"
   | "upcomingBills"
 > &
-  Required<Pick<WeeklyRecap, "memberFacts" | "dailyPoints" | "totalPoints" | "priorWeekPoints">>;
+  Required<
+    Pick<
+      WeeklyRecap,
+      | "memberFacts"
+      | "dailyPoints"
+      | "totalPoints"
+      | "priorWeekPoints"
+      | "billsSpend"
+      | "priorWeekBillsSpend"
+      | "dayToDaySpend"
+      | "priorWeekDayToDaySpend"
+      | "unattributedSplit"
+    >
+  >;
 
 /** Converts decimal dollars to integer cents, rounding to the nearest cent. */
 function toCents(dollars: number): number {
@@ -102,30 +140,60 @@ function addDays(dateStr: string, days: number): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+/**
+ * Does this transaction count as spend at all?
+ *
+ * TWO sentinels are excluded, not one: `INCOME_CATEGORY` (money in) and
+ * `CREDIT_CARD_CATEGORY` (an account-routing tag, not real spending — see its
+ * constant above). Both matches are case-insensitive, matching the income check
+ * this function already did.
+ */
 function isCountedSpend(t: RecapTransaction, start: string, end: string): boolean {
+  const category = t.category.toLowerCase();
   return (
     t.status === "verified" &&
-    t.category.toLowerCase() !== INCOME_CATEGORY.toLowerCase() &&
+    category !== INCOME_CATEGORY.toLowerCase() &&
+    category !== CREDIT_CARD_CATEGORY.toLowerCase() &&
     t.date >= start &&
     t.date <= end
   );
 }
 
-/** Sums verified, non-income transaction amounts (in cents) within [start, end] inclusive. */
-function sumVerifiedSpendCents(
+/**
+ * Which slice of counted spend a sum covers (RECAP-MATH).
+ *
+ * `"bills"` and `"dayToDay"` PARTITION `"all"`: every counted transaction is in
+ * exactly one of them, so `billsSpend + dayToDaySpend === totalSpend` holds by
+ * construction rather than by a subtraction that could absorb drift.
+ */
+type SpendSlice = "all" | "bills" | "dayToDay";
+
+const inSlice = (t: RecapTransaction, slice: SpendSlice): boolean => {
+  if (slice === "all") return true;
+  const isBill = isCalendarBudgetedCategory(t.category);
+  return slice === "bills" ? isBill : !isBill;
+};
+
+/** Sums counted transaction amounts (in cents) within [start, end], for one slice. */
+function sumSpendCents(
   transactions: RecapTransaction[],
   start: string,
-  end: string
+  end: string,
+  slice: SpendSlice
 ): number {
   return transactions
-    .filter((t) => isCountedSpend(t, start, end))
+    .filter((t) => isCountedSpend(t, start, end) && inSlice(t, slice))
     .reduce((sum, t) => sum + toCents(t.amount), 0);
 }
 
 /**
- * Sums verified, non-income transaction amounts (in cents) within [start, end],
+ * Sums DAY-TO-DAY counted transaction amounts (in cents) within [start, end],
  * grouped by lowercased category so mixed-casing ("Groceries" vs "groceries")
  * can't split one category into two; the first-seen casing is kept for display.
+ *
+ * Bills are excluded on purpose: `Budgeted in Calendar` is a routing sentinel,
+ * not a category, and it out-swings every real category on any week carrying
+ * rent — which made it the recap's #1 "category insight" (RECAP-MATH).
  */
 function sumVerifiedSpendByCategoryCents(
   transactions: RecapTransaction[],
@@ -134,7 +202,7 @@ function sumVerifiedSpendByCategoryCents(
 ): Map<string, { display: string; cents: number }> {
   const byCategory = new Map<string, { display: string; cents: number }>();
   for (const t of transactions) {
-    if (!isCountedSpend(t, start, end)) continue;
+    if (!isCountedSpend(t, start, end) || !inSlice(t, "dayToDay")) continue;
     const key = t.category.toLowerCase();
     const existing = byCategory.get(key);
     if (existing) {
@@ -157,8 +225,17 @@ export function assembleWeeklyRecap(input: DataAssemblyInput): AssembledRecap {
   const priorWeekStart = addDays(weekStart, -7);
   const priorWeekEnd = addDays(weekEnd, -7);
 
-  const totalSpendCents = sumVerifiedSpendCents(transactions, weekStart, weekEnd);
-  const priorWeekSpendCents = sumVerifiedSpendCents(transactions, priorWeekStart, priorWeekEnd);
+  const totalSpendCents = sumSpendCents(transactions, weekStart, weekEnd, "all");
+  const priorWeekSpendCents = sumSpendCents(transactions, priorWeekStart, priorWeekEnd, "all");
+  const billsSpendCents = sumSpendCents(transactions, weekStart, weekEnd, "bills");
+  const priorWeekBillsSpendCents = sumSpendCents(transactions, priorWeekStart, priorWeekEnd, "bills");
+  const dayToDaySpendCents = sumSpendCents(transactions, weekStart, weekEnd, "dayToDay");
+  const priorWeekDayToDaySpendCents = sumSpendCents(
+    transactions,
+    priorWeekStart,
+    priorWeekEnd,
+    "dayToDay"
+  );
 
   const currentByCategory = sumVerifiedSpendByCategoryCents(transactions, weekStart, weekEnd);
   const priorByCategory = sumVerifiedSpendByCategoryCents(transactions, priorWeekStart, priorWeekEnd);
@@ -219,6 +296,10 @@ export function assembleWeeklyRecap(input: DataAssemblyInput): AssembledRecap {
   return {
     totalSpend: toDollars(totalSpendCents),
     priorWeekSpend: toDollars(priorWeekSpendCents),
+    billsSpend: toDollars(billsSpendCents),
+    priorWeekBillsSpend: toDollars(priorWeekBillsSpendCents),
+    dayToDaySpend: toDollars(dayToDaySpendCents),
+    priorWeekDayToDaySpend: toDollars(priorWeekDayToDaySpendCents),
     topCategoryDeltas,
     habitCompletions,
     streaksAtRisk,
@@ -228,5 +309,6 @@ export function assembleWeeklyRecap(input: DataAssemblyInput): AssembledRecap {
     dailyPoints: ceremony.dailyPoints,
     totalPoints: ceremony.totalPoints,
     priorWeekPoints,
+    unattributedSplit: ceremony.unattributedSplit,
   };
 }

@@ -50,6 +50,35 @@ export interface RecapMemberFacts {
  * stay visible as a neutral segment rather than vanishing from the household's
  * own week.
  */
+/**
+ * WHY a chunk of points belongs to no individual member — the decomposition of
+ * `RecapDayPoints.unattributed` (RECAP-MATH).
+ *
+ * Mirrors `RecapUnattributedSplit` in the client's `types/schema.ts` (separate
+ * pnpm package, so the shape is duplicated rather than imported).
+ *
+ * 🛡️ `householdCredit + unclaimed === unattributed`, BY CONSTRUCTION: both
+ * halves come from the same `unattributedPointsOnDate` walk that produces
+ * `unattributed` itself, partitioned per habit — never a subtraction.
+ *
+ *  1. DELIBERATE household credit (`Habit.creditMode === 'household'`): the
+ *     household earned these together on purpose, and such a completion writes
+ *     NO `completedBy` entry by design.
+ *  2. Everything else with no holder: pre-attribution (grandfathered) history,
+ *     or a real gap (a per-member habit fired by something that never recorded
+ *     a person).
+ *
+ * There is deliberately no THIRD bucket splitting those two apart: `creditMode`
+ * is absent on every pre-feature habit and reads as `'members'`, so the shapes
+ * are identical on the document and cannot be told apart after the fact.
+ */
+export interface RecapUnattributedSplit {
+  /** Signed points from `creditMode: 'household'` habits — together, by design. */
+  householdCredit: number;
+  /** Signed points nobody holds for any other reason (legacy history or a gap). */
+  unclaimed: number;
+}
+
 export interface RecapDayPoints {
   /** yyyy-MM-dd, local to the generating timezone. */
   date: string;
@@ -59,6 +88,12 @@ export interface RecapDayPoints {
   unattributed: number;
   /** Signed household points for the day. */
   total: number;
+  /**
+   * Why that day's `unattributed` belongs to nobody (RECAP-MATH). OPTIONAL:
+   * absent on every recap written before the split shipped, so read it as
+   * "unknown", never as "zero household credit".
+   */
+  unattributedSplit?: RecapUnattributedSplit;
 }
 
 /**
@@ -78,11 +113,24 @@ export interface WeeklyRecap {
   /** ISO 8601 timestamp of when this recap was generated. */
   generatedAt: string;
 
-  /** Total verified, non-income spend for the recap week (decimal dollars). */
+  /**
+   * ALL counted spend for the recap week (decimal dollars) — bills included.
+   *
+   * "Counted" excludes income AND the `Credit Card` account-routing sentinel,
+   * which is not real spending (RECAP-MATH; mirrors the client's
+   * `utils/bucketSpentCalculator.ts`). Recaps written before that fix counted
+   * the sentinel, so an old document's figure is not comparable to a new one's.
+   */
   totalSpend: number;
-  /** Total verified, non-income spend for the prior week (decimal dollars). */
+  /** The same figure for the prior week (decimal dollars). */
   priorWeekSpend: number;
-  /** Up to 3 categories with the largest week-over-week spend swing. */
+  /**
+   * Up to 3 categories with the largest week-over-week spend swing.
+   *
+   * Excludes the `Budgeted in Calendar` calendar-bill sentinel (RECAP-MATH):
+   * it is a routing tag, not a category, and a heavy bill week made it win this
+   * list every time.
+   */
   topCategoryDeltas: Array<{ category: string; current: number; prior: number }>;
 
   /** Count of habit completions logged during the recap week. */
@@ -122,4 +170,34 @@ export interface WeeklyRecap {
   priorWeekPoints?: number;
   /** The household's ceremony tone at generation time (drives the deck order). */
   ceremonyTone?: "podium" | "household_first" | "adaptive";
+
+  // --- Spend decomposition (RECAP-MATH) -----------------------------------
+  // ALL OPTIONAL: absent on every recap written before the split shipped.
+  //
+  // 🛡️ `billsSpend + dayToDaySpend === totalSpend`, by construction — each is
+  // its own filter over the same counted-spend predicate, never a subtraction.
+  // The split exists because lumping them together made the week-over-week
+  // headline meaningless: a heavy bill week reads as a 3x "spending increase"
+  // when day-to-day spending was actually flat.
+
+  /**
+   * Counted spend the calendar already budgeted (decimal dollars) — the
+   * `Budgeted in Calendar` sentinel paid bills are filed under, plus the legacy
+   * `Bills` tag. Real outflows, just not discretionary ones.
+   */
+  billsSpend?: number;
+  /** The same figure for the week BEFORE the recap week. */
+  priorWeekBillsSpend?: number;
+  /** Counted spend that is NOT a paid calendar bill (decimal dollars). */
+  dayToDaySpend?: number;
+  /** The same figure for the week BEFORE the recap week. */
+  priorWeekDayToDaySpend?: number;
+
+  /**
+   * Week totals of `dailyPoints[].unattributedSplit` — how much of the week's
+   * unattributed pool was DELIBERATE household credit versus genuinely
+   * unclaimed (RECAP-MATH). `householdCredit + unclaimed === Σ
+   * dailyPoints[].unattributed`.
+   */
+  unattributedSplit?: RecapUnattributedSplit;
 }

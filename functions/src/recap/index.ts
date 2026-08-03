@@ -328,6 +328,9 @@ async function generateRecap(
       frozenDates: data.frozenDates,
       frozenDatesBy: data.frozenDatesBy,
       pausedUntil: data.pausedUntil,
+      // Only `'household'` is meaningful; anything else (including absent) reads
+      // as per-member credit, matching `Habit.creditMode`'s "no migration" rule.
+      creditMode: data.creditMode === "household" ? "household" : "members",
     };
   });
 

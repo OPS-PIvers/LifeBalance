@@ -12,6 +12,7 @@ import {
   memberUnitsOnDate,
   shiftDay,
   unattributedPointsOnDate,
+  unattributedSplitForDate,
   weekDates,
   weekPointsTotal,
   type CeremonyMember,
@@ -356,7 +357,13 @@ describe('assigned chores stay personal', () => {
 describe('buildDailyPoints', () => {
   it('emits 7 Monday-first all-zero rows for an untouched week', () => {
     expect(buildDailyPoints([], [JEN, PAUL], WEEK_START, WEEK_END)).toEqual(
-      DAYS.map(date => ({ date, byMember: {}, unattributed: 0, total: 0 })),
+      DAYS.map(date => ({
+        date,
+        byMember: {},
+        unattributed: 0,
+        total: 0,
+        unattributedSplit: { householdCredit: 0, unclaimed: 0 },
+      })),
     );
   });
 
@@ -509,15 +516,26 @@ describe('assembleWeeklyRecap', () => {
     expect(assembleWeeklyRecap(baseInput())).toEqual({
       totalSpend: 0,
       priorWeekSpend: 0,
+      billsSpend: 0,
+      priorWeekBillsSpend: 0,
+      dayToDaySpend: 0,
+      priorWeekDayToDaySpend: 0,
       topCategoryDeltas: [],
       habitCompletions: 0,
       streaksAtRisk: [],
       pointsByMember: [],
       upcomingBills: [],
       memberFacts: [],
-      dailyPoints: DAYS.map(date => ({ date, byMember: {}, unattributed: 0, total: 0 })),
+      dailyPoints: DAYS.map(date => ({
+        date,
+        byMember: {},
+        unattributed: 0,
+        total: 0,
+        unattributedSplit: { householdCredit: 0, unclaimed: 0 },
+      })),
       totalPoints: 0,
       priorWeekPoints: 0,
+      unattributedSplit: { householdCredit: 0, unclaimed: 0 },
     });
   });
 
@@ -644,5 +662,240 @@ describe('assembleWeeklyRecap', () => {
     expect(result.streaksAtRisk).toEqual([{ habitTitle: 'Legacy habit', streakDays: 4 }]);
     expect(result.totalPoints).toBe(0); // basePoints absent → 0 per unit
     expect(result.memberFacts).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RECAP-MATH — spend slices and the unattributed split
+// ---------------------------------------------------------------------------
+
+describe('counted spend excludes the Credit Card sentinel', () => {
+  it('drops it from totalSpend, both slices and the category deltas', () => {
+    const transactions: RecapTransaction[] = [
+      { amount: 100, category: 'Groceries', date: MON, status: 'verified' },
+      // `CREDIT_CARD_CATEGORY` is an ACCOUNT-ROUTING tag, not spending —
+      // `utils/bucketSpentCalculator.ts` has always excluded it.
+      { amount: 220.89, category: 'Credit Card', date: TUE, status: 'verified' },
+      // Case-insensitive, matching the income check in the same predicate.
+      { amount: 11.11, category: 'credit card', date: WED, status: 'verified' },
+    ];
+    const result = assembleWeeklyRecap(baseInput({ transactions }));
+    expect(result.totalSpend).toBe(100);
+    expect(result.dayToDaySpend).toBe(100);
+    expect(result.billsSpend).toBe(0);
+    expect(result.topCategoryDeltas).toEqual([{ category: 'Groceries', current: 100, prior: 0 }]);
+  });
+
+  it('still excludes it when a household literally named a bucket "Credit Card"', () => {
+    // Mirrors the bucket calculator's comment: the sentinel is not a bucket
+    // category, even when a bucket happens to share its name.
+    const transactions: RecapTransaction[] = [
+      { amount: 50, category: 'Credit Card', date: MON, status: 'verified' },
+    ];
+    expect(assembleWeeklyRecap(baseInput({ transactions })).totalSpend).toBe(0);
+  });
+});
+
+describe('bills vs day-to-day spend', () => {
+  const transactions: RecapTransaction[] = [
+    // Bills — the sentinel `payCalendarItem` files a paid bill under...
+    { amount: 950, category: 'Budgeted in Calendar', date: MON, status: 'verified' },
+    // ...and the LEGACY tag older paid bills still carry.
+    { amount: 356.77, category: 'Bills', date: WED, status: 'verified' },
+    // Day-to-day
+    { amount: 200, category: 'Groceries', date: TUE, status: 'verified' },
+    { amount: 100, category: 'Dining', date: THU, status: 'verified' },
+    // Prior week — day-to-day only, so the bill week can't hide behind it.
+    { amount: 180, category: 'Groceries', date: P_MON, status: 'verified' },
+    { amount: 120, category: 'Dining', date: P_TUE, status: 'verified' },
+  ];
+
+  it('partitions counted spend, both weeks', () => {
+    const result = assembleWeeklyRecap(baseInput({ transactions }));
+    expect(result.billsSpend).toBe(1306.77);
+    expect(result.dayToDaySpend).toBe(300);
+    expect(result.totalSpend).toBe(1606.77);
+    expect(result.billsSpend + result.dayToDaySpend).toBe(result.totalSpend);
+
+    expect(result.priorWeekBillsSpend).toBe(0);
+    expect(result.priorWeekDayToDaySpend).toBe(300);
+    expect(result.priorWeekSpend).toBe(300);
+  });
+
+  it('keeps the calendar sentinel OUT of topCategoryDeltas entirely', () => {
+    // It swung $1,306.77 — bigger than every real category — so it would
+    // otherwise be the household's #1 "category insight" every bill week.
+    const result = assembleWeeklyRecap(baseInput({ transactions }));
+    expect(result.topCategoryDeltas).toEqual([
+      { category: 'Groceries', current: 200, prior: 180 },
+      { category: 'Dining', current: 100, prior: 120 },
+    ]);
+  });
+
+  it('sums bills in cents, with no floating-point drift', () => {
+    const result = assembleWeeklyRecap(
+      baseInput({
+        transactions: [
+          { amount: 0.1, category: 'Budgeted in Calendar', date: MON, status: 'verified' },
+          { amount: 0.2, category: 'Bills', date: TUE, status: 'verified' },
+        ],
+      }),
+    );
+    expect(result.billsSpend).toBe(0.3);
+  });
+
+  it('keeps a trailing-space category separate from its trimmed twin', () => {
+    // "Grocery & Misc. " is real production data. The grouping key is
+    // lowercased but NOT trimmed — pinned so a future trim is deliberate.
+    const result = assembleWeeklyRecap(
+      baseInput({
+        transactions: [
+          { amount: 30, category: 'Grocery & Misc. ', date: MON, status: 'verified' },
+          { amount: 5, category: 'Grocery & Misc.', date: TUE, status: 'verified' },
+        ],
+      }),
+    );
+    expect(result.dayToDaySpend).toBe(35);
+    expect(result.topCategoryDeltas).toEqual([
+      { category: 'Grocery & Misc. ', current: 30, prior: 0 },
+      { category: 'Grocery & Misc.', current: 5, prior: 0 },
+    ]);
+  });
+});
+
+describe('unattributedSplitForDate', () => {
+  it('routes a creditMode: household habit to householdCredit', () => {
+    const h = habit({ creditMode: 'household', basePoints: 12, completedDates: [MON] });
+    expect(unattributedSplitForDate([h], MON, WEEK_END)).toEqual({
+      householdCredit: 12,
+      unclaimed: 0,
+    });
+  });
+
+  it('routes an explicit creditMode: members habit with NO attribution to unclaimed', () => {
+    // The real gap: a habit fired by a transaction that never got a person.
+    const h = habit({
+      creditMode: 'members',
+      basePoints: 7,
+      completedDates: [MON],
+      completedBy: {},
+    });
+    expect(unattributedSplitForDate([h], MON, WEEK_END)).toEqual({
+      householdCredit: 0,
+      unclaimed: 7,
+    });
+  });
+
+  it('routes a habit with NO creditMode at all to unclaimed (grandfathered history)', () => {
+    // Absent reads as 'members' (see `Habit.creditMode`) — there is deliberately
+    // no third bucket, because legacy history and a real gap are the same shape.
+    const h = habit({ basePoints: 10, completedDates: [MON] });
+    expect(unattributedSplitForDate([h], MON, WEEK_END)).toEqual({
+      householdCredit: 0,
+      unclaimed: 10,
+    });
+  });
+
+  it('keeps both apart on the SAME day', () => {
+    const habits = [
+      habit({
+        title: 'Homemade dinner',
+        creditMode: 'household',
+        basePoints: 12,
+        completedDates: [MON],
+      }),
+      habit({
+        title: 'Go into Target',
+        creditMode: 'members',
+        basePoints: 7,
+        completedDates: [MON],
+      }),
+    ];
+    expect(unattributedSplitForDate(habits, MON, WEEK_END)).toEqual({
+      householdCredit: 12,
+      unclaimed: 7,
+    });
+  });
+
+  it('splits only the REMAINDER when a household-credit habit carries stale attribution', () => {
+    // Attribution written before the mode flipped: u1 keeps their unit, the
+    // rest is household credit. The split decomposes, it never re-derives.
+    const h = habit({
+      creditMode: 'household',
+      scoringType: 'incremental',
+      basePoints: 5,
+      targetCount: 3,
+      completedDates: [MON],
+      completedBy: { [MON]: { u1: 1 } },
+    });
+    const split = unattributedSplitForDate([h], MON, WEEK_END);
+    expect(split.householdCredit + split.unclaimed).toBe(
+      unattributedPointsOnDate(h, MON, WEEK_END),
+    );
+  });
+
+  it('ignores creditMode on an ASSIGNED chore — it never reaches the household pool', () => {
+    const h = habit({
+      assignedTo: LEO.uid,
+      creditMode: 'household',
+      basePoints: 5,
+      completedDates: [MON],
+    });
+    expect(unattributedSplitForDate([h], MON, WEEK_END)).toEqual({
+      householdCredit: 0,
+      unclaimed: 0,
+    });
+  });
+
+  it('carries the sign of a negative household-credit habit', () => {
+    const h = habit({
+      creditMode: 'household',
+      type: 'negative',
+      basePoints: 8,
+      completedDates: [MON],
+    });
+    expect(unattributedSplitForDate([h], MON, WEEK_END)).toEqual({
+      householdCredit: -8,
+      unclaimed: 0,
+    });
+  });
+});
+
+describe('unattributedSplit on the assembled recap', () => {
+  it('sums the week and decomposes every day, exactly', () => {
+    const habits: RecapHabit[] = [
+      recapHabit({
+        title: 'Homemade dinner',
+        creditMode: 'household',
+        basePoints: 12,
+        completedDates: [MON, TUE],
+      }),
+      recapHabit({
+        title: 'Go into Target',
+        creditMode: 'members',
+        basePoints: 7,
+        completedDates: [TUE],
+        completedBy: {},
+      }),
+      recapHabit({
+        title: 'Morning walk',
+        basePoints: 10,
+        completedDates: [MON],
+        completedBy: { [MON]: { u1: 1 } },
+      }),
+    ];
+    const result = assembleWeeklyRecap(baseInput({ habits, members: [JEN] }));
+
+    expect(result.unattributedSplit).toEqual({ householdCredit: 24, unclaimed: 7 });
+    const seriesTotal = result.dailyPoints.reduce((sum, d) => sum + d.unattributed, 0);
+    expect(result.unattributedSplit.householdCredit + result.unattributedSplit.unclaimed).toBe(
+      seriesTotal,
+    );
+
+    const monday = result.dailyPoints.find(d => d.date === MON);
+    expect(monday?.unattributedSplit).toEqual({ householdCredit: 12, unclaimed: 0 });
+    expect(monday?.byMember).toEqual({ u1: 10 });
+    // The household figure is untouched: the split explains it, never changes it.
+    expect(monday?.total).toBe(22);
   });
 });
