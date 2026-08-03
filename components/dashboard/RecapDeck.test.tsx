@@ -382,6 +382,28 @@ describe('RecapDeck — the personal card', () => {
     expect(screen.getByText('7/7')).toBeInTheDocument();
   });
 
+  it('never announces a ZERO-day streak in the prose line either (one gate, shared with the tiles)', async () => {
+    // `buildPersonalTiles` drops a 0-day streak; the paragraph beneath used to
+    // guard only on the object's presence, so it would say "Morning walk is
+    // your longest run · 0 days" beside a tile row that had correctly dropped
+    // it. Both surfaces now read the same normalised value.
+    renderDeck({
+      memberFacts: [
+        facts('jen', 'Jen', 410),
+        facts('paul', 'Paul', 40, {
+          perfectHabits: [],
+          completions: 4,
+          topStreak: { habitTitle: 'Morning walk', days: 0, period: 'daily' },
+        }),
+      ],
+    });
+    await advance([MONEY, WEEK_CARD, 'Your week, Paul']);
+    expect(screen.queryByText(/longest run/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Day streak')).not.toBeInTheDocument();
+    // The true stat survives.
+    expect(screen.getByText('Habits logged')).toBeInTheDocument();
+  });
+
   it('replaces the tiles with a true sentence for a genuinely empty week', async () => {
     renderDeck({
       memberFacts: [

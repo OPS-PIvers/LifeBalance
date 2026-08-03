@@ -447,7 +447,13 @@ const PersonalCard: React.FC<{ deck: RecapDeckModel; facts: RecapMemberFacts }> 
   // an absence formatted as a statistic. Hooks stay above the early return.
   const tiles = useMemo(() => buildPersonalTiles(facts), [facts]);
   if (!standing) return null;
-  const streak = facts.topStreak;
+  // 🛡️ ONE GATE, shared with `buildPersonalTiles`. A zero-day `topStreak` is
+  // not a streak: guarding the prose below on the object's mere PRESENCE while
+  // the tile guards on `days > 0` let the two surfaces disagree, and the card
+  // would announce "Morning walk is your longest run · 0 days" beside a tile
+  // row that had (correctly) dropped it — the same zero-as-a-statistic this
+  // rebuild exists to remove. Normalise once, here.
+  const streak = facts.topStreak && facts.topStreak.days > 0 ? facts.topStreak : null;
   const perfect = facts.perfectHabits[0];
 
   return (
