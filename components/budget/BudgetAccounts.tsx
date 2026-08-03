@@ -999,7 +999,10 @@ const BudgetAccounts: React.FC = () => {
                   ))}
                 </div>
                 <p className="text-xs text-brand-500 dark:text-brand-400">
-                  Tag which household member holds each card — useful when separate debit cards share one account.
+                  Tag who holds each card, so a shared account still shows who spent the money.
+                  <span className="block">
+                    Purchases on a tagged card earn that person the habit points — and the penalties.
+                  </span>
                 </p>
               </div>
             )}
