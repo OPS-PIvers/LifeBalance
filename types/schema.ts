@@ -427,11 +427,23 @@ export interface Transaction {
    *  onto the row instead of being discarded once routing is done.
    *  Normalized to exactly 4 digits, matching the keys of
    *  `Account.cardLast4s`/`cardOwners` — see `utils/cardOwnership.ts` for the
-   *  owner lookup this enables. Absent on every transaction from a path that
-   *  never captures a card digit (manual entry, receipt/statement scans,
-   *  Plaid, bank-sync) and on historical rows (no migration). Not yet written
-   *  by the stub-fill/duplicate-merge reconcile paths in
-   *  `functions/src/quickAdd/reconcile.ts` — only the primary create path. */
+   *  owner lookup this enables.
+   *
+   *  WRITTEN BY every capture path that sees a card digit: `quickAddExpense`'s
+   *  primary create, all three reconcile builders in
+   *  `functions/src/quickAdd/reconcile.ts` (stub fill + both duplicate-merge
+   *  directions), and the nightly `bankEmailSync` on BOTH its `create` and
+   *  `fill_stub` branches. When a merge finds the target already carrying a
+   *  DIFFERENT value, `resolveCardLast4Update` applies "bank wins" — a
+   *  bank-sourced incoming (`fromBankNotification`) overwrites, anything else
+   *  only fills an empty value. Adding a new capture path? Write this field
+   *  there too; a path that silently skips it reads as "unknown card" and its
+   *  transactions go unattributed with no error.
+   *
+   *  ABSENT on paths that never capture a card digit (manual entry,
+   *  receipt/statement scans, Plaid) and on ALL historical rows — the field
+   *  postdates them and there is no migration, so attribution built on it is
+   *  forward-only. */
   cardLast4?: string;
   /** When the transaction is tagged to a CREDIT account, marks it as a PAYMENT
    *  toward the card (reduces the credit balance) rather than a charge (which
