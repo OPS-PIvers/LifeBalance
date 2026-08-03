@@ -61,7 +61,7 @@ import {
   streakForPeriod,
   type HabitPeriod,
 } from "../quickAdd/streakLogic";
-import { RecapDayPoints, RecapMemberFacts } from "./types";
+import { RecapDayPoints, RecapMemberFacts, RecapUnattributedSplit } from "./types";
 
 /**
  * The habit fields the ceremony scorer reads. Everything past `title` /
@@ -85,7 +85,29 @@ export interface RecapScoringHabit {
   /** date → uids a per-member freeze was spent for (`freezeMode: 'per_member'`). */
   frozenDatesBy?: Record<string, string[]>;
   pausedUntil?: string;
+  /**
+   * `'household'` ⇒ a completion deliberately credits the household and writes
+   * NO `completedBy` entry. Absent reads as `'members'` (see the client's
+   * `Habit.creditMode`), which is why the unattributed split has no third
+   * "legacy" bucket.
+   */
+  creditMode?: "members" | "household";
 }
+
+/**
+ * Does a completion of this habit credit the HOUSEHOLD and nobody individually?
+ *
+ * Mirrors `isHouseholdCreditHabit` in the client's `utils/habitAttribution.ts`
+ * (functions/ is a separate pnpm package with `rootDir: "src"`, so the predicate
+ * is duplicated rather than imported — `parity.test.ts` pins the two together).
+ *
+ * An ASSIGNED chore is excluded on purpose: its points route to the assignee's
+ * own member doc and never touch the household pool, so there is no household
+ * award for a mode to redirect and `creditMode` is simply inert there.
+ */
+export const isHouseholdCreditHabit = (
+  habit: Pick<RecapScoringHabit, "assignedTo" | "creditMode">
+): boolean => !habit.assignedTo && habit.creditMode === "household";
 
 /** Minimal member shape the ceremony needs. */
 export interface CeremonyMember {
@@ -108,6 +130,8 @@ export interface AssembledCeremony {
   memberFacts: RecapMemberFacts[];
   dailyPoints: RecapDayPoints[];
   totalPoints: number;
+  /** Week totals of `dailyPoints[].unattributedSplit` (RECAP-MATH). */
+  unattributedSplit: RecapUnattributedSplit;
 }
 
 // ---------------------------------------------------------------------------
@@ -405,18 +429,44 @@ export function memberPointsOnDate(
   );
 }
 
-/** Signed points on one date that no member holds (assigned chores excluded). */
-function unattributedPointsForDate(
+/**
+ * WHY one date's unattributed points belong to nobody (RECAP-MATH).
+ *
+ * 🛡️ ONE WALK, PARTITIONED — not two scorers and not a subtraction. Every
+ * habit's `unattributedPointsOnDate` lands in exactly one bucket, so
+ * `householdCredit + unclaimed` reproduces the day's `unattributed` exactly and
+ * the split can never disagree with the figure it explains.
+ *
+ * Household credit is NOT a second scoring path — a `creditMode: 'household'`
+ * completion goes down the same unattributed path a grandfathered one does. All
+ * this does is record WHY that path was taken.
+ */
+export function unattributedSplitForDate(
   habits: RecapScoringHabit[],
   date: string,
   anchor: string
-): number {
-  let total = 0;
+): RecapUnattributedSplit {
+  let householdCredit = 0;
+  let unclaimed = 0;
   for (const habit of habits) {
     if (habit.assignedTo) continue;
-    total += unattributedPointsOnDate(habit, date, anchor);
+    const points = unattributedPointsOnDate(habit, date, anchor);
+    if (points === 0) continue;
+    if (isHouseholdCreditHabit(habit)) householdCredit += points;
+    else unclaimed += points;
   }
-  return total;
+  return { householdCredit, unclaimed };
+}
+
+/** Σ of a week's per-day splits — the `AssembledCeremony` week total. */
+function sumUnattributedSplits(days: RecapDayPoints[]): RecapUnattributedSplit {
+  let householdCredit = 0;
+  let unclaimed = 0;
+  for (const day of days) {
+    householdCredit += day.unattributedSplit?.householdCredit ?? 0;
+    unclaimed += day.unattributedSplit?.unclaimed ?? 0;
+  }
+  return { householdCredit, unclaimed };
 }
 
 // ---------------------------------------------------------------------------
@@ -450,8 +500,11 @@ export function buildDailyPoints(
         memberSum += points;
       }
     }
-    const unattributed = unattributedPointsForDate(habits, date, anchor);
-    return { date, byMember, unattributed, total: memberSum + unattributed };
+    // ONE walk: the split IS the source of the day's `unattributed` figure, so
+    // the two cannot drift apart (RECAP-MATH).
+    const unattributedSplit = unattributedSplitForDate(habits, date, anchor);
+    const unattributed = unattributedSplit.householdCredit + unattributedSplit.unclaimed;
+    return { date, byMember, unattributed, total: memberSum + unattributed, unattributedSplit };
   });
 }
 
@@ -601,5 +654,6 @@ export function assembleCeremony(input: CeremonyInput): AssembledCeremony {
     memberFacts: hasMemberData ? facts : [],
     dailyPoints,
     totalPoints: dailyPoints.reduce((sum, d) => sum + d.total, 0),
+    unattributedSplit: sumUnattributedSplits(dailyPoints),
   };
 }
