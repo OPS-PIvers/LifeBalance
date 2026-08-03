@@ -100,7 +100,12 @@ import {
   shouldDeclareToNoSpend,
   type SpendCandidate,
 } from "./noSpendDay";
-import { applyNoSpendDay, type NoSpendHabitFire, type NoSpendOutcome } from "./noSpendFire";
+import {
+  applyNoSpendDay,
+  type NoSpendFreezeRefundNote,
+  type NoSpendHabitFire,
+  type NoSpendOutcome,
+} from "./noSpendFire";
 import { pickMerchantRule } from "./merchantRules";
 import {
   describeRuleEffects,
@@ -817,6 +822,18 @@ export const bankEmailSync = onRequest(
         // Gated on `noSpendDatesToJudgeSet` (not just the decision kind) so a
         // CREATE dated to a day already settled clean by an earlier email
         // doesn't get queued for a judgement that will never run.
+        //
+        // `shouldDeclareToNoSpend`'s date-equality check (`withdrawalDate !==
+        // targetDate`) is deliberately passed `w.date` for BOTH arguments —
+        // trivially true, so it degrades to a pure `kind === "create"` check.
+        // That's intentional, not a mistake: with one judged day per email,
+        // this call compared the withdrawal's date against THAT single day;
+        // now that a withdrawal can be declared to any of several judged
+        // days, the date scoping has moved entirely to the
+        // `noSpendDatesToJudgeSet.has(w.date)` check above — a withdrawal is
+        // only ever considered for the day it's actually dated on, so by the
+        // time this line runs, "does this withdrawal's date match the day
+        // being judged" is already guaranteed by construction.
         if (
           noSpendDatesToJudgeSet.has(w.date) &&
           shouldDeclareToNoSpend(decision.kind, w.date, w.date)
@@ -1001,7 +1018,11 @@ export const bankEmailSync = onRequest(
           targetDate: noSpendDate,
           today,
           extraSpend: noSpendExtraSpendByDate.get(noSpendDate) ?? [],
-          householdData,
+          // No `householdData` passed — `applyNoSpendDay` no longer writes to
+          // the household doc itself (see the accumulation right below this
+          // loop, and `NoSpendOutcome.freezeTokensRefunded`'s doc comment for
+          // why per-call household writes are unsafe across several days on
+          // one batch).
           // An `exempt` rule must apply to every row dated to the judged day, not
           // just the ones this email creates — an exempted subscription is an
           // ordinary stored transaction on every later sync.
@@ -1023,11 +1044,90 @@ export const bankEmailSync = onRequest(
         blockedBy: [],
         fired: [],
         weekendCompleted: false,
+        pointsDelta: { daily: 0, weekly: 0, total: 0 },
+        freezeTokensRefunded: 0,
+        freezeRefundNotes: [],
       };
       // Habits fired across EVERY judged day, pooled — a fire on an earlier
       // settled day of a multi-day catch-up must still be announced even
       // though the push title below is driven by the most recent day alone.
       const allFiredNoSpendHabits: NoSpendHabitFire[] = noSpendOutcomes.flatMap((o) => o.fired);
+
+      // Combine every judged day's points delta and freeze-token refund into
+      // ONE household-doc write — see `NoSpendOutcome.freezeTokensRefunded`'s
+      // doc comment in noSpendFire.ts for exactly why a per-day write is
+      // unsafe (the whole-object `freezeBank` write is built from THIS SAME
+      // `householdData` snapshot, loaded once above, before the batch; two
+      // days each computing their own `tokens: original + 1` from that same
+      // stale snapshot would have the later one silently overwrite the
+      // earlier one's refund — the classic whole-map-write clobber this
+      // repo's CLAUDE.md warns about for `freezeBanksByMember`/
+      // `frozenDatesBy`). Points are combined here too even though bare
+      // `FieldValue.increment` calls are themselves safe across multiple
+      // same-batch writes to one document (Firestore applies same-batch
+      // writes to a document atomically and IN ORDER, so relative transforms
+      // correctly accumulate) — one simple, auditable household write per
+      // email is easier to reason about than relying on that guarantee.
+      const noSpendPointsDelta = { daily: 0, weekly: 0, total: 0 };
+      let noSpendFreezeTokensRefunded = 0;
+      const noSpendFreezeRefundNotes: NoSpendFreezeRefundNote[] = [];
+      for (const outcome of noSpendOutcomes) {
+        noSpendPointsDelta.daily += outcome.pointsDelta.daily;
+        noSpendPointsDelta.weekly += outcome.pointsDelta.weekly;
+        noSpendPointsDelta.total += outcome.pointsDelta.total;
+        noSpendFreezeTokensRefunded += outcome.freezeTokensRefunded;
+        noSpendFreezeRefundNotes.push(...outcome.freezeRefundNotes);
+      }
+      const noSpendHouseholdUpdates: Record<string, unknown> = {};
+      if (noSpendPointsDelta.daily !== 0) {
+        noSpendHouseholdUpdates["points.daily"] = admin.firestore.FieldValue.increment(
+          noSpendPointsDelta.daily
+        );
+      }
+      if (noSpendPointsDelta.weekly !== 0) {
+        noSpendHouseholdUpdates["points.weekly"] = admin.firestore.FieldValue.increment(
+          noSpendPointsDelta.weekly
+        );
+      }
+      if (noSpendPointsDelta.total !== 0) {
+        noSpendHouseholdUpdates["points.total"] = admin.firestore.FieldValue.increment(
+          noSpendPointsDelta.total
+        );
+      }
+      if (noSpendFreezeTokensRefunded > 0) {
+        const freezeBank = householdData?.freezeBank as
+          | { tokens?: number; maxTokens?: number; history?: unknown[] }
+          | undefined;
+        if (freezeBank) {
+          // Whole-object write, matching every other freezeBank writer (it is a
+          // nested map, not a counter, and all writers treat it as
+          // last-writer-wins). Capped so a refund can't push the bank above its
+          // ceiling. Computed ONCE here, from the total across every judged day,
+          // so this is the only `freezeBank` write in the whole batch.
+          const maxTokens = typeof freezeBank.maxTokens === "number" ? freezeBank.maxTokens : 2;
+          const tokens = typeof freezeBank.tokens === "number" ? freezeBank.tokens : 0;
+          noSpendHouseholdUpdates["freezeBank"] = {
+            ...freezeBank,
+            tokens: Math.min(maxTokens, tokens + noSpendFreezeTokensRefunded),
+            history: [
+              ...(Array.isArray(freezeBank.history) ? freezeBank.history : []),
+              ...noSpendFreezeRefundNotes.map((n) => ({
+                id: `nospend-${n.habitId}-${n.habitDate}`,
+                type: "earned",
+                amount: 1,
+                date: today,
+                habitId: n.habitId,
+                habitDate: n.habitDate,
+                notes: `Freeze refunded: ${n.title} was completed on ${n.habitDate} after all (no-spend day)`,
+                createdAt: new Date().toISOString(),
+              })),
+            ],
+          };
+        }
+      }
+      if (Object.keys(noSpendHouseholdUpdates).length > 0) {
+        batch.update(db.doc(`households/${householdId}`), noSpendHouseholdUpdates);
+      }
 
       // 10. Overwrite the account balance with the email's AVAILABLE balance
       //     (posted ending balance minus authorized-but-unposted holds) —
