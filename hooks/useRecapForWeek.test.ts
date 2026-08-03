@@ -1,15 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useRecapForWeek } from '@/hooks/useRecapForWeek';
-import type { WeeklyRecap } from '@/types/schema';
+import type { Household, WeeklyRecap } from '@/types/schema';
 
 const fetchStoredRecap = vi.fn<(isoWeek: string) => Promise<WeeklyRecap | null>>();
 const loadAllTransactions = vi.fn(async () => []);
+const mockBillingEnabled = vi.fn(() => false);
 
 const mockCore = {
   recaps: [] as WeeklyRecap[],
   members: [{ uid: 'u1', displayName: 'Jen' }],
   fetchStoredRecap,
+  household: undefined as Pick<Household, 'subscription'> | undefined,
 };
 const mockFinance = {
   transactions: [
@@ -26,6 +28,9 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useHouseholdCore: () => mockCore,
   useFinance: () => mockFinance,
   useGamification: () => mockGamification,
+}));
+vi.mock('@/hooks/useBillingEnabled', () => ({
+  useBillingEnabled: () => mockBillingEnabled(),
 }));
 
 const ISO_WEEK = '2026-W27'; // Mon 2026-06-29 → Sun 2026-07-05, same anchor as recapAssembly.test.ts
@@ -51,8 +56,10 @@ describe('useRecapForWeek', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCore.recaps = [];
+    mockCore.household = undefined;
     mockFinance.transactionWindowStart = null;
     mockFinance.hasMoreTransactions = false;
+    mockBillingEnabled.mockReturnValue(false);
     fetchStoredRecap.mockResolvedValue(null);
   });
 
@@ -92,7 +99,50 @@ describe('useRecapForWeek', () => {
     expect(result.current.source).toBe('derived');
     expect(result.current.recap?.totalSpend).toBe(42); // the one seeded transaction
     expect(result.current.recap?.narrative).toBe(''); // honest — nothing generated
-    expect(result.current.recap?.premium).toBe(false);
+    // Billing is dormant (the default in every test here unless overridden) —
+    // every household is premium, so this must NOT be false. See the
+    // "premium truthfulness" describe block below for the full matrix.
+    expect(result.current.recap?.premium).toBe(true);
+  });
+
+  describe('premium truthfulness — never inferred from the absence of a narrative', () => {
+    // A prior version of useRecapForWeek/deriveWeeklyRecap hardcoded
+    // `premium: false` on every derived recap (to route the drawer's
+    // narrative section into its paywall fallback). That told every
+    // currently-real household — billing is off, so ALL of them are
+    // premium — that it lacked something it already has. These pin the fix:
+    // `premium` reflects the household's actual entitlement
+    // (`resolveIsPremiumHousehold`), completely independent of whether a
+    // narrative exists (a derived recap never has one).
+
+    it('is premium=true while billing is dormant, regardless of subscription — narrative is still empty', async () => {
+      mockBillingEnabled.mockReturnValue(false);
+      mockCore.household = { subscription: undefined };
+      fetchStoredRecap.mockResolvedValue(null);
+      const { result } = renderHook(() => useRecapForWeek(ISO_WEEK));
+      await waitFor(() => expect(result.current.recap).not.toBeNull());
+      expect(result.current.recap?.narrative).toBe('');
+      expect(result.current.recap?.premium).toBe(true);
+    });
+
+    it('once billing is live, is premium=true for an active subscription — narrative is still empty', async () => {
+      mockBillingEnabled.mockReturnValue(true);
+      mockCore.household = { subscription: { plan: 'premium', status: 'active' } };
+      fetchStoredRecap.mockResolvedValue(null);
+      const { result } = renderHook(() => useRecapForWeek(ISO_WEEK));
+      await waitFor(() => expect(result.current.recap).not.toBeNull());
+      expect(result.current.recap?.narrative).toBe('');
+      expect(result.current.recap?.premium).toBe(true);
+    });
+
+    it('once billing is live, is premium=false for a household with no subscription — the true free-tier answer', async () => {
+      mockBillingEnabled.mockReturnValue(true);
+      mockCore.household = { subscription: undefined };
+      fetchStoredRecap.mockResolvedValue(null);
+      const { result } = renderHook(() => useRecapForWeek(ISO_WEEK));
+      await waitFor(() => expect(result.current.recap).not.toBeNull());
+      expect(result.current.recap?.premium).toBe(false);
+    });
   });
 
   it('withholds a derived recap (never a wrong $0) until out-of-window transactions finish loading', async () => {

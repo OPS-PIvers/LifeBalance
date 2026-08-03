@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFinance, useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { useBillingEnabled } from '@/hooks/useBillingEnabled';
 import { deriveWeeklyRecap, transactionsCoverWeek } from '@/utils/recapCompose';
+import { resolveIsPremiumHousehold } from '@/utils/entitlements';
 import { weekRangeForIsoWeek } from '@/utils/recapWeek';
 import type { WeeklyRecap } from '@/types/schema';
 
@@ -34,20 +36,23 @@ export interface RecapForWeekResult {
  *     first `RECAPS_LIMIT` weeks after generation.
  *  3. A CLIENT-DERIVED recap (`utils/recapCompose.ts`, wrapping the
  *     protected `utils/recapAssembly.ts`) built from the habits / members /
- *     calendarItems / transactions already held in context. Real numbers,
- *     no narrative — `WeeklyRecapDrawer`'s existing premium gate (untouched;
- *     out of this task's scope) is the only available lever to keep that
- *     section from rendering blank space, so derived recaps are composed
- *     with `premium: false` on purpose. See `recapCompose.ts`'s doc comment.
+ *     calendarItems / transactions already held in context. Real numbers, no
+ *     narrative (the absence itself is the signal — see `recapCompose.ts`'s
+ *     doc comment) — but `premium` is still the household's TRUTHFUL plan
+ *     status, resolved via `resolveIsPremiumHousehold` exactly the way a
+ *     server-generated recap resolves it. Never hardcoded: a derived recap
+ *     must not tell a non-billing (i.e. every current) household it lacks
+ *     something it already has.
  *
  * `pass isoWeek={null}` (nothing requested yet) short-circuits to
  * `{ recap: null, source: null }` without touching any context slice's data.
  */
 export function useRecapForWeek(isoWeek: string | null): RecapForWeekResult {
-  const { recaps, fetchStoredRecap, members } = useHouseholdCore();
+  const { recaps, fetchStoredRecap, members, household } = useHouseholdCore();
   const { habits } = useGamification();
   const { transactions, calendarItems, transactionWindowStart, hasMoreTransactions, loadAllTransactions } =
     useFinance();
+  const billingEnabled = useBillingEnabled();
 
   const stored = useMemo(
     () => (isoWeek ? (recaps.find(r => r.isoWeek === isoWeek) ?? null) : null),
@@ -104,6 +109,22 @@ export function useRecapForWeek(isoWeek: string | null): RecapForWeekResult {
     if (fetchedStored) return { recap: fetchedStored, source: 'stored' };
     if (!range) return { recap: null, source: null }; // malformed isoWeek
     if (needsMoney) return { recap: null, source: null }; // history still loading
-    return { recap: deriveWeeklyRecap(range, { transactions, habits, members, calendarItems }), source: 'derived' };
-  }, [isoWeek, stored, fetchedStored, range, needsMoney, transactions, habits, members, calendarItems]);
+    const premium = resolveIsPremiumHousehold(household ?? {}, billingEnabled);
+    return {
+      recap: deriveWeeklyRecap(range, { transactions, habits, members, calendarItems }, premium),
+      source: 'derived',
+    };
+  }, [
+    isoWeek,
+    stored,
+    fetchedStored,
+    range,
+    needsMoney,
+    transactions,
+    habits,
+    members,
+    calendarItems,
+    household,
+    billingEnabled,
+  ]);
 }

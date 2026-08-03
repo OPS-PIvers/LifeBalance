@@ -43,7 +43,7 @@ describe('deriveWeeklyRecap', () => {
   it('produces the same numeric fields as calling assembleWeeklyRecap directly', () => {
     const input = baseInput();
     const assembled = assembleWeeklyRecap({ ...input, weekStart: WEEK_START, weekEnd: WEEK_END });
-    const derived = deriveWeeklyRecap(RANGE, input);
+    const derived = deriveWeeklyRecap(RANGE, input, true);
 
     // The derived object carries assembleWeeklyRecap's output verbatim, plus
     // the wrapper fields (id/isoWeek/generatedAt/narrative/...) it adds.
@@ -52,21 +52,36 @@ describe('deriveWeeklyRecap', () => {
     expect(derived.isoWeek).toBe(ISO_WEEK);
   });
 
-  it('is honest about having no narrative: premium is false, never true with an empty narrative', () => {
-    // A `premium: true` + empty `narrative` would render a blank paragraph in
-    // WeeklyRecapDrawer/RecapDeck (both protected/out of scope for this
-    // change) — `premium: false` is the only lever available to route into
-    // their existing graceful "nothing generated yet" fallback instead.
-    const derived = deriveWeeklyRecap(RANGE, baseInput());
+  it('leaves the narrative empty — the absence is the signal, not a premium=false workaround', () => {
+    // Narrative honesty and plan truthfulness are INDEPENDENT: a derived
+    // recap never has a narrative (nothing generated it), regardless of the
+    // household's actual plan.
+    const derived = deriveWeeklyRecap(RANGE, baseInput(), true);
     expect(derived.narrative).toBe('');
-    expect(derived.premium).toBe(false);
+  });
+
+  it('never reports premium:false purely because the recap lacks a narrative — premium is whatever the caller resolved', () => {
+    // A prior version of this module hardcoded `premium: false` on every
+    // derived recap to route into the drawer's paywall fallback instead of
+    // blank space. That was WRONG: `premium` describes the household's PLAN,
+    // and while billing is off every household IS premium — hardcoding
+    // false told them they lacked something they already have. `premium` is
+    // now an explicit, caller-supplied parameter with no default, so this
+    // asserts both directions actually flow through untouched.
+    const premiumDerived = deriveWeeklyRecap(RANGE, baseInput(), true);
+    expect(premiumDerived.premium).toBe(true);
+    expect(premiumDerived.narrative).toBe(''); // still no narrative — the two facts don't couple
+
+    const freeDerived = deriveWeeklyRecap(RANGE, baseInput(), false);
+    expect(freeDerived.premium).toBe(false);
+    expect(freeDerived.narrative).toBe(''); // same empty narrative either way
   });
 
   it('still emits the household daily-points series even with no per-member data', () => {
     // Mirrors assembleWeeklyRecap's own "household series is real even when
     // memberFacts is empty" contract (see recapAssembly.ts's doc comment).
     const input = { ...baseInput(), habits: [] };
-    const derived = deriveWeeklyRecap(RANGE, input);
+    const derived = deriveWeeklyRecap(RANGE, input, true);
     expect(derived.memberFacts).toEqual([]);
     expect(derived.dailyPoints).toHaveLength(7);
   });

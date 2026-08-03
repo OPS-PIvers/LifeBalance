@@ -18,16 +18,20 @@
  * it spreads that object wholesale, so a field added/removed on the other
  * side of that PR flows through here for free.
  *
- * 🛡️ NARRATIVE HONESTY. A derived recap has never been through Gemini (or
- * even the template narrative generator) — there is nothing true to put in
- * `narrative`. `premium` is set to `false` (never `true`) specifically so
- * `WeeklyRecapDrawer`/`RecapDeck`'s existing premium-gated narrative section
- * (protected — this task does not touch it) renders its EXISTING graceful
- * fallback ("Unlock your personal recap with Premium") instead of an empty
- * `<p>` tag — `premium: true` with an empty `narrative` would render visible
- * blank space, which is exactly the "confidently wrong" failure mode this
- * whole feature is trying to avoid. See ARCH-1's PR description for the full
- * reasoning and the scope boundary that makes this the only lever available.
+ * 🛡️ NARRATIVE HONESTY, `premium` STAYS TRUTHFUL. A derived recap has never
+ * been through Gemini (or even the template narrative generator) — there is
+ * nothing true to put in `narrative`, so it's left empty and that absence IS
+ * the signal (a parallel PR, DECK-1, is teaching `RecapDeck` to treat an
+ * absent/empty narrative as its own first-class "nothing to show" state
+ * rather than an upsell). `premium` is a SEPARATE fact — the household's
+ * actual plan — and must never be inferred from whether a narrative happens
+ * to exist: `premium: false` on every household while `billingEnabled` is
+ * off (today's default — see `resolveIsPremiumHousehold`) would tell a
+ * household it lacks something it already has, which is worse than the
+ * blank-space failure mode this whole feature exists to avoid. Callers pass
+ * the household's REAL premium status in — resolved the same way a
+ * server-generated recap's `premium` field is (`resolveIsPremiumHousehold` in
+ * `utils/entitlements.ts`), never hardcoded here.
  */
 import { assembleWeeklyRecap, shiftDay, type DataAssemblyInput } from '@/utils/recapAssembly';
 import type { RecapWeekRange } from '@/utils/recapWeek';
@@ -40,12 +44,21 @@ export type DerivedRecapInput = Pick<
 
 /**
  * Builds a derived `WeeklyRecap` for `range` from live client arrays. Pure —
- * callers are responsible for only calling this once the transactions the
- * money figures depend on are actually loaded (`transactionsCoverWeek`
- * below); this function has no way to know whether `input.transactions` is
- * complete for the requested range and will happily sum whatever it's given.
+ * callers are responsible for:
+ *  - only calling this once the transactions the money figures depend on are
+ *    actually loaded (`transactionsCoverWeek` below); this function has no
+ *    way to know whether `input.transactions` is complete for the requested
+ *    range and will happily sum whatever it's given.
+ *  - resolving `premium` themselves (typically via
+ *    `resolveIsPremiumHousehold` from `utils/entitlements.ts`) — this
+ *    function has no household/billing context to resolve it from, and must
+ *    never guess.
  */
-export function deriveWeeklyRecap(range: RecapWeekRange, input: DerivedRecapInput): WeeklyRecap {
+export function deriveWeeklyRecap(
+  range: RecapWeekRange,
+  input: DerivedRecapInput,
+  premium: boolean
+): WeeklyRecap {
   const assembled = assembleWeeklyRecap({
     ...input,
     weekStart: range.weekStart,
@@ -57,7 +70,7 @@ export function deriveWeeklyRecap(range: RecapWeekRange, input: DerivedRecapInpu
     generatedAt: new Date().toISOString(),
     narrative: '',
     narrativeSource: 'template',
-    premium: false,
+    premium,
     ...assembled,
   };
 }
