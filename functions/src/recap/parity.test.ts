@@ -171,6 +171,16 @@ const HABIT_CASES: HabitCase[] = [
     }),
   },
   {
+    name: "negative habit with basePoints ITSELF stored negative (real production shape)",
+    habit: habit({
+      title: "Doom scroll",
+      type: "negative",
+      basePoints: -1,
+      completedDates: [WED, FRI],
+      completedBy: { [WED]: { u1: 1 }, [FRI]: { u2: 1 } },
+    }),
+  },
+  {
     name: "weekly threshold — award parks on the week's FIRST completed day",
     habit: habit({
       title: "Meal plan",
@@ -471,6 +481,50 @@ describe("recap assembly parity — client vs server", () => {
       weekEnd: WEEK_END,
     };
     expect(clientAssembleCeremony(args)).toEqual(assembleCeremony(args));
+  });
+
+  // ---------------------------------------------------------------------------
+  // 🛡️ memberTopStreak TIE-BREAK — dedicated fixture (not in HABIT_CASES)
+  //
+  // memberTopStreak's per-habit loop keeps the FIRST habit in roster order on a
+  // tie (`if (!best || days > best.days)`, never `>=`). None of HABIT_CASES
+  // exercises two habits with an IDENTICAL streak for the same member — the
+  // `describe.each(HABIT_CASES)` tests each habit alone, and the "whole habit
+  // table at once" test above mixes titles/members that never tie — so mutation
+  // testing found this comparator unpinned: flipping `>` to `>=` in either copy
+  // left every other parity assertion passing. Two habits, same member, same
+  // 3-day streak ending on WEEK_END, closes that hole.
+  // ---------------------------------------------------------------------------
+  it("memberTopStreak tie-break keeps the FIRST habit in roster order (client === server)", () => {
+    const tiedDates = [FRI, SAT, SUN]; // 3-day streak ending WEEK_END
+    const habitA = habit({
+      title: "Habit A",
+      completedDates: tiedDates,
+      completedBy: { [FRI]: { u1: 1 }, [SAT]: { u1: 1 }, [SUN]: { u1: 1 } },
+    });
+    const habitB = habit({
+      title: "Habit B",
+      completedDates: tiedDates,
+      completedBy: { [FRI]: { u1: 1 }, [SAT]: { u1: 1 }, [SUN]: { u1: 1 } },
+    });
+    const args = {
+      habits: [habitA, habitB],
+      members: [JEN],
+      weekStart: WEEK_START,
+      weekEnd: WEEK_END,
+    };
+
+    const serverResult = assembleCeremony(args);
+    const clientResult = clientAssembleCeremony(args);
+
+    // The parity check: both copies must agree, byte-for-byte.
+    expect(clientResult).toEqual(serverResult);
+
+    // Pin the documented rule itself, so a future edit that breaks it (in
+    // EITHER copy, in a way that keeps them agreeing with each other) is still
+    // caught here rather than only by this test's own parity assertion.
+    const jenFacts = serverResult.memberFacts.find((f) => f.memberId === JEN.uid);
+    expect(jenFacts?.topStreak?.habitTitle).toBe("Habit A");
   });
 
   describe.each(ASSEMBLY_FIXTURES)("assembleWeeklyRecap parity — $name", ({ input: fixture }) => {
