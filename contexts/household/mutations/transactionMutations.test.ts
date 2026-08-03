@@ -2448,6 +2448,48 @@ describe('ATTR-1 — transaction-fired habits credit the card owner', () => {
       expect(pointsFor(householdPath).total).toBe(-30);
     });
 
+    // 🛡️ A side-effect member who WAS current at fire time but has left the
+    // roster by the time the undo runs. `resolveReversalSources` still names
+    // them — the STORED `completedBy` on the reversed habit doesn't change
+    // just because a member departed — so `periodPointsMove` still returns
+    // their share in `move.perMember`. The undo's `isCurrentMember` guard is
+    // what keeps that `batch.update` from rejecting NOT_FOUND and aborting the
+    // whole all-or-nothing batch (distinct from the `GHOST` fixture elsewhere
+    // in this file, which covers a non-current `attributedTo` at FIRE time).
+    it('a side-effect member who departed before the undo — no write to their doc, pool still nets to zero', async () => {
+      const { updateTransactionCategory } = makeUpdateTransactionCategory(deps([twoStepHabit]));
+      await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
+
+      const afterFire = applyHabitWrite(twoStepHabit);
+      const firePool = pointsFor(householdPath);
+      const fireApprover = pointsFor(memberPath(APPROVER));
+      const fireCardholder = pointsFor(memberPath(CARDHOLDER));
+      // Guard the fixture: APPROVER really was paid a side-effect award, and
+      // the pool is the sum of both — otherwise this round-trip would test
+      // nothing (the guard would never be reached).
+      expect(fireApprover.total).toBeGreaterThan(0);
+      expect(firePool.total).toBe(fireApprover.total + fireCardholder.total);
+
+      seedFiredSubmission();
+      capturedUpdates = [];
+      // APPROVER has left the household by the time of the undo — the roster
+      // handed to the undo holds only CARDHOLDER.
+      const { reverseTransactionApproval } = makeReverseTransactionApproval(
+        undoDeps([afterFire], [{ uid: CARDHOLDER }]),
+      );
+      await reverseTransactionApproval('tx-card', { category: 'Uncategorized' }, ['h1']);
+
+      // Negative: the departed member's doc is never touched.
+      expect(capturedUpdates.find(u => u.ref.__path === memberPath(APPROVER))).toBeUndefined();
+      // Positive control, value-checked (not just "a write happened"): the
+      // still-current CARDHOLDER's debit lands at exactly what the fire paid.
+      expect(pointsFor(memberPath(CARDHOLDER))).toEqual(negated(fireCardholder));
+      // Conservation: the pool receives the FULL move.household delta
+      // regardless of membership, so it nets to zero even though one member's
+      // write was skipped.
+      expect(pointsFor(householdPath)).toEqual(negated(firePool));
+    });
+
     it('re-firing after an undo credits exactly what the first fire did', async () => {
       const { updateTransactionCategory } = makeUpdateTransactionCategory(deps([twoStepHabit]));
       await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
@@ -2478,6 +2520,42 @@ describe('ATTR-1 — transaction-fired habits credit the card owner', () => {
       expect(pointsFor(memberPath(APPROVER))).toEqual(first.approver);
       expect(pointsFor(memberPath(CARDHOLDER))).toEqual(first.cardholder);
     });
+  });
+
+  // 🛡️ A GHOST holding a PRIOR unit of a threshold habit — still sitting in
+  // the habit's stored `completedBy` from before they left the household —
+  // when a CURRENT member's tagged card crosses the threshold. `resolveCard-
+  // FireAttribution` fails closed for the attributedTo candidate (the `GHOST`
+  // fixture used elsewhere in this file), but here the ghost is only a
+  // SIDE-EFFECT holder: `periodPointsMove` derives their share purely from
+  // the habit's before/after decomposition, not from the roster, so it still
+  // returns it in `move.perMember`. `fireHabitsIntoBatch`'s `isCurrentMember`
+  // guard is what keeps that `batch.update` from rejecting NOT_FOUND and
+  // aborting the whole all-or-nothing batch.
+  it('a GHOST holding a prior unit is skipped at fire time — no write to their doc, pool still nets the full award', async () => {
+    const ghostHeldHabit: Habit = {
+      ...baseHabit,
+      targetCount: 2,
+      count: 1,
+      completedBy: { [today]: { [GHOST]: 1 } },
+    };
+    // GHOST is not on the roster handed to this fire — only APPROVER + CARDHOLDER.
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(
+      deps([ghostHeldHabit], [cardTx], [{ uid: APPROVER }, { uid: CARDHOLDER }]),
+    );
+    await updateTransactionCategory('tx-card', 'Shopping', ['h1']);
+
+    // Negative: no write ever lands on the departed member's doc.
+    expect(capturedUpdates.find(u => u.ref.__path === memberPath(GHOST))).toBeUndefined();
+    // Positive control, value-checked (not just "a write happened"): CARDHOLDER
+    // — the current member whose card actually crossed the threshold — is
+    // still credited their own share.
+    const cardholderWrite = capturedUpdates.find(u => u.ref.__path === memberPath(CARDHOLDER))!;
+    expect(cardholderWrite.data!['points.total']).toEqual({ __increment: 10 });
+    // Conservation: the pool receives BOTH shares — the ghost's side-effect
+    // award included — even though the ghost's own doc write was skipped.
+    const hh = capturedUpdates.find(u => u.ref.__path === householdPath)!;
+    expect(hh.data!['points.total']).toEqual({ __increment: 20 });
   });
 
   it('back-dates the attribution to the TRANSACTION date, never today', async () => {
