@@ -520,3 +520,77 @@ describe('HabitFormModal — a chore never carries a stale creditMode (Kid Mode 
     expect(lastPayload().assignedTo).toBeUndefined();
   });
 });
+
+// HABIT-SIGN-1: basePoints must always be stored as a positive magnitude —
+// the sign is conveyed entirely by `type` (see habitSign/signedHabitPoints in
+// utils/habitLogic.ts). This form previously wrote whatever the user typed
+// verbatim, so a negative entry on a `type: 'negative'` habit stored a
+// "double negative" (the shape production has on "Lights out after
+// 10:30pm": type 'negative', basePoints -1) — scoring already canonicalizes
+// that shape correctly via Math.abs, but the form itself must not be able to
+// (re)create it going forward.
+describe('HabitFormModal — basePoints is always saved as a positive magnitude', () => {
+  const mockAddHabit = vi.fn();
+  const mockUpdateHabit = vi.fn(() => Promise.resolve());
+  const mockSetHabitPause = vi.fn(() => Promise.resolve());
+  const mockOnClose = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (useGamification as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      addHabit: mockAddHabit,
+      updateHabit: mockUpdateHabit,
+      setHabitPause: mockSetHabitPause,
+      habitCategories: [],
+      updateHabitCategories: vi.fn(),
+    });
+    (useHouseholdCore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ members: [] });
+    (useTodos as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ todos: [] });
+  });
+
+  const save = () => fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+  const lastUpdatePayload = (): Habit => {
+    const call = (mockUpdateHabit.mock.calls as unknown[][])[0];
+    if (!call) throw new Error('expected updateHabit to have been called');
+    return call[0] as Habit;
+  };
+
+  it('clamps a negative entry to a positive magnitude on save (negative-type habit)', async () => {
+    const habit = baseHabit({ type: 'negative', basePoints: 2 });
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={habit} />);
+
+    fireEvent.change(screen.getByLabelText(/points \(magnitude\)/i), { target: { value: '-5' } });
+    save();
+
+    await waitFor(() => expect(mockUpdateHabit).toHaveBeenCalledTimes(1));
+    const payload = lastUpdatePayload();
+    expect(payload.basePoints).toBe(5);
+    expect(payload.type).toBe('negative');
+  });
+
+  it('re-saving a habit already stored with the legacy negative-basePoints shape normalizes it to a positive magnitude', async () => {
+    // The exact production shape: type 'negative', basePoints -1.
+    const legacyHabit = baseHabit({ type: 'negative', basePoints: -1 });
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={legacyHabit} />);
+
+    // The form seeds the field from the stored value verbatim ("-1")...
+    expect(screen.getByLabelText(/points \(magnitude\)/i)).toHaveValue(-1);
+
+    // ...but an unmodified save must still normalize it on write.
+    save();
+
+    await waitFor(() => expect(mockUpdateHabit).toHaveBeenCalledTimes(1));
+    expect(lastUpdatePayload().basePoints).toBe(1);
+  });
+
+  it('leaves a positive entry untouched', async () => {
+    const habit = baseHabit({ type: 'positive', basePoints: 10 });
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={habit} />);
+
+    fireEvent.change(screen.getByLabelText(/points \(magnitude\)/i), { target: { value: '15' } });
+    save();
+
+    await waitFor(() => expect(mockUpdateHabit).toHaveBeenCalledTimes(1));
+    expect(lastUpdatePayload().basePoints).toBe(15);
+  });
+});

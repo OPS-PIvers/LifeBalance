@@ -277,3 +277,41 @@ export const generatePointRebalanceSuggestions = (
     return byDelta !== 0 ? byDelta : a.habitId.localeCompare(b.habitId);
   });
 };
+
+// --- Display -----------------------------------------------------------------
+
+export interface RebalanceDisplay {
+  /** Canonically-signed current value, safe to render directly (e.g. "-3 pts"). */
+  currentPoints: number;
+  /** Canonically-signed suggested value, safe to render directly. */
+  suggestedPoints: number;
+  /** True when the change is good news: a bigger reward, or a lighter penalty. */
+  favorable: boolean;
+}
+
+/**
+ * Convention-independent DISPLAY values for a rebalance suggestion.
+ *
+ * `suggestion.currentPoints`/`suggestedPoints` are in the habit's STORED
+ * `basePoints` convention — magnitude-only for habits created after this
+ * convention converged, signed for older ones (see the `storedSign` comment
+ * above) — because those are the *exact* values `updateHabit` writes back
+ * verbatim. They must never be re-signed for that purpose.
+ *
+ * For DISPLAY, though, a habit's sign is defined by `habit.type` alone
+ * (`habitSign`) — never by the raw sign of a stored number, which is
+ * ambiguous across the two conventions. This re-derives both values from
+ * `habit.type`, so a penalty habit reads (and colours) identically no
+ * matter which convention created it: e.g. `basePoints: -3` and
+ * `basePoints: 3` on the same `type: 'negative'` habit both render "-3 pts"
+ * and the same favorable/unfavorable colour for the same underlying change.
+ */
+export const rebalanceDisplay = (
+  habit: Pick<Habit, 'type'>,
+  suggestion: Pick<HabitPointAdjustmentSuggestion, 'currentPoints' | 'suggestedPoints'>
+): RebalanceDisplay => {
+  const sign = habitSign(habit);
+  const currentPoints = sign * habitPointsMagnitude({ basePoints: suggestion.currentPoints });
+  const suggestedPoints = sign * habitPointsMagnitude({ basePoints: suggestion.suggestedPoints });
+  return { currentPoints, suggestedPoints, favorable: suggestedPoints > currentPoints };
+};

@@ -56,9 +56,9 @@ describe('presetToHabit', () => {
     });
   });
 
-  it('negates base points for a negative preset', () => {
+  it('stores a positive magnitude for a negative preset — sign comes from `type`, not `basePoints`', () => {
     const habit = presetToHabit(negativePreset, () => 'id2');
-    expect(habit.basePoints).toBe(-5); // very_hard, negative
+    expect(habit.basePoints).toBe(5); // very_hard, magnitude only
     expect(habit.type).toBe('negative');
     expect(habit.presetId).toBe('preset_dinner_out');
   });

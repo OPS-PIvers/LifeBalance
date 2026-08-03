@@ -28,16 +28,6 @@ export const generateId = (): string => {
 };
 
 /**
- * Base points for a habit: positive habits earn the effort points, negative
- * habits subtract them. Mirrors HabitCreatorWizard.calculateBasePoints so a
- * preset enabled via onboarding scores identically to one enabled later.
- */
-const calculateBasePoints = (preset: PresetHabit): number => {
-  const points = EFFORT_POINTS[preset.effortLevel];
-  return preset.type === 'negative' ? -points : points;
-};
-
-/**
  * Convert a preset habit into a fresh, ready-to-persist `Habit`.
  *
  * The id is generated client-side (the context's `addHabit` spreads the object
@@ -53,7 +43,11 @@ export const presetToHabit = (
   title: preset.title,
   category: preset.category,
   type: preset.type,
-  basePoints: calculateBasePoints(preset),
+  // basePoints is always a positive magnitude — the sign is conveyed
+  // entirely by `type` (see habitSign/signedHabitPoints in
+  // utils/habitLogic.ts). Mirrors HabitCreatorWizard's preset-toggle path so
+  // a preset enabled via onboarding scores identically to one enabled later.
+  basePoints: EFFORT_POINTS[preset.effortLevel],
   scoringType: preset.scoringType,
   period: preset.period,
   targetCount: preset.targetCount,
