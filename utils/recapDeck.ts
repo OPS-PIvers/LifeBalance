@@ -16,13 +16,27 @@
  * 🛡️ ORDER IS PERSONAL. The viewing member's own personal card always precedes
  * any other member's, so two people opening the same recap see themselves in
  * the same slot. The tone (`Household.ceremonyTone`) chooses the FRAMING —
- * whether the week's story leads with the household or with the head-to-head —
- * and the deck stays the four cards the mocks approved.
+ * whether the head-to-head is PROMOTED ahead of the household week and crowned,
+ * or demoted behind the personal card and reported flat.
+ *
+ * 🛡️ ONE JOB PER CARD (DECK-1). The first ceremony shipped four cards carrying
+ * about three ideas: the household total was the hero of card 2 AND of card 4,
+ * the head-to-head was a footnote under a figure that had already been read,
+ * and MONEY — in a household finance app — was not in the ceremony at all. The
+ * deck is now cover → money → household week → personal → head-to-head →
+ * finish, each answering exactly one question, and no figure is the hero twice.
  */
-import type { CeremonyTone, RecapDayPoints, RecapMemberFacts, WeeklyRecap } from '@/types/schema';
+import type {
+  CeremonyTone,
+  RecapDayPoints,
+  RecapMemberFacts,
+  RecapUnattributedSplit,
+  WeeklyRecap,
+} from '@/types/schema';
 import { buildMemberColorMap, memberColorFor, type ColorableMember } from '@/utils/memberColors';
 import { findLeaderId } from '@/utils/pointsLeader';
 import { isoWeekStartDate } from '@/utils/dateHelpers';
+import { roundMoney } from '@/utils/money';
 import { resolveCeremonyTone } from '@/utils/freezeSettings';
 
 // ---------------------------------------------------------------------------
@@ -87,6 +101,33 @@ export interface RecapChartDay {
   /** The week's single best day (never set when nothing was scored). */
   best: boolean;
   segments: RecapChartSegment[];
+  /**
+   * The day's household total finished BELOW zero (DECK-1).
+   *
+   * The stacked column stays positive-only — that is the standing product
+   * decision, and it is the right one: a stacked bar cannot honestly show a
+   * negative slice, and a negative CSS length is dropped by the browser, which
+   * paints a FULL column rather than an empty one. But "positive-only" was
+   * being rendered as "invisible": on the real 2026-W31 deck, Monday netted −5
+   * and drew literally nothing — no bar, no number, no acknowledgement — so the
+   * week looked like it had six days in it.
+   *
+   * The fix is a second, dedicated register rather than a compromised bar: the
+   * column area keeps its positive-only stack, and the deficit is drawn BELOW a
+   * real baseline as its own solid stub (`deficitPct`). Above the line is what
+   * was gained; below the line is what was lost. Nothing has to lie, and no day
+   * is missing.
+   */
+  negative: boolean;
+  /**
+   * Depth of the below-baseline deficit stub as a share of the week's DEEPEST
+   * deficit, 0-100 — scaled against the deficits alone, never against
+   * `heightPct`'s positive maximum, so a small loss in a high-scoring week is
+   * still a legible mark instead of a sub-pixel smear. Always 0 when `negative`
+   * is false. The component floors the rendered height so the shallowest
+   * deficit of a week is still drawn.
+   */
+  deficitPct: number;
 }
 
 /** The chart series key for points nobody holds attribution for. */
@@ -101,7 +142,7 @@ const WEEKDAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 // The deck
 // ---------------------------------------------------------------------------
 
-export type RecapCardKind = 'cover' | 'week' | 'personal' | 'finish';
+export type RecapCardKind = 'cover' | 'money' | 'week' | 'personal' | 'standings' | 'finish';
 
 export interface RecapDeckCard {
   kind: RecapCardKind;
@@ -109,6 +150,63 @@ export interface RecapDeckCard {
   id: string;
   /** Set on a `personal` card: whose week it describes. */
   memberId?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Money (DECK-1)
+// ---------------------------------------------------------------------------
+
+/** One spend figure and its own week-over-week base. Decimal dollars. */
+export interface RecapSpendLine {
+  amount: number;
+  /** The same figure a week earlier, or null when the recap carries no base. */
+  prior: number | null;
+  /** `amount - prior`, or null without a base. */
+  delta: number | null;
+  /** Rounded percent change, or null when `prior` is absent or <= 0. */
+  changePct: number | null;
+}
+
+/**
+ * The week's money, decomposed the way `WeeklyRecap` now carries it
+ * (RECAP-MATH, PR #1207) — and the reason money is IN the ceremony at all.
+ *
+ * 🛡️ NEVER LEAD WITH `totalSpend`. `billsSpend + dayToDaySpend === totalSpend`
+ * by construction, and the two halves behave nothing alike: bills are lumpy and
+ * already budgeted (rent lands in one week and not the next), day-to-day is the
+ * part a household actually steers. Reporting the sum made a normal week look
+ * like a catastrophe — real 2026-W31 was $2,429 total against a $803 prior
+ * week, a "3.3× blowout", when day-to-day was $1,122 vs $803: a 1.4× rise.
+ * `dayToDay` is the hero; `bills` gets its own comparison beside it; `total` is
+ * a closing line, not a headline.
+ *
+ * 🛡️ `hasSplit` is FALSE-SAFE. `billsSpend`/`dayToDaySpend` are OPTIONAL fields
+ * (absent on every recap written before the split), so a missing one degrades to
+ * the `total`-only story rather than rendering a confident `$0` of day-to-day
+ * spending for a week nobody measured that way.
+ */
+export interface RecapMoney {
+  /** True only when BOTH halves of the split are present and finite. */
+  hasSplit: boolean;
+  /** Discretionary spend — the card's hero. Null without the split. */
+  dayToDay: RecapSpendLine | null;
+  /** Spend the calendar already budgeted. Null without the split. */
+  bills: RecapSpendLine | null;
+  /** All counted spend — always available (a required recap field). */
+  total: RecapSpendLine;
+}
+
+// ---------------------------------------------------------------------------
+// The personal card's stat tiles (DECK-1)
+// ---------------------------------------------------------------------------
+
+/** One stat tile on the viewer's personal card. */
+export interface RecapPersonalTile {
+  id: 'streak' | 'perfect' | 'completions' | 'bestDay';
+  /** Pre-formatted display value — never a bare zero (see `buildPersonalTiles`). */
+  value: string;
+  label: string;
+  detail: string;
 }
 
 export interface RecapDeck {
@@ -128,6 +226,8 @@ export interface RecapDeck {
   viewerStanding: RecapStanding | null;
   /** Signed household points for the week. */
   totalPoints: number;
+  /** The week's money, split bills vs day-to-day (DECK-1). */
+  money: RecapMoney;
   /**
    * The household's OWN share of `totalPoints` — points earned together that
    * belong to no individual member (pre-attribution legacy history today, and
@@ -137,6 +237,36 @@ export interface RecapDeck {
    * never disagree. Zero when every day's `unattributed` is zero/absent.
    */
   householdSharePoints: number;
+  /**
+   * WHY that share belongs to nobody (RECAP-MATH), or null when the recap
+   * predates the split and genuinely cannot say.
+   *
+   * 🛡️ This is what let `householdShareCopy` be DELETED rather than extended.
+   * That helper was four branches of apology reconciling a signed figure with a
+   * positive-only chart, and it existed because "unattributed" was a residual —
+   * a leftover with no name. It isn't one: `householdCredit` is points from
+   * habits with `creditMode: 'household'`, which belong to nobody ON PURPOSE
+   * (this household runs 15 of them — groceries, dinners out, leftovers). Once
+   * the series has a name, the card states it; there is nothing to apologise
+   * for. `unclaimed` — legacy history or a real attribution gap — stays its own
+   * quiet line, never a caveat attached to the first.
+   *
+   * 🛡️ NULL MEANS UNKNOWN, NOT ZERO. A recap without the split must never be
+   * rendered as "0 household credit" — it simply never measured the question.
+   */
+  householdSplit: RecapUnattributedSplit | null;
+  /**
+   * Does the chart actually DRAW a Household bar?
+   *
+   * Segment EXISTENCE is not the same question: a segment exists when
+   * `day.unattributed > 0`, while the column has height only when
+   * `day.total > 0` — two independent figures. A day where the members net
+   * deeply negative while a household-credit habit scores puts a household
+   * segment on a ZERO-HEIGHT column, so gating a legend swatch on existence
+   * alone paints a colour beside zero drawn pixels. Both conditions, always —
+   * and computed here, in the model, so it is testable without a DOM.
+   */
+  chartHasHouseholdBar: boolean;
   /** Percent change vs the prior week, or null when there is no base. */
   trendPct: number | null;
   /** True when this week beat every other recap week in its calendar month. */
@@ -147,6 +277,24 @@ export interface RecapDeck {
   weekRange: string;
   /** The week's best day, for the chart's one-line highlight. */
   bestDay: RecapChartDay | null;
+  /**
+   * The week's DEEPEST net-negative day, or null when no day finished below
+   * zero. Names the day the chart's deficit gutter draws, so a loss gets a
+   * sentence rather than only a stub (DECK-1).
+   */
+  worstDay: RecapChartDay | null;
+  /**
+   * Does this recap carry prose to show?
+   *
+   * 🛡️ THREE STATES, NOT TWO (ARCH-1). The finish card used to branch only on
+   * `recap.premium`, so a recap with NO narrative fell into the not-premium
+   * branch and showed a paywall for content that does not exist. Client-derived
+   * recaps (ARCH-1) have real numbers and no narrative — the narrative is only
+   * ever written server-side — so "absent" is now a first-class state that
+   * renders NEITHER the prose NOR the upsell. `recap.premium` remains the gate
+   * for the upsell, and is only ever consulted when this is true.
+   */
+  hasNarrative: boolean;
 }
 
 /**
@@ -271,19 +419,31 @@ export function buildHeadToHead(
  * net-negative day (all-negative habits) has no meaningful bar, and a negative
  * CSS height/width is an invalid length browsers drop — which renders a FULL
  * column instead of an empty one (the same trap `selectAdultStandings` clamps
- * for). Such a day still gets its label and its number; it just has no bar.
+ * for).
+ *
+ * 🛡️ POSITIVE-ONLY IS NOT INVISIBLE (DECK-1). Such a day used to get nothing at
+ * all — no bar, no mark, no number — so a losing day simply vanished from the
+ * week. It now gets `negative` + `deficitPct`, a SECOND register the component
+ * draws below the chart's baseline. The stack above the line still shows only
+ * what was gained (unchanged, and deliberately so); the stub below shows what
+ * was lost. Scaled against the week's deepest deficit, not against the positive
+ * maximum, so a small loss in a big week is still visible.
  */
 export function buildRecapChart(
   days: readonly RecapDayPoints[],
   colors: Record<string, string>,
   unattributedColor: string
 ): RecapChartDay[] {
-  const positives = days.map(d => Math.max(0, d.total));
+  const totals = days.map(d => d.total);
+  const positives = totals.map(t => Math.max(0, t));
+  const deficits = totals.map(t => Math.max(0, -t));
   const max = Math.max(0, ...positives);
+  const maxDeficit = Math.max(0, ...deficits);
   const bestIndex = max > 0 ? positives.indexOf(max) : -1;
 
   return days.map((day, i) => {
     const positive = positives[i] ?? 0;
+    const deficit = deficits[i] ?? 0;
     const segmentSource: Array<[string, number]> = [
       ...Object.entries(day.byMember),
       // DEFENSIVE `?? 0` — insurance, not a fix for an observed defect.
@@ -323,8 +483,151 @@ export function buildRecapChart(
       quiet: positive > 0 && positive < max * QUIET_THRESHOLD,
       best: i === bestIndex,
       segments,
+      negative: deficit > 0,
+      deficitPct: maxDeficit > 0 ? (deficit / maxDeficit) * 100 : 0,
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Money (DECK-1)
+// ---------------------------------------------------------------------------
+
+/** A finite number, or null — the one guard every optional recap field needs. */
+function finiteOrNull(value: number | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/** One spend figure against its own prior-week base. Dollars in, dollars out. */
+function spendLine(amount: number, prior: number | null): RecapSpendLine {
+  const base = prior !== null && prior > 0 ? prior : null;
+  return {
+    amount: roundMoney(amount),
+    prior: prior === null ? null : roundMoney(prior),
+    delta: prior === null ? null : roundMoney(amount - prior),
+    changePct: base === null ? null : Math.round(((amount - base) / base) * 100),
+  };
+}
+
+/**
+ * The week's money for the ceremony's money card.
+ *
+ * `totalSpend`/`priorWeekSpend` are REQUIRED recap fields, so the `total` line
+ * always exists. The split is optional and must be treated as all-or-nothing:
+ * one half without the other cannot be reported as a decomposition, and a
+ * missing half must never render as `$0` (see `RecapMoney.hasSplit`).
+ */
+export function buildRecapMoney(recap: WeeklyRecap): RecapMoney {
+  const total = spendLine(finiteOrNull(recap.totalSpend) ?? 0, finiteOrNull(recap.priorWeekSpend));
+  const bills = finiteOrNull(recap.billsSpend);
+  const dayToDay = finiteOrNull(recap.dayToDaySpend);
+  if (bills === null || dayToDay === null) {
+    return { hasSplit: false, dayToDay: null, bills: null, total };
+  }
+  return {
+    hasSplit: true,
+    dayToDay: spendLine(dayToDay, finiteOrNull(recap.priorWeekDayToDaySpend)),
+    bills: spendLine(bills, finiteOrNull(recap.priorWeekBillsSpend)),
+    total,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The household's own share, and why (DECK-1 / RECAP-MATH)
+// ---------------------------------------------------------------------------
+
+/**
+ * The week's `unattributedSplit`, or null when the recap cannot say.
+ *
+ * Prefers the server-written week total; falls back to summing the per-day
+ * splits. The fallback refuses to answer if ANY day carrying unattributed
+ * points lacks a split — summing only the days that explain themselves would
+ * silently under-report the household's credit and, worse, make
+ * `householdCredit + unclaimed !== householdSharePoints`, which is the one
+ * invariant this pair is supposed to hold.
+ */
+function resolveHouseholdSplit(recap: WeeklyRecap): RecapUnattributedSplit | null {
+  const week = recap.unattributedSplit;
+  const weekCredit = finiteOrNull(week?.householdCredit);
+  const weekUnclaimed = finiteOrNull(week?.unclaimed);
+  if (weekCredit !== null && weekUnclaimed !== null) {
+    return { householdCredit: roundPoints(weekCredit), unclaimed: roundPoints(weekUnclaimed) };
+  }
+
+  const days = recap.dailyPoints ?? [];
+  if (days.length === 0) return null;
+  if (days.every(d => !d.unattributedSplit)) return null;
+  if (days.some(d => (d.unattributed ?? 0) !== 0 && !d.unattributedSplit)) return null;
+
+  let credit = 0;
+  let unclaimed = 0;
+  for (const day of days) {
+    credit += finiteOrNull(day.unattributedSplit?.householdCredit) ?? 0;
+    unclaimed += finiteOrNull(day.unattributedSplit?.unclaimed) ?? 0;
+  }
+  return { householdCredit: roundPoints(credit), unclaimed: roundPoints(unclaimed) };
+}
+
+// ---------------------------------------------------------------------------
+// The personal card's stat tiles (DECK-1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Up to two TRUE stat tiles for one member's week.
+ *
+ * 🛡️ NEVER A ZERO TILE. The shipped ceremony hard-coded two tiles and filled
+ * whichever had no data with a literal `0` — the real 2026-W31 deck showed Paul
+ * a tile reading `0` / "Every day" / "Nothing perfect this week", which is a
+ * scoreboard of an absence dressed up as a statistic. Tiles are now DRAWN from
+ * what actually happened, in descending order of how much it says, and a
+ * candidate that would render zero simply never becomes a tile. Fewer tiles is
+ * a better card than a padded one; zero tiles is handled by the card itself
+ * with a plain sentence.
+ */
+export function buildPersonalTiles(facts: RecapMemberFacts): RecapPersonalTile[] {
+  const tiles: RecapPersonalTile[] = [];
+
+  const streak = facts.topStreak;
+  if (streak && streak.days > 0) {
+    tiles.push({
+      id: 'streak',
+      value: String(streak.days),
+      label: streak.period === 'weekly' ? 'Week streak' : 'Day streak',
+      detail: streak.habitTitle,
+    });
+  }
+
+  const perfect = facts.perfectHabits[0];
+  if (perfect) {
+    const more = facts.perfectHabits.length - 1;
+    tiles.push({
+      id: 'perfect',
+      value: '7/7',
+      label: 'Every day',
+      detail: more > 0 ? `${perfect} +${more} more` : perfect,
+    });
+  }
+
+  if (facts.completions > 0) {
+    tiles.push({
+      id: 'completions',
+      value: String(facts.completions),
+      label: 'Habits logged',
+      detail: 'across the week',
+    });
+  }
+
+  const best = facts.bestDay;
+  if (best && best.points !== 0) {
+    tiles.push({
+      id: 'bestDay',
+      value: String(best.points),
+      label: 'Best day',
+      detail: weekdayNameOf(best.date) || best.date,
+    });
+  }
+
+  return tiles.slice(0, 2);
 }
 
 /**
@@ -375,10 +678,29 @@ export interface RecapDeckInput {
 /**
  * Build the whole deck for one recap and one viewer.
  *
- * Card order is the four the mocks approved. The viewer's PERSONAL card sits
- * third whenever they have facts of their own; a viewer with no facts (a member
- * who joined after the week, or an unattributed week) drops that card entirely
- * rather than showing an empty one — the deck is then cover → week → finish.
+ * ONE JOB PER CARD (DECK-1) — the sequence and what each card exists to answer:
+ *
+ *   cover      which week is this?
+ *   money      what did the week cost to live? (day-to-day vs bills)
+ *   week       how did the household score, day by day?
+ *   personal   how did YOU do?
+ *   standings  how did it split between the adults?
+ *   finish     what does it add up to?
+ *
+ * Two cards are CONDITIONAL, and both drop rather than render empty: the
+ * personal card needs the viewer to have facts of their own (a member who
+ * joined after the week, or a fully unattributed week, has none), and the
+ * standings card needs at least two ADULT standings to compare.
+ *
+ * 🛡️ THE TONE MOVES THE HEAD-TO-HEAD; IT NO LONGER DUPLICATES A FIGURE. The
+ * shipped deck expressed `podium` by making the household total the hero of
+ * card 2 and again of card 4, with the head-to-head as a footnote on both.
+ * Now the head-to-head is its OWN card, and the tone chooses where it sits and
+ * whether it crowns: `podium` (and `adaptive` on a runaway week) promotes it
+ * AHEAD of the household week, so the competition is the frame you read the
+ * week through; `household_first` — the absent default — demotes it behind the
+ * personal card and reports it flat. The household total is the hero exactly
+ * once, on the week card.
  */
 export function buildRecapDeck(input: RecapDeckInput): RecapDeck {
   const { recap, recaps, members, viewerId, unattributedColor } = input;
@@ -406,14 +728,24 @@ export function buildRecapDeck(input: RecapDeckInput): RecapDeck {
       })
     : null;
 
+  const podiumFirst = headToHead.framing === 'podium';
+  const showStandings = headToHead.standings.length > 1;
+
   const cards: RecapDeckCard[] = [
     { kind: 'cover', id: 'cover' },
-    { kind: 'week', id: 'week' },
+    { kind: 'money', id: 'money' },
   ];
+  if (showStandings && podiumFirst) cards.push({ kind: 'standings', id: 'standings' });
+  cards.push({ kind: 'week', id: 'week' });
   if (viewer) cards.push({ kind: 'personal', id: `personal-${viewer.memberId}`, memberId: viewer.memberId });
+  if (showStandings && !podiumFirst) cards.push({ kind: 'standings', id: 'standings' });
   cards.push({ kind: 'finish', id: 'finish' });
 
   const best = chart.find(d => d.best && d.total > 0) ?? null;
+  // The DEEPEST loss, not merely the first — `deficitPct` is 100 on exactly
+  // that day, which is the one the gutter draws tallest and the one the card's
+  // sentence must name.
+  const worst = chart.find(d => d.negative && d.deficitPct === 100) ?? null;
 
   return {
     cards,
@@ -439,11 +771,16 @@ export function buildRecapDeck(input: RecapDeckInput): RecapDeck {
     // slips past its `!== 0` gate. Round the model once so the figure and the
     // gate agree.
     householdSharePoints: roundPoints((recap.dailyPoints ?? []).reduce((sum, d) => sum + (d.unattributed ?? 0), 0)),
+    money: buildRecapMoney(recap),
+    householdSplit: resolveHouseholdSplit(recap),
+    chartHasHouseholdBar: chart.some(d => d.heightPct > 0 && d.segments.some(s => s.key === UNATTRIBUTED_SERIES)),
     trendPct: recapTrendPct(recap),
     isBestWeekThisMonth: isBestWeekOfMonth(recap, recaps),
     weekNumber: weekNumberOf(recap.isoWeek),
     weekRange: weekRangeOf(recap.isoWeek),
     bestDay: best,
+    worstDay: worst,
+    hasNarrative: typeof recap.narrative === 'string' && recap.narrative.trim().length > 0,
   };
 }
 

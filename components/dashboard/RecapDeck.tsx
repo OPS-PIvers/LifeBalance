@@ -1,32 +1,37 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, type PanInfo } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Crown, Flame, Check, Lock, Sparkle, TrendingDown, TrendingUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Crown, Lock, Sparkle, TrendingDown, TrendingUp } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import {
-  UNATTRIBUTED_SERIES,
+  buildPersonalTiles,
   weekdayNameOf,
   type RecapChartDay,
   type RecapDeck as RecapDeckModel,
+  type RecapSpendLine,
 } from '@/utils/recapDeck';
 import MemberAvatar from '@/components/ui/MemberAvatar';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { RecapMemberFacts, WeeklyRecap } from '@/types/schema';
 
 /**
- * RecapDeck — the weekly ceremony's 4-card story deck (per-member points,
- * stage 5), rendered inside the existing `WeeklyRecapDrawer`.
+ * RecapDeck — the weekly ceremony's story deck, rendered inside the existing
+ * `WeeklyRecapDrawer`.
  *
- * Matches `.claude/mocks/per-member-points/r3-ceremony-1..4.html`: cover →
- * household week (giant Together total + member-stacked 7-day chart) → the
- * VIEWER's personal card → finish (household number anchored, head-to-head
- * demoted to one mono line). The `Household.ceremonyTone` setting reframes it:
- * `podium` leads the week card and the finish anchor with the head-to-head,
- * `household_first` (the default) keeps both about the household, `adaptive`
- * picks per the week's margin.
+ * 🛡️ ONE JOB PER CARD (DECK-1). The first ceremony shipped four cards carrying
+ * three ideas. The household total was the hero of card 2 and again of card 4;
+ * the head-to-head was a footnote under a figure you had already read; a member
+ * with no perfect habit got a tile reading `0` / "Nothing perfect this week"; a
+ * day that netted negative drew nothing at all; and MONEY — in a household
+ * finance app — was banished to a disclosure BELOW the ceremony. The deck is
+ * now cover → money → [head-to-head] → household week → personal →
+ * [head-to-head] → finish, each card answering exactly one question, and no
+ * figure is the hero twice. Card ORDER and every derived figure live in
+ * `utils/recapDeck.ts`; this file only draws them.
  *
  * 🛡️ NO FLAME RINGS. Streaks appear here as CONTENT (a stat tile), never as
  * decoration on an avatar — the flame ring is habits-page-only UI (locked
- * decision, handoff §1). Avatars in the deck are always plain.
+ * decision). Avatars in the deck are always plain.
  *
  * Motion: horizontal drag with prev/next buttons and progress dots as the
  * non-gestural path. Under `prefers-reduced-motion` the slide becomes a
@@ -66,13 +71,25 @@ const CardEyebrow: React.FC<{ children: React.ReactNode; tone?: 'warm' | 'accent
   </span>
 );
 
-const TrendChip: React.FC<{ pct: number }> = ({ pct }) => {
+/**
+ * A week-over-week delta chip.
+ *
+ * 🛡️ POLARITY IS NOT THE SIGN. More POINTS is good; more SPENDING is not. The
+ * pre-DECK-1 chip hard-coded "positive ⇒ green", which is right for the points
+ * trend and exactly backwards for the money card it now also serves — a 40%
+ * jump in day-to-day spending would have been painted as a win.
+ */
+const TrendChip: React.FC<{ pct: number; polarity?: 'more-is-good' | 'more-is-bad' }> = ({
+  pct,
+  polarity = 'more-is-good',
+}) => {
   const Icon = pct >= 0 ? TrendingUp : TrendingDown;
+  const good = polarity === 'more-is-good' ? pct >= 0 : pct <= 0;
   return (
     <span
       className={cn(
         'inline-flex items-center gap-1 rounded-full border px-2 py-[2px] text-xs font-semibold',
-        pct >= 0
+        good
           ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark border-money-pos/20 dark:border-money-pos/35'
           : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg dark:text-money-negDark border-money-neg/20 dark:border-money-neg/35'
       )}
@@ -83,8 +100,8 @@ const TrendChip: React.FC<{ pct: number }> = ({ pct }) => {
   );
 };
 
-/** The big serif figure the mocks anchor every card on. */
-const HeroNumber: React.FC<{ value: number; unit: string; className?: string }> = ({
+/** The big serif figure the deck anchors a card on. */
+const HeroNumber: React.FC<{ value: string; unit: string; className?: string }> = ({
   value,
   unit,
   className,
@@ -103,7 +120,7 @@ const HeroNumber: React.FC<{ value: number; unit: string; className?: string }> 
 );
 
 // ---------------------------------------------------------------------------
-// Card 1 — cover
+// Card 1 — cover · WHICH WEEK IS THIS?
 // ---------------------------------------------------------------------------
 
 const CoverCard: React.FC<{ deck: RecapDeckModel; householdName: string }> = ({ deck, householdName }) => (
@@ -130,37 +147,152 @@ const CoverCard: React.FC<{ deck: RecapDeckModel; householdName: string }> = ({ 
 );
 
 // ---------------------------------------------------------------------------
-// Card 2 — the household week (or, under podium, the head-to-head)
+// Card 2 — money · WHAT DID THE WEEK COST TO LIVE?
 // ---------------------------------------------------------------------------
 
-const DayColumn: React.FC<{ day: RecapChartDay }> = ({ day }) => (
-  <div className="flex h-full flex-1 flex-col items-center justify-end gap-1.5">
-    <div className="relative flex w-full flex-col justify-end gap-[2px]" style={{ height: `${day.heightPct}%` }}>
-      {day.best && (
-        <Sparkle
-          size={12}
-          className="absolute -top-4 left-1/2 -translate-x-1/2 text-habit-gold"
-          aria-hidden="true"
-        />
-      )}
-      {day.segments.map(segment => (
-        <div
-          key={segment.key}
-          className="w-full rounded-[5px]"
-          style={{
-            height: `${segment.pct}%`,
-            backgroundColor: segment.color,
-            // Quiet days keep the member's hue but drop to a ghost weight, so
-            // a slow day still reads as "that person", just faintly.
-            opacity: day.quiet ? 0.35 : 1,
-          }}
-        />
-      ))}
+/**
+ * One spend line's week-over-week comparison, in words.
+ *
+ * Three distinct states, because "no percentage" has two very different causes
+ * and neither may be rendered as a confident 0%: the recap can carry no prior
+ * figure at all (`prior === null`, an optional field a document may predate),
+ * or it can carry a prior of zero, where a percentage is undefined but the
+ * comparison is still meaningful and worth saying.
+ */
+const SpendComparison: React.FC<{
+  line: RecapSpendLine;
+  format: (amount: number) => string;
+  className?: string;
+}> = ({ line, format, className }) => {
+  if (line.changePct !== null && line.prior !== null) {
+    return (
+      <div className={cn('flex flex-wrap items-center gap-x-2 gap-y-1', className)}>
+        <TrendChip pct={line.changePct} polarity="more-is-bad" />
+        <span className="text-sm text-brand-500 dark:text-brand-400">vs {format(line.prior)} last week</span>
+      </div>
+    );
+  }
+  return (
+    <p className={cn('text-sm text-brand-500 dark:text-brand-400', className)}>
+      {line.prior === null ? 'no prior week to compare' : 'nothing here last week'}
+    </p>
+  );
+};
+
+const MoneyCard: React.FC<{ deck: RecapDeckModel }> = ({ deck }) => {
+  const fmt = useFormatCurrency();
+  const whole = useCallback((amount: number) => fmt(amount, { decimals: 0 }), [fmt]);
+  const { money } = deck;
+
+  // No split on the document — say only what it can support. Deliberately NOT
+  // a `$0` of day-to-day spending: the week was never measured that way.
+  if (!money.hasSplit || !money.dayToDay || !money.bills) {
+    return (
+      <div className="flex h-full flex-col justify-center px-5">
+        <CardEyebrow tone="accent">The week&apos;s money</CardEyebrow>
+        <HeroNumber value={whole(money.total.amount)} unit="spent" className="text-[52px]" />
+        <SpendComparison line={money.total} format={whole} className="mt-2" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full flex-col justify-center px-5">
+      <CardEyebrow tone="accent">The week&apos;s money</CardEyebrow>
+      {/* 🛡️ DAY-TO-DAY IS THE HERO, never `totalSpend`. A lumpy bill week makes
+          the sum swing wildly around spending that never moved — the figure the
+          owner called out as a scary number nobody could act on. */}
+      <HeroNumber value={whole(money.dayToDay.amount)} unit="day to day" className="text-[52px]" />
+      <SpendComparison line={money.dayToDay} format={whole} className="mt-2" />
+
+      <div className="mt-5 rounded-card border border-brand-200 bg-white p-3.5 dark:border-brand-700 dark:bg-brand-800">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="text-[13px] font-semibold text-brand-700 dark:text-brand-200">
+            Bills the calendar already had
+          </span>
+          <span className="stat-num shrink-0 text-base font-semibold text-brand-900 dark:text-brand-50">
+            {whole(money.bills.amount)}
+          </span>
+        </div>
+        <SpendComparison line={money.bills} format={whole} className="mt-1.5" />
+      </div>
+
+      <p className="mt-3 font-mono text-[11.5px] tabular-nums text-brand-450 dark:text-brand-400">
+        {whole(money.total.amount)} out the door all in
+      </p>
     </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Card 3 — the household week · HOW DID THE HOUSEHOLD SCORE, DAY BY DAY?
+// ---------------------------------------------------------------------------
+
+/**
+ * One day of the 7-day chart.
+ *
+ * 🛡️ TWO REGISTERS, ONE BASELINE (DECK-1). The stack ABOVE the baseline is
+ * positive-only — the standing product decision, and the right one: a stacked
+ * bar cannot honestly show a negative slice. But that used to mean a losing day
+ * drew nothing whatsoever, so the real 2026-W31 chart showed six days and a
+ * blank. The deficit now gets its own register BELOW a drawn baseline, so
+ * "positive-only" no longer means "invisible" — and the stack itself is
+ * untouched. `min-h-[3px]` floors the stub so the shallowest loss of a week is
+ * still a mark rather than a sub-pixel nothing.
+ */
+const DayColumn: React.FC<{ day: RecapChartDay; showDeficit: boolean }> = ({ day, showDeficit }) => (
+  <div className="flex h-full flex-1 flex-col items-center">
+    <div className="flex w-full flex-1 flex-col justify-end">
+      <div
+        className="relative flex w-full flex-col justify-end gap-[2px]"
+        style={{ height: `${day.heightPct}%` }}
+      >
+        {day.best && (
+          <Sparkle
+            size={12}
+            className="absolute -top-4 left-1/2 -translate-x-1/2 text-habit-gold"
+            aria-hidden="true"
+          />
+        )}
+        {day.segments.map(segment => (
+          <div
+            key={segment.key}
+            className="w-full rounded-[5px]"
+            style={{
+              height: `${segment.pct}%`,
+              backgroundColor: segment.color,
+              // Quiet days keep the member's hue but drop to a ghost weight, so
+              // a slow day still reads as "that person", just faintly.
+              opacity: day.quiet ? 0.35 : 1,
+            }}
+          />
+        ))}
+      </div>
+    </div>
+
+    {showDeficit && (
+      <>
+        <div className="mt-[3px] h-px w-full bg-brand-200 dark:bg-brand-600" aria-hidden="true" />
+        <div className="h-3.5 w-full pt-[2px]">
+          {day.negative && (
+            <div
+              className="min-h-[3px] w-full rounded-b-[4px] bg-money-neg"
+              style={{ height: `${day.deficitPct}%` }}
+              data-testid={`recap-chart-deficit-${day.date}`}
+            />
+          )}
+        </div>
+      </>
+    )}
+
     <span
       className={cn(
-        'text-[10px] font-semibold',
-        day.best ? 'text-warm-600 dark:text-warm-300' : 'text-brand-450 dark:text-brand-400'
+        'mt-1.5 text-[10px] font-semibold',
+        day.negative
+          ? 'text-money-neg dark:text-money-negDark'
+          : day.best
+            ? 'text-warm-600 dark:text-warm-300'
+            : 'text-brand-450 dark:text-brand-400'
       )}
     >
       {day.label}
@@ -168,100 +300,31 @@ const DayColumn: React.FC<{ day: RecapChartDay }> = ({ day }) => (
   </div>
 );
 
-/**
- * The wording of the household-share line under the chart.
- *
- * TWO independent facts decide it, and conflating them is the whole bug this
- * function exists to prevent:
- *
- *  - the figure's SIGN — a loss must never be phrased as something "earned";
- *  - whether the chart actually DRAWS a Household bar (`hasHouseholdBar`) —
- *    only then does the figure have a visible cause anywhere on the card.
- *
- * All four combinations are reachable (see `WeekCard` for why bar-drawn and
- * figure-sign are independent), so each gets copy that is literally true of
- * what is on screen. The chart itself stays POSITIVE-ONLY by product decision;
- * every fix here is on the labelling side.
- */
-function householdShareCopy(points: number, hasHouseholdBar: boolean): string {
-  if (points > 0) {
-    return hasHouseholdBar
-      ? 'earned together, credited to no one member'
-      : // A real gain with no bar to sit in. The reason is only provable for
-        // the days carrying a POSITIVE contribution — those are exactly what
-        // `hasHouseholdBar` looks for, so its being false means every one of
-        // them netted <= 0 overall and got no column height. Days carrying a
-        // NEGATIVE contribution are clamped out of the chart by
-        // `buildRecapChart` regardless of how they netted, and one of those can
-        // be the week's tallest column while the total still comes out
-        // positive — so this must say "gained on", never "fell on".
-        'earned together, credited to no one member — the days it was gained on ended flat or down, so the chart draws no column for them';
-  }
-  // A LOSS — never "earned". When a Household bar IS drawn (a mixed-sign week
-  // whose positive days show while its bigger negative days don't), the figure
-  // already has a visible cause, and claiming "this loss is not in it" would be
-  // wrong about the part that IS drawn — so say nothing about the chart there.
-  return hasHouseholdBar
-    ? 'points, credited to no one member'
-    : 'points, credited to no one member — the chart only draws points gained, so this loss is not in it';
-}
-
 const WeekCard: React.FC<{ deck: RecapDeckModel }> = ({ deck }) => {
-  const { headToHead: h2h, framing } = deck;
-  const podium = framing === 'podium' && h2h.leader && h2h.runnerUp;
-  const legend = h2h.standings.filter(s => s.points !== 0);
-  // Does the chart actually DRAW a Household bar? Segment EXISTENCE is not the
-  // same question: a segment exists when `day.unattributed > 0`, while the
-  // column has height only when `day.total > 0` — two independent figures. A
-  // day where the members net deeply negative while a household-credit habit
-  // scores puts a household segment on a ZERO-HEIGHT column, so gating on
-  // existence alone paints a legend swatch and claims points "earned together"
-  // beside zero drawn pixels. Both conditions, always.
-  const hasHouseholdBar = deck.chart.some(
-    d => d.heightPct > 0 && d.segments.some(s => s.key === UNATTRIBUTED_SERIES)
-  );
+  const legend = deck.headToHead.standings.filter(s => s.points !== 0);
+  const showDeficit = deck.worstDay !== null;
+  const split = deck.householdSplit;
 
   return (
     <div className="flex h-full flex-col justify-center px-5">
-      {podium && h2h.leader ? (
-        <>
-          <CardEyebrow>{h2h.runaway ? 'Ran away with the week' : 'Won the week'}</CardEyebrow>
-          <div className="mt-1 flex items-center gap-2.5">
-            <MemberAvatar name={h2h.leader.name} photoURL={h2h.leader.photoURL} color={h2h.leader.color} size={34} />
-            <span className="font-display text-[28px] font-semibold leading-none tracking-tight text-brand-900 dark:text-brand-50">
-              {h2h.leader.name}
-            </span>
-            <Crown size={18} className="text-habit-gold" aria-hidden="true" />
-          </div>
-          <p className="mt-1.5 text-sm text-brand-500 dark:text-brand-400">
-            <span className="stat-num font-semibold text-brand-700 dark:text-brand-200">
-              {h2h.leader.points}
-            </span>{' '}
-            to {h2h.runnerUp?.name}&apos;s{' '}
-            <span className="stat-num font-semibold text-brand-700 dark:text-brand-200">
-              {h2h.runnerUp?.points}
-            </span>{' '}
-            · {deck.totalPoints} together
-          </p>
-        </>
-      ) : (
-        <>
-          <CardEyebrow>Together you scored</CardEyebrow>
-          <HeroNumber value={deck.totalPoints} unit="pts" />
-          <div className="mt-1 flex items-center gap-2 text-sm text-brand-500 dark:text-brand-400">
-            {deck.trendPct !== null && deck.trendPct !== 0 && <TrendChip pct={deck.trendPct} />}
-            <span>{deck.trendPct === null ? 'first week on record' : 'vs last week'}</span>
-          </div>
-        </>
-      )}
+      {/* 🛡️ THE ONE PLACE the household total is the hero. The tone no longer
+          swaps this card's headline for the head-to-head — the head-to-head has
+          its own card, and duplicating a figure across two cards is what made
+          the four-card deck feel like three. */}
+      <CardEyebrow>Together you scored</CardEyebrow>
+      <HeroNumber value={String(deck.totalPoints)} unit="pts" />
+      <div className="mt-1 flex items-center gap-2 text-sm text-brand-500 dark:text-brand-400">
+        {deck.trendPct !== null && deck.trendPct !== 0 && <TrendChip pct={deck.trendPct} />}
+        <span>{deck.trendPct === null ? 'first week on record' : 'vs last week'}</span>
+      </div>
 
       <div className="mt-6">
         <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-brand-450 dark:text-brand-400">
           Points by day
         </span>
-        <div className="mt-2.5 flex h-[110px] items-end gap-2.5">
+        <div className={cn('mt-2.5 flex items-stretch gap-2.5', showDeficit ? 'h-[132px]' : 'h-[110px]')}>
           {deck.chart.map(day => (
-            <DayColumn key={day.date} day={day} />
+            <DayColumn key={day.date} day={day} showDeficit={showDeficit} />
           ))}
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[11px] text-brand-500 dark:text-brand-400">
@@ -275,20 +338,19 @@ const WeekCard: React.FC<{ deck: RecapDeckModel }> = ({ deck }) => {
               {s.name}
             </span>
           ))}
-          {hasHouseholdBar && (
-            // Label only — deliberately NO figure here. `buildRecapChart`
-            // clamps every segment to its positive share (`Math.max(0, ...)`,
-            // `points > 0`), so a week with a net-negative unattributed total
-            // draws no household segment at all while the swatch's number
-            // would still show the signed total — a legend that contradicts
-            // its own chart. The member legend entries above carry no figure
-            // either (just `{s.name}`), so this stays consistent with them:
-            // the legend is a series LABEL, not a second place to read the
-            // number. The signed total lives on `householdShare` below,
-            // where no chart sits beside it to disagree with.
+          {/* Label only, and gated on a DRAWN bar (`chartHasHouseholdBar`
+              couples segment existence to column height — see the model). The
+              member entries carry no figure either; the legend names series. */}
+          {deck.chartHasHouseholdBar && (
             <span className="inline-flex items-center gap-1.5">
               <span className="inline-block h-2 w-2 rounded-[2px] bg-brand-300" aria-hidden="true" />
               Household
+            </span>
+          )}
+          {showDeficit && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block h-2 w-2 rounded-[2px] bg-money-neg" aria-hidden="true" />
+              Below zero
             </span>
           )}
         </div>
@@ -300,29 +362,57 @@ const WeekCard: React.FC<{ deck: RecapDeckModel }> = ({ deck }) => {
             was your best day together · {deck.bestDay.total} pts
           </p>
         )}
-        {/* The household's OWN (signed) share of the week — `unattributed`
-            summed across all 7 days, which can legitimately be negative (a
-            penalty habit that credits the household). It lives here rather
-            than on the legend above because nothing here draws a bar beside
-            it, so it can't contradict the chart's positive-only segments the
-            way a figure on the swatch would.
-
-            The wording is `householdShareCopy`'s job, because the figure and
-            the chart can disagree in BOTH directions and one sentence cannot
-            honestly cover both: a negative share can sit beside seven
-            full-height columns (the members carried the week, the household's
-            own loss simply isn't a segment), and a positive share can sit
-            beside none at all (every day it was GAINED on netted <= 0, so none
-            of those got column height). Never claim "only positive days are
-            shown" — in the first case every day IS shown; and never widen the
-            second reason past the days it was gained on — a day carrying a
-            negative contribution is clamped out of the chart no matter how
-            tall its column is. */}
-        {deck.householdSharePoints !== 0 && (
-          <p className="mt-1.5 text-[11.5px] text-brand-450 dark:text-brand-400" data-testid="recap-household-share">
-            <b className="font-semibold text-brand-600 dark:text-brand-200">{deck.householdSharePoints}</b>{' '}
-            {householdShareCopy(deck.householdSharePoints, hasHouseholdBar)}
+        {deck.worstDay && (
+          <p className="mt-1.5 text-[11.5px] text-brand-450 dark:text-brand-400" data-testid="recap-worst-day">
+            <b className="font-semibold text-money-neg dark:text-money-negDark">
+              {weekdayNameOf(deck.worstDay.date)}
+            </b>{' '}
+            finished below zero · {deck.worstDay.total} pts
           </p>
+        )}
+
+        {/* 🛡️ `householdShareCopy` IS DELETED, not extended. It was four
+            branches apologising for a signed figure sitting beside a
+            positive-only chart, and it existed only because "unattributed" was
+            a nameless residual. `unattributedSplit` names it: `householdCredit`
+            is points from `creditMode: 'household'` habits, which belong to
+            nobody ON PURPOSE. A first-class series gets stated, not excused.
+            `unclaimed` stays its own quiet line — never a caveat bolted onto
+            the first. Both lines are phrased sign-neutrally, so a household
+            that ran a penalty habit reads true without a fifth branch. */}
+        {split ? (
+          <>
+            {split.householdCredit !== 0 && (
+              <p
+                className="mt-1.5 text-[11.5px] text-brand-450 dark:text-brand-400"
+                data-testid="recap-household-credit"
+              >
+                <b className="font-semibold text-brand-600 dark:text-brand-200">{split.householdCredit}</b> from
+                habits the whole household shares
+              </p>
+            )}
+            {split.unclaimed !== 0 && (
+              <p
+                className="mt-1.5 text-[11.5px] text-brand-450 dark:text-brand-400"
+                data-testid="recap-household-unclaimed"
+              >
+                <b className="font-semibold text-brand-600 dark:text-brand-200">{split.unclaimed}</b> we
+                couldn&apos;t trace back to a person
+              </p>
+            )}
+          </>
+        ) : (
+          // No split on the document — state the figure plainly. NEVER render
+          // it as "0 household credit"; the week simply never measured why.
+          deck.householdSharePoints !== 0 && (
+            <p
+              className="mt-1.5 text-[11.5px] text-brand-450 dark:text-brand-400"
+              data-testid="recap-household-share"
+            >
+              <b className="font-semibold text-brand-600 dark:text-brand-200">{deck.householdSharePoints}</b>{' '}
+              credited to no one member
+            </p>
+          )
         )}
       </div>
     </div>
@@ -330,24 +420,18 @@ const WeekCard: React.FC<{ deck: RecapDeckModel }> = ({ deck }) => {
 };
 
 // ---------------------------------------------------------------------------
-// Card 3 — the viewer's own week
+// Card 4 — the viewer's own week · HOW DID YOU DO?
 // ---------------------------------------------------------------------------
 
-const StatTile: React.FC<{
-  icon: React.ReactNode;
-  value: string;
-  label: string;
-  detail?: string;
-}> = ({ icon, value, label, detail }) => (
+const StatTile: React.FC<{ value: string; label: string; detail: string }> = ({ value, label, detail }) => (
   <div className="flex-1 rounded-card border border-brand-200 bg-white p-3.5 dark:border-brand-700 dark:bg-brand-800">
-    <div className="flex items-center gap-2 font-display text-[30px] font-semibold leading-none tracking-tight text-brand-900 dark:text-brand-50">
-      {icon}
+    <div className="font-display text-[30px] font-semibold leading-none tracking-tight text-brand-900 dark:text-brand-50">
       {value}
     </div>
     <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-brand-450 dark:text-brand-400">
       {label}
     </div>
-    {detail && <div className="mt-0.5 truncate text-[11px] text-brand-500 dark:text-brand-400">{detail}</div>}
+    <div className="mt-0.5 truncate text-[11px] text-brand-500 dark:text-brand-400">{detail}</div>
   </div>
 );
 
@@ -357,9 +441,14 @@ const PersonalCard: React.FC<{ deck: RecapDeckModel; facts: RecapMemberFacts }> 
   // — always present here since this card only renders when `deck.viewer` is
   // set (see the `body` switch below), but guarded rather than asserted.
   const standing = deck.viewerStanding;
+  // 🛡️ TILES ARE DRAWN FROM WHAT HAPPENED, and a candidate that would render
+  // zero never becomes a tile (`buildPersonalTiles`). The shipped deck showed
+  // the owner a tile reading `0` / "Every day" / "Nothing perfect this week" —
+  // an absence formatted as a statistic. Hooks stay above the early return.
+  const tiles = useMemo(() => buildPersonalTiles(facts), [facts]);
   if (!standing) return null;
-  const perfect = facts.perfectHabits[0];
   const streak = facts.topStreak;
+  const perfect = facts.perfectHabits[0];
 
   return (
     <div className="flex h-full flex-col justify-center px-5">
@@ -368,7 +457,7 @@ const PersonalCard: React.FC<{ deck: RecapDeckModel; facts: RecapMemberFacts }> 
         <CardEyebrow tone="accent">Your week, {facts.name}</CardEyebrow>
       </div>
       <div className="mt-2">
-        <HeroNumber value={facts.points} unit="pts" />
+        <HeroNumber value={String(facts.points)} unit="pts" />
       </div>
       <p className="mt-1.5 text-sm text-brand-500 dark:text-brand-400">
         <b className="font-semibold text-brand-700 dark:text-brand-200">
@@ -377,20 +466,19 @@ const PersonalCard: React.FC<{ deck: RecapDeckModel; facts: RecapMemberFacts }> 
         {facts.bestDay && ` · best on ${weekdayNameOf(facts.bestDay.date)}`}
       </p>
 
-      <div className="mt-5 flex gap-2.5">
-        <StatTile
-          icon={<Flame size={20} className="text-habit-streak" aria-hidden="true" />}
-          value={streak ? String(streak.days) : '0'}
-          label={streak?.period === 'weekly' ? 'Week streak' : 'Day streak'}
-          detail={streak?.habitTitle ?? 'No streak yet'}
-        />
-        <StatTile
-          icon={<Check size={19} className="text-accent-600 dark:text-accent-300" aria-hidden="true" />}
-          value={perfect ? '7/7' : String(facts.perfectHabits.length)}
-          label="Every day"
-          detail={perfect ?? 'Nothing perfect this week'}
-        />
-      </div>
+      {tiles.length > 0 ? (
+        <div className="mt-5 flex gap-2.5">
+          {tiles.map(tile => (
+            <StatTile key={tile.id} value={tile.value} label={tile.label} detail={tile.detail} />
+          ))}
+        </div>
+      ) : (
+        // Nothing qualified — say so in a sentence rather than padding the card
+        // with two zeroes. True, short, and not a scoreboard of an absence.
+        <p className="mt-5 text-[13px] text-brand-500 dark:text-brand-400" data-testid="recap-quiet-week">
+          A quiet week under your name — nothing logged, no streak running.
+        </p>
+      )}
 
       {(perfect || streak) && (
         <p className="mt-5 text-[13px] text-brand-500 dark:text-brand-400">
@@ -415,16 +503,125 @@ const PersonalCard: React.FC<{ deck: RecapDeckModel; facts: RecapMemberFacts }> 
 };
 
 // ---------------------------------------------------------------------------
-// Card 4 — finish
+// Card 5 — the head-to-head · HOW DID IT SPLIT BETWEEN THE ADULTS?
 // ---------------------------------------------------------------------------
 
+/**
+ * 🛡️ ADULTS ONLY. `deck.headToHead.standings` is already filtered by
+ * `!isManaged` in `buildHeadToHead`, matching `selectAdultStandings` — a
+ * chore-heavy kid week must never crown the kid. The kid still gets their own
+ * personal card; this one is a competition and their points are an allowance
+ * ledger.
+ *
+ * The tone chooses the FRAME, and `buildRecapDeck` has already chosen this
+ * card's POSITION from the same verdict: `podium` (and `adaptive` on a runaway)
+ * crowns and sits ahead of the household week; `household_first` reports the
+ * split flat, behind the personal card.
+ */
+const StandingsCard: React.FC<{ deck: RecapDeckModel }> = ({ deck }) => {
+  const { headToHead: h2h } = deck;
+  const podium = deck.framing === 'podium' && h2h.leader && h2h.runnerUp;
+  // Bars are shares of the largest ABSOLUTE score, so a net-negative week still
+  // draws proportionate bars instead of collapsing every one of them to zero.
+  const scale = Math.max(1, ...h2h.standings.map(s => Math.abs(s.points)));
+
+  return (
+    <div className="flex h-full flex-col justify-center px-5">
+      {podium && h2h.leader ? (
+        <>
+          <CardEyebrow>{h2h.runaway ? 'Ran away with the week' : 'Won the week'}</CardEyebrow>
+          <div className="mt-1.5 flex items-center gap-2.5">
+            <MemberAvatar
+              name={h2h.leader.name}
+              photoURL={h2h.leader.photoURL}
+              color={h2h.leader.color}
+              size={34}
+            />
+            <span className="font-display text-[28px] font-semibold leading-none tracking-tight text-brand-900 dark:text-brand-50">
+              {h2h.leader.name}
+            </span>
+            <Crown size={18} className="text-habit-gold" aria-hidden="true" />
+          </div>
+          <p className="mt-1.5 text-sm text-brand-500 dark:text-brand-400">
+            {h2h.margin} clear of {h2h.runnerUp?.name}
+          </p>
+        </>
+      ) : (
+        <>
+          <CardEyebrow tone="quiet">How the week split</CardEyebrow>
+          <p className="mt-1.5 text-sm text-brand-500 dark:text-brand-400">
+            Everyone&apos;s own score, chores included.
+          </p>
+        </>
+      )}
+
+      <ul className="mt-5 space-y-3">
+        {h2h.standings.map(s => (
+          <li key={s.memberId} className="flex items-center gap-2.5">
+            <MemberAvatar name={s.name} photoURL={s.photoURL} color={s.color} size={26} />
+            <span className="w-[68px] shrink-0 truncate text-[13px] font-semibold text-brand-700 dark:text-brand-200">
+              {s.name}
+            </span>
+            <span
+              className="h-2 flex-1 overflow-hidden rounded-full bg-brand-100 dark:bg-brand-700"
+              aria-hidden="true"
+            >
+              <span
+                className="block h-full rounded-full"
+                style={{
+                  width: `${(Math.abs(s.points) / scale) * 100}%`,
+                  backgroundColor: s.color,
+                }}
+              />
+            </span>
+            <span
+              className={cn(
+                'stat-num w-[52px] shrink-0 text-right text-sm font-semibold',
+                s.points < 0
+                  ? 'text-money-neg dark:text-money-negDark'
+                  : 'text-brand-900 dark:text-brand-50'
+              )}
+            >
+              {s.points}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Card 6 — finish · WHAT DOES IT ADD UP TO?
+// ---------------------------------------------------------------------------
+
+/**
+ * 🛡️ A PAYOFF, NOT A REPEAT. The shipped finish card re-anchored the household
+ * total that card 2 had already made its hero — 28 pts, twice, in a four-card
+ * deck. This card carries only things the deck has not said yet: the week's
+ * verdict, the count of things actually done, the narrative, and what to carry
+ * into next week. The standings live on their own card and are not echoed here.
+ *
+ * 🛡️ THREE NARRATIVE STATES, NOT TWO (ARCH-1). `premium` gates the UPSELL; it
+ * does not decide whether prose exists. A client-derived recap has real numbers
+ * and no narrative — it must render neither the prose nor a paywall for
+ * content that was never written. `deck.hasNarrative` is checked FIRST, so the
+ * absent state is unreachable from the not-premium branch.
+ */
 const FinishCard: React.FC<{ deck: RecapDeckModel; recap: WeeklyRecap }> = ({ deck, recap }) => {
   const { headToHead: h2h } = deck;
   const podium = deck.framing === 'podium' && h2h.leader;
+  const weekLabel = deck.weekNumber !== null ? `Week ${deck.weekNumber}` : 'the week';
+  const verdict = deck.isBestWeekThisMonth
+    ? 'Best week this month'
+    : podium && h2h.leader
+      ? `${h2h.leader.name} takes ${weekLabel}`
+      : `That's a wrap on ${weekLabel}`;
+  const carry = recap.streaksAtRisk.slice(0, 3);
 
   return (
     <div className="flex h-full flex-col items-center justify-center px-5 text-center">
-      <CardEyebrow>Week {deck.weekNumber ?? ''} · Final</CardEyebrow>
+      <CardEyebrow>{deck.weekNumber !== null ? `Week ${deck.weekNumber} · Final` : 'Final'}</CardEyebrow>
       {h2h.standings.length > 0 && (
         <div className="mt-3.5 flex items-center gap-3">
           {h2h.standings.map(s => (
@@ -433,75 +630,57 @@ const FinishCard: React.FC<{ deck: RecapDeckModel; recap: WeeklyRecap }> = ({ de
         </div>
       )}
 
-      <div className="mt-4">
-        {podium && h2h.leader ? (
-          <>
-            <HeroNumber value={h2h.leader.points} unit="pts" className="text-[76px]" />
-            <p className="mt-1 text-sm font-semibold text-brand-500 dark:text-brand-400">
-              {h2h.leader.name} takes the week · {deck.totalPoints} together
-            </p>
-          </>
-        ) : (
-          <HeroNumber value={deck.totalPoints} unit="pts" className="text-[76px]" />
-        )}
-      </div>
+      <p className="mt-4 font-display text-[30px] font-semibold leading-tight tracking-[-0.02em] text-brand-900 dark:text-brand-50">
+        {verdict}
+      </p>
+      {recap.habitCompletions > 0 && (
+        <p className="mt-1.5 text-sm text-brand-500 dark:text-brand-400">
+          <b className="font-semibold text-brand-700 dark:text-brand-200">{recap.habitCompletions}</b> things
+          done, together
+        </p>
+      )}
 
-      {(deck.isBestWeekThisMonth || deck.trendPct !== null) && (
-        <div className="mt-5 flex w-full items-center justify-center gap-3 rounded-card bg-accent-600 px-4 py-3 text-[15px] font-semibold text-white shadow-raised">
-          <span>{deck.isBestWeekThisMonth ? 'Best week this month' : 'Week complete'}</span>
-          {deck.trendPct !== null && deck.trendPct !== 0 && (
-            <>
-              <span className="h-4 w-px bg-white/25" aria-hidden="true" />
-              <span className="inline-flex items-center gap-1 text-money-posDark">
-                {deck.trendPct >= 0 ? (
-                  <TrendingUp size={14} aria-hidden="true" />
-                ) : (
-                  <TrendingDown size={14} aria-hidden="true" />
-                )}
-                {Math.abs(deck.trendPct)}%
+      {/* State 1/2 only. State 3 (no narrative) renders nothing here at all —
+          no prose, no upsell, and no filler standing in for either. */}
+      {deck.hasNarrative && (
+        <div className="mt-5 w-full">
+          {recap.premium ? (
+            <p className="text-[13px] leading-relaxed text-brand-600 dark:text-brand-300">{recap.narrative}</p>
+          ) : (
+            <div>
+              <p
+                className="text-[13px] leading-relaxed text-brand-600 dark:text-brand-300 blur-sm select-none"
+                aria-hidden="true"
+              >
+                {recap.narrative}
+              </p>
+              <span className="mt-2 flex items-center justify-center gap-1.5 text-[13px] font-semibold text-warm-700 dark:text-warm-300">
+                <Lock size={13} aria-hidden="true" />
+                Unlock your personal recap with Premium
               </span>
-            </>
+            </div>
           )}
         </div>
       )}
 
-      {h2h.standings.length > 1 && (
-        <p className="mt-5 flex items-center gap-1.5 font-mono text-sm font-semibold tabular-nums text-brand-500 dark:text-brand-400">
-          {h2h.leader && <Crown size={13} className="text-habit-gold" aria-hidden="true" />}
-          {h2h.standings.map((s, i) => (
-            <React.Fragment key={s.memberId}>
-              {i > 0 && (
-                <span className="px-0.5 text-brand-400" aria-hidden="true">
-                  ·
+      {carry.length > 0 && (
+        <div className="mt-5 w-full" data-testid="recap-carry-forward">
+          <CardEyebrow tone="quiet">Carry into next week</CardEyebrow>
+          <ul className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
+            {carry.map(s => (
+              <li
+                key={s.habitTitle}
+                className="inline-flex items-center gap-1 rounded-full border border-warm-200 bg-warm-50 px-2.5 py-1 text-xs font-semibold text-warm-700 dark:border-warm-700/50 dark:bg-warm-500/10 dark:text-warm-300"
+              >
+                {s.habitTitle}
+                <span className="font-mono tabular-nums text-warm-600 dark:text-warm-400">
+                  {s.streakDays}d
                 </span>
-              )}
-              <span>
-                {s.name} {s.points}
-              </span>
-            </React.Fragment>
-          ))}
-        </p>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
-
-      {/* The narrative — premium-gated exactly as the pre-deck layout gated it. */}
-      <div className="mt-5 w-full">
-        {recap.premium ? (
-          <p className="text-[13px] leading-relaxed text-brand-600 dark:text-brand-300">{recap.narrative}</p>
-        ) : (
-          <div>
-            <p
-              className="text-[13px] leading-relaxed text-brand-600 dark:text-brand-300 blur-sm select-none"
-              aria-hidden="true"
-            >
-              {recap.narrative || 'Your personalized weekly summary is ready to read.'}
-            </p>
-            <span className="mt-2 flex items-center justify-center gap-1.5 text-[13px] font-semibold text-warm-700 dark:text-warm-300">
-              <Lock size={13} aria-hidden="true" />
-              Unlock your personal recap with Premium
-            </span>
-          </div>
-        )}
-      </div>
     </div>
   );
 };
@@ -561,10 +740,14 @@ export const RecapDeck: React.FC<RecapDeckProps> = ({ deck, recap, householdName
     switch (card.kind) {
       case 'cover':
         return <CoverCard deck={deck} householdName={householdName} />;
+      case 'money':
+        return <MoneyCard deck={deck} />;
       case 'week':
         return <WeekCard deck={deck} />;
       case 'personal':
         return deck.viewer ? <PersonalCard deck={deck} facts={deck.viewer} /> : null;
+      case 'standings':
+        return <StandingsCard deck={deck} />;
       case 'finish':
         return <FinishCard deck={deck} recap={recap} />;
       default:
