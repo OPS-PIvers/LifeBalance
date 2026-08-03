@@ -1985,7 +1985,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       // off the shim to avoid exactly that. Read through refs instead: they are
       // evaluated when a transaction is actually added, so the fire still sees
       // fresh values. Same pattern as the midnight scheduler's `habitsRef`.
+      // ATTR-1 reads the roster through the same ref, for the same reason: a
+      // card owner must be a CURRENT member to be credited, and keying this
+      // callback on `members` would re-create it (and re-render every finance
+      // consumer) every time a member's points move.
       habits: habitsRef.current, freezeBank: freezeBankRef.current,
+      members: membersRef.current,
     }).addTransaction(tx);
   }, [householdId, user, householdSettings, accounts]);
 
@@ -2006,6 +2011,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   ) => {
     await makeUpdateTransactionCategory({
       db, householdId, currentUser, habits, transactions, accounts, householdSettings, freezeBank,
+      // ATTR-1 roster check, read through the ref so a member's points moving
+      // can't churn this callback's identity.
+      members: membersRef.current,
     }).updateTransactionCategory(id, category, relatedHabitIds, accountId, overrides);
   }, [householdId, currentUser, habits, transactions, accounts, householdSettings, freezeBank]);
 
@@ -2016,6 +2024,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   ) => {
     await makeReverseTransactionApproval({
       db, householdId, habits, transactions, accounts, calendarItems,
+      // ATTR-1: the undo debits the credited member's own points, so it needs
+      // the roster to know whose doc it may safely write.
+      members: membersRef.current,
     }).reverseTransactionApproval(id, prior, firedHabitIds);
   }, [householdId, habits, transactions, accounts, calendarItems]);
 
