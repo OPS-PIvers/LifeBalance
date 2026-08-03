@@ -1,7 +1,9 @@
 /**
  * Unit tests for `applyNoSpendDay`'s multi-day catch-up behavior.
  *
- * Two regressions this suite guards specifically:
+ * Four regressions this suite guards specifically — all UNREACHABLE before
+ * the catch-up window, since `applyNoSpendDay` used to run at most once per
+ * batch:
  *
  * 1. In-batch weekend visibility (`stagedCleanDates`): when one email judges
  *    both Saturday and Sunday, Saturday's verdict doc is only STAGED on the
@@ -21,6 +23,21 @@
  *    batch and stage exactly ONE combined household update. Two per-call
  *    household writes, each built from the same stale pre-batch snapshot, is
  *    exactly the clobber bug this suite guards against re-introducing.
+ *
+ * 3. Cross-day STREAK staleness (`stagedCompletionsByHabit`): if the SAME
+ *    habit fires on two different days judged in one batch (e.g. a
+ *    "day"-scope habit clean on both Saturday and Sunday — the headline case
+ *    the catch-up window exists to enable), a later day's read of the habits
+ *    collection can't see an earlier day's in-flight (staged, uncommitted)
+ *    completion, so its streak would be computed as if that day never
+ *    happened — and since `streakDays` is a plain-value write, not a
+ *    transform, the wrong value is the one that survives.
+ *
+ * 4. Cross-day THRESHOLD accumulation: the same staleness for a threshold
+ *    habit's `priorPeriodCount` (queried from Firestore, which can't see a
+ *    same-batch staged submission either) — a targetCount=1 habit would
+ *    double-credit two days in the same period, and a targetCount>1 habit
+ *    would never accumulate enough units to cross at all.
  *
  * Firestore is a small hand-built fake, not a real emulator (this repo's
  * Firestore emulator can't run locally on Windows) — just enough surface
@@ -340,5 +357,216 @@ describe("applyNoSpendDay — freeze-refund reporting (no household write)", () 
     expect(refPaths(satSetSpy)).not.toContain(householdDocPath);
     expect(refPaths(sunUpdateSpy)).not.toContain(householdDocPath);
     expect(refPaths(sunSetSpy)).not.toContain(householdDocPath);
+  });
+});
+
+describe("applyNoSpendDay — cross-day streak staleness (stagedCompletionsByHabit)", () => {
+  const SATURDAY = "2026-07-25";
+  const SUNDAY = "2026-07-26";
+  const TODAY = "2026-07-27"; // Monday's catch-up email
+
+  it("computes Sunday's streak as 2 (both days) when Saturday's completion was only STAGED, not committed", async () => {
+    const habit = dayHabit("habit-daily-streak");
+
+    // Call 1: Saturday, exactly like the caller's first loop iteration.
+    const { db: satDb } = makeFakeDb({
+      transactionsByDate: { [SATURDAY]: [] },
+      noSpendDayExists: {},
+      habits: [habit],
+    });
+    const { batch: satBatch } = makeFakeBatch();
+    const saturdayOutcome = await applyNoSpendDay({
+      db: satDb,
+      householdId: HOUSEHOLD_ID,
+      batch: satBatch,
+      targetDate: SATURDAY,
+      today: TODAY,
+      extraSpend: [],
+    });
+    expect(saturdayOutcome.fired).toHaveLength(1);
+    expect(saturdayOutcome.stagedFires).toEqual([
+      { habitId: "habit-daily-streak", date: SATURDAY, count: 1, completedDate: true },
+    ]);
+
+    // The caller (bankEmailSync.ts) folds every returned `stagedFires` entry
+    // into an accumulator, keyed by habitId, right after each call returns.
+    const stagedCompletionsByHabit = new Map<string, typeof saturdayOutcome.stagedFires>();
+    for (const sf of saturdayOutcome.stagedFires) {
+      const list = stagedCompletionsByHabit.get(sf.habitId) ?? [];
+      list.push(sf);
+      stagedCompletionsByHabit.set(sf.habitId, list);
+    }
+
+    // Call 2: Sunday, SAME habit id, in the SAME batch — the habit fixture
+    // fed to the fake db is UNCHANGED (still the pre-batch committed state,
+    // exactly what a real Firestore read would return), so anything correct
+    // about Sunday's streak has to come from `stagedCompletionsByHabit`.
+    const { db: sunDb } = makeFakeDb({
+      transactionsByDate: { [SUNDAY]: [] },
+      noSpendDayExists: {},
+      habits: [habit],
+    });
+    const { batch: sunBatch, update: sunUpdateSpy } = makeFakeBatch();
+    const sundayOutcome = await applyNoSpendDay({
+      db: sunDb,
+      householdId: HOUSEHOLD_ID,
+      batch: sunBatch,
+      targetDate: SUNDAY,
+      today: TODAY,
+      extraSpend: [],
+      stagedCompletionsByHabit,
+    });
+
+    expect(sundayOutcome.fired).toHaveLength(1);
+    // The streak reported for the submission (and used for the multiplier)
+    // must reflect BOTH days, not just Sunday in isolation.
+    expect(sundayOutcome.fired[0]?.streak).toBe(2);
+
+    // And the actual habit-doc write staged on the batch must carry the same
+    // correct value — this is the exact field (`streakDays`, written as a
+    // plain value, not a transform) the review flagged as the one that
+    // clobbers when two same-batch writes disagree.
+    const habitUpdateCall = sunUpdateSpy.mock.calls.find(([ref]) =>
+      (ref as { path: string }).path.endsWith("/habits/habit-daily-streak")
+    );
+    expect(habitUpdateCall).toBeDefined();
+    expect((habitUpdateCall?.[1] as { streakDays: number }).streakDays).toBe(2);
+  });
+
+  // Control case proving the bug is real: same fixtures, but Sunday judged
+  // with no knowledge of Saturday's same-batch fire (the shape this whole
+  // fix replaces). Sunday's streak is wrongly computed as 1, as if Saturday
+  // never happened.
+  it("regression control: without stagedCompletionsByHabit, Sunday's streak wrongly ignores Saturday", async () => {
+    const habit = dayHabit("habit-daily-streak-control");
+    const { db: sunDb } = makeFakeDb({
+      transactionsByDate: { [SUNDAY]: [] },
+      noSpendDayExists: {},
+      habits: [habit],
+    });
+    const { batch: sunBatch } = makeFakeBatch();
+    const sundayOutcome = await applyNoSpendDay({
+      db: sunDb,
+      householdId: HOUSEHOLD_ID,
+      batch: sunBatch,
+      targetDate: SUNDAY,
+      today: TODAY,
+      extraSpend: [],
+      // No stagedCompletionsByHabit — Saturday's fire is invisible.
+    });
+    expect(sundayOutcome.fired[0]?.streak).toBe(1);
+  });
+});
+
+describe("applyNoSpendDay — cross-day threshold accumulation (stagedCompletionsByHabit)", () => {
+  const SATURDAY = "2026-07-25";
+  const SUNDAY = "2026-07-26"; // same ISO week as Saturday (week of 2026-07-20)
+  const TODAY = "2026-07-27";
+
+  const weeklyThresholdHabit = (id: string): { id: string; data: FakeDocData } => ({
+    id,
+    data: {
+      title: "Once a week is enough",
+      type: "positive",
+      basePoints: 20,
+      scoringType: "threshold",
+      period: "weekly",
+      targetCount: 1,
+      count: 0,
+      totalCount: 0,
+      completedDates: [],
+      streakDays: 0,
+      lastUpdated: "2026-07-01T00:00:00.000Z",
+      triggers: { noSpend: "day" },
+    },
+  });
+
+  it("does not double-credit a targetCount=1 weekly habit across two judged days in the same ISO week", async () => {
+    const habit = weeklyThresholdHabit("habit-weekly-threshold");
+
+    const { db: satDb } = makeFakeDb({
+      transactionsByDate: { [SATURDAY]: [] },
+      noSpendDayExists: {},
+      habits: [habit],
+    });
+    const { batch: satBatch } = makeFakeBatch();
+    const saturdayOutcome = await applyNoSpendDay({
+      db: satDb,
+      householdId: HOUSEHOLD_ID,
+      batch: satBatch,
+      targetDate: SATURDAY,
+      today: TODAY,
+      extraSpend: [],
+    });
+    // Saturday is the first day in the week, so it crosses the target itself.
+    expect(saturdayOutcome.fired[0]?.pointsEarned).toBeGreaterThan(0);
+
+    const stagedCompletionsByHabit = new Map<string, typeof saturdayOutcome.stagedFires>();
+    for (const sf of saturdayOutcome.stagedFires) {
+      const list = stagedCompletionsByHabit.get(sf.habitId) ?? [];
+      list.push(sf);
+      stagedCompletionsByHabit.set(sf.habitId, list);
+    }
+
+    const { db: sunDb } = makeFakeDb({
+      transactionsByDate: { [SUNDAY]: [] },
+      noSpendDayExists: {},
+      habits: [habit],
+    });
+    const { batch: sunBatch } = makeFakeBatch();
+    const sundayOutcome = await applyNoSpendDay({
+      db: sunDb,
+      householdId: HOUSEHOLD_ID,
+      batch: sunBatch,
+      targetDate: SUNDAY,
+      today: TODAY,
+      extraSpend: [],
+      stagedCompletionsByHabit,
+    });
+
+    // Sunday still gets a submission (a unit banked toward the period), but
+    // must NOT earn points a second time — WITHOUT the fold, Sunday's own
+    // `priorPeriodCount` read comes back 0 (the Firestore query can't see
+    // Saturday's staged submission either), so it would wrongly cross the
+    // target a second time and double the household's points for one week.
+    expect(sundayOutcome.fired).toHaveLength(1);
+    expect(sundayOutcome.fired[0]?.pointsEarned).toBe(0);
+  });
+
+  // Control case proving the double-credit is real absent the fold.
+  it("regression control: without stagedCompletionsByHabit, Sunday double-credits the same week", async () => {
+    const habit = weeklyThresholdHabit("habit-weekly-threshold-control");
+    const { db: satDb } = makeFakeDb({
+      transactionsByDate: { [SATURDAY]: [] },
+      noSpendDayExists: {},
+      habits: [habit],
+    });
+    const { batch: satBatch } = makeFakeBatch();
+    await applyNoSpendDay({
+      db: satDb,
+      householdId: HOUSEHOLD_ID,
+      batch: satBatch,
+      targetDate: SATURDAY,
+      today: TODAY,
+      extraSpend: [],
+    });
+
+    const { db: sunDb } = makeFakeDb({
+      transactionsByDate: { [SUNDAY]: [] },
+      noSpendDayExists: {},
+      habits: [habit],
+    });
+    const { batch: sunBatch } = makeFakeBatch();
+    const sundayOutcome = await applyNoSpendDay({
+      db: sunDb,
+      householdId: HOUSEHOLD_ID,
+      batch: sunBatch,
+      targetDate: SUNDAY,
+      today: TODAY,
+      extraSpend: [],
+      // No stagedCompletionsByHabit — Saturday's crossing is invisible, so
+      // Sunday's own (stale) priorPeriodCount read is 0 and it crosses again.
+    });
+    expect(sundayOutcome.fired[0]?.pointsEarned).toBeGreaterThan(0);
   });
 });

@@ -105,6 +105,7 @@ import {
   type NoSpendFreezeRefundNote,
   type NoSpendHabitFire,
   type NoSpendOutcome,
+  type StagedNoSpendFire,
 } from "./noSpendFire";
 import { pickMerchantRule } from "./merchantRules";
 import {
@@ -1008,7 +1009,19 @@ export const bankEmailSync = onRequest(
       //     Sunday, Sunday's weekend check can see Saturday's verdict even
       //     though Saturday's doc is only staged — not yet committed — on
       //     this batch (see noSpendFire.ts's `stagedCleanDates` doc).
+      //
+      //     `stagedCompletionsByHabit` is the same idea for the HABIT docs
+      //     themselves: if the SAME habit fires on two different judged
+      //     days in this run (e.g. a "day"-scope habit clean on both
+      //     Saturday and Sunday — precisely the case this catch-up window
+      //     exists to enable), a later day's read of the habits collection
+      //     would otherwise be blind to an earlier day's in-flight fire,
+      //     corrupting that day's streak and (for a threshold habit spanning
+      //     the same scoring period) risking a double credit. See
+      //     `ApplyNoSpendDayDeps.stagedCompletionsByHabit`'s doc in
+      //     noSpendFire.ts for the full mechanics.
       const stagedCleanDates = new Set<string>();
+      const stagedCompletionsByHabit = new Map<string, StagedNoSpendFire[]>();
       const noSpendOutcomes: NoSpendOutcome[] = [];
       for (const noSpendDate of noSpendDatesToJudge) {
         const outcome = await applyNoSpendDay({
@@ -1028,9 +1041,15 @@ export const bankEmailSync = onRequest(
           // ordinary stored transaction on every later sync.
           merchantRules,
           stagedCleanDates,
+          stagedCompletionsByHabit,
         });
         noSpendOutcomes.push(outcome);
         if (outcome.isNoSpendDay) stagedCleanDates.add(noSpendDate);
+        for (const sf of outcome.stagedFires) {
+          const list = stagedCompletionsByHabit.get(sf.habitId);
+          if (list) list.push(sf);
+          else stagedCompletionsByHabit.set(sf.habitId, [sf]);
+        }
       }
       // Used when reporting below. `mostRecentNoSpend` falls back to a
       // not-a-no-spend-day placeholder dated to the newest day in the window
@@ -1047,6 +1066,7 @@ export const bankEmailSync = onRequest(
         pointsDelta: { daily: 0, weekly: 0, total: 0 },
         freezeTokensRefunded: 0,
         freezeRefundNotes: [],
+        stagedFires: [],
       };
       // Habits fired across EVERY judged day, pooled — a fire on an earlier
       // settled day of a multi-day catch-up must still be announced even
