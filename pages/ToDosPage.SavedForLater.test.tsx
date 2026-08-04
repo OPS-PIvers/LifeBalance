@@ -27,6 +27,7 @@ import {
   type HouseholdCoreContextValue,
 } from '@/contexts/FirebaseHouseholdContext';
 import { format, startOfToday } from 'date-fns';
+import toast from 'react-hot-toast';
 
 const render = (ui: ReactElement) =>
   rtlRender(<MemoryRouter><ThemeProvider>{ui}</ThemeProvider></MemoryRouter>);
@@ -39,8 +40,10 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
 
 vi.mock('@/utils/exportUtils', () => ({ generateCsvExport: vi.fn() }));
 vi.mock('@/utils/toastHelpers', () => ({ showDeleteConfirmation: vi.fn() }));
+// `toast(...)` itself is called (with a render function) for the park undo, on
+// top of the .success/.error helpers — so the default export has to be callable.
 vi.mock('react-hot-toast', () => ({
-  default: { success: vi.fn(), error: vi.fn() },
+  default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }),
 }));
 
 const today = format(startOfToday(), 'yyyy-MM-dd');
@@ -76,8 +79,9 @@ const mockAddSavedForLaterTodo = vi.fn(() => Promise.resolve());
 const mockDeleteToDo = vi.fn(() => Promise.resolve());
 const mockCompleteToDo = vi.fn(() => Promise.resolve());
 const mockPromoteTodo = vi.fn(() => Promise.resolve());
+const mockParkTodo = vi.fn(() => Promise.resolve());
 
-const setup = (savedForLaterTodos: ToDo[], todos: ToDo[] = [activeTodo]) => {
+const applyContext = (savedForLaterTodos: ToDo[], todos: ToDo[] = [activeTodo]) => {
   const value = {
     todos,
     savedForLaterTodos,
@@ -91,7 +95,7 @@ const setup = (savedForLaterTodos: ToDo[], todos: ToDo[] = [activeTodo]) => {
     uncompleteToDo: vi.fn(),
     toggleTodoSubtask: vi.fn(),
     promoteTodo: mockPromoteTodo,
-    parkTodo: vi.fn(),
+    parkTodo: mockParkTodo,
     taskTemplates: [],
     addTaskTemplate: vi.fn(),
     updateTaskTemplate: vi.fn(),
@@ -102,7 +106,16 @@ const setup = (savedForLaterTodos: ToDo[], todos: ToDo[] = [activeTodo]) => {
   };
   vi.mocked(useTodos).mockReturnValue(value as unknown as TodosContextValue);
   vi.mocked(useHouseholdCore).mockReturnValue(value as unknown as HouseholdCoreContextValue);
-  render(<ToDosPage />);
+};
+
+const setup = (savedForLaterTodos: ToDo[], todos: ToDo[] = [activeTodo]) => {
+  applyContext(savedForLaterTodos, todos);
+  return render(<ToDosPage />);
+};
+
+/** Opens the long-press Task-options drawer for one row. */
+const openTaskOptions = (text: string) => {
+  fireEvent.contextMenu(screen.getByRole('button', { name: `Edit task: ${text}` }));
 };
 
 const parkedSection = () => screen.getByRole('region', { name: 'Saved for later' });
@@ -123,6 +136,7 @@ describe('ToDosPage — Saved for later section', () => {
     const section = parkedSection();
     expect(within(section).getByText('Saved for later')).toBeInTheDocument();
     expect(within(section).getByLabelText('Save a task for later')).toBeInTheDocument();
+    expect(within(section).getByRole('button', { name: 'Save this for later' })).toBeInTheDocument();
     expect(within(section).getByText(/Nothing parked yet/)).toBeInTheDocument();
   });
 
@@ -156,7 +170,7 @@ describe('ToDosPage — Saved for later section', () => {
     setup([]);
     const input = within(parkedSection()).getByLabelText('Save a task for later');
     fireEvent.change(input, { target: { value: 'Look into a bike rack' } });
-    fireEvent.click(within(parkedSection()).getByRole('button', { name: 'Save for later' }));
+    fireEvent.click(within(parkedSection()).getByRole('button', { name: 'Save this for later' }));
 
     await waitFor(() => {
       expect(mockAddSavedForLaterTodo).toHaveBeenCalledWith('Look into a bike rack');
@@ -243,6 +257,131 @@ describe('ToDosPage — Saved for later section', () => {
       // 1 active + 2 parked.
       expect(screen.getByText('3 selected')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Deselect all/ })).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * Parking an ACTIVE to-do — the primary use case. Two entry points, and the
+   * menu one is NOT redundant: `SwipeActionRow` disables the gesture entirely
+   * under prefers-reduced-motion, and there is no keyboard swipe, so a
+   * swipe-only action would be unreachable for those users.
+   */
+  describe('parking an active to-do', () => {
+    it('parks from the Task-options drawer', async () => {
+      setup([]);
+
+      openTaskOptions('Active task');
+      fireEvent.click(screen.getByRole('button', { name: 'Save for later' }));
+
+      await waitFor(() => expect(mockParkTodo).toHaveBeenCalledWith('active-1'));
+    });
+
+    it('offers "Save for later" as a SECONDARY behind Delete in the swipe rail', () => {
+      setup([]);
+
+      // SwipeActionRow takes `[primary, ...secondaries]` — the primary is what
+      // a full swipe commits, and Delete must stay there (zero muscle-memory
+      // change). The END rail REVERSES render order so the primary sits at the
+      // outer edge (Apple Mail), so DOM order [secondary, …, primary] is the
+      // observable proof that Delete is actions[0] and "Save for later" is not.
+      const rail = screen
+        .getAllByRole('button', { hidden: true })
+        .map(b => b.getAttribute('aria-label'))
+        .filter((label): label is string => label !== null)
+        // The row body's own "Edit task: …" button shares the suffix.
+        .filter(label => label.endsWith('Active task') && !label.startsWith('Edit task'));
+
+      expect(rail).toEqual([
+        'Save for later: Active task',
+        'Delete task: Active task',
+      ]);
+    });
+
+    it('moves the row out of the active list and into the parked section', async () => {
+      const view = setup([]);
+
+      // Before: in the active list, absent from the parked section.
+      expect(screen.getByRole('button', { name: 'Edit task: Active task' })).toBeInTheDocument();
+      expect(within(parkedSection()).queryByText('Active task')).toBeNull();
+
+      openTaskOptions('Active task');
+      fireEvent.click(screen.getByRole('button', { name: 'Save for later' }));
+      await waitFor(() => expect(mockParkTodo).toHaveBeenCalledWith('active-1'));
+
+      // The context split is what actually moves it — `todos` excludes parked
+      // items — so replay the post-write slices the listener would deliver.
+      const nowParked: ToDo = { ...activeTodo, savedForLater: true };
+      applyContext([nowParked], []);
+      // Same providers as `render` — ToDosPage calls useSearchParams().
+      view.rerender(<MemoryRouter><ThemeProvider><ToDosPage /></ThemeProvider></MemoryRouter>);
+
+      expect(within(parkedSection()).getByText('Active task')).toBeInTheDocument();
+      // …and it is now a PARKED row: promote control, no completion affordance.
+      expect(
+        screen.getByRole('button', { name: 'Add to your list: Active task' }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('checkbox')).toBeNull();
+    });
+
+    it('offers an undo that restores via promoteTodo with the ORIGINAL fields', async () => {
+      const original: ToDo = {
+        ...activeTodo,
+        completeByDate: '2026-09-30',
+        assignedTo: 'user2',
+        category: 'Home',
+        isImportant: true,
+      };
+      setup([], [original]);
+
+      openTaskOptions('Active task');
+      fireEvent.click(screen.getByRole('button', { name: 'Save for later' }));
+      await waitFor(() => expect(mockParkTodo).toHaveBeenCalled());
+
+      // The undo toast is rendered by react-hot-toast's callable default, which
+      // is mocked — pull the render function out and drive its Undo button.
+      const toastCall = vi.mocked(toast).mock.calls.at(-1);
+      const renderToast = toastCall?.[0];
+      if (typeof renderToast !== 'function') throw new Error('No undo toast was shown');
+      render(<>{renderToast({ id: 't1' } as Parameters<typeof renderToast>[0])}</>);
+      fireEvent.click(screen.getByRole('button', { name: /undo/i }));
+
+      // NEVER a bare un-park: that is safe only for a to-do parked FROM active,
+      // and nothing downstream can tell that case apart. Restoring from the
+      // pre-park snapshot is exact, since parkTodo wrote ONLY the flag.
+      await waitFor(() => {
+        expect(mockPromoteTodo).toHaveBeenCalledWith('active-1', {
+          completeByDate: '2026-09-30',
+          assignedTo: 'user2',
+          category: 'Home',
+          isImportant: true,
+        });
+      });
+    });
+
+    it('offers NEITHER path for a completed to-do', () => {
+      const completed: ToDo = { ...activeTodo, isCompleted: true, completedAt: new Date().toISOString() };
+      setup([], [completed]);
+
+      // Switch to the Completed view, where the row actually renders.
+      fireEvent.click(screen.getByRole('button', { name: 'To-do list actions' }));
+      fireEvent.click(screen.getByRole('menuitemradio', { name: /Completed \(\d+\)/ }));
+
+      // Positive control: the completed row really is on screen.
+      expect(screen.getByText('Active task')).toBeInTheDocument();
+
+      // Neither entry point exists. The swipe one is queried by ATTRIBUTE: a
+      // rail button is aria-hidden until the row sticks open, and an
+      // aria-hidden element's accessible name computes to '', so a role+name
+      // query would return null whether the guard worked or not.
+      expect(document.querySelector('button[aria-label^="Save for later"]')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Save for later' })).toBeNull();
+      expect(mockParkTodo).not.toHaveBeenCalled();
+
+      // Belt and braces: the completed view renders `CompletedSection`, not
+      // `TodoRow`, so this page can't reach the action even by accident — the
+      // `isCompleted` guard inside TodoRow itself is covered directly in
+      // components/todos/TodoRow.test.tsx.
+      expect(screen.queryByRole('button', { name: 'Edit task: Active task' })).toBeNull();
     });
   });
 });

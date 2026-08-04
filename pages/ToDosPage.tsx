@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useR
 import { useSearchParams } from 'react-router-dom';
 import { Reorder, useDragControls } from 'framer-motion';
 import { useTodos, useHouseholdCore, useGamification } from '@/contexts/FirebaseHouseholdContext';
-import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Camera, Sparkles, Plus, Repeat, Filter, ArrowUpDown, GripVertical, UserPlus, Tag, Tags, ListChecks } from 'lucide-react';
+import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Camera, Sparkles, Plus, Repeat, Filter, ArrowUpDown, GripVertical, UserPlus, Tag, Tags, ListChecks, Bookmark } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
@@ -21,6 +21,8 @@ import { generateCsvExport } from '@/utils/exportUtils';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { QuickAddBar } from '@/components/ui/QuickAddBar';
+import { UndoToast } from '@/components/ui/UndoToast';
+import { toastIcon } from '@/components/ui/toastIcon';
 import EmptyState from '@/components/ui/EmptyState';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { Popover } from '@/components/ui/Popover';
@@ -292,6 +294,8 @@ const ToDosPage: React.FC = () => {
     savedForLaterTodos,
     addToDo,
     addSavedForLaterTodo,
+    parkTodo,
+    promoteTodo,
     updateToDo,
     deleteToDo,
     completeToDo,
@@ -883,6 +887,60 @@ const ToDosPage: React.FC = () => {
       submittingParkedAddRef.current = false;
     }
   }, [parkedQuickText, addSavedForLaterTodo]);
+
+  // "Saved for later": parks an ACTIVE to-do. Reachable from the row's
+  // secondary left-swipe action AND from the Task-options drawer — swipes are
+  // disabled entirely under prefers-reduced-motion and unreachable by keyboard,
+  // so a swipe-only action would be no action at all for those users.
+  //
+  // UNDO restores via `promoteTodo` with the item's ORIGINAL fields, never a
+  // bare un-park: clearing the flag alone is only safe for a to-do that was
+  // parked from active, and no consumer can tell that case from a from-scratch
+  // parked one — which is exactly why `parkTodo` is park-only. Restoring from
+  // the pre-park snapshot is exact, since `parkTodo` writes ONLY the flag and
+  // every other field survived untouched.
+  //
+  // Known cosmetic edge: `promoteTodo` routes through `updateToDo`, which
+  // re-arms `reminderSentAt` whenever `completeByDate` is present — so undoing
+  // a park on a to-do whose due-time reminder had ALREADY fired can re-deliver
+  // it inside the late-catch-up window. The value written is the original date,
+  // so nothing is lost; only a duplicate push is possible. Accepted rather than
+  // adding a second write path back to active, which is the thing the
+  // park-only hardening exists to prevent.
+  const handleSaveForLater = useCallback(async (todo: ToDo) => {
+    if (todo.isCompleted) return; // a completed to-do cannot be parked
+    haptic('light'); // at gesture time — dead after the await on iOS
+    try {
+      await parkTodo(todo.id);
+      toast(
+        (t) => (
+          <UndoToast
+            message="Saved for later"
+            onUndo={async () => {
+              toast.dismiss(t.id);
+              try {
+                await promoteTodo(todo.id, {
+                  completeByDate: todo.completeByDate,
+                  assignedTo: todo.assignedTo,
+                  category: todo.category,
+                  // Written as an explicit boolean rather than passing a
+                  // possibly-absent field through the sanitizer as null.
+                  isImportant: todo.isImportant === true,
+                });
+              } catch (error) {
+                console.error('Failed to undo save for later:', error);
+                toast.error('Failed to restore that task');
+              }
+            }}
+          />
+        ),
+        { duration: 5000, icon: toastIcon(Bookmark) }
+      );
+    } catch (error) {
+      console.error('Failed to save task for later:', error);
+      toast.error('Failed to save that for later');
+    }
+  }, [parkTodo, promoteTodo]);
 
   // Open modal for editing
   const openEditModal = useCallback((todo: ToDo) => {
@@ -2043,6 +2101,10 @@ const ToDosPage: React.FC = () => {
         onMore={setActionTodo}
         onToggleSelection={toggleSelection}
         onToggleSubtask={toggleTodoSubtask}
+        // "Saved for later": the secondary left-swipe action behind Delete.
+        // The Task-options drawer carries the same action for reduced-motion
+        // and keyboard users, who get no swipes at all.
+        onSaveForLater={handleSaveForLater}
         memberMap={memberMap}
       />
     </div>
@@ -2131,7 +2193,10 @@ const ToDosPage: React.FC = () => {
               placeholder="Save something for later..."
               aria-label="Save a task for later"
               disabled={!parkedQuickText.trim()}
-              submitLabel="Save for later"
+              // Deliberately NOT "Save for later" — that is the row/menu action
+              // that parks an EXISTING to-do, and two buttons with the same
+              // accessible name on one screen do different things.
+              submitLabel="Save this for later"
             />
           </div>
         )}
@@ -3007,6 +3072,26 @@ const ToDosPage: React.FC = () => {
               >
                 Duplicate
               </Button>
+
+              {/* "Saved for later" — NOT optional duplication of the swipe.
+                  `SwipeActionRow` disables the gesture entirely under
+                  prefers-reduced-motion, and there is no keyboard swipe, so
+                  this drawer IS the accessible path to parking a to-do. A
+                  COMPLETED to-do is omitted: it cannot be parked (the mirror of
+                  PR-1's guard against completing a parked one). */}
+              {!actionTodo.isCompleted && (
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start"
+                  leftIcon={<Bookmark size={18} className="text-brand-500" />}
+                  onClick={() => {
+                    void handleSaveForLater(actionTodo);
+                    setActionTodo(null);
+                  }}
+                >
+                  Save for later
+                </Button>
+              )}
 
               <div className="hairline-divider my-2" />
 

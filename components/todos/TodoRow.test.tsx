@@ -402,6 +402,13 @@ describe('TodoRow — saved-for-later (parked) variant', () => {
     expect(handlers.onComplete).not.toHaveBeenCalled();
   });
 
+  it('offers no "Save for later" action — it is already parked', () => {
+    render(<TodoRow {...parkedProps} onSaveForLater={vi.fn()} />);
+    // By attribute: rail buttons are aria-hidden until the row opens, and an
+    // aria-hidden element's accessible name computes to ''.
+    expect(document.querySelector('button[aria-label^="Save for later"]')).toBeNull();
+  });
+
   it('cannot be completed via swipe — the right-swipe action is Add, not Complete', () => {
     render(<TodoRow {...parkedProps} />);
     // SwipeActionRow renders every action as a real button (aria-hidden until
@@ -432,5 +439,67 @@ describe('TodoRow — saved-for-later (parked) variant', () => {
     expect(handlers.onToggleSelection).toHaveBeenCalledWith(parkedItem.id);
     expect(screen.queryByRole('checkbox')).toBeNull();
     expect(screen.queryByTestId('todo-due-label')).toBeNull();
+  });
+});
+
+/**
+ * "Saved for later" — parking an ACTIVE row. Delete stays the PRIMARY end-rail
+ * action (zero muscle-memory change); "Save for later" is a secondary, tappable
+ * only once the row sticks open. The host also carries it in the Task-options
+ * drawer, because swipes are disabled outright under prefers-reduced-motion.
+ */
+describe('TodoRow — save-for-later action on an active row', () => {
+  const onSaveForLater = vi.fn();
+
+  const railLabels = () =>
+    Array.from(document.querySelectorAll('button'))
+      .map(b => b.getAttribute('aria-label'))
+      .filter((label): label is string => label !== null)
+      .filter(label => label.endsWith(item.text) && !label.startsWith('Edit task'));
+
+  beforeEach(() => {
+    onSaveForLater.mockClear();
+  });
+
+  it('adds "Save for later" as a SECONDARY behind Delete', () => {
+    render(<TodoRow {...baseProps} onSaveForLater={onSaveForLater} />);
+    // The end rail renders `[...actions].reverse()` so the primary sits at the
+    // outer edge — DOM order [secondary, primary] proves Delete is actions[0].
+    expect(railLabels()).toEqual([
+      `Save for later: ${item.text}`,
+      `Delete task: ${item.text}`,
+    ]);
+  });
+
+  it('fires onSaveForLater with the whole item (the caller needs it for undo)', () => {
+    render(<TodoRow {...baseProps} onSaveForLater={onSaveForLater} />);
+    // Queried by attribute, not by role+name: a rail button is `aria-hidden`
+    // until the row sticks open, and an aria-hidden element's ACCESSIBLE NAME
+    // computes to '' — so `getByRole(..., { name })` can't reach it even with
+    // `hidden: true`. (Tapping it for real happens after the row opens, which
+    // clears aria-hidden; this is a shortcut past the drag gesture.)
+    const button = document.querySelector<HTMLButtonElement>(
+      `button[aria-label="Save for later: ${item.text}"]`,
+    );
+    expect(button).not.toBeNull();
+    fireEvent.click(button as HTMLButtonElement);
+    expect(onSaveForLater).toHaveBeenCalledWith(item);
+  });
+
+  it('omits the action for a COMPLETED to-do — it cannot be parked', () => {
+    render(
+      <TodoRow
+        {...baseProps}
+        item={{ ...item, isCompleted: true }}
+        onSaveForLater={onSaveForLater}
+      />,
+    );
+    // The mirror of PR-1's guard stopping a parked to-do being completed.
+    expect(railLabels()).toEqual([`Delete task: ${item.text}`]);
+  });
+
+  it('omits the action when the host passes no handler (unchanged for old callers)', () => {
+    render(<TodoRow {...baseProps} />);
+    expect(railLabels()).toEqual([`Delete task: ${item.text}`]);
   });
 });

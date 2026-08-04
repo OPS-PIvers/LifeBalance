@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Trash2, AlertCircle, Clock, CheckSquare, Bell, Star, ListChecks, Plus } from 'lucide-react';
+import { Check, Trash2, AlertCircle, Clock, CheckSquare, Bell, Star, ListChecks, Plus, Bookmark } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, startOfToday } from 'date-fns';
 import { ToDo, HouseholdMember } from '@/types/schema';
 import type { TodoSubtaskToggleResult, TodoCompletionOptions } from '@/contexts/household/mutations/todoMutations';
@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { haptic } from '@/utils/haptics';
 import { HapticCheck } from '@/components/ui/HapticCheck';
-import { SwipeActionRow } from '@/components/ui/SwipeActionRow';
+import { SwipeActionRow, type SwipeAction } from '@/components/ui/SwipeActionRow';
 import { Row } from '@/components/ui/Section';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { UndoToast } from '@/components/ui/UndoToast';
@@ -141,6 +141,17 @@ export interface TodoRowProps {
   /** Opens the promote sheet. Required in practice for `variant="parked"` (the
    *  `+` control and the promote swipe both call it); ignored when active. */
   onPromote?: (todo: ToDo) => void;
+  /**
+   * "Saved for later": parks this ACTIVE to-do (`parkTodo`). Offered as a
+   * SECONDARY left-swipe action behind Delete, and — because swipes are
+   * disabled entirely under `prefers-reduced-motion` and are unreachable by
+   * keyboard — as an entry in the Task-options drawer the host owns.
+   *
+   * Omitted for a parked row (already parked) and for a COMPLETED one: a
+   * completed to-do cannot be parked, the mirror of PR-1's guard stopping a
+   * parked to-do being completed.
+   */
+  onSaveForLater?: (todo: ToDo) => void;
 }
 
 // Memoized row for a single active to-do.
@@ -163,6 +174,7 @@ export const TodoRow = React.memo(function TodoRow({
   memberMap,
   variant = 'active',
   onPromote,
+  onSaveForLater,
 }: TodoRowProps) {
   // "Saved for later": a parked row is not committed work — no due date, no
   // completion. See the `variant` prop doc above.
@@ -827,6 +839,42 @@ export const TodoRow = React.memo(function TodoRow({
   // never both be offered. Swipes are disabled entirely under
   // prefers-reduced-motion, which is why the row's own `+` button (above) is the
   // real affordance and this is the shortcut.
+  //
+  // The END rail keeps DELETE AS THE PRIMARY — zero muscle-memory change for
+  // an action people already swipe by feel. "Save for later" rides behind it as
+  // a SECONDARY, which `SwipeActionRow` renders as a tappable button once the
+  // row sticks open rather than something a full swipe can fire by accident.
+  // Promoting it over Delete was explicitly rejected.
+  const endActions: SwipeAction[] = [{
+    icon: Trash2,
+    label: 'Delete',
+    // With two buttons in the rail, a bare "Delete" is announced without
+    // saying what it deletes — the stuck-open buttons precede the row content.
+    ariaLabel: `Delete task: ${item.text}`,
+    tone: 'destructive',
+    hapticPattern: 'medium',
+    onAction: () => {
+      showDeleteConfirmation(async () => {
+        await onDelete(item.id);
+        toast.success('Task deleted');
+      }, 'task');
+    },
+  }];
+  // A COMPLETED to-do cannot be parked (the mirror of PR-1's guard against
+  // completing a parked one), and a parked row is already parked.
+  if (!isParked && !item.isCompleted && onSaveForLater) {
+    endActions.push({
+      icon: Bookmark,
+      label: 'Later',
+      ariaLabel: `Save for later: ${item.text}`,
+      // Warm, not destructive: parking loses nothing (parkTodo writes only the
+      // flag) and is not a completion either.
+      tone: 'warm',
+      hapticPattern: 'light',
+      onAction: () => onSaveForLater(item),
+    });
+  }
+
   const startActions = isParked
     ? [{
         icon: Plus,
@@ -849,18 +897,7 @@ export const TodoRow = React.memo(function TodoRow({
   return (
     <SwipeActionRow
       startActions={startActions}
-      endActions={[{
-        icon: Trash2,
-        label: 'Delete',
-        tone: 'destructive',
-        hapticPattern: 'medium',
-        onAction: () => {
-          showDeleteConfirmation(async () => {
-            await onDelete(item.id);
-            toast.success('Task deleted');
-          }, 'task');
-        },
-      }]}
+      endActions={endActions}
       onSwipeStart={handleSwipeStart}
     >
       {cardInner}

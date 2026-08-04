@@ -77,6 +77,9 @@ vi.mock('lucide-react', () => ({
   GripVertical: () => <div data-testid="grip-vertical-icon" />,
   UserPlus: () => <div data-testid="user-plus-icon" />,
   ListChecks: () => <div data-testid="list-checks-icon" />,
+  // "Saved for later": the park action's glyph, in the swipe rail and the
+  // Task-options drawer.
+  Bookmark: () => <div data-testid="bookmark-icon" />,
   Repeat: () => <div data-testid="repeat-icon" />,
   Filter: () => <div data-testid="filter-icon" />,
   Tag: () => <div data-testid="tag-icon" />,
