@@ -759,6 +759,11 @@ export interface HouseholdContextType {
    * "Saved for later": parks an ACTIVE to-do (`true`) or un-parks one without
    * triage (`false`, the undo of a park). Writes ONLY the flag — an existing
    * to-do keeps its real `completeByDate`. The triage promotion is `promoteTodo`.
+   *
+   * ⚠️ `false` is only safe for a to-do that was parked FROM ACTIVE. One created
+   * parked from scratch (`addSavedForLaterTodo`) has only the placeholder date,
+   * so it must reach the active list via `promoteTodo` — otherwise it renders a
+   * fabricated "Overdue" label.
    */
   setTodoSavedForLater: (id: string, value: boolean) => Promise<void>;
   /**

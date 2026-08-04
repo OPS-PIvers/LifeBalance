@@ -378,6 +378,13 @@ export function makeTodoCrudMutations(deps: {
    * This is NOT the promotion path for the triage flow — `promoteTodo` is, so
    * that clearing the flag and applying the classification land as one write.
    *
+   * ⚠️ ASYMMETRY on the `false` direction: un-parking here is only safe for a
+   * to-do that was PARKED FROM ACTIVE, which still carries the real date it had.
+   * A to-do created parked from scratch (`addSavedForLaterTodo`) carries only
+   * the placeholder, so clearing the flag alone would drop it on the active list
+   * with a stale date that renders a fabricated red "Overdue" label — those MUST
+   * go through `promoteTodo`, which replaces the date in the same write.
+   *
    * Toast Behavior: none here. Both directions are offered with an undo
    * affordance on the row, so the caller owns the message.
    *

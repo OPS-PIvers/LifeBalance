@@ -126,7 +126,12 @@ describe('setTodoSavedForLater', () => {
     await setTodoSavedForLater('todo-2', false);
 
     expect(capturedUpdates).toHaveLength(1);
+    // No date is written — which is exactly why this direction is safe ONLY for
+    // a to-do parked FROM ACTIVE (it still has its real date). A from-scratch
+    // parked to-do carries only the placeholder and must use `promoteTodo`, or
+    // it lands on the active list rendering a fabricated "Overdue" label.
     expect(capturedUpdates[0]?.data).toEqual({ savedForLater: false });
+    expect('completeByDate' in (capturedUpdates[0]?.data ?? {})).toBe(false);
   });
 
   it('does not toast — the caller owns both messages (the row offers undo)', async () => {
