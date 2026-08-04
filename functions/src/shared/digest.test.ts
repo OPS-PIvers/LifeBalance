@@ -66,6 +66,19 @@ describe("computeTodosToday", () => {
     ];
     expect(computeTodosToday(withHeld, "u1", "2026-07-14")).toBe(1);
   });
+
+  // "Saved for later": a parked to-do's completeByDate is an INERT PLACEHOLDER
+  // stamped with the day it was parked — so it MATCHES `today` on that day and
+  // would inflate the digest with work the user never committed to.
+  it("excludes parked (savedForLater) todos whose placeholder date is today", () => {
+    const withParked: DigestTodo[] = [
+      { assignedTo: "u1", isCompleted: false, completeByDate: "2026-07-14", savedForLater: true },
+      { assignedTo: "u1", isCompleted: false, completeByDate: "2026-07-14", savedForLater: false },
+      { assignedTo: "u1", isCompleted: false, completeByDate: "2026-07-14" },
+    ];
+    // Only the parked one drops; false and absent both mean "not parked".
+    expect(computeTodosToday(withParked, "u1", "2026-07-14")).toBe(2);
+  });
 });
 
 describe("buildDigestMessage", () => {

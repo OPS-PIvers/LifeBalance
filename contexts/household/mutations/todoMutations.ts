@@ -65,6 +65,31 @@ export interface TodoCompletionOptions {
 }
 
 /**
+ * "Saved for later" — the classification a parked to-do is triaged with when it
+ * is PROMOTED to the active list. `promoteTodo` applies these fields AND clears
+ * `savedForLater` in ONE write, so nothing half-classified ever reaches the
+ * active list (backing out of the triage sheet leaves the item parked and
+ * untouched).
+ *
+ * `completeByDate` is REQUIRED because that is the point of the triage step: a
+ * parked to-do's stored date is an inert placeholder (see `ToDo.completeByDate`
+ * in types/schema.ts) and promotion must replace it with a real one. The rest
+ * are optional — an unassigned, uncategorized, not-important to-do is a valid
+ * active to-do.
+ *
+ * `assignedTo` / `category` accept `undefined` to mean "leave unset": both go
+ * through `sanitizeFirestoreData`, which turns `undefined` into `null`, and both
+ * fields already treat absent and null identically (see the `ToDo.category`
+ * schema comment).
+ */
+export interface TodoPromotionFields {
+  completeByDate: string;
+  assignedTo?: string;
+  category?: string;
+  isImportant?: boolean;
+}
+
+/**
  * Habit Automations (PRD #1065) — the doc that receives a habit's points. An
  * ASSIGNED (per-member / kid chore) habit credits the assignee's own
  * `members/{uid}.points`; an unassigned/shared habit credits the shared
@@ -229,7 +254,36 @@ export function makeAddToDo(deps: {
     }
   };
 
-  return { addToDo };
+  /**
+   * "Saved for later": parks a thought DIRECTLY, without routing it through the
+   * active list first (the parked section has its own add bar).
+   *
+   * This exists as a dedicated function rather than an `addToDo` option because
+   * `ToDo.completeByDate` is REQUIRED and a parked to-do has no real due date —
+   * so one has to be fabricated, and the rule for fabricating it belongs in
+   * exactly one place. It stores `getLocalDateString()` (never the UTC day) as
+   * an INERT PLACEHOLDER that is never rendered anywhere; `promoteTodo`
+   * overwrites it with the date the user actually picks. Nothing else about the
+   * to-do is classified — no assignee, no category, no importance — because a
+   * parked item is explicitly NOT committed work.
+   *
+   * Note this is the from-scratch path only. PARKING AN EXISTING to-do is
+   * `setTodoSavedForLater`, which leaves its real date alone.
+   *
+   * Toast Behavior: omitted, consistent with `addToDo` above.
+   *
+   * @throws Re-throws any caught errors so callers can provide contextual error messages
+   */
+  const addSavedForLaterTodo = async (text: string) => {
+    await addToDo({
+      text,
+      completeByDate: getLocalDateString(),
+      isCompleted: false,
+      savedForLater: true,
+    });
+  };
+
+  return { addToDo, addSavedForLaterTodo };
 }
 
 /** updateToDo / deleteToDo — original closures captured only `householdId`. */
@@ -310,7 +364,55 @@ export function makeTodoCrudMutations(deps: {
     toast.success('Added to list');
   };
 
-  return { updateToDo, deleteToDo, approveTodo };
+  /**
+   * "Saved for later": parks an ACTIVE to-do, or un-parks one without triage
+   * (the undo of a park).
+   *
+   * Writes ONLY the flag. Parking deliberately does NOT touch `completeByDate` —
+   * an existing to-do already has a real date, and overwriting it with the
+   * placeholder would destroy information the user would get back on promotion
+   * anyway (promotion overwrites the date regardless). The from-scratch parked
+   * item is the one case that needs a fabricated date, and that lives in
+   * `addSavedForLaterTodo`.
+   *
+   * This is NOT the promotion path for the triage flow — `promoteTodo` is, so
+   * that clearing the flag and applying the classification land as one write.
+   *
+   * Toast Behavior: none here. Both directions are offered with an undo
+   * affordance on the row, so the caller owns the message.
+   *
+   * @throws Re-throws (via updateToDo) so callers don't report success for a
+   *         write that never landed.
+   */
+  const setTodoSavedForLater = async (id: string, value: boolean) => {
+    await updateToDo(id, { savedForLater: value });
+  };
+
+  /**
+   * "Saved for later": PROMOTES a parked to-do to the active list, applying the
+   * triage sheet's classification (assignee / due date / category / important)
+   * AND clearing `savedForLater` in a SINGLE write.
+   *
+   * One write is the requirement, not an optimisation: splitting it would let a
+   * to-do reach the active list unclassified if the second write failed — and a
+   * to-do carrying its inert placeholder date on the active list renders a
+   * fabricated red "Overdue" label. Backing out of the sheet calls nothing at
+   * all, leaving the item parked and untouched.
+   *
+   * `updateToDo` re-arms `reminderSentAt` because `completeByDate` is present;
+   * that is correct — a parked to-do never had a reminder to preserve.
+   *
+   * Toast Behavior: none here, matching `updateToDo` — the triage sheet owns the
+   * success message and must be able to stay open when the write didn't land.
+   *
+   * @throws Re-throws (via updateToDo) so callers don't report success for a
+   *         write that never landed.
+   */
+  const promoteTodo = async (id: string, fields: TodoPromotionFields) => {
+    await updateToDo(id, { ...fields, savedForLater: false });
+  };
+
+  return { updateToDo, deleteToDo, approveTodo, setTodoSavedForLater, promoteTodo };
 }
 
 /**

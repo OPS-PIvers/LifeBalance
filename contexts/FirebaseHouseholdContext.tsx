@@ -161,6 +161,7 @@ import {
   makeUpdateTodoCategories,
   makeTodoCategoryEditMutations,
   type TodoCompletionOptions,
+  type TodoPromotionFields,
 } from '@/contexts/household/mutations/todoMutations';
 import {
   softDeleteDoc,
@@ -533,18 +534,28 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // stay marked and are never re-fetched).
   const requestedMealIdsRef = useRef<Set<string>>(new Set());
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
-  // captureReview (F-CAPTURE-01 foundation): split the raw Firestore-synced
-  // list by `needsReview` so held-for-review captures are hidden from the
-  // visible list. Internal mutations (toggleShoppingItemPurchased,
-  // clearPurchasedShoppingItems, deleteStore) keep reading the RAW `shoppingList`
-  // state directly (their id-based lookups/filters are unaffected by review
-  // status), so only the exposed slice value swaps in the filtered lists below.
+  // captureReview (F-CAPTURE-01 foundation) + Saved for later: split the raw
+  // Firestore-synced list by `needsReview` and `savedForLater` so held-for-review
+  // captures AND parked items are hidden from the visible list. Internal
+  // mutations (toggleShoppingItemPurchased, clearPurchasedShoppingItems,
+  // deleteStore) keep reading the RAW `shoppingList` state directly (their
+  // id-based lookups/filters are unaffected by either flag), so only the exposed
+  // slice value swaps in the filtered lists below.
+  //
+  // This provider-level split is what makes every downstream consumer correct
+  // for free (nav badges, share text, CSV export, kid surface, …) — do NOT add
+  // per-consumer `savedForLater` filters. `needsReview` takes precedence: an
+  // item held for review is never ALSO reported as parked.
   const visibleShoppingList = useMemo(
-    () => shoppingList.filter((item) => item.needsReview !== true),
+    () => shoppingList.filter((item) => item.needsReview !== true && item.savedForLater !== true),
     [shoppingList]
   );
   const shoppingAwaitingReview = useMemo(
     () => shoppingList.filter((item) => item.needsReview === true),
+    [shoppingList]
+  );
+  const savedForLaterShopping = useMemo(
+    () => shoppingList.filter((item) => item.needsReview !== true && item.savedForLater === true),
     [shoppingList]
   );
   // Meal plan: live window (current week ± 1) merged with weeks loaded on demand
@@ -574,16 +585,22 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     () => mergeById(mergeById(activeTodos, completedTodos), olderCompletedTodos),
     [activeTodos, completedTodos, olderCompletedTodos]
   );
-  // captureReview (F-CAPTURE-01 foundation): split the raw merged list by
-  // `needsReview`, mirroring shoppingList above — held-for-review todo
-  // captures are hidden from the visible list but stay in `todos` for any
-  // future id-based internal lookup.
+  // captureReview (F-CAPTURE-01 foundation) + Saved for later: split the raw
+  // merged list by `needsReview` and `savedForLater`, mirroring shoppingList
+  // above — held-for-review captures and parked to-dos are hidden from the
+  // visible list but stay in `todos` for any id-based internal lookup.
+  // `needsReview` takes precedence: a to-do held for review is never ALSO
+  // reported as parked.
   const visibleTodos = useMemo(
-    () => todos.filter((t) => t.needsReview !== true),
+    () => todos.filter((t) => t.needsReview !== true && t.savedForLater !== true),
     [todos]
   );
   const todosAwaitingReview = useMemo(
     () => todos.filter((t) => t.needsReview === true),
+    [todos]
+  );
+  const savedForLaterTodos = useMemo(
+    () => todos.filter((t) => t.needsReview !== true && t.savedForLater === true),
     [todos]
   );
   const [isLoadingOlderTodos, setIsLoadingOlderTodos] = useState(false);
@@ -2435,6 +2452,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeShoppingListMutations({ db, householdId }).approveShoppingItem(id, overrides);
   }, [householdId]);
 
+  /**
+   * "Saved for later": parks an active shopping item, or promotes a parked one
+   * back to the active list (see makeShoppingListMutations).
+   */
+  const setShoppingItemSavedForLater = useCallback(async (id: string, value: boolean) => {
+    await makeShoppingListMutations({ db, householdId }).setShoppingItemSavedForLater(id, value);
+  }, [householdId]);
+
   const toggleShoppingItemPurchased = useCallback(async (id: string) => {
     await makeToggleShoppingItemPurchased({ db, householdId, shoppingList, groceryCatalog }).toggleShoppingItemPurchased(id);
   }, [householdId, shoppingList, groceryCatalog]);
@@ -2536,6 +2561,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [householdId, user]);
 
   /**
+   * "Saved for later": parks a thought directly from the parked section's own
+   * add bar, stamping the inert placeholder `completeByDate`
+   * (see makeAddToDo).
+   */
+  const addSavedForLaterTodo = useCallback(async (text: string) => {
+    await makeAddToDo({ db, householdId, user }).addSavedForLaterTodo(text);
+  }, [householdId, user]);
+
+  /**
    * Updates an existing to-do item.
    *
    * Toast Behavior: Toast notifications are omitted from this function to allow UI-specific messaging.
@@ -2577,6 +2611,24 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     overrides?: Partial<Pick<ToDo, 'text' | 'completeByDate' | 'assignedTo' | 'isImportant'>>
   ) => {
     await makeTodoCrudMutations({ db, householdId }).approveTodo(id, overrides);
+  }, [householdId]);
+
+  /**
+   * "Saved for later": parks an ACTIVE to-do, or un-parks one without triage.
+   * Writes only the flag — the real `completeByDate` is left alone
+   * (see makeTodoCrudMutations).
+   */
+  const setTodoSavedForLater = useCallback(async (id: string, value: boolean) => {
+    await makeTodoCrudMutations({ db, householdId }).setTodoSavedForLater(id, value);
+  }, [householdId]);
+
+  /**
+   * "Saved for later": promotes a parked to-do, applying the triage
+   * classification AND clearing `savedForLater` in ONE write
+   * (see makeTodoCrudMutations).
+   */
+  const promoteTodo = useCallback(async (id: string, fields: TodoPromotionFields) => {
+    await makeTodoCrudMutations({ db, householdId }).promoteTodo(id, fields);
   }, [householdId]);
 
   /**
@@ -2890,6 +2942,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const shoppingValue = useMemo<ShoppingContextValue>(() => ({
     shoppingList: visibleShoppingList,
     shoppingAwaitingReview,
+    savedForLaterShopping,
     groceryCatalog,
     loadFullGroceryCatalog,
     stores,
@@ -2901,6 +2954,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     reorderShoppingItems,
     deleteShoppingItem,
     approveShoppingItem,
+    setShoppingItemSavedForLater,
     toggleShoppingItemPurchased,
     clearPurchasedShoppingItems,
     addStore,
@@ -2916,8 +2970,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateGroceryCatalogItem,
     deleteGroceryCatalogItem,
   }), [
-    visibleShoppingList, shoppingAwaitingReview, groceryCatalog, loadFullGroceryCatalog, stores, groceryCategories, quickStockLists,
-    addShoppingItem, addShoppingItems, updateShoppingItem, reorderShoppingItems, deleteShoppingItem, approveShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
+    visibleShoppingList, shoppingAwaitingReview, savedForLaterShopping, groceryCatalog, loadFullGroceryCatalog, stores, groceryCategories, quickStockLists,
+    addShoppingItem, addShoppingItems, updateShoppingItem, reorderShoppingItems, deleteShoppingItem, approveShoppingItem, setShoppingItemSavedForLater, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
     addStore, updateStore, deleteStore, reorderStores, updateGroceryCategories,
     addQuickStockList, updateQuickStockList, updateQuickStockLists, deleteQuickStockList,
     addGroceryCatalogItem, updateGroceryCatalogItem, deleteGroceryCatalogItem,
@@ -2926,13 +2980,17 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const todosValue = useMemo<TodosContextValue>(() => ({
     todos: visibleTodos,
     todosAwaitingReview,
+    savedForLaterTodos,
     isLoadingOlderTodos,
     hasMoreCompletedTodos,
     loadOlderCompletedTodos,
     addToDo,
+    addSavedForLaterTodo,
     updateToDo,
     deleteToDo,
     approveTodo,
+    setTodoSavedForLater,
+    promoteTodo,
     completeToDo,
     uncompleteToDo,
     toggleTodoSubtask,
@@ -2946,8 +3004,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     deleteTaskTemplate,
     applyTaskTemplate,
   }), [
-    visibleTodos, todosAwaitingReview, isLoadingOlderTodos, hasMoreCompletedTodos, loadOlderCompletedTodos,
-    addToDo, updateToDo, deleteToDo, approveTodo, completeToDo, uncompleteToDo, toggleTodoSubtask,
+    visibleTodos, todosAwaitingReview, savedForLaterTodos, isLoadingOlderTodos, hasMoreCompletedTodos, loadOlderCompletedTodos,
+    addToDo, addSavedForLaterTodo, updateToDo, deleteToDo, approveTodo, setTodoSavedForLater, promoteTodo, completeToDo, uncompleteToDo, toggleTodoSubtask,
     todoCategories, updateTodoCategories, renameTodoCategory, deleteTodoCategory,
     taskTemplates, addTaskTemplate, updateTaskTemplate, deleteTaskTemplate, applyTaskTemplate,
   ]);

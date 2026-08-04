@@ -1254,6 +1254,17 @@ export interface ShoppingItem {
   // 'shopping' to 'review'): hidden from the shopping list until approved.
   // Absent/false = visible as normal. See utils/captureReview.ts.
   needsReview?: boolean;
+
+  // "Saved for later": a parked idea, not committed work — hidden from the
+  // active shopping list and surfaced in its own section instead. Promotion is
+  // a one-field write (clear the flag); the doc id, order and every detail
+  // survive it. `needsReview` takes precedence — an item is never both
+  // held-for-review and parked. Absent/false = a normal item, so it is absent
+  // on every existing ShoppingItem — no migration. The provider-level split
+  // (`shoppingList` vs `savedForLaterShopping` in
+  // contexts/FirebaseHouseholdContext.tsx) is what keeps parked items out of
+  // every downstream consumer; do NOT add per-consumer filters.
+  savedForLater?: boolean;
 }
 
 export interface Store {
@@ -1529,7 +1540,14 @@ export interface Subtask {
 export interface ToDo {
   id: string;
   text: string;
-  completeByDate: string; // Due date for task completion (YYYY-MM-DD format)
+  // Due date for task completion (YYYY-MM-DD format). REQUIRED, which is why a
+  // PARKED to-do (`savedForLater: true`) still carries one: it stores
+  // `getLocalDateString()` as an INERT PLACEHOLDER that is NEVER RENDERED
+  // ANYWHERE. Every surface that shows a parked item must suppress the due
+  // date — rendering it ships a fabricated red "Overdue" label — and a parked
+  // to-do's Eisenhower quadrant is assigned unconditionally rather than derived
+  // from this value. Promotion overwrites it with the real date the user picks.
+  completeByDate: string;
   // uid of household member, or absent for "whole household" (no single
   // assignee). Absent on a to-do means every member can see it as shared —
   // it is not an error state.
@@ -1548,6 +1566,21 @@ export interface ToDo {
   // 'todo' to 'review'): hidden from the to-do list until approved. Absent/
   // false = visible as normal. See utils/captureReview.ts.
   needsReview?: boolean;
+
+  // "Saved for later": a parked thought, not committed work — hidden from the
+  // active to-do list and surfaced in its own section instead. A parked to-do
+  // is deliberately unclassified (no real due date — see `completeByDate`
+  // above — and usually no assignee or category); PROMOTION clears this flag
+  // AND applies the triage classification in ONE write (`promoteTodo`), so
+  // nothing half-classified ever reaches the active list. `needsReview` takes
+  // precedence — a to-do is never both held-for-review and parked. Absent/
+  // false = a normal to-do, so it is absent on every existing ToDo — no
+  // migration. The provider-level split (`todos` vs `savedForLaterTodos` in
+  // contexts/FirebaseHouseholdContext.tsx) keeps parked items out of every
+  // downstream client consumer; the two SERVER readers that bypass the context
+  // (functions/src/quickAdd/getTodos.ts, functions/src/shared/todoReminders.ts)
+  // carry their own explicit exclusion.
+  savedForLater?: boolean;
 
   // Plan 080c (Kid Mode): points credited to a MANAGED-KID assignee on completion
   // (defaults to DEFAULT_TODO_POINTS, see utils/todoPoints.ts). Absent on every

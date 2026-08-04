@@ -871,6 +871,7 @@ service cloud.firestore {
                                 'dueTime', 'reminderMinutesBefore', 'reminderSentAt',
                                 'recurrence', 'subtasks', 'linkedHabitId',
                                 'category', 'resetWhenExpired', 'needsReview',
+                                'savedForLater',
                                 'createdBy', 'createdAt'
                               ]) &&
                               isValidString(request.resource.data.text, 500) &&
@@ -893,6 +894,14 @@ service cloud.firestore {
                               // this key off the allowlist above made EVERY client write to a
                               // held to-do fail, approval included. Optional boolean.
                               (request.resource.data.get('needsReview', null) == null || isValidBoolean(request.resource.data.needsReview)) &&
+                              // "Saved for later" parked flag. SAME trap as needsReview above:
+                              // request.resource.data is the MERGED post-write doc, so leaving
+                              // this key off the allowlist would deny EVERY client write to a
+                              // parked to-do — including the promotion that clears it. The
+                              // client writes it in both directions (park sets true, promote
+                              // sets false alongside the triage fields, in one write). Optional
+                              // boolean.
+                              (request.resource.data.get('savedForLater', null) == null || isValidBoolean(request.resource.data.savedForLater)) &&
                               // Managed-kid completion credit (Plan 080c) — optional number
                               isValidOptionalNumber(request.resource.data.get('points', null)) &&
                               // Timed reminders (F-TODO-14) — optional HH:mm due time,

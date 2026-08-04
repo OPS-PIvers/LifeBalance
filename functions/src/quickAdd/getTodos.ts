@@ -281,9 +281,17 @@ export const getTodos = onRequest(
         .limit(READ_CAP)
         .get();
 
-      let todos = snap.docs.map((d) =>
-        mapTodo(d.id, d.data() as Record<string, unknown>)
-      );
+      // "Saved for later": parked to-dos are NOT committed work — they carry an
+      // inert placeholder due date and no classification. This endpoint bypasses
+      // the client context's provider-level split entirely, so without this
+      // explicit exclusion an iOS Shortcut would pull parked items into Apple
+      // Reminders as if they were real tasks (complete with a fabricated due
+      // date). Filtered on the RAW doc, before mapping, because the exported
+      // shape deliberately carries no `savedForLater` field.
+      let todos = snap.docs
+        .map((d) => ({ id: d.id, data: d.data() as Record<string, unknown> }))
+        .filter(({ data }) => data.savedForLater !== true)
+        .map(({ id, data }) => mapTodo(id, data));
 
       if (!includeCompleted) {
         todos = todos.filter((t) => !t.isCompleted);

@@ -41,7 +41,7 @@ import {
 import { computeBackdatedHabitFire, computeHabitTriggerFire, computeHabitTriggerReverse } from '@/utils/habitTriggerFire';
 import { evaluateTodoSubtaskGate, TodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import { setSubtaskDone, subtaskProgress } from '@/utils/subtasks';
-import type { TodoSubtaskToggleResult, TodoCompletionOptions } from '@/contexts/household/mutations/todoMutations';
+import type { TodoSubtaskToggleResult, TodoCompletionOptions, TodoPromotionFields } from '@/contexts/household/mutations/todoMutations';
 import type { MergeLearnAlias } from '@/contexts/household/types';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import { attributionString, type TriggerSource } from '@/utils/habitTriggers';
@@ -942,7 +942,21 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // Test Mode seeds no held-for-review shopping captures by default: an
   // auto-opening review drawer would intercept pointer events and break the e2e
   // suite. The visible/awaiting-review split is covered by unit tests.
-  const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
+  //
+  // It DOES seed one "Saved for later" item, which is safe for the same reason
+  // the review captures aren't: a parked item opens nothing, it just renders in
+  // its own section — and the section needs content to be walkable. The ACTIVE
+  // shopping list stays empty, exactly as before, because the provider split
+  // keeps a parked item out of `shoppingList`.
+  const [shoppingList, setShoppingList] = useState<ShoppingItem[]>(() => [
+    {
+      id: 'shop_parked_1',
+      name: 'Cast iron skillet',
+      category: 'Household',
+      isPurchased: false,
+      savedForLater: true,
+    },
+  ]);
   const [mealPlan, setMealPlan] = useState<MealPlanItem[]>([]);
   // Plan 080c-5 Test-Mode harness: one kid-assigned todo so the +pts badge and
   // the completeToDo → kid-points credit path are walkable. assignedTo targets the
@@ -1017,6 +1031,21 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       assignedTo: 'test-user-id',
       isCompleted: false,
       linkedHabitId: 'h2',
+      createdBy: 'test-user-id',
+      createdAt: new Date().toISOString(),
+    },
+    // "Saved for later": one PARKED to-do so the section, its promote control
+    // and the Eisenhower 'later' grouping are walkable in Test Mode. It is
+    // deliberately unclassified — no assignee, no category, not important — and
+    // its completeByDate is the INERT PLACEHOLDER the real add path stamps. No
+    // surface may render that date; if one ever does, this fixture is what
+    // shows the fabricated "Today"/"Overdue" label.
+    {
+      id: 'todo_parked_1',
+      text: 'Look into a bike rack for the car',
+      completeByDate: getLocalDateString(),
+      isCompleted: false,
+      savedForLater: true,
       createdBy: 'test-user-id',
       createdAt: new Date().toISOString(),
     },
@@ -3504,6 +3533,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Added to shopping list');
   }, []);
 
+  // "Saved for later": park an active item / promote a parked one. Single-flag
+  // flip, matching makeShoppingListMutations — shopping promotion has no triage.
+  const setShoppingItemSavedForLater = useCallback(async (id: string, value: boolean) => {
+    setShoppingList(prev => prev.map(s => s.id === id ? { ...s, savedForLater: value } : s));
+  }, []);
+
   // Meal plan operations
   const addMealPlan = useCallback(async (plan: Omit<MealPlanItem, 'id'>) => {
     const newPlan = { ...plan, id: generateId() } as MealPlanItem;
@@ -3537,9 +3572,34 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: ToDo added');
   }, []);
 
+  // "Saved for later": park a thought directly. Mirrors makeAddToDo's dedicated
+  // path — the required completeByDate is stamped with the LOCAL date as an
+  // inert placeholder that is never rendered.
+  const addSavedForLaterTodo = useCallback(async (text: string) => {
+    await addToDo({
+      text,
+      completeByDate: getLocalDateString(),
+      isCompleted: false,
+      savedForLater: true,
+    });
+  }, [addToDo]);
+
   const updateToDo = useCallback(async (id: string, updates: Partial<ToDo>) => {
     setTodos(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
     toast.success('Mock: ToDo updated');
+  }, []);
+
+  // "Saved for later": park an ACTIVE to-do / un-park without triage. Flag only —
+  // an existing to-do keeps its real completeByDate (makeTodoCrudMutations parity).
+  const setTodoSavedForLater = useCallback(async (id: string, value: boolean) => {
+    setTodos(prev => prev.map(t => t.id === id ? { ...t, savedForLater: value } : t));
+  }, []);
+
+  // "Saved for later": promote a parked to-do — clears the flag AND applies the
+  // triage classification in ONE update, so the mock can never show a
+  // half-classified to-do on the active list either.
+  const promoteTodo = useCallback(async (id: string, fields: TodoPromotionFields) => {
+    setTodos(prev => prev.map(t => t.id === id ? { ...t, ...fields, savedForLater: false } : t));
   }, []);
 
   // Mock parity with makeCompleteToDo — named so `toggleTodoSubtask` can DELEGATE
@@ -4150,23 +4210,32 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     [safeToSpendBreakdown, buckets, bucketSpentMap]
   );
 
-  // captureReview (F-CAPTURE-01 foundation): mirror the real context's
-  // visible/awaiting-review split so the settings UI + list views behave
-  // identically in Test Mode.
+  // captureReview (F-CAPTURE-01 foundation) + "Saved for later": mirror the real
+  // context's visible / awaiting-review / parked split so the settings UI + list
+  // views behave identically in Test Mode. `needsReview` takes precedence over
+  // `savedForLater`, exactly as in FirebaseHouseholdContext.
   const visibleShoppingList = useMemo(
-    () => shoppingList.filter((item) => item.needsReview !== true),
+    () => shoppingList.filter((item) => item.needsReview !== true && item.savedForLater !== true),
     [shoppingList]
   );
   const shoppingAwaitingReview = useMemo(
     () => shoppingList.filter((item) => item.needsReview === true),
     [shoppingList]
   );
+  const savedForLaterShopping = useMemo(
+    () => shoppingList.filter((item) => item.needsReview !== true && item.savedForLater === true),
+    [shoppingList]
+  );
   const visibleTodos = useMemo(
-    () => todos.filter((t) => t.needsReview !== true),
+    () => todos.filter((t) => t.needsReview !== true && t.savedForLater !== true),
     [todos]
   );
   const todosAwaitingReview = useMemo(
     () => todos.filter((t) => t.needsReview === true),
+    [todos]
+  );
+  const savedForLaterTodos = useMemo(
+    () => todos.filter((t) => t.needsReview !== true && t.savedForLater === true),
     [todos]
   );
 
@@ -4218,9 +4287,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     meals,
     shoppingList: visibleShoppingList,
     shoppingAwaitingReview,
+    savedForLaterShopping,
     mealPlan,
     todos: visibleTodos,
     todosAwaitingReview,
+    savedForLaterTodos,
     todoCategories,
     groceryCatalog,
     bucketHistory,
@@ -4342,12 +4413,16 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     reorderShoppingItems,
     deleteShoppingItem,
     approveShoppingItem,
+    setShoppingItemSavedForLater,
     toggleShoppingItemPurchased: noOp,
     clearPurchasedShoppingItems: noOp,
     addMealPlanItem: addMealPlan,
     updateMealPlanItem: updateMealPlan,
     deleteMealPlanItem: deleteMealPlan,
     addToDo,
+    addSavedForLaterTodo,
+    setTodoSavedForLater,
+    promoteTodo,
     updateToDo,
     toggleTodoSubtask,
     updateTodoCategories,

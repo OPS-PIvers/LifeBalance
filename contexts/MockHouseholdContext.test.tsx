@@ -1329,3 +1329,108 @@ describe('MockHouseholdContext household credit mode', () => {
     expect(habit.completedBy?.[today]).toEqual({ 'test-partner-id': 1 });
   });
 });
+
+// "Saved for later" — the provider-level split is the ONE mechanism keeping
+// parked items out of every downstream consumer (nav badges, share text, CSV
+// export, the kid surface...). These exercise it through the real provider, in
+// the shape FirebaseHouseholdContext mirrors verbatim.
+describe('MockHouseholdContext saved-for-later split', () => {
+  const captureHousehold = () => renderHook(() => useHousehold(), { wrapper });
+
+  it('hides the seeded parked to-do from `todos` and exposes it on `savedForLaterTodos`', () => {
+    const { result } = captureHousehold();
+    expect(result.current.todos.find(t => t.id === 'todo_parked_1')).toBeUndefined();
+    expect(result.current.savedForLaterTodos.map(t => t.id)).toContain('todo_parked_1');
+  });
+
+  it('hides the seeded parked shopping item from `shoppingList` and exposes it on `savedForLaterShopping`', () => {
+    const { result } = captureHousehold();
+    expect(result.current.shoppingList.find(s => s.id === 'shop_parked_1')).toBeUndefined();
+    expect(result.current.savedForLaterShopping.map(s => s.id)).toContain('shop_parked_1');
+  });
+
+  it('parks an ACTIVE to-do without touching its real completeByDate', async () => {
+    const { result } = captureHousehold();
+    const before = result.current.todos.find(t => t.id === 'todo_later_1')!;
+    const originalDate = before.completeByDate;
+
+    await act(async () => {
+      await result.current.setTodoSavedForLater('todo_later_1', true);
+    });
+
+    expect(result.current.todos.find(t => t.id === 'todo_later_1')).toBeUndefined();
+    const parked = result.current.savedForLaterTodos.find(t => t.id === 'todo_later_1');
+    expect(parked?.completeByDate).toBe(originalDate);
+  });
+
+  it('promotes a parked to-do with its classification in one step', async () => {
+    const { result } = captureHousehold();
+
+    await act(async () => {
+      await result.current.promoteTodo('todo_parked_1', {
+        completeByDate: '2026-09-01',
+        assignedTo: 'test-user-id',
+        category: 'Home',
+        isImportant: true,
+      });
+    });
+
+    expect(result.current.savedForLaterTodos.find(t => t.id === 'todo_parked_1')).toBeUndefined();
+    const promoted = result.current.todos.find(t => t.id === 'todo_parked_1');
+    // Never half-classified: the flag and the classification land together.
+    expect(promoted).toMatchObject({
+      completeByDate: '2026-09-01',
+      assignedTo: 'test-user-id',
+      category: 'Home',
+      isImportant: true,
+      savedForLater: false,
+    });
+  });
+
+  it('parks a thought directly with an inert placeholder date', async () => {
+    const { result } = captureHousehold();
+
+    await act(async () => {
+      await result.current.addSavedForLaterTodo('Research a bread machine');
+    });
+
+    const created = result.current.savedForLaterTodos.find(
+      t => t.text === 'Research a bread machine',
+    );
+    expect(created).toBeDefined();
+    expect(created?.completeByDate).toBe(getLocalDateString());
+    // Unclassified — a parked item is explicitly not committed work.
+    expect(created?.assignedTo).toBeUndefined();
+    expect(created?.isImportant).toBeUndefined();
+    // …and it must NOT appear on the active list.
+    expect(result.current.todos.find(t => t.text === 'Research a bread machine')).toBeUndefined();
+  });
+
+  it('parks and promotes a shopping item with no triage', async () => {
+    const { result } = captureHousehold();
+
+    await act(async () => {
+      await result.current.setShoppingItemSavedForLater('shop_parked_1', false);
+    });
+    expect(result.current.shoppingList.map(s => s.id)).toContain('shop_parked_1');
+    expect(result.current.savedForLaterShopping).toHaveLength(0);
+
+    await act(async () => {
+      await result.current.setShoppingItemSavedForLater('shop_parked_1', true);
+    });
+    expect(result.current.shoppingList.find(s => s.id === 'shop_parked_1')).toBeUndefined();
+    expect(result.current.savedForLaterShopping.map(s => s.id)).toEqual(['shop_parked_1']);
+  });
+
+  it('gives needsReview precedence — a held capture is never ALSO reported as parked', async () => {
+    const { result } = captureHousehold();
+
+    await act(async () => {
+      await result.current.updateToDo('todo_parked_1', { needsReview: true });
+    });
+
+    expect(result.current.todos.find(t => t.id === 'todo_parked_1')).toBeUndefined();
+    expect(result.current.savedForLaterTodos.find(t => t.id === 'todo_parked_1')).toBeUndefined();
+    expect(result.current.todosAwaitingReview.map(t => t.id)).toContain('todo_parked_1');
+  });
+});

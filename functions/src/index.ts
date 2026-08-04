@@ -388,8 +388,18 @@ export const sendactionqueuereminders = onSchedule(
           // Held-for-review captures (captureReview) must not trigger a
           // reminder until approved — they haven't landed on the real to-do
           // list yet. See types/schema.ts's `ToDo.needsReview`.
+          //
+          // "Saved for later" parked to-dos are excluded for a sharper reason:
+          // their `completeByDate` is an INERT PLACEHOLDER stamped with the day
+          // they were parked, so it MATCHES `todayString` on that very day.
+          // Without this guard, parking a thought in the morning would push the
+          // user a reminder about it the next morning it lines up — a task they
+          // deliberately did not commit to. See `ToDo.savedForLater`.
           const todayTodos = todosSnapshot.docs.filter(
-            (doc) => doc.data().completeByDate === todayString && doc.data().needsReview !== true
+            (doc) =>
+              doc.data().completeByDate === todayString &&
+              doc.data().needsReview !== true &&
+              doc.data().savedForLater !== true
           );
 
           if (todayTodos.length > 0) {
