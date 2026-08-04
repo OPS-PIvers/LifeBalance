@@ -134,11 +134,21 @@ const BucketPlanEditor: React.FC<BucketPlanEditorProps> = ({
   // cash at all (or negative) there is no meaningful denominator, so the bar
   // renders full — every dollar planned is a dollar that isn't there.
   const percent = available > 0 ? (fit.claimed / available) * 100 : fit.claimed > 0 ? 100 : 0;
-  const verdict = fit.fits
-    ? fit.leftover >= 0.005
+  // Driven by `leftover` — the TRUTH of whether the plan balances — never by
+  // `fit.fits`, which is only the $10 noise floor for ALARM STYLING below.
+  // A shortfall under that floor still over-claims the cash; declining to
+  // raise an alarm about it is not the same as calling it "Fully planned".
+  // The `0.005` half-cent epsilon matches this repo's other displayed-money
+  // comparisons (TopToolbar's `isPositive`, the drawer's `>= 0.005` checks)
+  // so a leftover just barely negative (e.g. -$0.004) still reads as
+  // balanced rather than rounding `fit.shortfall` down to a nonsensical
+  // "Short by $0.00".
+  const verdict =
+    fit.leftover >= 0.005
       ? `${fmt(fit.leftover)} left unplanned`
-      : 'Fully planned'
-    : `Short by ${fmt(fit.shortfall)}`;
+      : fit.leftover <= -0.005
+        ? `Short by ${fmt(fit.shortfall)}`
+        : 'Fully planned';
 
   // `text-brand-400` is hand-tuned to 4.54:1 against `bg-brand-50` (see
   // index.css) — the fits state's box background — but only 4.44:1 against
@@ -174,7 +184,7 @@ const BucketPlanEditor: React.FC<BucketPlanEditorProps> = ({
     >
       {/* Fit meter — informational only. Never disables or gates anything. */}
       <div
-        data-testid="bucket-plan-meter"
+        data-testid={`${idPrefix}-meter`}
         className={cn(
           'mb-2 rounded-card border px-3 py-2.5',
           fit.fits

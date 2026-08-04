@@ -50,6 +50,8 @@ const Harness: React.FC<{
   );
 };
 
+// The testid is namespaced by `idPrefix` (BucketPlanEditor.tsx ~line 177);
+// the Harness above never passes one, so this stays the component's default.
 const meter = () => screen.getByTestId('bucket-plan-meter');
 
 describe('BucketPlanEditor fit meter', () => {
@@ -153,6 +155,25 @@ describe('BucketPlanEditor fit meter', () => {
 
     expect(meter()).toHaveTextContent('Fully planned');
     expect(meter()).not.toHaveTextContent('Short by');
+  });
+
+  it('a shortfall under the $10 noise floor still says "Short by", never "Fully planned" — and keeps the calm (non-warning) styling', () => {
+    // 105 claimed against 100 available → $5 short. That clears the "true"
+    // over-claim test but stays UNDER OVER_ALLOCATION_MIN_SHORTFALL ($10), so
+    // `fit.fits` is true and the alarm styling stays off. The verdict TEXT
+    // must not follow `fits` here — a plan that over-claims the cash by $5
+    // is not "Fully planned" just because $5 isn't worth an alarm.
+    render(<Harness buckets={[bucket('b1', 'Groceries', 105)]} available={100} />);
+
+    expect(meter()).toHaveTextContent('Short by $5.00');
+    expect(meter()).not.toHaveTextContent('Fully planned');
+
+    // Styling stays calm: the `fit.fits` container/track classes, no
+    // AlertTriangle icon — a $5 gap under the floor doesn't raise the alarm,
+    // it just stops lying about being fully planned.
+    expect(meter().className).toContain('border-brand-200');
+    expect(meter().className).not.toContain('border-warm-200');
+    expect(meter().querySelector('svg')).toBeNull();
   });
 });
 

@@ -105,7 +105,11 @@ const renderDrawer = () =>
   render(<PayPeriodCeremonyDrawer event={event} isOpen onClose={vi.fn()} />);
 
 const saveButton = () => screen.getByRole('button', { name: 'Save changes' });
-const meter = () => screen.getByTestId('bucket-plan-meter');
+// PayPeriodCeremonyDrawer mounts BucketPlanEditor with idPrefix="ceremony",
+// so its testid is namespaced to match (BucketPlanEditor.tsx ~line 177) —
+// keeps this apart from a second mounted editor (e.g. a rebalance drawer)
+// using BucketPlanEditor's own default `bucket-plan` prefix.
+const meter = () => screen.getByTestId('ceremony-meter');
 
 beforeEach(() => {
   vi.clearAllMocks();
