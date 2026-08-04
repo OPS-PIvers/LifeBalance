@@ -118,6 +118,24 @@ describe('SavedForLaterShoppingSection', () => {
     expect(content).toHaveAttribute('hidden');
   });
 
+  // Review finding: the add bar previously sat ABOVE the `hidden`-when-
+  // collapsed region, so collapsing left it floating — a visual AND semantic
+  // mismatch with the header's `aria-expanded="false"`. It must collapse
+  // WITH the rest of the card.
+  it('hides the add bar along with the rest of the section when collapsed', async () => {
+    const user = userEvent.setup();
+    render(<SavedForLaterShoppingSection {...baseProps} items={[]} />);
+
+    expect(screen.getByPlaceholderText('Save something for later...')).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: /Saved for later/ }));
+
+    const addBar = screen.getByPlaceholderText('Save something for later...');
+    // Not just "gone from view" — genuinely inside the same hidden
+    // (display:none) subtree the header now claims is closed.
+    expect(addBar.closest('[hidden]')).not.toBeNull();
+  });
+
   // Addendum (PR-5 search dependency): a collapsed section renders its content
   // `hidden` (display:none) rather than unmounting it, and `scrollIntoView` /
   // the flash class on a `display:none` subtree is a silent no-op. So an

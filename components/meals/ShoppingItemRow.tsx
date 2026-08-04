@@ -237,7 +237,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({
               type="button"
               onClick={handlePromote}
               aria-label={`Move ${item.name} to your shopping list`}
-              className="p-3 -m-3 shrink-0"
+              className="p-3 -m-3 shrink-0 rounded-full focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
             >
               <span className="w-5 h-5 rounded-full border-2 border-accent-400 hover:border-accent-500 flex items-center justify-center text-accent-500 dark:border-accent-500 dark:hover:border-accent-400 dark:text-accent-400 transition-colors">
                 <Plus size={12} strokeWidth={3} />

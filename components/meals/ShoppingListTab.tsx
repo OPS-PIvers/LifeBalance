@@ -411,15 +411,20 @@ const ShoppingListTab: React.FC = () => {
       : 0;
 
     haptic('success');
-    await addShoppingItem({
-        name: rawName,
-        category,
-        store,
-        quantity,
-        isPurchased: false,
-        order: maxOrder + 1,
-        savedForLater: true,
-    });
+    try {
+      await addShoppingItem({
+          name: rawName,
+          category,
+          store,
+          quantity,
+          isPurchased: false,
+          order: maxOrder + 1,
+          savedForLater: true,
+      });
+    } catch (error) {
+      console.error('[handleParkedSmartAdd] Failed:', error);
+      toast.error(describeError(error, 'save the item for later'));
+    }
   };
 
   // Memoized flags derived from shoppingList to avoid two O(N) scans on every render

@@ -167,9 +167,13 @@ export const SavedForLaterShoppingSection: React.FC<SavedForLaterShoppingSection
           seam between the add bar and the first row is a single line, not a
           doubled one (no [&>*:first-child]:border-t-0 override needed, since
           — unlike the main list — this isn't split into two stacked/sticky
-          cards). Always mounted (hidden when collapsed) so the header
-          button's aria-controls never references an absent id. */}
-      <div className="surface-section overflow-hidden">
+          cards). Always MOUNTED (hidden when collapsed) so the header
+          button's aria-controls never references an absent id — but `hidden`
+          is on THIS card itself (mirrors `SurfaceList`'s own precedent, e.g.
+          ToDosPage's category sections), not on some inner wrapper: the add
+          bar collapses along with the rows, and no empty bordered sliver is
+          left behind under the header. */}
+      <div id={CONTENT_ID} hidden={collapsed} className="surface-section overflow-hidden">
         <QuickAddBar
           attached
           onSubmit={onAddSubmit}
@@ -180,55 +184,53 @@ export const SavedForLaterShoppingSection: React.FC<SavedForLaterShoppingSection
           submitLabel="Add to saved for later"
         />
 
-        <div id={CONTENT_ID} hidden={collapsed}>
-          {filteredSorted.length === 0 ? (
-            <div className="hairline-divider px-3 py-4 text-sm text-brand-400 dark:text-brand-450">
-              {totalCount === 0 ? 'Nothing saved for later.' : 'No parked items match this store filter.'}
-            </div>
-          ) : !isReorderable ? (
-            filteredSorted.map((item, index) => {
-              const label = shoppingGroupLabel(item, sortMode);
-              const prev = index > 0 ? filteredSorted[index - 1] : undefined;
-              const prevLabel = prev ? shoppingGroupLabel(prev, sortMode) : null;
-              const isNewGroup = label !== null &&
-                label.toLowerCase() !== prevLabel?.toLowerCase();
-              return (
-                <React.Fragment key={item.id}>
-                  {isNewGroup && (
-                    <h3 className="hairline-divider px-3 pt-2.5 pb-1 text-xxs font-semibold uppercase tracking-wide text-brand-500 dark:text-brand-400 bg-brand-50/60 dark:bg-brand-900/40">
-                      {label}
-                    </h3>
-                  )}
-                  <ShoppingItemRow
-                    item={item}
-                    variant="parked"
-                    onCheck={noop}
-                    onPromote={onPromote}
-                    onDelete={onDelete}
-                    onEdit={onEdit}
-                    isReorderable={false}
-                  />
-                </React.Fragment>
-              );
-            })
-          ) : (
-            <Reorder.Group axis="y" values={rows} onReorder={handleReorder} as="ul" className="list-none">
-              {rows.map(item => (
+        {filteredSorted.length === 0 ? (
+          <div className="hairline-divider px-3 py-4 text-sm text-brand-400 dark:text-brand-450">
+            {totalCount === 0 ? 'Nothing saved for later.' : 'No parked items match this store filter.'}
+          </div>
+        ) : !isReorderable ? (
+          filteredSorted.map((item, index) => {
+            const label = shoppingGroupLabel(item, sortMode);
+            const prev = index > 0 ? filteredSorted[index - 1] : undefined;
+            const prevLabel = prev ? shoppingGroupLabel(prev, sortMode) : null;
+            const isNewGroup = label !== null &&
+              label.toLowerCase() !== prevLabel?.toLowerCase();
+            return (
+              <React.Fragment key={item.id}>
+                {isNewGroup && (
+                  <h3 className="hairline-divider px-3 pt-2.5 pb-1 text-xxs font-semibold uppercase tracking-wide text-brand-500 dark:text-brand-400 bg-brand-50/60 dark:bg-brand-900/40">
+                    {label}
+                  </h3>
+                )}
                 <ShoppingItemRow
-                  key={item.id}
                   item={item}
                   variant="parked"
                   onCheck={noop}
                   onPromote={onPromote}
                   onDelete={onDelete}
                   onEdit={onEdit}
-                  onReorderDragStart={handleReorderDragStart}
-                  onReorderDragEnd={handleReorderDragEnd}
+                  isReorderable={false}
                 />
-              ))}
-            </Reorder.Group>
-          )}
-        </div>
+              </React.Fragment>
+            );
+          })
+        ) : (
+          <Reorder.Group axis="y" values={rows} onReorder={handleReorder} as="ul" className="list-none">
+            {rows.map(item => (
+              <ShoppingItemRow
+                key={item.id}
+                item={item}
+                variant="parked"
+                onCheck={noop}
+                onPromote={onPromote}
+                onDelete={onDelete}
+                onEdit={onEdit}
+                onReorderDragStart={handleReorderDragStart}
+                onReorderDragEnd={handleReorderDragEnd}
+              />
+            ))}
+          </Reorder.Group>
+        )}
       </div>
     </div>
   );
