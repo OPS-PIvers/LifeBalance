@@ -212,6 +212,8 @@ A test needing the DOM with neither fails loudly (`ReferenceError: window is not
 
 ## Repo Hygiene
 
+**[TODO.md](TODO.md) is the backlog and holds open work only** — a finished item is deleted, not archived there. Behavior that looks like a bug but was decided deliberately, plus traps that outlived the task that found them, live in **[docs/DECISIONS.md](docs/DECISIONS.md)**. Read it before "fixing" something surprising in the money paths, the points/reversal math, or `firestore.rules`; add to it when you conclude an argument that a future agent could reopen.
+
 Multi-agent projects leave branches and worktrees behind. **[docs/REPO_CLEANUP_RUNBOOK.md](docs/REPO_CLEANUP_RUNBOOK.md)** is the procedure for clearing them — archive to a bundle first, check for open PRs (deleting a head branch closes its PR), then delete. Two things that trip up the obvious approach: this repo **squash-merges**, so `git branch -d` and `--merged main` can't recognise a merged branch and `-D` is required; and a worktree's branch is pinned by metadata in `.git/worktrees/`, not by the directory — clearing that metadata frees the branches instantly, which matters because `git worktree remove` fails outright on a populated `node_modules`.
 
 ## TypeScript
