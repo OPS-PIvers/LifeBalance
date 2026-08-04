@@ -311,6 +311,21 @@ export function makeToggleShoppingItemPurchased(deps: {
       if (!item) return;
 
       if (!item.isPurchased) {
+        // A parked ("saved for later") item is explicitly NOT committed work
+        // — see ShoppingItem.savedForLater — and is therefore not purchasable.
+        // Refusing here (not just omitting the checkbox in the UI) prevents a
+        // doc from ever NEWLY reaching {savedForLater: true, isPurchased:
+        // true}: `savedForLaterShopping` deliberately does not filter out
+        // purchased items (see that selector's comment), so such a doc would
+        // become a zombie invisible to every exposed slice. This guards only
+        // the forward (purchase) direction, mirroring `completeToDo` — the
+        // reverse (undo) branch below stays open as the recovery route for
+        // any zombie that already existed before this guard shipped.
+        if (item.savedForLater === true) {
+          toast.error('Cannot mark a saved-for-later item as purchased');
+          return;
+        }
+
         // Commit the purchase flag and the catalog (history) upsert in a single
         // batch so they can never diverge (item checked off but its purchase
         // history never recorded, or vice versa).

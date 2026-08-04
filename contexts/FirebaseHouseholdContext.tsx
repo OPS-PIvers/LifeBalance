@@ -554,6 +554,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     () => shoppingList.filter((item) => item.needsReview === true),
     [shoppingList]
   );
+  // Deliberately does NOT also filter `isPurchased !== true`. `needsReview`
+  // and `savedForLater` currently form a complete 3-way partition of
+  // `shoppingList` with `visibleShoppingList`/`shoppingAwaitingReview` — every
+  // item lands in exactly one exposed slice. Adding an `isPurchased` filter
+  // here would break that: a pre-existing doc that somehow reached
+  // `{savedForLater: true, isPurchased: true}` would vanish from ALL slices
+  // (genuinely orphaned, unreachable by the user) instead of staying visible
+  // and recoverable here. The mutation (`toggleShoppingItemPurchased`) refuses
+  // to purchase a parked item so this state can't newly arise — guard the
+  // invariant at the write, not by hiding it at read time.
   const savedForLaterShopping = useMemo(
     () => shoppingList.filter((item) => item.needsReview !== true && item.savedForLater === true),
     [shoppingList]
@@ -599,6 +609,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     () => todos.filter((t) => t.needsReview === true),
     [todos]
   );
+  // Deliberately does NOT also filter `isCompleted !== true`. `needsReview`
+  // and `savedForLater` currently form a complete 3-way partition of `todos`
+  // with `visibleTodos`/`todosAwaitingReview` — every item lands in exactly
+  // one exposed slice. Adding an `isCompleted` filter here would break that: a
+  // pre-existing doc that somehow reached `{savedForLater: true, isCompleted:
+  // true}` would vanish from ALL slices (genuinely orphaned, unreachable by
+  // the user) instead of staying visible and recoverable here. The mutation
+  // (`completeToDo`, including the subtask-escalation path that routes
+  // through it) refuses to complete a parked to-do so this state can't newly
+  // arise — guard the invariant at the write, not by hiding it at read time.
   const savedForLaterTodos = useMemo(
     () => todos.filter((t) => t.needsReview !== true && t.savedForLater === true),
     [todos]
@@ -1157,6 +1177,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       const existingByName = new Map<string, { ref: ReturnType<typeof doc>; quantity: string | number | undefined }>();
       for (const docSnap of unpurchasedSnapshot.docs) {
         const data = docSnap.data();
+        // Exclude parked ("saved for later") items from dedup candidates.
+        // This MUST stay an in-memory filter, not a `where('savedForLater',
+        // '!=', true)` query clause: Firestore inequality filters exclude
+        // docs where the field is ABSENT, and `savedForLater` is absent on
+        // every pre-existing shopping item — an inequality clause here would
+        // match nothing and silently duplicate every captured item instead.
+        if (data.savedForLater === true) {
+          continue;
+        }
         const name = (data.name as string | undefined) ?? '';
         const key = normalize(name);
         // Keep the first occurrence (mirrors prior `existing.docs[0]` behavior).

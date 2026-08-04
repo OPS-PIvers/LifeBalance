@@ -511,6 +511,17 @@ export function makeCompleteToDo(deps: {
       if (todo.isCompleted) {
         return; // already completed — idempotent, no duplicate points
       }
+      // A parked ("saved for later") to-do is explicitly NOT committed work —
+      // see ToDo.savedForLater — and is therefore not completable. Refusing
+      // here (not just in the row's UI) prevents a doc from ever reaching
+      // {savedForLater: true, isCompleted: true}: `savedForLaterTodos`
+      // deliberately does not filter out completed items (see that selector's
+      // comment), so such a doc would become a zombie invisible to every
+      // exposed slice. `toggleTodoSubtask`'s escalation path routes through
+      // this same function, so guarding here covers it too.
+      if (todo.savedForLater === true) {
+        throw new Error(`Cannot complete "${todo.text}" — it is saved for later`);
+      }
       // Inline subtask auto-complete (owner-approved): when checking the LAST
       // subtask escalates to completion, the caller hands a by-id descriptor
       // that we apply to THIS function's OWN fresh read (`todo.subtasks`) — not

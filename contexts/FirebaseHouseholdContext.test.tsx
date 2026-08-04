@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
-import { render, act } from '@testing-library/react';
+import { render, act, waitFor } from '@testing-library/react';
 import { format, subDays } from 'date-fns';
 import toast from 'react-hot-toast';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -180,6 +180,17 @@ vi.mock('@/services/appConfig', () => ({
   getBillingEnabled: getBillingEnabledMock,
 }));
 
+// The pending-items voice/NL capture drain (drainPendingItemQueue ->
+// handleShoppingItems) dynamically imports geminiService to avoid bundling it
+// on the boot path. Mock it so the "handleShoppingItems dedup vs parked items"
+// suite below can drive a deterministic parse result without a real Gemini call.
+const { parseNaturalLanguageCommandMock } = vi.hoisted(() => ({
+  parseNaturalLanguageCommandMock: vi.fn(),
+}));
+vi.mock('@/services/geminiService', () => ({
+  parseNaturalLanguageCommand: parseNaturalLanguageCommandMock,
+}));
+
 import {
   FirebaseHouseholdProvider,
   useFinance,
@@ -190,12 +201,13 @@ import {
 // Plan 080d reward CRUD writes through these single-doc APIs (not a batch), so we
 // read their captured call args to assert path + payload. (Plan 051: addKidProfile
 // no longer writes via setDoc — it calls the createkidprofile callable, mocked above.)
-import { addDoc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
+import { addDoc, updateDoc, deleteDoc, setDoc, getDocs } from 'firebase/firestore';
 
 const addDocMock = vi.mocked(addDoc);
 const updateDocMock = vi.mocked(updateDoc);
 const deleteDocMock = vi.mocked(deleteDoc);
 const setDocMock = vi.mocked(setDoc);
+const getDocsMock = vi.mocked(getDocs);
 
 // --- Snapshot seeding helpers --------------------------------------------
 
@@ -2674,5 +2686,113 @@ describe('FirebaseHouseholdContext — grocery catalog dedup on purchase', () =>
     );
     expect(catalogSets).toHaveLength(1);
     expect(catalogSets[0]!.data).toMatchObject({ name: 'Bread', category: 'Bakery', purchaseCount: 1 });
+  });
+});
+
+describe('FirebaseHouseholdContext — handleShoppingItems (voice/NL capture) dedup vs parked items', () => {
+  // `handleShoppingItems` is the client-side twin of the server `quickAddShoppingItem`
+  // dedup fix: it also queries `where('isPurchased', '==', false)` and, without an
+  // in-memory `savedForLater` exclusion, would silently merge a voice/Shortcut
+  // capture into a PARKED item instead of creating a new active row. Driven end to
+  // end through the real provider: pendingItems listener -> drainPendingItemQueue
+  // -> the mocked Gemini parse -> handleShoppingItems's writeBatch.
+
+  /** Fake `getDocs` return shape — cast at the call site to the real (much
+   *  wider) `QuerySnapshot` type, since these tests only ever read `.docs`. */
+  type FakeQuerySnapshot = Awaited<ReturnType<typeof getDocs>>;
+
+  /** A shoppingList doc fixture for the `getDocs` dedup query, carrying `.ref`. */
+  function shoppingQueryDoc(id: string, data: Record<string, unknown>) {
+    return { id, data: () => data, ref: { __path: `${householdPath}/shoppingList/${id}` } };
+  }
+
+  function seedPendingCapture() {
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+    });
+    emitCollection(`${householdPath}/pendingItems`, [
+      docSnap('p1', { text: 'add milk', type: 'shopping', processed: false }),
+    ]);
+  }
+
+  beforeEach(() => {
+    parseNaturalLanguageCommandMock.mockReset();
+    parseNaturalLanguageCommandMock.mockResolvedValue({
+      items: [{ item: 'Milk', quantity: 2, category: 'Dairy' }],
+      detectedType: 'shopping',
+      confidence: 1,
+    });
+    getDocsMock.mockReset();
+    getDocsMock.mockImplementation(async () => ({ docs: [], size: 0 }) as unknown as FakeQuerySnapshot);
+  });
+
+  it('does not merge a voice capture into a PARKED (saved-for-later) row with the same name — creates a new active row instead', async () => {
+    getDocsMock.mockImplementation(async (ref: unknown) => {
+      const path = (ref as { __path?: string } | undefined)?.__path;
+      if (path === `${householdPath}/shoppingList`) {
+        return {
+          docs: [shoppingQueryDoc('parked1', { name: 'Milk', quantity: 1, savedForLater: true })],
+          size: 1,
+        } as unknown as FakeQuerySnapshot;
+      }
+      return { docs: [], size: 0 } as unknown as FakeQuerySnapshot;
+    });
+
+    renderProvider();
+    seedPendingCapture();
+
+    // The drain loop runs off the snapshot callback (fire-and-forget), so wait
+    // for its observable completion signal rather than a fixed sleep — a bare
+    // setTimeout here would resolve before React/the microtask chain finishes
+    // and pass vacuously regardless of which item the batch actually touched.
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalled();
+    });
+
+    const allOps = batches.flatMap((b) => b.ops);
+    // The parked row is left completely untouched...
+    expect(allOps.filter((o) => o.path === `${householdPath}/shoppingList/parked1`)).toHaveLength(0);
+    // ...and a new, active row is created instead of silently merging into it
+    // (the bug: `isPurchased: false` alone still matched the parked row).
+    const newRowSets = allOps.filter(
+      (o) => o.kind === 'set' && o.path.startsWith(`${householdPath}/shoppingList/`)
+    );
+    expect(newRowSets).toHaveLength(1);
+    expect(newRowSets[0]?.data).toMatchObject({ name: 'Milk', quantity: '2' });
+  });
+
+  it('positive control: a voice capture DOES merge into a normal (non-parked) row with the same name', async () => {
+    // Same fixture shape as above, minus `savedForLater` — proves the guard
+    // above is a real exclusion and not e.g. a query that now matches nothing
+    // at all (which would also make the first test pass vacuously).
+    getDocsMock.mockImplementation(async (ref: unknown) => {
+      const path = (ref as { __path?: string } | undefined)?.__path;
+      if (path === `${householdPath}/shoppingList`) {
+        return {
+          docs: [shoppingQueryDoc('normal1', { name: 'Milk', quantity: 1 })],
+          size: 1,
+        } as unknown as FakeQuerySnapshot;
+      }
+      return { docs: [], size: 0 } as unknown as FakeQuerySnapshot;
+    });
+
+    renderProvider();
+    seedPendingCapture();
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalled();
+    });
+
+    const allOps = batches.flatMap((b) => b.ops);
+    const mergeOps = allOps.filter(
+      (o) => o.kind === 'update' && o.path === `${householdPath}/shoppingList/normal1`
+    );
+    expect(mergeOps).toHaveLength(1);
+    expect(mergeOps[0]?.data).toMatchObject({ quantity: '3' });
+    const newRowSets = allOps.filter(
+      (o) => o.kind === 'set' && o.path.startsWith(`${householdPath}/shoppingList/`)
+    );
+    expect(newRowSets).toHaveLength(0);
   });
 });

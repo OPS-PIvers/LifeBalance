@@ -1295,6 +1295,15 @@ export const quickAddShoppingItem = onRequest(
         const existingItems = await shoppingListRef
           .where("isPurchased", "==", false)
           .get();
+        // Exclude parked ("saved for later") items from dedup candidates.
+        // This MUST be an in-memory filter, not a `.where('savedForLater',
+        // '!=', true)` query clause: Firestore inequality filters exclude
+        // docs where the field is ABSENT, and `savedForLater` is absent on
+        // every pre-existing shopping item — an inequality clause here would
+        // match nothing and silently duplicate every captured item instead.
+        const activeItems = existingItems.docs.filter(
+          (doc) => doc.data().savedForLater !== true
+        );
 
         const results: Array<{
           itemId: string;
@@ -1352,7 +1361,7 @@ export const quickAddShoppingItem = onRequest(
             continue;
           }
 
-          const duplicate = existingItems.docs.find((doc) => {
+          const duplicate = activeItems.find((doc) => {
             const data = doc.data();
             return (
               data.name?.toLowerCase() === normalizedItem &&
@@ -1495,9 +1504,18 @@ export const quickAddShoppingItem = onRequest(
         .collection(`households/${householdId}/shoppingList`)
         .where("isPurchased", "==", false)
         .get();
+      // Exclude parked ("saved for later") items from dedup candidates. This
+      // MUST be an in-memory filter, not a `.where('savedForLater', '!=',
+      // true)` query clause: Firestore inequality filters exclude docs where
+      // the field is ABSENT, and `savedForLater` is absent on every
+      // pre-existing shopping item — an inequality clause here would match
+      // nothing and silently duplicate every captured item instead.
+      const activeItems = existingItems.docs.filter(
+        (doc) => doc.data().savedForLater !== true
+      );
 
       const normalizedItem = item.trim().toLowerCase();
-      const duplicate = existingItems.docs.find((doc) => {
+      const duplicate = activeItems.find((doc) => {
         const data = doc.data();
         return (
           data.name?.toLowerCase() === normalizedItem &&
