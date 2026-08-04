@@ -1,11 +1,10 @@
 import React, { useMemo } from 'react';
-import { RotateCcw, Sparkles } from 'lucide-react';
+import { AlertTriangle, RotateCcw, Sparkles } from 'lucide-react';
 import { BudgetBucket } from '@/types/schema';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import Input from '@/components/ui/Input';
 import ProgressBar from '@/components/ui/ProgressBar';
-import { FIELD_ERROR } from '@/components/ui/fieldStyles';
 import { cn } from '@/utils/cn';
 import { type BucketSpent } from '@/utils/bucketSpentCalculator';
 import { parseLimitDraft, previewPlanFit, resolvePlanDrafts } from '@/utils/bucketPlanPreview';
@@ -114,25 +113,21 @@ const BucketPlanEditor: React.FC<BucketPlanEditorProps> = ({
     [available, resolved.effective, bucketSpentMap],
   );
 
+  // Full REPLACEMENT of the drafts object (not a merge onto `prev`) — matches
+  // origin/main's pre-extraction `applySuggestions`/`resetToLast`. A merge
+  // would leave a deleted bucket's stale draft key in state forever; every
+  // consumer iterates `buckets` today so that's inert, but it's still an
+  // unflagged behavioral departure for logic that claims to have moved
+  // verbatim, so the full-replacement semantics are restored here.
   const applySuggestions = () => {
     if (!suggestions) return;
-    onDraftsChange(prev => {
-      const next = { ...prev };
-      buckets.forEach(b => {
-        next[b.id] = String(suggestions.get(b.id) ?? b.limit);
-      });
-      return next;
-    });
+    onDraftsChange(
+      Object.fromEntries(buckets.map(b => [b.id, String(suggestions.get(b.id) ?? b.limit)])),
+    );
   };
 
   const resetToSaved = () => {
-    onDraftsChange(prev => {
-      const next = { ...prev };
-      buckets.forEach(b => {
-        next[b.id] = String(b.limit);
-      });
-      return next;
-    });
+    onDraftsChange(Object.fromEntries(buckets.map(b => [b.id, String(b.limit)])));
   };
 
   // The bar reads "how much of the available cash this plan claims". With no
@@ -144,6 +139,17 @@ const BucketPlanEditor: React.FC<BucketPlanEditorProps> = ({
       ? `${fmt(fit.leftover)} left unplanned`
       : 'Fully planned'
     : `Short by ${fmt(fit.shortfall)}`;
+
+  // `text-brand-400` is hand-tuned to 4.54:1 against `bg-brand-50` (see
+  // index.css) — the fits state's box background — but only 4.44:1 against
+  // `bg-warm-50`, the short state's box background, under the 4.5:1 AA floor
+  // for small text. `brand-500` (5.78:1 on warm-50) clears it in both boxes,
+  // so the muted "of $X" / "· Safe to spend $Y" sub-labels switch to it only
+  // in the short state; dark mode was already fine and is unchanged.
+  const mutedSuffixClass = cn(
+    'font-normal',
+    fit.fits ? 'text-brand-400 dark:text-brand-450' : 'text-brand-500 dark:text-brand-450',
+  );
 
   return (
     <Section
@@ -182,30 +188,48 @@ const BucketPlanEditor: React.FC<BucketPlanEditorProps> = ({
           </span>
           <span className="stat-num shrink-0 text-sm font-semibold text-brand-800 dark:text-brand-100">
             {fmt(fit.claimed)}
-            <span className="font-normal text-brand-400 dark:text-brand-450">
+            <span className={mutedSuffixClass}>
               {' '}
               of {fmt(available)}
             </span>
           </span>
         </div>
+        {/* Track retints per state rather than staying a fixed neutral — same
+            strategy BudgetBucketCard uses for its overspend track (never just
+            the fill). Light reuses its exact tokens (bg-money-bgPos/bgNeg,
+            solid). Dark can't reuse its literal money-pos/neg alpha tint: this
+            meter's own box background is ITSELF translucent in dark
+            (dark:bg-brand-700/30 / dark:bg-warm-900/25), and tinting the track
+            toward the same hue as the fill only pulls the two closer together
+            — verified by computing the actual composited pixels, that
+            shrinks the fill-vs-track ratio as the tint gets stronger, not the
+            opposite. A single solid darker neutral is backdrop-independent and
+            clears 3:1 for both fills with room to spare (money-pos-dark
+            4.49:1, money-neg-dark 3.85:1 against brand-900). */}
         <ProgressBar
           value={percent}
-          className="mt-2 h-1.5 bg-brand-100 dark:bg-brand-700"
+          className={cn('mt-2 h-1.5 dark:bg-brand-900', fit.fits ? 'bg-money-bgPos' : 'bg-money-bgNeg')}
           barClassName={fit.fits ? 'bg-money-pos' : 'bg-money-neg'}
           ariaLabel={`Planned ${fmt(fit.claimed)} of ${fmt(available)} ${availableLabel}`}
         />
         <p
           className={cn(
-            'mt-1.5 text-xxs',
+            'mt-1.5 flex items-center gap-1 text-xxs',
             fit.fits
               ? 'text-brand-500 dark:text-brand-400'
               : 'font-semibold text-money-neg dark:text-money-negDark',
           )}
         >
-          {verdict}
-          <span className="font-normal text-brand-400 dark:text-brand-450">
-            {' · '}
-            {availableLabel} {fmt(available)}
+          {/* Matches BudgetBucketCard's "over budget" line, which pairs the
+              same warning state with an AlertTriangle — icon stays aria-hidden
+              since the adjacent text already carries the meaning. */}
+          {!fit.fits && <AlertTriangle size={12} className="shrink-0" aria-hidden="true" />}
+          <span>
+            {verdict}
+            <span className={mutedSuffixClass}>
+              {' · '}
+              {availableLabel} {fmt(available)}
+            </span>
           </span>
         </p>
       </div>
@@ -236,8 +260,14 @@ const BucketPlanEditor: React.FC<BucketPlanEditorProps> = ({
                     onChange={e =>
                       onDraftsChange(prev => ({ ...prev, [b.id]: e.target.value }))
                     }
-                    className={cn('text-right font-mono tabular-nums', invalid && FIELD_ERROR)}
+                    className="text-right font-mono tabular-nums"
                     aria-label={`${b.name} budget for this period`}
+                    // `Input` already wires aria-invalid/aria-describedby and
+                    // renders a visible message whenever `error` is supplied —
+                    // no need to hand-roll the red-border styling separately
+                    // (that's what FIELD_ERROR did before, silently, with no
+                    // explanation for why Save was unreachable).
+                    error={invalid ? 'Must be $0 or more' : undefined}
                   />
                 </div>
               </div>

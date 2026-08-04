@@ -2,7 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { type Account } from '@/types/schema';
 import { type BucketSpent } from '@/utils/bucketSpentCalculator';
 import { OVER_ALLOCATION_MIN_SHORTFALL } from '@/utils/budgetFit';
-import { previewPlanFit, projectedAvailable, type PlanDraft } from '@/utils/bucketPlanPreview';
+import {
+  parseLimitDraft,
+  previewPlanFit,
+  projectedAvailable,
+  resolvePlanDrafts,
+  type PlanDraft,
+} from '@/utils/bucketPlanPreview';
 
 function spentMap(entries: Record<string, BucketSpent>): Map<string, BucketSpent> {
   return new Map(Object.entries(entries));
@@ -182,5 +188,81 @@ describe('projectedAvailable', () => {
     expect(
       projectedAvailable(100, [checking, second], { chk: '1000.10', chk2: '200.20' }),
     ).toBe(100.3);
+  });
+});
+
+describe('parseLimitDraft', () => {
+  it('rejects empty and whitespace-only input', () => {
+    expect(parseLimitDraft('')).toBeNull();
+    expect(parseLimitDraft('   ')).toBeNull();
+  });
+
+  it('rejects negatives — a budget cannot be less than nothing', () => {
+    expect(parseLimitDraft('-1')).toBeNull();
+    expect(parseLimitDraft('-0.01')).toBeNull();
+  });
+
+  it('accepts zero and positive values, rounded to whole cents', () => {
+    expect(parseLimitDraft('0')).toBe(0);
+    expect(parseLimitDraft('12.345')).toBe(12.35);
+    expect(parseLimitDraft('12.344')).toBe(12.34);
+  });
+
+  it('accepts scientific notation ("1e3") like any other finite number', () => {
+    expect(parseLimitDraft('1e3')).toBe(1000);
+  });
+
+  it('rejects non-numeric and non-finite input', () => {
+    expect(parseLimitDraft('abc')).toBeNull();
+    expect(parseLimitDraft('NaN')).toBeNull();
+    expect(parseLimitDraft('Infinity')).toBeNull();
+  });
+});
+
+describe('resolvePlanDrafts', () => {
+  const buckets = [
+    { id: 'b1', limit: 100 },
+    { id: 'b2', limit: 60 },
+  ];
+
+  it('excludes a bucket retyped to the SAME value from `changed`', () => {
+    const resolved = resolvePlanDrafts(buckets, { b1: '100', b2: '60' });
+
+    expect(resolved.changed).toEqual([]);
+    expect(resolved.effective).toEqual([
+      { id: 'b1', limit: 100 },
+      { id: 'b2', limit: 60 },
+    ]);
+    expect(resolved.hasInvalid).toBe(false);
+  });
+
+  it('includes a bucket only when its parsed draft differs from the saved limit', () => {
+    const resolved = resolvePlanDrafts(buckets, { b1: '250', b2: '60' });
+
+    expect(resolved.changed).toEqual([{ id: 'b1', limit: 250 }]);
+  });
+
+  it('excludes an invalid draft from `changed` AND sets `hasInvalid`', () => {
+    const resolved = resolvePlanDrafts(buckets, { b1: 'not-a-number', b2: '60' });
+
+    // The invalid bucket falls back to its saved limit for `effective` (never
+    // a change, since a save can't write text that doesn't parse) and never
+    // appears in `changed`, but the plan is flagged unsaveable.
+    expect(resolved.changed).toEqual([]);
+    expect(resolved.effective).toEqual([
+      { id: 'b1', limit: 100 },
+      { id: 'b2', limit: 60 },
+    ]);
+    expect(resolved.hasInvalid).toBe(true);
+  });
+
+  it('falls back to the saved limit in `effective` when a bucket has no draft entry at all', () => {
+    // `late` was added by the live listener after the drafts state was seeded.
+    const withLate = [...buckets, { id: 'late', limit: 75 }];
+    const resolved = resolvePlanDrafts(withLate, { b1: '100', b2: '60' });
+
+    expect(resolved.effective).toContainEqual({ id: 'late', limit: 75 });
+    expect(resolved.changed).toEqual([]);
+    expect(resolved.hasInvalid).toBe(false);
   });
 });

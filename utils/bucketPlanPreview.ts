@@ -15,7 +15,14 @@ import { sumMoney, subtractMoney, roundMoney } from '@/utils/money';
  * — `claim = max(0, limit − (verified + pending))`, an overspent bucket claims
  * 0 and never a negative — and the "does it fit" floor is the SAME
  * {@link OVER_ALLOCATION_MIN_SHORTFALL} the header's amber mark uses, so the
- * ceremony can never say "fits" about a plan the toolbar then marks amber.
+ * two can never disagree about WHERE THE LINE IS. That is a shared constant,
+ * not a shared verdict: the two are never fed the same inputs, so this module
+ * can still say "fits" in a moment the header marks amber, and that is not a
+ * bug. The ceremony measures DRAFT limits against
+ * `safeToSpend + unsaved balance deltas` ({@link projectedAvailable}); the
+ * header measures SAVED limits against the raw `safeToSpend` and additionally
+ * suppresses its own mark entirely when `safeToSpend < 0`, a suppression this
+ * meter does not apply. Different bases, same threshold.
  *
  * We cannot delegate to `computeSafeToSpendDistribution` directly here because
  * it takes saved `BudgetBucket`s and a `SafeToSpendBreakdown`; the draft state
