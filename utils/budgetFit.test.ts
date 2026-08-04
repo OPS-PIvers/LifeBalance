@@ -44,7 +44,7 @@ describe('computeBudgetFit', () => {
     expect(fit.leftover).toBe(expected.leftover);
   });
 
-  it('matches the CLAUDE.md worked example: StS $356.22 vs $423.76 claimed => $67.54 shortfall, over-allocated', () => {
+  it('StS $356.22 vs $423.76 claimed => $67.54 shortfall, over-allocated', () => {
     const breakdown = makeBreakdown(356.22);
     const buckets = [makeBucket({ id: 'b1', limit: 423.76 })];
     const map = spentMap({ b1: { verified: 0, pending: 0 } });
@@ -136,5 +136,22 @@ describe('computeBudgetFit', () => {
     expect(fit.leftover).toBe(0);
     expect(fit.shortfall).toBe(0);
     expect(fit.isOverAllocated).toBe(false);
+  });
+
+  // The `breakdown.safeToSpend >= 0` gate's own boundary: safeToSpend === 0
+  // is the ONE input where `>=` and `>` disagree. Every other test in this
+  // file uses -50 (negative branch) or 100/356.22 (clearly positive), so
+  // none of them exercise this value — a mutant flipping `>=` to `>` passed
+  // the whole suite until this test was added.
+  it('IS over-allocated when Safe-to-Spend is exactly zero and a bucket claims a shortfall over $10', () => {
+    const breakdown = makeBreakdown(0);
+    const buckets = [makeBucket({ id: 'b1', limit: 15 })];
+    const map = spentMap({ b1: { verified: 0, pending: 0 } });
+
+    const fit = computeBudgetFit(breakdown, buckets, map);
+
+    expect(fit.leftover).toBe(-15);
+    expect(fit.shortfall).toBe(15);
+    expect(fit.isOverAllocated).toBe(true);
   });
 });

@@ -10,6 +10,16 @@ import { roundMoney, subtractMoney } from '@/utils/money';
  *
  * Below this shortfall, don't raise an alarm — a $3 rounding-scale overlap
  * between bucket limits and free cash isn't a real budgeting problem.
+ *
+ * This $10 floor DELIBERATELY diverges from `SafeToSpendBreakdownDrawer`'s
+ * own `overAllocated` (via `computeSafeToSpendDistribution`), which fires at
+ * any negative leftover — one cent. Consequence today: a $5 shortfall shows
+ * no header mark here, but the drawer still labels that same row
+ * "Over-allocated" in red. That's pre-existing drawer behaviour, not a
+ * regression introduced by this header mark, and reconciling the two floors
+ * is deliberately deferred to the follow-up PR that rebuilds the drawer's
+ * over-allocation section — don't "fix" this by lowering this constant to 0
+ * or raising the drawer's floor to match without doing that work.
  */
 export const OVER_ALLOCATION_MIN_SHORTFALL = 10;
 
