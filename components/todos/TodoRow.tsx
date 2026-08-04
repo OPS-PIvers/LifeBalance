@@ -467,7 +467,15 @@ export const TodoRow = React.memo(function TodoRow({
   const pillToneClass = completionGated
     ? 'text-warm-700 dark:text-warm-300'
     : 'text-brand-400 dark:text-brand-450';
-  const subtaskPill = subtaskCount > 0 && (
+  //
+  // "Saved for later": the pill and its checklist are SUPPRESSED on a parked
+  // row. A parked to-do keeps its subtasks (`parkTodo` writes only the flag),
+  // but its steps are not actionable work — and checking the LAST one escalates
+  // to `completeToDo`, which refuses a parked to-do. That refusal would surface
+  // through `handleSubtaskCheck`'s catch as a bare "Failed to update subtask",
+  // an unexplained error for a control that should never have been offered.
+  // The steps remain visible and editable in the edit drawer.
+  const subtaskPill = !isParked && subtaskCount > 0 && (
     isSelectionMode ? (
       <span
         data-testid="todo-subtask-pill"
@@ -509,7 +517,11 @@ export const TodoRow = React.memo(function TodoRow({
   // stay vertically centered against the checkbox no matter how many steps are
   // expanded; `pl-9` (checkbox 24px + gap 12px) keeps it indented under the
   // title exactly as it was when it lived inside that column.
-  const subtaskList = subtasksExpanded && subtaskCount > 0 && (
+  // Suppressed for a parked row alongside its pill (see above) — the pill is the
+  // only way to expand it, but gating both means a stale `subtasksExpanded`
+  // (expanded, then parked from the options drawer) can't leave the checklist
+  // — and its swipe-to-toggle rows — reachable.
+  const subtaskList = !isParked && subtasksExpanded && subtaskCount > 0 && (
     <ul
       id={subtaskListId}
       aria-label={`Subtasks for ${item.text}`}

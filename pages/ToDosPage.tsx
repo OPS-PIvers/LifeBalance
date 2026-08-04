@@ -403,6 +403,11 @@ const ToDosPage: React.FC = () => {
   const [isPhotoImportOpen, setIsPhotoImportOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // "Saved for later": whether the edit drawer is open on a PARKED to-do. Held
+  // as state rather than derived, because `todos` excludes parked items — a
+  // lookup by `editingId` there returns undefined for exactly the case that
+  // needs the flag. See the parked-affordance enumeration near renderParkedRow.
+  const [editingParked, setEditingParked] = useState(false);
 
   // Top-right overflow ("…") menu of secondary actions (Export, Select multiple)
   // — mirrors the Shopping list header so the two pages share one structure.
@@ -680,6 +685,17 @@ const ToDosPage: React.FC = () => {
     [selectedIds, parkedIdSet],
   );
 
+  // Looks a to-do up across BOTH slices. `todos` excludes parked items at the
+  // context, so any by-id lookup that can be reached from a parked row (the edit
+  // drawer's "what did this field hold before?" comparisons) must consult
+  // `savedForLaterTodos` too — otherwise it reads `undefined` and every
+  // "only write the field if it CHANGED" guard collapses into "always write".
+  const findTodoById = useCallback(
+    (id: string): ToDo | undefined =>
+      todos.find(t => t.id === id) ?? savedForLaterTodos.find(t => t.id === id),
+    [todos, savedForLaterTodos],
+  );
+
   // Session-only (deliberately NOT persisted): collapsing a section is a
   // momentary "get this out of my way", not a saved view.
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
@@ -828,6 +844,7 @@ const ToDosPage: React.FC = () => {
     setAssigneePickerSubtaskId(null);
     setMoreOpen(false);
     setEditingId(null);
+    setEditingParked(false); // a new task is never parked — the parked add bar is its own path
     setIsAddModalOpen(true);
   }, [quickText, currentUser, members, todoCategories]);
 
@@ -944,8 +961,15 @@ const ToDosPage: React.FC = () => {
 
   // Open modal for editing
   const openEditModal = useCallback((todo: ToDo) => {
+    const parked = todo.savedForLater === true;
+    setEditingParked(parked);
     setText(todo.text);
-    setCompleteByDate(todo.completeByDate);
+    // A PARKED to-do's stored `completeByDate` is an inert placeholder that is
+    // never rendered anywhere — so the field it feeds is not rendered either
+    // (see the drawer below), and the state is seeded EMPTY rather than with the
+    // fabricated value. handleSubmit never writes it for a parked to-do; the
+    // promote sheet is the only thing that sets a real date.
+    setCompleteByDate(parked ? '' : todo.completeByDate);
     setAssignedTo(todo.assignedTo ?? WHOLE_HOUSEHOLD_ASSIGNEE);
     setIsImportant(todo.isImportant === true);
     setDueTime(todo.dueTime ?? '');
@@ -979,6 +1003,18 @@ const ToDosPage: React.FC = () => {
   const handleDuplicate = useCallback(async (todo: ToDo) => {
       haptic('success'); // at gesture time — dead after the await on iOS
       try {
+          // "Saved for later": the copy of a PARKED to-do stays PARKED. The
+          // plain `addToDo` path below would mint an ACTIVE to-do due today with
+          // no assignee/category/importance — a second, unguarded write path
+          // into the active list that bypasses `promoteTodo` and lands exactly
+          // the half-classified item the promote sheet exists to prevent.
+          // `addSavedForLaterTodo` owns the placeholder-date rule, so the copy
+          // is classified identically to any other parked item: not at all.
+          if (todo.savedForLater === true) {
+              await addSavedForLaterTodo(todo.text);
+              toast.success('Copied to Saved for later');
+              return;
+          }
           await addToDo({
               text: todo.text,
               completeByDate: getLocalDateString(), // Default to today for the copy
@@ -990,7 +1026,7 @@ const ToDosPage: React.FC = () => {
           console.error('Failed to duplicate task:', error);
           toast.error('Failed to duplicate task');
       }
-  }, [addToDo]);
+  }, [addToDo, addSavedForLaterTodo]);
 
   const handleUncomplete = useCallback(async (id: string, options?: TodoCompletionOptions) => {
       try {
@@ -1007,6 +1043,13 @@ const ToDosPage: React.FC = () => {
   }, [uncompleteToDo]);
 
   const handleMoveToTomorrow = useCallback(async (todo: ToDo) => {
+      // "Saved for later": rescheduling something with no schedule is a no-op
+      // the UI would report as a success. The control is removed from the
+      // options drawer for a parked to-do; this is the belt-and-braces guard so
+      // no future caller can write a real `completeByDate` onto a doc whose
+      // `savedForLater` is still true (the promote sheet does both together, or
+      // neither). Deliberately silent — there is no failure to report.
+      if (todo.savedForLater === true) return;
       try {
           const tomorrow = addDays(startOfToday(), 1);
           await updateToDo(todo.id, {
@@ -1440,7 +1483,10 @@ const ToDosPage: React.FC = () => {
       toast.error('No household members available. Please add members first.');
       return;
     }
-    if (!text.trim() || !completeByDate) {
+    // A PARKED to-do legitimately has no due date to validate — it is not a
+    // required field here because the field is not rendered here (the promote
+    // sheet is where a real date is chosen, and it requires one).
+    if (!text.trim() || (!editingParked && !completeByDate)) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -1461,7 +1507,7 @@ const ToDosPage: React.FC = () => {
     setIsSaving(true);
     try {
       const trimmedText = text.trim();
-      const editingTodo = editingId ? todos.find(t => t.id === editingId) : undefined;
+      const editingTodo = editingId ? findTodoById(editingId) : undefined;
       // F-TODO-01: recurrence template. Preserve an existing chain root across
       // edits; a fresh recurring task has no parentRecurringId yet (the first
       // spawn on completion anchors it).
@@ -1486,7 +1532,7 @@ const ToDosPage: React.FC = () => {
       // clearing a task that previously had them). This keeps ordinary edits off
       // the new field until the firestore.rules whitelist ships it — a plain task
       // with no checklist never sends `subtasks`, so its write stays valid today.
-      const editingOriginal = editingId ? todos.find(t => t.id === editingId) : undefined;
+      const editingOriginal = editingId ? findTodoById(editingId) : undefined;
       const hadSubtasks = (editingOriginal?.subtasks?.length ?? 0) > 0;
       const subtaskField: Partial<ToDo> =
         subtasks.length > 0 || hadSubtasks ? { subtasks } : {};
@@ -1521,7 +1567,13 @@ const ToDosPage: React.FC = () => {
           notes: trimmedNotes,
           ...subtaskField
         };
-        if (completeByDate !== editingTodo?.completeByDate) {
+        // "Saved for later": a parked to-do's date is NEVER written from this
+        // form. Doing so would put a real date on a doc whose `savedForLater`
+        // is still true — defeating the promote sheet's one-write design, in
+        // which the date and the flag change together or not at all. (The state
+        // is seeded empty for a parked edit, so this also stops an empty string
+        // being written as a due date.)
+        if (!editingParked && completeByDate !== editingTodo?.completeByDate) {
           updates.completeByDate = completeByDate;
         }
         if ((dueTimeValue ?? null) !== (editingTodo?.dueTime ?? null) && 'dueTime' in timeFields) {
@@ -2110,10 +2162,63 @@ const ToDosPage: React.FC = () => {
     </div>
   );
 
-  // "Saved for later" row — the same TodoRow in its parked variant, never a
-  // fork. The leading control becomes a circular `+` that opens the promote
-  // sheet, right-swipe promotes, left-swipe deletes, and BOTH completion paths
-  // (checkbox and swipe) are suppressed inside the component.
+  // ───────────────────────────────────────────────────────────────────────────
+  // 🛡️ PARKED-ROW AFFORDANCE INVARIANT — read this before adding anything to
+  // the Task-options drawer, the edit drawer, or TodoRow.
+  //
+  // A parked ("saved for later") to-do is explicitly NOT committed work. It has
+  // NO REAL DUE DATE (its `completeByDate` is an inert placeholder, never
+  // rendered) and CANNOT BE COMPLETED (`completeToDo` refuses one, so the doc
+  // can never reach the zombie `{savedForLater: true, isCompleted: true}`).
+  // Every affordance a parked row exposes must therefore be audited against
+  // those two facts — SUPPRESS it, ADAPT it, or consciously LEAVE it. A control
+  // that silently no-ops, toasts a false success, or writes a real date while
+  // the flag stays true is worse than one that isn't offered.
+  //
+  // The full enumeration, as implemented:
+  //
+  //   Swipe rail (start / right)  ADAPT    Complete → Promote (opens the sheet).
+  //   Swipe rail (end / left)     ADAPT    Delete stays; "Save for later" is
+  //                                        dropped — it is already parked.
+  //   Leading control             ADAPT    Complete checkbox → circular `+`.
+  //   Row body tap → edit         ADAPT    Drawer opens, but the due-date field
+  //                                        and the whole scheduling group
+  //                                        (time / reminder / repeat /
+  //                                        auto-reschedule) are suppressed, and
+  //                                        `completeByDate` is never written.
+  //                                        Text/notes/steps/category/importance
+  //                                        stay editable — refining a parked
+  //                                        idea is the point of parking it.
+  //   Subtask pill + checklist    SUPPRESS Steps aren't actionable work, and
+  //                                        checking the last one escalates to
+  //                                        `completeToDo`, which refuses.
+  //                                        Still editable in the edit drawer.
+  //   Options → Edit              ADAPT    Same drawer as the body tap.
+  //   Options → Important         LEAVE    A classification the promote sheet
+  //                                        pre-fills; harmless while parked.
+  //   Options → Move to tomorrow  SUPPRESS No schedule to move. Guarded in the
+  //                                        handler too.
+  //   Options → Add to your list  ADD      The parked counterpart: opens the
+  //                                        promote sheet, so the drawer is a
+  //                                        complete keyboard / reduced-motion
+  //                                        path to every parked action.
+  //   Options → Duplicate         ADAPT    The copy stays PARKED
+  //                                        (`addSavedForLaterTodo`), instead of
+  //                                        minting an active to-do due today.
+  //   Options → Save for later    SUPPRESS Already parked (mirrors the rail).
+  //   Options → Delete            LEAVE    Deleting a parked item is correct.
+  //   Batch selection             ADAPT    Selectable for DELETE ONLY; Complete
+  //                                        and Reschedule are removed from the
+  //                                        bar whenever the selection includes
+  //                                        one.
+  //   Deep-link highlight/scroll  LEAVE    Works; expands the section first.
+  //
+  // Test Mode (`MockHouseholdContext.completeToDoMock`) carries the same
+  // completion refusal as production — without it the escalation path succeeds
+  // there and mints the zombie doc the guard exists to prevent.
+  // ───────────────────────────────────────────────────────────────────────────
+  //
+  // The row itself is the same TodoRow in its parked variant, never a fork.
   const renderParkedRow = (item: ToDo) => (
     <div
       key={item.id}
@@ -2650,15 +2755,32 @@ const ToDosPage: React.FC = () => {
             autoFocus
           />
 
-          <Input
-            id="due-date-input"
-            label="Due date"
-            type="date"
-            value={completeByDate}
-            onChange={(e) => setCompleteByDate(e.target.value)}
-            icon={<Calendar size={18} />}
-            className="appearance-none"
-          />
+          {/* "Saved for later": a PARKED to-do has no due date to edit. Its
+              stored `completeByDate` is an inert placeholder the schema says is
+              never rendered anywhere — showing it here as a normal, pre-filled,
+              editable date presents a fabricated value as real and lets any
+              edit (even a retitle) commit it. The promote sheet is the only
+              place a real date is chosen, and it requires one. */}
+          {editingParked ? (
+            <div className="rounded-btn border border-brand-200 bg-brand-50 px-3 py-2.5 dark:border-brand-700 dark:bg-brand-800/40">
+              <p className="text-sm text-brand-600 dark:text-brand-200">
+                Saved for later — no due date yet.
+              </p>
+              <p className="mt-0.5 text-xs text-brand-400 dark:text-brand-450">
+                Tap <span className="font-medium">+</span> on the task to add it to your list and pick a date.
+              </p>
+            </div>
+          ) : (
+            <Input
+              id="due-date-input"
+              label="Due date"
+              type="date"
+              value={completeByDate}
+              onChange={(e) => setCompleteByDate(e.target.value)}
+              icon={<Calendar size={18} />}
+              className="appearance-none"
+            />
+          )}
 
           {members.length === 0 ? (
             <div className="flex items-center gap-2 text-sm text-brand-400 dark:text-brand-450 py-2">
@@ -2721,8 +2843,12 @@ const ToDosPage: React.FC = () => {
 
               {/* Auto-reschedule — only meaningful for a repeating task, so it
                   appears alongside Important once a cadence is chosen. Accent
-                  (not warm) on-state so it never reads as a second "Important". */}
-              {recurrence !== 'none' && (
+                  (not warm) on-state so it never reads as a second "Important".
+                  Suppressed for a parked to-do with the rest of the scheduling
+                  group below: it moves a DUE DATE forward, and a parked to-do
+                  has none. (A to-do parked while recurring still holds the
+                  cadence in state, so this needs its own guard.) */}
+              {!editingParked && recurrence !== 'none' && (
                 <button
                   type="button"
                   onClick={() => setResetWhenExpired(v => !v)}
@@ -2747,7 +2873,7 @@ const ToDosPage: React.FC = () => {
             <p className="mt-1 text-xs text-brand-400 dark:text-brand-450">
               Matters to the family — big consequences if skipped.
             </p>
-            {recurrence !== 'none' && (
+            {!editingParked && recurrence !== 'none' && (
               <p className="mt-1 text-xs text-brand-400 dark:text-brand-450">
                 Not done by the due date? It moves to the next date instead of going overdue — and the steps reset.
               </p>
@@ -2793,6 +2919,16 @@ const ToDosPage: React.FC = () => {
           {/* Always mounted (hidden when collapsed) so the expander button's
               aria-controls never references an absent id. */}
           <div id="task-more-options" className="space-y-4" hidden={!moreOpen}>
+          {/* "Saved for later": the whole SCHEDULING group is suppressed for a
+              parked to-do. Every control in it anchors on a due date that does
+              not exist yet — a due time and its reminder have nothing to fire
+              relative to (`todoReminders` skips parked items outright), and
+              Repeat / Auto-reschedule only act on completion, which a parked
+              to-do cannot reach. Offering them would be the same lie as the due
+              date field above. Notes, steps, category, importance and the habit
+              link all still apply and stay. */}
+          {!editingParked && (
+          <>
           {/* F-TODO-14: optional due time + reminder lead time. The reminder
               select is disabled until a time anchors it; clearing the time
               clears the reminder on save (see handleSubmit). */}
@@ -2851,6 +2987,8 @@ const ToDosPage: React.FC = () => {
               </p>
             )}
           </div>
+          </>
+          )}
 
           {/* Habit Automations (PRD #1065): "Counts toward habit" picker.
               Completing this to-do fires the chosen habit like one manual tap
@@ -3049,17 +3187,42 @@ const ToDosPage: React.FC = () => {
                 {actionTodo.isImportant ? 'Unmark important' : 'Mark important'}
               </Button>
 
-              <Button
-                variant="ghost"
-                className="w-full justify-start"
-                leftIcon={<Calendar size={18} className="text-brand-500" />}
-                onClick={() => {
-                  handleMoveToTomorrow(actionTodo);
-                  setActionTodo(null);
-                }}
-              >
-                Move to tomorrow
-              </Button>
+              {/* "Saved for later": SUPPRESSED for a parked to-do. It writes
+                  `completeByDate` and toasts "Task moved to tomorrow", while
+                  nothing observable changes — the item stays parked and its row
+                  renders no due date. A false success message is worse than an
+                  absent control. Promotion is how a parked item gets a date. */}
+              {actionTodo.savedForLater !== true && (
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start"
+                  leftIcon={<Calendar size={18} className="text-brand-500" />}
+                  onClick={() => {
+                    handleMoveToTomorrow(actionTodo);
+                    setActionTodo(null);
+                  }}
+                >
+                  Move to tomorrow
+                </Button>
+              )}
+
+              {/* "Saved for later": the parked counterpart of Move to tomorrow —
+                  the one control that actually gives a parked item a date. Opens
+                  the same promote sheet the row's `+` and promote-swipe use, so
+                  the drawer is a complete keyboard/reduced-motion path. */}
+              {actionTodo.savedForLater === true && (
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start"
+                  leftIcon={<Plus size={18} className="text-accent-600 dark:text-accent-300" />}
+                  onClick={() => {
+                    setPromotingTodo(actionTodo);
+                    setActionTodo(null);
+                  }}
+                >
+                  Add to your list
+                </Button>
+              )}
 
               <Button
                 variant="ghost"
@@ -3078,8 +3241,11 @@ const ToDosPage: React.FC = () => {
                   prefers-reduced-motion, and there is no keyboard swipe, so
                   this drawer IS the accessible path to parking a to-do. A
                   COMPLETED to-do is omitted: it cannot be parked (the mirror of
-                  PR-1's guard against completing a parked one). */}
-              {!actionTodo.isCompleted && (
+                  PR-1's guard against completing a parked one), and so is an
+                  already-PARKED one. This condition mirrors the swipe rail's
+                  (`!isParked && !item.isCompleted`) exactly — the two must not
+                  drift, or the drawer offers what the rail refuses. */}
+              {actionTodo.savedForLater !== true && !actionTodo.isCompleted && (
                 <Button
                   variant="ghost"
                   className="w-full justify-start"

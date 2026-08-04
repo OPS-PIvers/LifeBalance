@@ -3619,6 +3619,17 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     if (found.isCompleted) {
       return; // already completed — avoid duplicate points
     }
+    // Parked-to-do guard — PARITY WITH makeCompleteToDo, not decoration. A
+    // parked ("saved for later") to-do is not completable, and this mock is the
+    // path Test Mode takes: without this the same interaction that THROWS in
+    // production SILENTLY SUCCEEDS here and mints `{savedForLater: true,
+    // isCompleted: true}` — a doc `savedForLaterTodos` still matches (it
+    // deliberately does not filter completed items) but the completed view does
+    // not, i.e. a zombie invisible to every exposed slice. `toggleTodoSubtask`
+    // delegates its last-subtask escalation here, so this covers that too.
+    if (found.savedForLater === true) {
+      throw new Error(`Cannot complete "${found.text}" — it is saved for later`);
+    }
     const subtaskToggle = options?.subtaskToggle;
     const effectiveSubtasks = subtaskToggle
       ? setSubtaskDone(found.subtasks, subtaskToggle.subtaskId, subtaskToggle.done)

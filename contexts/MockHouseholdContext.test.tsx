@@ -1406,6 +1406,47 @@ describe('MockHouseholdContext saved-for-later split', () => {
     expect(result.current.todos.find(t => t.text === 'Research a bread machine')).toBeUndefined();
   });
 
+  /**
+   * PARITY, not decoration. Test Mode is where the app is driven by hand, so a
+   * missing guard here doesn't throw — it SILENTLY SUCCEEDS and mints
+   * `{savedForLater: true, isCompleted: true}`: a doc `savedForLaterTodos`
+   * still matches (it deliberately does not filter completed items) but the
+   * completed view does not, i.e. invisible to every exposed slice. Production
+   * refuses this in `makeCompleteToDo`; the mock must refuse it identically.
+   */
+  it('REFUSES to complete a parked to-do, exactly as production does', async () => {
+    const { result } = captureHousehold();
+
+    await expect(
+      result.current.completeToDo('todo_parked_1'),
+    ).rejects.toThrow(/saved for later/i);
+
+    // Still parked, still not completed — no zombie doc.
+    const parked = result.current.savedForLaterTodos.find(t => t.id === 'todo_parked_1');
+    expect(parked?.isCompleted).toBe(false);
+    expect(parked?.savedForLater).toBe(true);
+    expect(result.current.todos.find(t => t.id === 'todo_parked_1')).toBeUndefined();
+  });
+
+  it('refuses the SUBTASK escalation path into completion too', async () => {
+    const { result } = captureHousehold();
+
+    // `toggleTodoSubtask` delegates its last-subtask auto-complete to
+    // completeToDoMock, so the guard has to cover that door as well.
+    await act(async () => {
+      await result.current.updateToDo('todo_parked_1', {
+        subtasks: [{ id: 'st1', text: 'Only step', isDone: false }],
+      });
+    });
+
+    await expect(
+      result.current.toggleTodoSubtask('todo_parked_1', 'st1'),
+    ).rejects.toThrow(/saved for later/i);
+
+    const parked = result.current.savedForLaterTodos.find(t => t.id === 'todo_parked_1');
+    expect(parked?.isCompleted).toBe(false);
+  });
+
   it('parks and promotes a shopping item with no triage', async () => {
     const { result } = captureHousehold();
 

@@ -75,6 +75,8 @@ const parked = (id: string, text: string, extra: Partial<ToDo> = {}): ToDo => ({
   ...extra,
 });
 
+const mockAddToDo = vi.fn(() => Promise.resolve());
+const mockUpdateToDo = vi.fn(() => Promise.resolve());
 const mockAddSavedForLaterTodo = vi.fn(() => Promise.resolve());
 const mockDeleteToDo = vi.fn(() => Promise.resolve());
 const mockCompleteToDo = vi.fn(() => Promise.resolve());
@@ -87,9 +89,9 @@ const applyContext = (savedForLaterTodos: ToDo[], todos: ToDo[] = [activeTodo]) 
     savedForLaterTodos,
     members,
     currentUser: members[0],
-    addToDo: vi.fn(),
+    addToDo: mockAddToDo,
     addSavedForLaterTodo: mockAddSavedForLaterTodo,
-    updateToDo: vi.fn(),
+    updateToDo: mockUpdateToDo,
     deleteToDo: mockDeleteToDo,
     completeToDo: mockCompleteToDo,
     uncompleteToDo: vi.fn(),
@@ -358,6 +360,17 @@ describe('ToDosPage — Saved for later section', () => {
       });
     });
 
+    it('offers NEITHER path for an ALREADY-PARKED to-do (mirrors the swipe rail)', () => {
+      setup([parked('p1', 'Bike rack')]);
+
+      openTaskOptions('Bike rack');
+      // The drawer's condition must mirror the rail's exactly
+      // (`!isParked && !isCompleted`), or it offers what the rail refuses.
+      expect(screen.queryByRole('button', { name: 'Save for later' })).toBeNull();
+      // Positive control — the drawer really opened, on the parked row.
+      expect(screen.getByRole('button', { name: /^Delete/ })).toBeInTheDocument();
+    });
+
     it('offers NEITHER path for a completed to-do', () => {
       const completed: ToDo = { ...activeTodo, isCompleted: true, completedAt: new Date().toISOString() };
       setup([], [completed]);
@@ -382,6 +395,130 @@ describe('ToDosPage — Saved for later section', () => {
       // `isCompleted` guard inside TodoRow itself is covered directly in
       // components/todos/TodoRow.test.tsx.
       expect(screen.queryByRole('button', { name: 'Edit task: Active task' })).toBeNull();
+    });
+  });
+
+  /**
+   * The affordance sweep over everything ELSE a parked row reaches — the
+   * Task-options drawer and the edit drawer. See the enumeration comment above
+   * `renderParkedRow` in ToDosPage.tsx for the suppress/adapt/leave decision on
+   * each one. The invariant these all serve: a parked to-do has NO REAL DUE
+   * DATE and CANNOT BE COMPLETED, so no control may pretend otherwise.
+   */
+  describe('parked-row affordances', () => {
+    it('SUPPRESSES "Move to tomorrow" — it would toast a false success', () => {
+      setup([parked('p1', 'Bike rack')]);
+
+      openTaskOptions('Bike rack');
+      // It writes completeByDate and toasts "Task moved to tomorrow" while
+      // nothing observable changes: the item stays parked and its row renders
+      // no due date at all.
+      expect(screen.queryByRole('button', { name: /Move to tomorrow/ })).toBeNull();
+      expect(mockUpdateToDo).not.toHaveBeenCalled();
+    });
+
+    it('positive control: an ACTIVE row still offers "Move to tomorrow"', () => {
+      setup([]);
+      openTaskOptions('Active task');
+      expect(screen.getByRole('button', { name: /Move to tomorrow/ })).toBeInTheDocument();
+    });
+
+    it('ADDS "Add to your list" so the drawer is a complete keyboard path', async () => {
+      setup([parked('p1', 'Bike rack')]);
+
+      openTaskOptions('Bike rack');
+      // Exact name: the row's own `+` control is "Add to your list: Bike rack".
+      fireEvent.click(screen.getByRole('button', { name: 'Add to your list' }));
+
+      // Opens the same promote sheet as the row's `+` and the promote swipe —
+      // which matters because swipes are disabled under prefers-reduced-motion.
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Add to list' })).toBeInTheDocument();
+      });
+    });
+
+    it('ADAPTS Duplicate — the copy of a parked item stays PARKED', async () => {
+      setup([parked('p1', 'Bike rack')]);
+
+      openTaskOptions('Bike rack');
+      fireEvent.click(screen.getByRole('button', { name: /^Duplicate/ }));
+
+      // `addToDo` would mint an ACTIVE to-do due today with no classification —
+      // a second write path into the active list bypassing `promoteTodo`.
+      await waitFor(() => expect(mockAddSavedForLaterTodo).toHaveBeenCalledWith('Bike rack'));
+      expect(mockAddToDo).not.toHaveBeenCalled();
+    });
+
+    it('positive control: duplicating an ACTIVE row still uses addToDo', async () => {
+      setup([]);
+      openTaskOptions('Active task');
+      fireEvent.click(screen.getByRole('button', { name: /^Duplicate/ }));
+
+      await waitFor(() => expect(mockAddToDo).toHaveBeenCalled());
+      expect(mockAddSavedForLaterTodo).not.toHaveBeenCalled();
+    });
+
+    describe('the edit drawer', () => {
+      const openParkedEditor = () => {
+        setup([parked('p1', 'Bike rack', { completeByDate: '2026-08-04' })]);
+        fireEvent.click(screen.getByRole('button', { name: 'Edit task: Bike rack' }));
+      };
+
+      it('never exposes the placeholder date as an editable field', () => {
+        openParkedEditor();
+
+        // The schema says this value is NEVER RENDERED ANYWHERE. Showing it
+        // pre-filled in a normal date input presents a fabricated value as real
+        // and lets any edit — even a retitle — commit it.
+        expect(screen.queryByLabelText('Due date')).toBeNull();
+        expect(screen.queryByDisplayValue('2026-08-04')).toBeNull();
+        expect(screen.getByText(/Saved for later — no due date yet/)).toBeInTheDocument();
+      });
+
+      it('suppresses the scheduling group, which all anchors on a due date', () => {
+        openParkedEditor();
+        fireEvent.click(screen.getByRole('button', { name: /More options/ }));
+
+        expect(screen.queryByLabelText('Time')).toBeNull();
+        expect(screen.queryByLabelText('Reminder')).toBeNull();
+        expect(screen.queryByLabelText('Repeat')).toBeNull();
+      });
+
+      it('still allows editing the fields that DO apply while parked', () => {
+        openParkedEditor();
+        expect(screen.getByLabelText('Task')).toBeInTheDocument();
+        expect(screen.getByLabelText('Assign to')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Important' })).toBeInTheDocument();
+      });
+
+      it('saves a retitle WITHOUT writing completeByDate', async () => {
+        openParkedEditor();
+
+        fireEvent.change(screen.getByLabelText('Task'), { target: { value: 'Bike rack research' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+        await waitFor(() => expect(mockUpdateToDo).toHaveBeenCalled());
+        const [, updates] = mockUpdateToDo.mock.calls[0] as unknown as [string, Record<string, unknown>];
+        expect(updates.text).toBe('Bike rack research');
+        // Writing a real date while `savedForLater` stays true defeats the
+        // promote sheet's one-write design (date and flag change together).
+        expect('completeByDate' in updates).toBe(false);
+        expect('savedForLater' in updates).toBe(false);
+      });
+
+      it('positive control: an ACTIVE edit still shows and can write the due date', async () => {
+        setup([]);
+        fireEvent.click(screen.getByRole('button', { name: 'Edit task: Active task' }));
+
+        const dueDate = screen.getByLabelText('Due date');
+        expect(dueDate).toBeInTheDocument();
+        fireEvent.change(dueDate, { target: { value: '2026-12-25' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+        await waitFor(() => expect(mockUpdateToDo).toHaveBeenCalled());
+        const [, updates] = mockUpdateToDo.mock.calls[0] as unknown as [string, Record<string, unknown>];
+        expect(updates.completeByDate).toBe('2026-12-25');
+      });
     });
   });
 });

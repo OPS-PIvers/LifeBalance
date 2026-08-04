@@ -402,6 +402,51 @@ describe('TodoRow — saved-for-later (parked) variant', () => {
     expect(handlers.onComplete).not.toHaveBeenCalled();
   });
 
+  it('suppresses the subtask pill and checklist — no path to completeToDo', () => {
+    const withSteps: ToDo = {
+      ...parkedItem,
+      subtasks: [
+        { id: 's1', text: 'First step', isDone: true },
+        { id: 's2', text: 'Last step', isDone: false },
+      ],
+    };
+    render(<TodoRow {...parkedProps} item={withSteps} />);
+
+    // Checking the LAST step escalates to `completeToDo`, which refuses a
+    // parked to-do — surfacing as a bare "Failed to update subtask". The
+    // control should never have been offered.
+    expect(screen.queryByTestId('todo-subtask-pill')).toBeNull();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByText('Last step')).toBeNull();
+  });
+
+  it('positive control: the SAME fixture as an ACTIVE row DOES show the pill', () => {
+    const withSteps: ToDo = {
+      ...parkedItem,
+      subtasks: [
+        { id: 's1', text: 'First step', isDone: true },
+        { id: 's2', text: 'Last step', isDone: false },
+      ],
+    };
+    render(<TodoRow {...baseProps} item={withSteps} />);
+    expect(screen.getByTestId('todo-subtask-pill')).toBeInTheDocument();
+  });
+
+  it('offers NO path to completeToDo at all', () => {
+    const withSteps: ToDo = {
+      ...parkedItem,
+      subtasks: [{ id: 's1', text: 'Only step', isDone: false }],
+    };
+    render(<TodoRow {...parkedProps} item={withSteps} />);
+
+    // The three doors: the leading control, the start-swipe action, and the
+    // subtask checklist's auto-complete escalation. Click everything the row
+    // exposes and assert onComplete/onToggleSubtask were never reached.
+    document.querySelectorAll('button').forEach(b => fireEvent.click(b));
+    expect(handlers.onComplete).not.toHaveBeenCalled();
+    expect(handlers.onToggleSubtask).not.toHaveBeenCalled();
+  });
+
   it('offers no "Save for later" action — it is already parked', () => {
     render(<TodoRow {...parkedProps} onSaveForLater={vi.fn()} />);
     // By attribute: rail buttons are aria-hidden until the row opens, and an
