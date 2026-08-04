@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Star, TrendingUp, User } from 'lucide-react';
+import { AlertCircle, Star, TrendingUp, User } from 'lucide-react';
 import { useFinance, useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
@@ -49,10 +49,14 @@ const loadPointsBreakdownDrawer = () => import('@/components/habits/PointsBreakd
 const PointsBreakdownDrawer = React.lazy(loadPointsBreakdownDrawer);
 
 const TopToolbar: React.FC = () => {
-  const { safeToSpendBreakdown } = useFinance();
+  const { safeToSpendBreakdown, budgetFit } = useFinance();
   // Fall back to 0 while the breakdown hasn't been computed yet (matches the
   // toolbar's prior initial render with the raw `safeToSpend` field).
   const safeToSpend = safeToSpendBreakdown?.safeToSpend ?? 0;
+  // PR A — Safe-to-Spend header amber mark. `isOverAllocated` is already
+  // false whenever StS itself is negative (see utils/budgetFit.ts), so this
+  // mark never doubles up with the figure already rendering red below.
+  const isOverAllocated = budgetFit?.isOverAllocated ?? false;
   const { dailyPoints, weeklyPoints } = useGamification();
   // `currentUser` here is the household MEMBER record (not the Firebase Auth
   // user below) — it's what carries the uid a MemberColorMap is keyed on, so
@@ -110,11 +114,16 @@ const TopToolbar: React.FC = () => {
   // users hear the new values without hunting back up to the header. The ref
   // guard skips the initial render (announcing on mount would be noise).
   const [liveMessage, setLiveMessage] = useState('');
-  const prevFiguresRef = useRef<{ sts: number; pts: number } | null>(null);
+  const prevFiguresRef = useRef<{ sts: number; pts: number; overAllocated: boolean } | null>(null);
   useEffect(() => {
     const prev = prevFiguresRef.current;
-    prevFiguresRef.current = { sts: safeToSpend, pts: dailyPoints };
-    if (!prev || (prev.sts === safeToSpend && prev.pts === dailyPoints)) return;
+    prevFiguresRef.current = { sts: safeToSpend, pts: dailyPoints, overAllocated: isOverAllocated };
+    if (
+      !prev ||
+      (prev.sts === safeToSpend && prev.pts === dailyPoints && prev.overAllocated === isOverAllocated)
+    ) {
+      return;
+    }
     const timer = setTimeout(() => {
       const parts: string[] = [];
       if (prev.sts !== safeToSpend && isModuleEnabled('money')) {
@@ -123,10 +132,16 @@ const TopToolbar: React.FC = () => {
       if (prev.pts !== dailyPoints && isModuleEnabled('habits')) {
         parts.push(`${dailyPoints} points today`);
       }
+      // Only the false -> true transition is news; recovering from
+      // over-allocation is not announced (matches the mark itself, which
+      // only ever appears, never explicitly "clears" with its own message).
+      if (!prev.overAllocated && isOverAllocated && isModuleEnabled('money')) {
+        parts.push('Budgets over-allocated');
+      }
       if (parts.length > 0) setLiveMessage(parts.join('. '));
     }, 800);
     return () => clearTimeout(timer);
-  }, [safeToSpend, dailyPoints, fmt, isModuleEnabled]);
+  }, [safeToSpend, dailyPoints, isOverAllocated, fmt, isModuleEnabled]);
 
   return (
     <>
@@ -141,16 +156,62 @@ const TopToolbar: React.FC = () => {
           {isModuleEnabled('money') && (
             <button
               type="button"
-              aria-label="View Safe to Spend details"
+              aria-label={
+                isOverAllocated
+                  ? 'View Safe to Spend details, your budgets are over-allocated'
+                  : 'View Safe to Spend details'
+              }
               className="flex flex-col text-left cursor-pointer active:opacity-80 transition-opacity focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-400 focus-visible:rounded-lg"
               onClick={() => setStsOpen(true)}
             >
-              <span
-                // No theme split: the toolbar band is brand-800 in BOTH themes,
-                // so the figure always needs the light-on-dark money variants.
-                className={`text-2xl font-mono font-bold tracking-tight tabular-nums ${isPositive ? 'text-money-posDark' : 'text-money-negDark'}`}
-              >
-                {fmt(safeToSpend)}
+              <span className="flex items-center gap-1.5">
+                <span
+                  // The toolbar band is brand-800 in light mode and brand-900
+                  // in dark mode (see the header's className below) — the
+                  // SHADE differs by theme, but both are dark enough that the
+                  // figure always needs the light-on-dark money variants;
+                  // there's no separate "light band" case to branch on.
+                  className={`text-2xl font-mono font-bold tracking-tight tabular-nums ${isPositive ? 'text-money-posDark' : 'text-money-negDark'}`}
+                >
+                  {fmt(safeToSpend)}
+                </span>
+                {isOverAllocated && (
+                  // Same mark as ActionQueueItem's "Overdue" badge
+                  // (components/dashboard/ActionQueueItem.tsx) — solid
+                  // warm-500 fill + white AlertCircle. Deliberately no dollar
+                  // amount here: measured in the running app at 375pt, a mark
+                  // plus a figure collides with the points cluster on an
+                  // SE/mini/8-width screen. The full breakdown is one tap away.
+                  //
+                  // Purely decorative (`aria-hidden`): the ancestor button's
+                  // `aria-label` above is the single carrier of meaning for
+                  // this state. Per the WAI-ARIA accname algorithm, an
+                  // element's `aria-label` fully determines its accessible
+                  // name and the algorithm never descends into subtree
+                  // content — so a `title` or `sr-only` span here would be
+                  // unreachable for screen readers (and `title` is also dead
+                  // on touch, this app's primary surface). Matches the
+                  // pattern documented on `components/ui/CountBadge.tsx`.
+                  //
+                  // `ring-warm-700` measures only ~2.1:1 against this
+                  // toolbar band — well under WCAG 1.4.11's 3:1 floor on its
+                  // own — but it's kept DELIBERATELY for visual consistency
+                  // with ActionQueueItem's identical badge (which does the
+                  // real separation work against its own near-white card).
+                  // Here the `bg-warm-500` fill carries the required
+                  // contrast by itself: 4.42:1 against the light-mode band
+                  // (brand-800) and 5.09:1 against the dark-mode band
+                  // (brand-900), comfortably clearing the 3:1 floor for a
+                  // meaningful graphical object. Don't "fix" the ring away
+                  // or treat it as a contrast bug — it isn't carrying the
+                  // contrast requirement.
+                  <span
+                    className="w-4 h-4 rounded-full bg-warm-500 ring-2 ring-warm-700 flex items-center justify-center text-white shrink-0"
+                    aria-hidden="true"
+                  >
+                    <AlertCircle size={10} />
+                  </span>
+                )}
               </span>
               <span className="font-display text-xs text-brand-300 uppercase tracking-wider font-semibold leading-tight">
                 Safe to Spend

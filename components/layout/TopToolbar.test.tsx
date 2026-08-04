@@ -1,5 +1,5 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import TopToolbar from './TopToolbar';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
@@ -8,8 +8,12 @@ import type { ModuleKey } from '@/types/schema';
 // Narrow context slices TopToolbar reads. Stub each with the minimal shape.
 // `currentUser`/`members` back the profile chip's MemberColorMap (paper cut:
 // the chip now resolves the SAME color as this member's badge elsewhere).
+// `useFinance` is a `vi.fn()` (not a fixed object) so individual tests can
+// reconfigure `budgetFit` for the over-allocation mark, mirroring the
+// `setEnabledModules` pattern used for `useModuleVisibility` below.
+const useFinanceMock = vi.fn();
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
-  useFinance: () => ({ safeToSpendBreakdown: { safeToSpend: 1234 } }),
+  useFinance: () => useFinanceMock(),
   useGamification: () => ({ dailyPoints: 10, weeklyPoints: 50 }),
   useHouseholdCore: () => ({
     unreadNotificationCount: 0,
@@ -107,6 +111,7 @@ describe('TopToolbar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setEnabledModules(['habits', 'money', 'lists', 'todos', 'meals', 'shopping']);
+    useFinanceMock.mockReturnValue({ safeToSpendBreakdown: { safeToSpend: 1234 } });
   });
 
   it('shows Safe-to-Spend and the points/Rewards cluster when both domains are on', () => {
@@ -171,5 +176,125 @@ describe('TopToolbar', () => {
       expect(screen.getByTestId('points-breakdown-drawer')).toBeInTheDocument();
     });
     expect(trackMock).toHaveBeenCalledWith('points_drawer_opened');
+  });
+
+  // PR A — Safe-to-Spend header over-allocation mark. Regression risk called
+  // out explicitly: a mark that shows even when Safe-to-Spend itself is
+  // negative would double up with the figure already rendering red.
+  describe('budget over-allocation mark', () => {
+    const OVER_ALLOCATED_LABEL = 'View Safe to Spend details, your budgets are over-allocated';
+
+    // The mark is `aria-hidden` (its button's `aria-label` is the single
+    // accessible-name carrier — see TopToolbar.tsx), so it carries no
+    // `title` and no discoverable text. Assert on the DOM node directly.
+    it('shows the amber mark when budgetFit.isOverAllocated is true', () => {
+      useFinanceMock.mockReturnValue({
+        safeToSpendBreakdown: { safeToSpend: 356.22 },
+        budgetFit: { claimed: 423.76, leftover: -67.54, shortfall: 67.54, isOverAllocated: true },
+      });
+      renderToolbar();
+
+      const button = screen.getByRole('button', { name: OVER_ALLOCATED_LABEL });
+      const mark = button.querySelector('[aria-hidden="true"]');
+      expect(mark).toBeInTheDocument();
+      expect(mark?.querySelector('svg')).toBeInTheDocument();
+      // The dead accessibility attributes this mark used to carry (fix:
+      // both were unreachable — an ancestor aria-label wins the whole
+      // subtree, and `title` is dead on touch besides) must stay gone.
+      expect(mark).not.toHaveAttribute('title');
+      expect(screen.queryByText('Budgets over-allocated', { exact: false })).not.toBeInTheDocument();
+      // The plain (non-over-allocated) label must NOT also match — otherwise
+      // this assertion would pass vacuously via a substring match.
+      expect(screen.queryByRole('button', { name: STS_LABEL })).not.toBeInTheDocument();
+    });
+
+    it('does NOT show the mark when the shortfall is below the $10 threshold', () => {
+      useFinanceMock.mockReturnValue({
+        safeToSpendBreakdown: { safeToSpend: 100 },
+        // isOverAllocated is what the toolbar reads — this is what
+        // computeBudgetFit would produce for a $9.99 shortfall.
+        budgetFit: { claimed: 109.99, leftover: -9.99, shortfall: 9.99, isOverAllocated: false },
+      });
+      renderToolbar();
+
+      const button = screen.getByRole('button', { name: STS_LABEL });
+      expect(button.querySelector('svg')).not.toBeInTheDocument();
+    });
+
+    it('does NOT show the mark when Safe-to-Spend itself is negative (figure already reads red)', () => {
+      useFinanceMock.mockReturnValue({
+        safeToSpendBreakdown: { safeToSpend: -50 },
+        // A negative StS forces isOverAllocated false regardless of the
+        // buckets' claim (see utils/budgetFit.ts) — the biggest regression
+        // risk this feature has, so assert it directly here too.
+        budgetFit: { claimed: 500, leftover: -550, shortfall: 550, isOverAllocated: false },
+      });
+      renderToolbar();
+
+      const button = screen.getByRole('button', { name: STS_LABEL });
+      expect(button.querySelector('svg')).not.toBeInTheDocument();
+    });
+  });
+
+  // Parity gap fix: the debounced header live region previously tracked only
+  // `{sts, pts}`, so a household crossing INTO over-allocation with StS
+  // itself unchanged produced no announcement at all, even though the
+  // sighted UI grows a new amber mark. `isOverAllocated` now rides the same
+  // ref/effect.
+  describe('over-allocation live-region announcement', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('announces "Budgets over-allocated" on the false -> true transition', () => {
+      useFinanceMock.mockReturnValue({
+        safeToSpendBreakdown: { safeToSpend: 200 },
+        budgetFit: { claimed: 0, leftover: 200, shortfall: 0, isOverAllocated: false },
+      });
+      const { rerender } = render(
+        <MemoryRouter>
+          <TopToolbar />
+        </MemoryRouter>
+      );
+
+      useFinanceMock.mockReturnValue({
+        safeToSpendBreakdown: { safeToSpend: 200 },
+        budgetFit: { claimed: 210, leftover: -10, shortfall: 10, isOverAllocated: true },
+      });
+      rerender(
+        <MemoryRouter>
+          <TopToolbar />
+        </MemoryRouter>
+      );
+
+      act(() => {
+        vi.advanceTimersByTime(800);
+      });
+
+      expect(screen.getByRole('status')).toHaveTextContent('Budgets over-allocated');
+    });
+
+    // Negative control: if the mount-skip guard (`!prev`) were dropped, or
+    // `prevFiguresRef` were seeded with a non-null default instead of
+    // `null`, this would start reporting a spurious announcement on first
+    // render whenever a household happens to load already over-allocated.
+    // Pairs with the positive test above so this guard can't silently regress.
+    it('does NOT announce on initial render even when already over-allocated', () => {
+      useFinanceMock.mockReturnValue({
+        safeToSpendBreakdown: { safeToSpend: 200 },
+        budgetFit: { claimed: 210, leftover: -10, shortfall: 10, isOverAllocated: true },
+      });
+      renderToolbar();
+
+      act(() => {
+        vi.advanceTimersByTime(800);
+      });
+
+      expect(screen.getByRole('status')).toHaveTextContent('');
+    });
   });
 });

@@ -39,6 +39,7 @@ import {
   NotificationLogEntry
 } from '@/types/schema';
 import { type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
+import { type BudgetFit } from '@/utils/budgetFit';
 import { type BucketSpent } from '@/utils/bucketSpentCalculator';
 import { type TrashedItem } from '@/utils/trash';
 import { type TriggerSource } from '@/utils/habitTriggers';
@@ -142,6 +143,14 @@ export interface HouseholdContextType {
    * supply it; the real Firebase provider always does.
    */
   safeToSpendBreakdown?: SafeToSpendBreakdown;
+  /**
+   * Whether the household's budget buckets claim more of the Safe-to-Spend
+   * pool than is actually free (PR A — header amber mark). Optional for the
+   * same reason as `safeToSpendBreakdown`: an alternate provider may not
+   * supply it, though both the real Firebase provider and the Test Mode
+   * mock provider always do.
+   */
+  budgetFit?: BudgetFit;
   dailyPoints: number;
   weeklyPoints: number;
   totalPoints: number;
@@ -772,7 +781,7 @@ export interface HouseholdContextType {
 // shape automatically — there is a single source of truth for every field.
 
 export type FinanceContextValue = Pick<HouseholdContextType,
-  | 'safeToSpend' | 'safeToSpendBreakdown' | 'accounts' | 'buckets' | 'savingsGoals' | 'calendarItems' | 'transactions'
+  | 'safeToSpend' | 'safeToSpendBreakdown' | 'budgetFit' | 'accounts' | 'buckets' | 'savingsGoals' | 'calendarItems' | 'transactions'
   | 'currentPeriodId' | 'bucketSpentMap' | 'bucketHistory' | 'netWorthHistory'
   | 'transactionWindowStart' | 'isLoadingOlderTransactions' | 'hasMoreTransactions'
   | 'loadOlderTransactions' | 'loadAllTransactions'

@@ -69,6 +69,7 @@ import {
   NotificationLogEntry
 } from '@/types/schema';
 import { calculateSafeToSpendBreakdownFromExpanded, calculateSafeToSpendExpansionStart } from '@/utils/safeToSpendCalculator';
+import { computeBudgetFit } from '@/utils/budgetFit';
 import { isHabitStale, getHabitResetUpdate } from '@/utils/habitLogic';
 import {
   calculateHouseholdPointsForDate,
@@ -735,6 +736,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const safeToSpendBreakdown = useMemo(
     () => calculateSafeToSpendBreakdownFromExpanded(accounts, expandedCalendarItemsForSafeToSpend, currentPeriodId, transactions),
     [accounts, expandedCalendarItemsForSafeToSpend, currentPeriodId, transactions]
+  );
+  // Whether the buckets' remaining limits claim more of the Safe-to-Spend pool
+  // than is actually free — surfaced as the toolbar's amber over-allocation
+  // mark (PR A). Memoized HERE (not in the always-mounted TopToolbar) because
+  // `bucketSpentMap` recomputes on every transaction change; computing this
+  // inline in the toolbar would re-run it on every render for a small object
+  // instead of once here — same reasoning as `safeToSpendBreakdown` above.
+  const budgetFit = useMemo(
+    () => computeBudgetFit(safeToSpendBreakdown, buckets, bucketSpentMap),
+    [safeToSpendBreakdown, buckets, bucketSpentMap]
   );
   const safeToSpend = safeToSpendBreakdown.safeToSpend;
   const dailyPoints = householdSettings?.points?.daily || 0;
@@ -2738,6 +2749,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const financeValue = useMemo<FinanceContextValue>(() => ({
     safeToSpend,
     safeToSpendBreakdown,
+    budgetFit,
     accounts,
     buckets,
     savingsGoals,
@@ -2801,7 +2813,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addTransactionComment,
     deleteTransactionComment,
   }), [
-    safeToSpend, safeToSpendBreakdown, accounts, buckets, savingsGoals, netWorthHistory, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
+    safeToSpend, safeToSpendBreakdown, budgetFit, accounts, buckets, savingsGoals, netWorthHistory, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
     transactionWindowStart, isLoadingOlderTransactions, hasMoreTransactions, loadOlderTransactions, loadAllTransactions,
     isLoadingOlderBucketHistory, hasMoreBucketHistory, loadAllBucketHistory,
     addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, setAccountCardDetails, deleteAccount, archiveAccount, unarchiveAccount, updateAccountOrder, reorderAccounts,
