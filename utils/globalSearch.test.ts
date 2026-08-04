@@ -357,6 +357,73 @@ describe('searchAll', () => {
       const listsDisabled = searchAll(corpus, 'repaint', { moduleVisibility: { plan: false } });
       expect(listsDisabled).toEqual([]);
     });
+
+    /**
+     * `searchAll` merges an active array and a parked array per type
+     * (`[...searchTodos(active), ...searchTodos(parked, true)]`) and then
+     * rank-sorts the combined list. Every other "saved for later" test above
+     * uses an all-active or all-parked corpus, so this rank-based ordering —
+     * the merge output isn't just concatenated, the better match wins
+     * regardless of which array it came from — is only exercised here. Both
+     * fixtures below give the two rows DIFFERENT match ranks (one is an
+     * exact-prefix match, rank 0; the other only a word-boundary match, rank
+     * 1) so the assertion is decided purely by rank, never by a title
+     * tie-break, and reads correctly under a stable sort regardless of merge
+     * order.
+     *
+     * Two directions are required together: alone, "parked ranks first when
+     * it's the better match" would still pass under a broken implementation
+     * that unconditionally put parked results ahead of active ones; alone,
+     * "active ranks first when it's the better match" would still pass under
+     * one that unconditionally put active results first. Only the pair rules
+     * out both naive bugs.
+     */
+    describe('mixed active + parked ranking', () => {
+      it('ranks a closer-matching PARKED to-do ahead of a weaker-matching ACTIVE one', () => {
+        const corpus: GlobalSearchCorpus = {
+          ...emptyCorpus,
+          // Exact-prefix match (rank 0).
+          savedForLaterTodos: [makeTodo({ id: 'todo-parked-closer', text: 'Fence repair estimate' })],
+          // Word-boundary match only (rank 1): "fence" appears as a whole
+          // token but the text doesn't START with the query.
+          todos: [makeTodo({ id: 'todo-active-farther', text: 'Ask about the fence contractor' })],
+        };
+        const results = searchAll(corpus, 'fence', undefined);
+        expect(results.map((r) => r.id)).toEqual(['todo-parked-closer', 'todo-active-farther']);
+      });
+
+      it('ranks a closer-matching ACTIVE to-do ahead of a weaker-matching PARKED one', () => {
+        const corpus: GlobalSearchCorpus = {
+          ...emptyCorpus,
+          // Exact-prefix match (rank 0).
+          todos: [makeTodo({ id: 'todo-active-closer', text: 'Fence repair estimate' })],
+          // Word-boundary match only (rank 1).
+          savedForLaterTodos: [makeTodo({ id: 'todo-parked-farther', text: 'Ask about the fence contractor' })],
+        };
+        const results = searchAll(corpus, 'fence', undefined);
+        expect(results.map((r) => r.id)).toEqual(['todo-active-closer', 'todo-parked-farther']);
+      });
+
+      it('ranks a closer-matching PARKED shopping item ahead of a weaker-matching ACTIVE one', () => {
+        const corpus: GlobalSearchCorpus = {
+          ...emptyCorpus,
+          savedForLaterShopping: [makeShoppingItem({ id: 'shop-parked-closer', name: 'Fence paint' })],
+          shoppingItems: [makeShoppingItem({ id: 'shop-active-farther', name: 'Ask about fence paint options' })],
+        };
+        const results = searchAll(corpus, 'fence', undefined);
+        expect(results.map((r) => r.id)).toEqual(['shop-parked-closer', 'shop-active-farther']);
+      });
+
+      it('ranks a closer-matching ACTIVE shopping item ahead of a weaker-matching PARKED one', () => {
+        const corpus: GlobalSearchCorpus = {
+          ...emptyCorpus,
+          shoppingItems: [makeShoppingItem({ id: 'shop-active-closer', name: 'Fence paint' })],
+          savedForLaterShopping: [makeShoppingItem({ id: 'shop-parked-farther', name: 'Ask about fence paint options' })],
+        };
+        const results = searchAll(corpus, 'fence', undefined);
+        expect(results.map((r) => r.id)).toEqual(['shop-active-closer', 'shop-parked-farther']);
+      });
+    });
   });
 
   describe('merchant rules', () => {
