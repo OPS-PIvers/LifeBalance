@@ -34,6 +34,10 @@ const habits = [
 const meals = [{ id: 'meal-1', name: 'Taco Tuesday', ingredients: [], tags: ['favorite'] }];
 const todos = [{ id: 'todo-1', text: 'Take out the trash', completeByDate: '2026-07-10', assignedTo: 'uid-1', isCompleted: false, createdBy: 'uid-1', createdAt: '2026-07-01T00:00:00.000Z' }];
 const shoppingList = [{ id: 'shop-1', name: 'Tostadas', category: 'Bakery', isPurchased: false }];
+// Parked ("Saved for later") items — excluded from the default todos/
+// shoppingList slices, so they live only on the savedForLater* slices.
+const savedForLaterTodos = [{ id: 'todo-parked-1', text: 'Repaint the fence', completeByDate: '2026-08-04', assignedTo: 'uid-1', isCompleted: false, createdBy: 'uid-1', createdAt: '2026-07-01T00:00:00.000Z', savedForLater: true }];
+const savedForLaterShopping = [{ id: 'shop-parked-1', name: 'Cast iron skillet', category: 'Kitchen', isPurchased: false, savedForLater: true }];
 
 // Displays the current route so navigation can be asserted without mocking
 // useNavigate directly.
@@ -73,8 +77,8 @@ describe('SearchOverlay', () => {
     vi.mocked(useFinance).mockReturnValue({ transactions } as unknown as ReturnType<typeof useFinance>);
     vi.mocked(useGamification).mockReturnValue({ habits } as unknown as ReturnType<typeof useGamification>);
     vi.mocked(useMealPlan).mockReturnValue({ meals } as unknown as ReturnType<typeof useMealPlan>);
-    vi.mocked(useShopping).mockReturnValue({ shoppingList } as unknown as ReturnType<typeof useShopping>);
-    vi.mocked(useTodos).mockReturnValue({ todos } as unknown as ReturnType<typeof useTodos>);
+    vi.mocked(useShopping).mockReturnValue({ shoppingList, savedForLaterShopping: [] } as unknown as ReturnType<typeof useShopping>);
+    vi.mocked(useTodos).mockReturnValue({ todos, savedForLaterTodos: [] } as unknown as ReturnType<typeof useTodos>);
     vi.mocked(useHouseholdCore).mockReturnValue({ householdSettings: null } as unknown as ReturnType<typeof useHouseholdCore>);
   });
 
@@ -215,5 +219,81 @@ describe('SearchOverlay', () => {
       '/lists | {"tab":"meals","highlightId":"meal-1"}'
     );
     expect(window.localStorage.getItem('lists-active-tab')).toBe('meals');
+  });
+
+  // "Saved for later" (PR-5) — parked to-dos/shopping items live on their own
+  // `savedForLater*` slices (excluded from `todos`/`shoppingList` by the
+  // context split), so the overlay must read those slices too or the items
+  // are unfindable.
+  describe('saved for later', () => {
+    beforeEach(() => {
+      vi.mocked(useShopping).mockReturnValue({
+        shoppingList,
+        savedForLaterShopping,
+      } as unknown as ReturnType<typeof useShopping>);
+      vi.mocked(useTodos).mockReturnValue({
+        todos,
+        savedForLaterTodos,
+      } as unknown as ReturnType<typeof useTodos>);
+    });
+
+    it('finds a parked to-do and a parked shopping item, each labelled "Saved for later"', () => {
+      renderOverlay();
+      fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'Repaint' } });
+      expect(screen.getByText('Repaint the fence')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'skillet' } });
+      expect(screen.getByText('Cast iron skillet')).toBeInTheDocument();
+      // Both parked results carry the label — not the parked to-do's
+      // placeholder due date (never rendered anywhere) or a category line.
+      fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'Repaint' } });
+      expect(screen.getAllByText('Saved for later')).toHaveLength(1);
+      fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'skillet' } });
+      expect(screen.getAllByText('Saved for later')).toHaveLength(1);
+    });
+
+    it('never shows the parked to-do\'s placeholder due date', () => {
+      renderOverlay();
+      fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'Repaint' } });
+      expect(screen.queryByText(/Due 2026-08-04/)).not.toBeInTheDocument();
+    });
+
+    it('navigates a parked to-do result to /lists todos with its own highlightId', () => {
+      renderOverlay();
+      fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'Repaint the fence' } });
+      fireEvent.click(screen.getByText('Repaint the fence'));
+
+      expect(screen.getByTestId('location-probe').textContent).toBe(
+        '/lists | {"tab":"todos","highlightId":"todo-parked-1"}'
+      );
+      expect(window.localStorage.getItem('lists-active-tab')).toBe('todos');
+    });
+
+    it('navigates a parked shopping result to /lists shopping with its own highlightId', () => {
+      renderOverlay();
+      fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'Cast iron skillet' } });
+      fireEvent.click(screen.getByText('Cast iron skillet'));
+
+      expect(screen.getByTestId('location-probe').textContent).toBe(
+        '/lists | {"tab":"shopping","highlightId":"shop-parked-1"}'
+      );
+      expect(window.localStorage.getItem('lists-active-tab')).toBe('shopping');
+    });
+
+    /**
+     * The gating case (mirrors the "excludes results from a disabled module"
+     * test above): a parked item must be gated on the SAME leaf as its
+     * active equivalent. This would fail if search read savedForLater*
+     * slices without also running them through isEntityVisible/hiddenKeys.
+     */
+    it('hides a parked to-do when the household disables the lists module, same as an active to-do', () => {
+      vi.mocked(useHouseholdCore).mockReturnValue({
+        householdSettings: { moduleVisibility: { plan: false } },
+      } as unknown as ReturnType<typeof useHouseholdCore>);
+      renderOverlay();
+      fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'Repaint' } });
+      expect(screen.queryByText('Repaint the fence')).not.toBeInTheDocument();
+      expect(screen.getByText('No matches')).toBeInTheDocument();
+    });
   });
 });

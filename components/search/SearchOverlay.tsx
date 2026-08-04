@@ -65,10 +65,13 @@ function navigateToResult(navigate: ReturnType<typeof useNavigate>, result: Glob
 /**
  * Lazy-loaded global search overlay (Plan 14) — a `Drawer` with an autofocused
  * search field over the household's already-loaded in-memory slices
- * (transactions, habits, meals, todos, shopping items). Pure matching/ranking
- * lives in `utils/globalSearch.ts`; this component only owns UI state and
- * navigation. Consumes its own slices (rather than TopToolbar consuming them)
- * so the always-mounted toolbar stays on its narrow slices.
+ * (transactions, habits, meals, todos, shopping items). Also indexes parked
+ * "Saved for later" to-dos/shopping items via `savedForLaterTodos`/
+ * `savedForLaterShopping` — the default `todos`/`shoppingList` slices exclude
+ * them, so without this they'd be unfindable. Pure matching/ranking lives in
+ * `utils/globalSearch.ts`; this component only owns UI state and navigation.
+ * Consumes its own slices (rather than TopToolbar consuming them) so the
+ * always-mounted toolbar stays on its narrow slices.
  */
 const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
   const [query, setQuery] = useState('');
@@ -77,8 +80,8 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
   const { transactions } = useFinance();
   const { habits } = useGamification();
   const { meals } = useMealPlan();
-  const { shoppingList } = useShopping();
-  const { todos } = useTodos();
+  const { shoppingList, savedForLaterShopping } = useShopping();
+  const { todos, savedForLaterTodos } = useTodos();
   const { householdSettings } = useHouseholdCore();
   // 2F.1: a result must never deep-link to a view THIS member has hidden, so the
   // member's own hidden-key list gates the corpus alongside the household's —
@@ -93,13 +96,33 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
   const results = useMemo(
     () =>
       searchAll(
-        { transactions, habits, meals, todos, shoppingItems: shoppingList },
+        {
+          transactions,
+          habits,
+          meals,
+          todos,
+          shoppingItems: shoppingList,
+          savedForLaterTodos,
+          savedForLaterShopping,
+        },
         query,
         householdSettings,
         merchantRules,
         hiddenKeys
       ),
-    [transactions, habits, meals, todos, shoppingList, householdSettings, merchantRules, hiddenKeys, query]
+    [
+      transactions,
+      habits,
+      meals,
+      todos,
+      shoppingList,
+      savedForLaterTodos,
+      savedForLaterShopping,
+      householdSettings,
+      merchantRules,
+      hiddenKeys,
+      query,
+    ]
   );
 
   const grouped = useMemo(() => {
