@@ -127,14 +127,24 @@ const SortDropdown: React.FC<SortDropdownProps> = ({ sortMode, onSelect, onClose
 
 interface DeleteUndoToastProps {
   itemName: string;
+  /** True when the deleted row was a PARKED ("saved for later") item — it
+   *  was never on the active shopping list, so the generic "Deleted" copy
+   *  would be misleadingly vague and the old literal "Removed from shopping
+   *  list" wording (a sibling bug fixed alongside this one) would be an
+   *  outright false claim. Defaults to false, which renders the EXACT
+   *  pre-existing message for an active item — unchanged. */
+  isParked?: boolean;
   onUndo: () => void;
 }
 
 // Thin wrapper over the shared `UndoToast` (components/ui/UndoToast.tsx,
 // generalized in F-TODO-11) that formats the delete-specific message. Kept
 // as its own export so existing call sites/tests don't need to change.
-export const DeleteUndoToast: React.FC<DeleteUndoToastProps> = ({ itemName, onUndo }) => (
-  <UndoToast message={`Deleted "${itemName}"`} onUndo={onUndo} />
+export const DeleteUndoToast: React.FC<DeleteUndoToastProps> = ({ itemName, isParked = false, onUndo }) => (
+  <UndoToast
+    message={isParked ? `Removed "${itemName}" from Saved for later` : `Deleted "${itemName}"`}
+    onUndo={onUndo}
+  />
 );
 
 const ShoppingListTab: React.FC = () => {
@@ -412,6 +422,9 @@ const ShoppingListTab: React.FC = () => {
 
     haptic('success');
     try {
+      // 'Saved for later' — matches handleSaveForLater's success copy — not
+      // the mutation's default "Added to shopping list": this item never
+      // reaches the active list.
       await addShoppingItem({
           name: rawName,
           category,
@@ -420,7 +433,7 @@ const ShoppingListTab: React.FC = () => {
           isPurchased: false,
           order: maxOrder + 1,
           savedForLater: true,
-      });
+      }, 'Saved for later');
     } catch (error) {
       console.error('[handleParkedSmartAdd] Failed:', error);
       toast.error(describeError(error, 'save the item for later'));
@@ -572,16 +585,24 @@ const ShoppingListTab: React.FC = () => {
     }, [toggleShoppingItemPurchased]);
 
     // Deletes stay instant (no confirm on the swipe path) — the undo toast is
-    // the safety net. Undo re-adds the item; a new id is acceptable.
+    // the safety net. Undo re-adds the item; a new id is acceptable. Both the
+    // deleted-copy and the undo's re-add copy must be savedForLater-aware: a
+    // parked item was never on the active shopping list, and undo restores it
+    // to Saved for later, not the list — the default "Deleted"/"Added to
+    // shopping list" wording would be false for it (matching the sibling
+    // To-Dos fix; `restored.savedForLater` survives the spread so it lands
+    // back in the right section either way — this only fixes the COPY).
     const showDeleteUndoToast = useCallback((item: ShoppingItem) => {
         const { id: _id, ...restored } = item;
+        const isParked = item.savedForLater === true;
         toast(
             (t) => (
                 <DeleteUndoToast
                     itemName={item.name}
+                    isParked={isParked}
                     onUndo={() => {
                         toast.dismiss(t.id);
-                        void addShoppingItem(restored);
+                        void addShoppingItem(restored, isParked ? 'Saved for later' : undefined);
                     }}
                 />
             ),
