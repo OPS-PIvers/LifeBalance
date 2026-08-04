@@ -1,17 +1,28 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { AlertCircle, ChevronDown } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { useFormatCurrency, useHouseholdCurrency } from '@/hooks/useFormatCurrency';
 import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
+import { LazyMount } from '@/components/ui/LazyMount';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import ProgressBar from '@/components/ui/ProgressBar';
 import { cn } from '@/utils/cn';
 import { computeSafeToSpendDistribution } from '@/utils/safeToSpendDistribution';
+import { OVER_ALLOCATION_MIN_SHORTFALL } from '@/utils/budgetFit';
 import { getBucketSpendTransactions } from '@/utils/bucketSpentCalculator';
 import { calculateDailyPace, calculateBucketDailyPace, getDaysLeft } from '@/utils/spendPace';
 import { splitCurrencyParts } from '@/utils/currencyParts';
+import { roundMoney } from '@/utils/money';
+
+// Lazy so this drawer's own chunk doesn't drag a second Drawer (and its
+// BucketPlanEditor subtree) along with it — same discipline TopToolbar applies
+// to the drawers it owns.
+const RebalanceBucketsDrawer = React.lazy(
+  () => import('@/components/budget/RebalanceBucketsDrawer'),
+);
 
 /** Fill color by spend ratio — same ramp as BudgetHistory's bucket drawer. */
 const progressColor = (spent: number, limit: number) => {
@@ -76,6 +87,7 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
   const currency = useHouseholdCurrency();
   const fmt = useFormatCurrency();
   const [openPanel, setOpenPanel] = useState<PanelKey>(null);
+  const [rebalanceOpen, setRebalanceOpen] = useState(false);
 
   const togglePanel = (key: string) => setOpenPanel(current => (current === key ? null : key));
 
@@ -156,6 +168,28 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
   // pending have already outrun the balance. Blaming bucket limits there (they
   // may not even exist: with no buckets `claimed` is $0.00) would misdirect the
   // one person who most needs a straight answer.
+  // TWO FLOORS, DELIBERATELY — the ledger tells the truth, the alarm has a
+  // noise floor (this is the reconciliation `utils/budgetFit.ts` deferred to
+  // this PR; its constant comment records the same decision).
+  //
+  //   `overAllocated` (from computeSafeToSpendDistribution) is TRUE at one
+  //   cent of negative leftover, and everything that REPORTS A FIGURE keeps
+  //   keying off it: the closing row's value, its "Short by $X" footer, the
+  //   panel's explanation. A $5 over-claim is a $5 over-claim.
+  //
+  //   `alarmOverAllocated` adds the SAME `OVER_ALLOCATION_MIN_SHORTFALL` the
+  //   toolbar's amber mark uses, and everything that SHOUTS keys off it: the
+  //   red closing-row treatment, the standalone red caption, and the lead-in +
+  //   Rebalance CTA below. Below the floor the drawer still says "short", it
+  //   just doesn't raise an alarm about $3 of rounding-scale overlap.
+  //
+  // Note this does NOT copy the header's extra `safeToSpend >= 0` suppression.
+  // The mark suppresses itself there to avoid a second alarm beside a figure
+  // already rendering red; this drawer is the surface that EXPLAINS that case,
+  // and its copy already splits on it (see `overAllocationCopy` below).
+  const shortfall = roundMoney(Math.max(0, -leftover));
+  const alarmOverAllocated = shortfall >= OVER_ALLOCATION_MIN_SHORTFALL;
+
   const gap = fmt(Math.abs(leftover));
   const overAllocationCopy = (): string => {
     if (breakdown.safeToSpend < 0) {
@@ -207,6 +241,57 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
           </div>
           <p className="mt-3 text-sm font-medium text-brand-500 dark:text-brand-400">{caption}</p>
         </div>
+
+        {/* Over-allocation lead-in — the problem, stated first, with the fix
+            attached. This used to be discoverable only by scrolling past the
+            whole ledger and expanding a collapsed row, which is the wrong end
+            of the drawer for the one thing that needs doing.
+
+            WARM, not red, on purpose: this is the same signal as the toolbar's
+            amber mark (the thing that most often brought the user here), and
+            the ledger's red is the negative-money convention rather than an
+            alarm colour. It appears only above the shared shortfall floor. */}
+        {alarmOverAllocated && (
+          <div
+            data-testid="sts-over-allocation-leadin"
+            className="rounded-card border border-warm-200 bg-warm-50 px-4 py-3 dark:border-warm-700 dark:bg-warm-900/25"
+          >
+            <div className="flex items-start gap-2">
+              <AlertCircle
+                size={16}
+                className="mt-0.5 shrink-0 text-warm-600 dark:text-warm-400"
+                aria-hidden="true"
+              />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-brand-800 dark:text-brand-100">
+                  Budgets over-allocated by {fmt(shortfall)}
+                </p>
+                <p className="mt-0.5 text-xs leading-relaxed text-brand-600 dark:text-brand-300">
+                  {breakdown.safeToSpend < 0
+                    ? `Bills and pending transactions have already outrun your balance by ${fmt(
+                        Math.abs(breakdown.safeToSpend)
+                      )}.`
+                    : `Your buckets still expect to spend ${fmt(
+                        claimed
+                      )}, but only ${fmt(breakdown.safeToSpend)} is free.`}
+                </p>
+              </div>
+            </div>
+            {/* With no buckets at all there is nothing to trim — the copy above
+                already points at the bills instead, so don't offer an editor
+                that would open empty. */}
+            {buckets.length > 0 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="mt-2.5 w-full"
+                onClick={() => setRebalanceOpen(true)}
+              >
+                Rebalance buckets
+              </Button>
+            )}
+          </div>
+        )}
 
         {/* 1. Ledger — how the pool is computed. */}
         <Section title="How it's calculated">
@@ -401,12 +486,17 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
               // list, so it has something to say even with no buckets at all.
               itemCount={1}
               rowClassName="bg-brand-50 dark:bg-brand-700/30"
+              // The LABEL follows the truth (`overAllocated`, one cent) — a
+              // negative leftover is over-allocated whatever its size, and
+              // renaming it "Unallocated" while showing −$5.00 would be the
+              // lie this reconciliation exists to avoid. Only the RED follows
+              // the alarm floor.
               label={overAllocated ? 'Over-allocated' : 'Unallocated'}
               labelClassName="font-display text-sm font-semibold tracking-tight text-brand-800 dark:text-brand-100"
               value={fmt(leftover)}
               valueClassName={cn(
                 'text-base font-bold',
-                overAllocated
+                alarmOverAllocated
                   ? 'text-money-neg dark:text-money-negDark'
                   : 'text-brand-900 dark:text-brand-50'
               )}
@@ -455,7 +545,10 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
             </LedgerRow>
           </SurfaceList>
 
-          {overAllocated && (
+          {/* Alarm-floor gated: a sub-$10 over-claim gets the honest ledger
+              figure above, but not a red sentence telling the user their
+              budgets exceed their cash. */}
+          {alarmOverAllocated && (
             <p className="px-1 pt-2 text-xs text-money-neg dark:text-money-negDark">
               {/* Same split as the panel's explanation: with a negative pool the
                   budgets aren't what exceeded the cash, so don't say they were. */}
@@ -471,6 +564,12 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
           Buckets track where your spending goes — they don&apos;t reduce Safe-to-Spend.
         </p>
       </div>
+
+      {/* Stacks over this sheet; `Drawer`'s open-drawer registry already routes
+          Escape to the topmost one. */}
+      <LazyMount when={rebalanceOpen}>
+        <RebalanceBucketsDrawer open={rebalanceOpen} onClose={() => setRebalanceOpen(false)} />
+      </LazyMount>
     </Drawer>
   );
 };

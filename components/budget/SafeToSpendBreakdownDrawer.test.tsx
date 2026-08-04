@@ -42,6 +42,9 @@ vi.mock('lucide-react', () => ({
   PiggyBank: () => <div data-testid="piggy-bank" />,
   ChevronDown: () => <div data-testid="chevron-down" />,
   ChevronRight: () => <div data-testid="chevron-right" />,
+  // The over-allocation lead-in's mark, and `Button`'s loading spinner.
+  AlertCircle: () => <div data-testid="alert-circle" />,
+  Loader2: () => <div data-testid="loader" />,
 }));
 
 const bucket = (id: string, name: string, limit: number) => ({
@@ -197,6 +200,123 @@ describe('SafeToSpendBreakdownDrawer', () => {
     // leftover = 1000 − 2000 = -1000 → over-allocated.
     expect(screen.getByText('Over-allocated')).toBeInTheDocument();
     expect(screen.getByText(/Your budgets exceed available cash/)).toBeInTheDocument();
+  });
+
+  // PR B2 — the alarm threshold reconciliation. The LEDGER is truthful at one
+  // cent; the ALARM (lead-in + CTA + red treatment) shares the header mark's
+  // $10 floor. The below-floor case is the one most likely to regress back into
+  // either extreme: shouting at $3, or "fixing" it by declaring $9.99 fine.
+  describe('over-allocation lead-in and Rebalance CTA', () => {
+    const overClaimBy = (shortfall: number) => ({
+      safeToSpendBreakdown: {
+        checkingBalance: 1000, unpaidBills: 0, pendingSpend: 0, safeToSpend: 1000,
+        nextPaycheckDate: null, unpaidBillItems: [], pendingTransactions: [],
+      },
+      buckets: [bucket('rent', 'Rent', 1000 + shortfall)],
+      bucketSpentMap: new Map<string, BucketSpent>([['rent', { verified: 0, pending: 0 }]]),
+    });
+
+    it('leads with the shortfall and offers "Rebalance buckets" at the $10 floor', () => {
+      setFinance(overClaimBy(10));
+      render(<SafeToSpendBreakdownDrawer open={true} onClose={() => {}} />);
+
+      const leadIn = screen.getByTestId('sts-over-allocation-leadin');
+      expect(leadIn).toHaveTextContent('Budgets over-allocated by $10.00');
+      expect(leadIn).toHaveTextContent(
+        'Your buckets still expect to spend $1,010.00, but only $1,000.00 is free.'
+      );
+      expect(screen.getByRole('button', { name: 'Rebalance buckets' })).toBeInTheDocument();
+      expect(screen.getByText('Your budgets exceed available cash — trim a bucket.')).toBeInTheDocument();
+    });
+
+    it('leads with the shortfall well above the floor too', () => {
+      setFinance(overClaimBy(250));
+      render(<SafeToSpendBreakdownDrawer open={true} onClose={() => {}} />);
+
+      expect(screen.getByTestId('sts-over-allocation-leadin')).toHaveTextContent(
+        'Budgets over-allocated by $250.00'
+      );
+      expect(screen.getByRole('button', { name: 'Rebalance buckets' })).toBeInTheDocument();
+    });
+
+    it('stays SILENT below the floor — no lead-in, no CTA, no red caption', () => {
+      // $9.99 short: one cent under OVER_ALLOCATION_MIN_SHORTFALL, so the
+      // header shows no amber mark and this drawer must not shout either.
+      setFinance(overClaimBy(9.99));
+      render(<SafeToSpendBreakdownDrawer open={true} onClose={() => {}} />);
+
+      expect(screen.queryByTestId('sts-over-allocation-leadin')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Rebalance buckets' })).not.toBeInTheDocument();
+      expect(screen.queryByText(/Your budgets exceed available cash/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Bills and pending spend have outrun/)).not.toBeInTheDocument();
+    });
+
+    it('…but STILL reports that sub-floor shortfall in the ledger — quiet is not "it balances"', async () => {
+      const user = userEvent.setup();
+      setFinance(overClaimBy(9.99));
+      render(<SafeToSpendBreakdownDrawer open={true} onClose={() => {}} />);
+
+      // The closing row still names the state and shows the true negative.
+      const row = screen.getByRole('button', { name: /Over-allocated/ });
+      expect(row).toBeInTheDocument();
+      expect(within(row).getByText('-$9.99')).toBeInTheDocument();
+      // Never "Unallocated", and never a flattering $0.00.
+      expect(screen.queryByText('Unallocated')).not.toBeInTheDocument();
+
+      await user.click(row);
+      const shortfall = screen.getByText('Short by').parentElement as HTMLElement;
+      expect(within(shortfall).getByText('$9.99')).toBeInTheDocument();
+      expect(
+        screen.getByText(/Your buckets still expect to spend \$1,009\.99 before payday/)
+      ).toBeInTheDocument();
+    });
+
+    it('shows no lead-in at all when the budgets fit', () => {
+      setFinance({
+        safeToSpendBreakdown: {
+          checkingBalance: 1000, unpaidBills: 0, pendingSpend: 0, safeToSpend: 1000,
+          nextPaycheckDate: null, unpaidBillItems: [], pendingTransactions: [],
+        },
+        buckets: [bucket('rent', 'Rent', 400)],
+        bucketSpentMap: new Map<string, BucketSpent>([['rent', { verified: 0, pending: 0 }]]),
+      });
+      render(<SafeToSpendBreakdownDrawer open={true} onClose={() => {}} />);
+
+      expect(screen.queryByTestId('sts-over-allocation-leadin')).not.toBeInTheDocument();
+      expect(screen.getByText('Unallocated')).toBeInTheDocument();
+    });
+
+    it('blames the bills in the lead-in when Safe-to-Spend itself is negative, and offers no editor with no buckets', () => {
+      setFinance({
+        safeToSpendBreakdown: {
+          checkingBalance: 500, unpaidBills: 600, pendingSpend: 0, safeToSpend: -100,
+          nextPaycheckDate: null, unpaidBillItems: [], pendingTransactions: [],
+        },
+      });
+      render(<SafeToSpendBreakdownDrawer open={true} onClose={() => {}} />);
+
+      const leadIn = screen.getByTestId('sts-over-allocation-leadin');
+      expect(leadIn).toHaveTextContent(
+        'Bills and pending transactions have already outrun your balance by $100.00.'
+      );
+      expect(leadIn).not.toHaveTextContent('Your buckets still expect to spend');
+      // Nothing to trim → no dead-end button into an empty editor.
+      expect(screen.queryByRole('button', { name: 'Rebalance buckets' })).not.toBeInTheDocument();
+    });
+
+    it('still offers the editor when the pool is negative but buckets do claim', () => {
+      setFinance({
+        safeToSpendBreakdown: {
+          checkingBalance: 500, unpaidBills: 600, pendingSpend: 0, safeToSpend: -100,
+          nextPaycheckDate: null, unpaidBillItems: [], pendingTransactions: [],
+        },
+        buckets: [bucket('groc', 'Groceries', 200)],
+        bucketSpentMap: new Map<string, BucketSpent>([['groc', { verified: 0, pending: 0 }]]),
+      });
+      render(<SafeToSpendBreakdownDrawer open={true} onClose={() => {}} />);
+
+      expect(screen.getByRole('button', { name: 'Rebalance buckets' })).toBeInTheDocument();
+    });
   });
 
   describe('itemized expansions', () => {
