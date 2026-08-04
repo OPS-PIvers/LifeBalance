@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { searchAll, type GlobalSearchCorpus } from '@/utils/globalSearch';
+import { searchAll, SAVED_FOR_LATER_SUBTITLE, type GlobalSearchCorpus } from '@/utils/globalSearch';
 import type { Habit, Meal, MerchantRule, ShoppingItem, Transaction, ToDo } from '@/types/schema';
 
 const makeTransaction = (overrides: Partial<Transaction> = {}): Transaction => ({
@@ -253,6 +253,177 @@ describe('searchAll', () => {
   it('returns no results when nothing matches', () => {
     const corpus: GlobalSearchCorpus = { ...emptyCorpus, transactions: [makeTransaction({ merchant: 'Target' })] };
     expect(searchAll(corpus, 'nonexistentquery', undefined)).toEqual([]);
+  });
+
+  /**
+   * "Saved for later" (PR-5) — parked to-dos/shopping items are excluded from
+   * the default `todos`/`shoppingItems` slices (see `contexts/
+   * FirebaseHouseholdContext.tsx`), so search must draw them from the
+   * dedicated `savedForLaterTodos`/`savedForLaterShopping` corpus fields or
+   * they're unfindable entirely.
+   */
+  describe('saved for later', () => {
+    it('finds a parked to-do via savedForLaterTodos', () => {
+      const corpus: GlobalSearchCorpus = {
+        ...emptyCorpus,
+        savedForLaterTodos: [makeTodo({ id: 'todo-parked', text: 'Repaint the fence' })],
+      };
+      const results = searchAll(corpus, 'repaint', undefined);
+      expect(results.map((r) => r.id)).toEqual(['todo-parked']);
+    });
+
+    it('finds a parked shopping item via savedForLaterShopping', () => {
+      const corpus: GlobalSearchCorpus = {
+        ...emptyCorpus,
+        savedForLaterShopping: [makeShoppingItem({ id: 'shop-parked', name: 'Cast iron skillet' })],
+      };
+      const results = searchAll(corpus, 'skillet', undefined);
+      expect(results.map((r) => r.id)).toEqual(['shop-parked']);
+    });
+
+    it('labels a parked to-do result "Saved for later" instead of its (placeholder) due date', () => {
+      const corpus: GlobalSearchCorpus = {
+        ...emptyCorpus,
+        // A parked to-do still carries a completeByDate — an inert placeholder
+        // that must never render (see ToDo.savedForLater). The subtitle must
+        // show the parked label, not `Due 2026-08-04`.
+        savedForLaterTodos: [makeTodo({ id: 'todo-parked', text: 'Repaint the fence', completeByDate: '2026-08-04' })],
+      };
+      const results = searchAll(corpus, 'repaint', undefined);
+      expect(results[0]?.subtitle).toBe(SAVED_FOR_LATER_SUBTITLE);
+      expect(results[0]?.subtitle).toBe('Saved for later');
+    });
+
+    it('labels a parked shopping item result "Saved for later" instead of its category', () => {
+      const corpus: GlobalSearchCorpus = {
+        ...emptyCorpus,
+        savedForLaterShopping: [makeShoppingItem({ id: 'shop-parked', name: 'Cast iron skillet', category: 'Kitchen' })],
+      };
+      const results = searchAll(corpus, 'skillet', undefined);
+      expect(results[0]?.subtitle).toBe(SAVED_FOR_LATER_SUBTITLE);
+    });
+
+    it('does not label an active (non-parked) result as saved for later', () => {
+      const corpus: GlobalSearchCorpus = {
+        ...emptyCorpus,
+        todos: [makeTodo({ id: 'todo-active', text: 'Repaint the fence', completeByDate: '2026-08-04' })],
+      };
+      const results = searchAll(corpus, 'repaint', undefined);
+      expect(results[0]?.subtitle).toBe('Due 2026-08-04');
+    });
+
+    it('sets the same /lists nav target for a parked to-do/shopping item as their active equivalents', () => {
+      const corpus: GlobalSearchCorpus = {
+        ...emptyCorpus,
+        savedForLaterTodos: [makeTodo({ id: 'todo-parked', text: 'Repaint' })],
+        savedForLaterShopping: [makeShoppingItem({ id: 'shop-parked', name: 'Repaint brush' })],
+      };
+      const results = searchAll(corpus, 'repaint', undefined);
+      const byId = Object.fromEntries(results.map((r) => [r.id, r.nav]));
+      expect(byId['todo-parked']).toEqual({ path: '/lists', listsTab: 'todos' });
+      expect(byId['shop-parked']).toEqual({ path: '/lists', listsTab: 'shopping' });
+    });
+
+    /**
+     * The gating case: a parked item is gated on the SAME leaf as its active
+     * equivalent (`isNavLeafKeyVisible`/`isPlanTabVisible` via
+     * `isEntityVisible`), not exempted from it. This test would FAIL if the
+     * gate were removed or if parked items bypassed `isEntityVisible`.
+     */
+    it('hides parked results when their leaf is hidden, exactly like active results', () => {
+      const corpus: GlobalSearchCorpus = {
+        ...emptyCorpus,
+        savedForLaterTodos: [makeTodo({ id: 'todo-parked', text: 'Repaint the fence' })],
+        savedForLaterShopping: [makeShoppingItem({ id: 'shop-parked', name: 'Repaint brush' })],
+      };
+
+      // Baseline: visible with nothing hidden.
+      expect(searchAll(corpus, 'repaint', undefined).map((r) => r.id).sort()).toEqual(
+        ['shop-parked', 'todo-parked']
+      );
+
+      // Member hides the To-Dos leaf → the parked to-do (not just active
+      // to-dos) disappears; the parked shopping item is untouched.
+      const todosHidden = searchAll(corpus, 'repaint', undefined, undefined, ['todos']);
+      expect(todosHidden.map((r) => r.id)).toEqual(['shop-parked']);
+
+      // Member hides the Shopping leaf → the parked shopping item disappears;
+      // the parked to-do is untouched.
+      const shoppingHidden = searchAll(corpus, 'repaint', undefined, undefined, ['shopping']);
+      expect(shoppingHidden.map((r) => r.id)).toEqual(['todo-parked']);
+
+      // Household disables the `lists` master toggle → both parked types
+      // disappear, mirroring the existing plan-toggle test for active items.
+      const listsDisabled = searchAll(corpus, 'repaint', { moduleVisibility: { plan: false } });
+      expect(listsDisabled).toEqual([]);
+    });
+
+    /**
+     * `searchAll` merges an active array and a parked array per type
+     * (`[...searchTodos(active), ...searchTodos(parked, true)]`) and then
+     * rank-sorts the combined list. Every other "saved for later" test above
+     * uses an all-active or all-parked corpus, so this rank-based ordering —
+     * the merge output isn't just concatenated, the better match wins
+     * regardless of which array it came from — is only exercised here. Both
+     * fixtures below give the two rows DIFFERENT match ranks (one is an
+     * exact-prefix match, rank 0; the other only a word-boundary match, rank
+     * 1) so the assertion is decided purely by rank, never by a title
+     * tie-break, and reads correctly under a stable sort regardless of merge
+     * order.
+     *
+     * Two directions are required together: alone, "parked ranks first when
+     * it's the better match" would still pass under a broken implementation
+     * that unconditionally put parked results ahead of active ones; alone,
+     * "active ranks first when it's the better match" would still pass under
+     * one that unconditionally put active results first. Only the pair rules
+     * out both naive bugs.
+     */
+    describe('mixed active + parked ranking', () => {
+      it('ranks a closer-matching PARKED to-do ahead of a weaker-matching ACTIVE one', () => {
+        const corpus: GlobalSearchCorpus = {
+          ...emptyCorpus,
+          // Exact-prefix match (rank 0).
+          savedForLaterTodos: [makeTodo({ id: 'todo-parked-closer', text: 'Fence repair estimate' })],
+          // Word-boundary match only (rank 1): "fence" appears as a whole
+          // token but the text doesn't START with the query.
+          todos: [makeTodo({ id: 'todo-active-farther', text: 'Ask about the fence contractor' })],
+        };
+        const results = searchAll(corpus, 'fence', undefined);
+        expect(results.map((r) => r.id)).toEqual(['todo-parked-closer', 'todo-active-farther']);
+      });
+
+      it('ranks a closer-matching ACTIVE to-do ahead of a weaker-matching PARKED one', () => {
+        const corpus: GlobalSearchCorpus = {
+          ...emptyCorpus,
+          // Exact-prefix match (rank 0).
+          todos: [makeTodo({ id: 'todo-active-closer', text: 'Fence repair estimate' })],
+          // Word-boundary match only (rank 1).
+          savedForLaterTodos: [makeTodo({ id: 'todo-parked-farther', text: 'Ask about the fence contractor' })],
+        };
+        const results = searchAll(corpus, 'fence', undefined);
+        expect(results.map((r) => r.id)).toEqual(['todo-active-closer', 'todo-parked-farther']);
+      });
+
+      it('ranks a closer-matching PARKED shopping item ahead of a weaker-matching ACTIVE one', () => {
+        const corpus: GlobalSearchCorpus = {
+          ...emptyCorpus,
+          savedForLaterShopping: [makeShoppingItem({ id: 'shop-parked-closer', name: 'Fence paint' })],
+          shoppingItems: [makeShoppingItem({ id: 'shop-active-farther', name: 'Ask about fence paint options' })],
+        };
+        const results = searchAll(corpus, 'fence', undefined);
+        expect(results.map((r) => r.id)).toEqual(['shop-parked-closer', 'shop-active-farther']);
+      });
+
+      it('ranks a closer-matching ACTIVE shopping item ahead of a weaker-matching PARKED one', () => {
+        const corpus: GlobalSearchCorpus = {
+          ...emptyCorpus,
+          shoppingItems: [makeShoppingItem({ id: 'shop-active-closer', name: 'Fence paint' })],
+          savedForLaterShopping: [makeShoppingItem({ id: 'shop-parked-farther', name: 'Ask about fence paint options' })],
+        };
+        const results = searchAll(corpus, 'fence', undefined);
+        expect(results.map((r) => r.id)).toEqual(['shop-active-closer', 'shop-parked-farther']);
+      });
+    });
   });
 
   describe('merchant rules', () => {

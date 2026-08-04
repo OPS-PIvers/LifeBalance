@@ -41,6 +41,20 @@ export interface GlobalSearchCorpus {
   meals: Meal[];
   todos: ToDo[];
   shoppingItems: ShoppingItem[];
+  /**
+   * "Saved for later" parked to-dos (`ToDo.savedForLater === true`), sourced
+   * from the `savedForLaterTodos` slice (`useTodos()`) — the default `todos`
+   * array excludes them, so without this they would be unfindable. Optional
+   * so every pre-existing corpus literal (tests, call sites) keeps compiling;
+   * absent/omitted behaves exactly like `[]`.
+   */
+  savedForLaterTodos?: ToDo[];
+  /**
+   * "Saved for later" parked shopping items (`ShoppingItem.savedForLater ===
+   * true`), sourced from the `savedForLaterShopping` slice (`useShopping()`).
+   * Same optionality rationale as `savedForLaterTodos`.
+   */
+  savedForLaterShopping?: ShoppingItem[];
 }
 
 /**
@@ -82,6 +96,17 @@ function isEntityVisible(
 
 const MAX_PER_TYPE = 5;
 const MAX_TOTAL = 20;
+
+/**
+ * The subtitle a parked ("Saved for later") result carries, in the same
+ * secondary-text slot every other result already uses (`DisclosureRow`'s
+ * `subtitle`) — no new visual language, just this string in that slot. It
+ * REPLACES the type's normal subtitle (a to-do's due date, a shopping item's
+ * category) rather than appending to it: a parked to-do's `completeByDate` is
+ * an inert placeholder that must never render (see `ToDo.savedForLater`), and
+ * telling the user *where an item lives* matters more here than its category.
+ */
+export const SAVED_FOR_LATER_SUBTITLE = 'Saved for later';
 
 /**
  * Ranks how well `text` matches `query` (both compared case-insensitively).
@@ -191,7 +216,14 @@ function searchMeals(meals: Meal[], queryLower: string): RankedResult[] {
   return results;
 }
 
-function searchTodos(todos: ToDo[], queryLower: string): RankedResult[] {
+/**
+ * `savedForLater` (default `false`) marks every result from this call as a
+ * parked to-do — its subtitle becomes `SAVED_FOR_LATER_SUBTITLE` instead of
+ * the due-date line a normal result gets, since a parked to-do's
+ * `completeByDate` is an inert placeholder (never rendered anywhere, see
+ * `ToDo.savedForLater`) and would otherwise ship a fabricated "Due …" line.
+ */
+function searchTodos(todos: ToDo[], queryLower: string, savedForLater = false): RankedResult[] {
   const results: RankedResult[] = [];
   for (const todo of todos) {
     const rank = bestRank(queryLower, todo.text);
@@ -200,7 +232,11 @@ function searchTodos(todos: ToDo[], queryLower: string): RankedResult[] {
       type: 'todo',
       id: todo.id,
       title: todo.text,
-      subtitle: todo.completeByDate ? `Due ${todo.completeByDate}` : undefined,
+      subtitle: savedForLater
+        ? SAVED_FOR_LATER_SUBTITLE
+        : todo.completeByDate
+          ? `Due ${todo.completeByDate}`
+          : undefined,
       nav: { path: '/lists', listsTab: 'todos' },
       rank,
     });
@@ -208,7 +244,12 @@ function searchTodos(todos: ToDo[], queryLower: string): RankedResult[] {
   return results;
 }
 
-function searchShoppingItems(items: ShoppingItem[], queryLower: string): RankedResult[] {
+/** Same `savedForLater` convention as `searchTodos` — see its doc comment. */
+function searchShoppingItems(
+  items: ShoppingItem[],
+  queryLower: string,
+  savedForLater = false
+): RankedResult[] {
   const results: RankedResult[] = [];
   for (const item of items) {
     const rank = bestRank(queryLower, item.name, item.category);
@@ -217,7 +258,7 @@ function searchShoppingItems(items: ShoppingItem[], queryLower: string): RankedR
       type: 'shopping',
       id: item.id,
       title: item.name,
-      subtitle: item.category || undefined,
+      subtitle: savedForLater ? SAVED_FOR_LATER_SUBTITLE : item.category || undefined,
       nav: { path: '/lists', listsTab: 'shopping' },
       rank,
     });
@@ -237,6 +278,13 @@ function searchShoppingItems(items: ShoppingItem[], queryLower: string): RankedR
  * transaction matches on its raw bank descriptor OR its friendly name. Omit it
  * (or pass an empty array) and search behaves exactly as it did before merchant
  * rules existed.
+ *
+ * `corpus.savedForLaterTodos`/`savedForLaterShopping` (both optional, default
+ * `[]`) are folded into the SAME `'todo'`/`'shopping'` result groups as their
+ * active counterparts — a parked item is gated by the exact same
+ * `isEntityVisible` check as a normal one (there is no separate "parked"
+ * entity type to gate), and is distinguished only by its
+ * `SAVED_FOR_LATER_SUBTITLE` subtitle.
  */
 export function searchAll(
   corpus: GlobalSearchCorpus,
@@ -252,8 +300,14 @@ export function searchAll(
     transaction: searchTransactions(corpus.transactions, queryLower, rules),
     habit: searchHabits(corpus.habits, queryLower),
     meal: searchMeals(corpus.meals, queryLower),
-    todo: searchTodos(corpus.todos, queryLower),
-    shopping: searchShoppingItems(corpus.shoppingItems, queryLower),
+    todo: [
+      ...searchTodos(corpus.todos, queryLower),
+      ...searchTodos(corpus.savedForLaterTodos ?? [], queryLower, true),
+    ],
+    shopping: [
+      ...searchShoppingItems(corpus.shoppingItems, queryLower),
+      ...searchShoppingItems(corpus.savedForLaterShopping ?? [], queryLower, true),
+    ],
   };
 
   const capped: RankedResult[] = [];
