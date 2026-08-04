@@ -45,6 +45,10 @@ vi.mock('lucide-react', () => ({
   // The over-allocation lead-in's mark, and `Button`'s loading spinner.
   AlertCircle: () => <div data-testid="alert-circle" />,
   Loader2: () => <div data-testid="loader" />,
+  // Reached only through the nested RebalanceBucketsDrawer → BucketPlanEditor.
+  AlertTriangle: () => <div data-testid="alert-triangle" />,
+  RotateCcw: () => <div data-testid="rotate-ccw" />,
+  Sparkles: () => <div data-testid="sparkles" />,
 }));
 
 const bucket = (id: string, name: string, limit: number) => ({
@@ -70,6 +74,9 @@ const setFinance = (config: {
     transactions: config.transactions ?? [],
     currentPeriodId: config.currentPeriodId ?? '',
     householdSettings: { currency: 'USD' },
+    // Read only by the nested RebalanceBucketsDrawer, which shares this mock.
+    bucketHistory: [],
+    setBucketLimits: vi.fn(async () => {}),
   });
 };
 
@@ -304,7 +311,11 @@ describe('SafeToSpendBreakdownDrawer', () => {
       expect(screen.queryByRole('button', { name: 'Rebalance buckets' })).not.toBeInTheDocument();
     });
 
-    it('still offers the editor when the pool is negative but buckets do claim', () => {
+    it('keeps the lead-in but withholds the CTA when the pool is negative, even with buckets claiming', () => {
+      // Trimming bucket LIMITS cannot raise Safe-to-Spend — buckets are not in
+      // its formula at all — so with a negative pool the button would promise a
+      // fix it structurally cannot deliver. The explanation stays; only the
+      // button goes.
       setFinance({
         safeToSpendBreakdown: {
           checkingBalance: 500, unpaidBills: 600, pendingSpend: 0, safeToSpend: -100,
@@ -315,7 +326,29 @@ describe('SafeToSpendBreakdownDrawer', () => {
       });
       render(<SafeToSpendBreakdownDrawer open={true} onClose={() => {}} />);
 
-      expect(screen.getByRole('button', { name: 'Rebalance buckets' })).toBeInTheDocument();
+      expect(screen.getByTestId('sts-over-allocation-leadin')).toHaveTextContent(
+        'Bills and pending transactions have already outrun your balance by $100.00.'
+      );
+      expect(screen.queryByRole('button', { name: 'Rebalance buckets' })).not.toBeInTheDocument();
+      // The remedy that DOES work is still on the surface.
+      expect(
+        screen.getByText('Bills and pending spend have outrun your balance.')
+      ).toBeInTheDocument();
+    });
+
+    it('opens the rebalance editor when the CTA is tapped', async () => {
+      const user = userEvent.setup();
+      setFinance(overClaimBy(250));
+      render(<SafeToSpendBreakdownDrawer open={true} onClose={() => {}} />);
+
+      expect(screen.queryByTestId('rebalance-meter')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Rebalance buckets' }));
+
+      // The nested drawer is React.lazy behind LazyMount, so it genuinely
+      // resolves a chunk before it can render — findBy is a real wait here.
+      expect(await screen.findByTestId('rebalance-meter')).toBeInTheDocument();
+      expect(screen.getByLabelText('Rent budget for this period')).toBeInTheDocument();
     });
   });
 

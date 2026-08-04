@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { Drawer } from './Drawer';
 
 // Mock AnimatePresence to render children immediately
@@ -250,5 +251,132 @@ describe('Drawer', () => {
     );
     const content = screen.getByTestId('drawer-content');
     expect(content.className).toContain('supports-[height:100dvh]:h-[90dvh]');
+  });
+
+  // The REAL Drawer and the REAL useFocusTrap, deliberately: the defect these
+  // pin (two stacked sheets fighting over Tab) is invisible to any suite that
+  // mocks `Drawer` away to a passthrough <div>, which is exactly how it reached
+  // main. `SafeToSpendBreakdownDrawer` → `RebalanceBucketsDrawer` is the real
+  // pairing; this reproduces its SHAPE with plain sheets so the assertion is
+  // about focus, not about budgets.
+  describe('Tab focus trap with nested drawers', () => {
+    // jsdom performs no layout, so `getClientRects()` is empty for every
+    // element and `useFocusTrap`'s visibility filter would discard the whole
+    // trap. Report a box for attached elements so the hook sees the same
+    // focusables a browser would.
+    beforeEach(() => {
+      vi.spyOn(Element.prototype, 'getClientRects').mockImplementation(function (
+        this: Element
+      ) {
+        return (this.isConnected
+          ? [{ width: 10, height: 10 }]
+          : []) as unknown as DOMRectList;
+      });
+    });
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    const nested = (outerOpen: boolean, innerOpen: boolean) => (
+      <Drawer isOpen={outerOpen} onClose={() => {}} title="Outer">
+        <button type="button">Outer action</button>
+        <Drawer isOpen={innerOpen} onClose={() => {}} title="Inner">
+          <button type="button">Inner first</button>
+          <button type="button">Inner last</button>
+        </Drawer>
+      </Drawer>
+    );
+
+    /** The inner sheet's tabbables, in DOM order. */
+    const innerControls = () => {
+      const close = screen.getAllByLabelText('Close drawer')[1] as HTMLElement;
+      return {
+        close,
+        first: screen.getByRole('button', { name: 'Inner first' }),
+        last: screen.getByRole('button', { name: 'Inner last' }),
+      };
+    };
+
+    const openNested = () => {
+      const { rerender } = render(nested(true, false));
+      // The inner sheet opens AFTER the outer, as it does in the app — the
+      // stack is ordered by open time.
+      rerender(nested(true, true));
+      return { rerender };
+    };
+
+    it('lets Tab move forward through the TOP sheet while a sheet is open beneath it', async () => {
+      const user = userEvent.setup();
+      openNested();
+      const { first, last } = innerControls();
+
+      first.focus();
+      await user.tab();
+
+      // Before the stack-aware gate, the outer sheet's still-registered handler
+      // saw focus outside its own container, called preventDefault() and pulled
+      // focus back — so Tab moved nowhere at all.
+      expect(document.activeElement).toBe(last);
+    });
+
+    it('lets Shift+Tab move backward through the TOP sheet too', async () => {
+      const user = userEvent.setup();
+      openNested();
+      const { first, last } = innerControls();
+
+      last.focus();
+      await user.tab({ shift: true });
+
+      expect(document.activeElement).toBe(first);
+    });
+
+    it('still wraps at the TOP sheet’s edges rather than escaping into the sheet below', async () => {
+      const user = userEvent.setup();
+      openNested();
+      const { close, first, last } = innerControls();
+
+      last.focus();
+      await user.tab();
+      expect(document.activeElement).toBe(close);
+
+      await user.tab({ shift: true });
+      expect(document.activeElement).toBe(last);
+
+      // …and never lands on the outer sheet's controls.
+      first.focus();
+      await user.tab();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Outer action' })).not.toHaveFocus();
+    });
+
+    it('hands the trap back to the sheet below once the top one closes', async () => {
+      const user = userEvent.setup();
+      const { rerender } = openNested();
+      rerender(nested(true, false));
+
+      const outerAction = screen.getByRole('button', { name: 'Outer action' });
+      const outerClose = screen.getByLabelText('Close drawer');
+
+      outerAction.focus();
+      await user.tab();
+      // Only two tabbables left (close + action), so Tab off the last wraps.
+      expect(document.activeElement).toBe(outerClose);
+    });
+
+    it('traps a single, unstacked drawer exactly as before', async () => {
+      const user = userEvent.setup();
+      render(
+        <Drawer isOpen={true} onClose={() => {}} title="Solo">
+          <button type="button">Solo action</button>
+        </Drawer>
+      );
+
+      const action = screen.getByRole('button', { name: 'Solo action' });
+      const close = screen.getByLabelText('Close drawer');
+
+      action.focus();
+      await user.tab();
+      expect(document.activeElement).toBe(close);
+    });
   });
 });

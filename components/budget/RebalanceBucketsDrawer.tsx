@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Drawer } from '@/components/ui/Drawer';
@@ -158,31 +157,28 @@ const RebalanceBucketsDrawer: React.FC<RebalanceBucketsDrawerProps> = ({ open, o
       }
     >
       <div className="flex flex-col gap-5">
-        {/* The part the buckets could NOT absorb. Surfaced rather than quietly
-            under-delivered: the meter below will still read short, and a plan
-            that says nothing about why is worse than no plan. */}
+        {/* WHY the plan falls short — and ONLY the why. The amount left
+            uncovered is already the editor's live "Short by $X" fit meter a few
+            lines down; stating it again here (in a second warm box, no less)
+            made the user read one shortfall twice and left the true alarm
+            competing with its own echo. The meter owns the figure and the
+            alarm treatment; this line owns the explanation the meter can't give
+            — so it's plain framing copy, not a second banner.
+
+            Careful with this sentence: with no spending history at all, every
+            bucket's "usually needs" IS its current limit, so the plan frees $0
+            — not because the room isn't there, but because nothing yet says the
+            bucket doesn't need it. Phrase it as what a SAFE trim can free,
+            never as "there is no room". */}
         {plan.unresolved >= 0.005 && (
-          <div
+          <p
             data-testid="rebalance-unresolved"
-            className="flex items-start gap-2 rounded-card border border-warm-200 bg-warm-50 px-3 py-2.5 dark:border-warm-700 dark:bg-warm-900/25"
+            className="text-xs leading-relaxed text-brand-500 dark:text-brand-400"
           >
-            <AlertTriangle
-              size={14}
-              className="mt-0.5 shrink-0 text-warm-600 dark:text-warm-400"
-              aria-hidden="true"
-            />
-            {/* Careful with this sentence: with no spending history at all,
-                every bucket's "usually needs" IS its current limit, so the
-                plan frees $0 — not because the room isn't there, but because
-                nothing yet says the bucket doesn't need it. Phrase it as what
-                a SAFE trim can free, never as "there is no room". */}
-            <p className="text-xs leading-relaxed text-brand-700 dark:text-brand-200">
-              <span className="font-semibold">{fmt(plan.unresolved)} still uncovered.</span>{' '}
-              Only {fmt(plan.resolved)} can come off without dropping a bucket below what it
-              has already spent this period, or what it usually needs. Edit a limit below, or
-              move a bill to the next period, to close the rest.
-            </p>
-          </div>
+            Only {fmt(plan.resolved)} can come off without dropping a bucket below what it has
+            already spent this period, or what it usually needs. Edit a limit below, or move a
+            bill to the next period, to close the rest.
+          </p>
         )}
 
         <BucketPlanEditor

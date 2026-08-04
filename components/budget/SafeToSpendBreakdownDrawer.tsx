@@ -277,10 +277,18 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
                 </p>
               </div>
             </div>
-            {/* With no buckets at all there is nothing to trim — the copy above
-                already points at the bills instead, so don't offer an editor
-                that would open empty. */}
-            {buckets.length > 0 && (
+            {/* Two suppressions, both about not promising a fix the editor
+                cannot deliver:
+                  - no buckets at all → nothing to trim, and the editor would
+                    open empty (the copy above already points at the bills);
+                  - NEGATIVE Safe-to-Spend → trimming bucket LIMITS cannot
+                    raise it. Buckets do not participate in the Safe-to-Spend
+                    formula at all (see the model note at the top of this
+                    file), so no limit the user types closes this gap. The
+                    lead-in stays — that state most needs explaining — and
+                    `overAllocationCopy()` below already names the remedy that
+                    does work: move a bill to the next period. */}
+            {buckets.length > 0 && breakdown.safeToSpend >= 0 && (
               <Button
                 variant="secondary"
                 size="sm"

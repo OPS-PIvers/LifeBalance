@@ -221,7 +221,7 @@ describe('RebalanceBucketsDrawer', () => {
     expect(meter()).toHaveTextContent('Fully planned');
   });
 
-  it('names the uncovered amount when the buckets have no room left to give', () => {
+  it('explains WHY the buckets had no room left, without restating the shortfall', () => {
     // StS $50. Rent claims $900 (nothing spent) but its history says it NEEDS
     // $900, so it has zero slack. Shortfall $850, resolvable $0.
     setFinance({
@@ -232,12 +232,15 @@ describe('RebalanceBucketsDrawer', () => {
     });
     render(<RebalanceBucketsDrawer open onClose={() => {}} />);
 
-    expect(screen.getByText(/\$850\.00 still uncovered/)).toBeInTheDocument();
     expect(screen.getByTestId('rebalance-unresolved')).toHaveTextContent(
       'Only $0.00 can come off without dropping a bucket below what it has already spent this period, or what it usually needs.',
     );
-    // Nothing was trimmed, so the meter still reads short — the banner is what
-    // explains why the drawer didn't just fix it.
+    // The live shortfall is the METER's figure — the explanation must not echo
+    // it back beside the meter in a second alarm-coloured box. (The header's
+    // "Your budgets claim $850.00 more than you have left" is a different
+    // statement: the problem the drawer OPENED on, which stays put while the
+    // meter tracks the drafts.)
+    expect(screen.getByTestId('rebalance-unresolved')).not.toHaveTextContent('$850.00');
     expect(meter()).toHaveTextContent('Short by $850.00');
     expect(screen.getByRole('button', { name: 'Save budgets' })).toBeDisabled();
   });

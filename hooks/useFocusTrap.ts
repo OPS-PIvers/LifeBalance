@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { getTopOpenDrawerId, type OpenDrawerId } from '@/utils/openDrawerRegistry';
 
 /**
  * Selector matching elements that can receive keyboard focus.
@@ -32,9 +33,25 @@ const getFocusableElements = (container: HTMLElement): HTMLElement[] =>
  *
  * Attach the returned ref to the dialog's content container.
  *
+ * `stackId` OPTS THE TRAP INTO THE OPEN-DRAWER STACK, and is the whole reason
+ * two sheets can nest. Every trap listens on `document`, and two `Drawer`s
+ * portal into `document.body` as SIBLINGS — so while focus sits in the upper
+ * sheet, the lower sheet's `container.contains(activeEl)` is false for every
+ * element up there. Left ungated, the lower trap concludes focus escaped on
+ * EVERY Tab and yanks it back to its own first focusable; the upper trap yanks
+ * it back again, and Tab/Shift+Tab do nothing at all in the sheet the user is
+ * actually in — a keyboard-only or screen-reader user cannot reach its
+ * controls. `Drawer` passes the same id it registers with, so only the topmost
+ * sheet acts; this is exactly the scoping Escape already has in `Drawer`.
+ *
+ * Consumers that are NOT on that stack (`Modal`, `Popover`, `KidDashboard`'s
+ * PIN modal, `DayCompleteCelebration`) pass nothing and keep the unconditional
+ * behaviour — a bare "bail unless I'm the top drawer" would disable them
+ * outright, since `getTopOpenDrawerId()` names some drawer that isn't them.
+ *
  * No setState is called here, so react-hooks/set-state-in-effect is satisfied.
  */
-export function useFocusTrap<T extends HTMLElement>(active: boolean) {
+export function useFocusTrap<T extends HTMLElement>(active: boolean, stackId?: OpenDrawerId) {
   const containerRef = useRef<T>(null);
 
   // Focus on open; restore on close/unmount.
@@ -60,6 +77,9 @@ export function useFocusTrap<T extends HTMLElement>(active: boolean) {
 
     const handleTab = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;
+      // Checked per keystroke, not per effect: a deeper sheet can open and
+      // close while this one stays mounted with `active` unchanged.
+      if (stackId !== undefined && getTopOpenDrawerId() !== stackId) return;
       const container = containerRef.current;
       if (!container) return;
 
@@ -88,7 +108,7 @@ export function useFocusTrap<T extends HTMLElement>(active: boolean) {
 
     document.addEventListener('keydown', handleTab);
     return () => document.removeEventListener('keydown', handleTab);
-  }, [active]);
+  }, [active, stackId]);
 
   return containerRef;
 }
