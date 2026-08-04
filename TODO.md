@@ -7,7 +7,8 @@ before re-filing something that looks like a bug.
 
 **Sibling backlogs — check both before concluding something isn't tracked:**
 
-- **`FEATURES_ROADMAP.md`** — features only (96 candidate briefs, 2026-07-13). Nothing greenlit. The
+- **`FEATURES_ROADMAP.md`** — features only (36 open candidate briefs; catalogued 2026-07-13, audited
+  and pruned 2026-08-04 when 62 of the original 98 were verified shipped). Nothing greenlit. The
   split is enforced in both directions: an idea overlapping this file was dropped there with a
   cross-reference instead.
 - **`docs/plans/phase-2b-deterministic-nl-quickadd.md`** — execution detail for §2A's Phase 2b, the
@@ -29,7 +30,7 @@ in the runbooks; this is the index.
 | # | Item | Risk | Runbook |
 |---|------|------|---------|
 | 1.1 | **Admin custom claim → retire the hardcoded super-admin UID.** Provision `admin:true` via the Admin SDK (nothing in the repo sets a claim today), then drop the UID fallback from `firestore.rules` `isSuperAdmin()`, demote `contexts/AuthContext.tsx` + `pages/Settings.tsx` to `getIdTokenResult()`, and remove `VITE_ADMIN_UID` from `deploy.yml`, `.env.local.example`, `vite-env.d.ts`. **Blocks open signup and paid launch.** | HIGH — admin lockout if mis-ordered | `docs/DEPLOY_CHECKLIST.md` §1 |
-| 1.2 | **Open public signup (legal-gated).** Fill 8 `[PLACEHOLDER]`s (19 occurrences) in `PrivacyPolicy.tsx` + `TermsOfService.tsx` → counsel → PR removing the DRAFT banner. Bumping `CONSENT_VERSION` affects **new signups only** (nothing compares a stored `consentVersion`; no re-consent flow exists). Then add the prod origin to Auth authorized domains and flip `openSignup=true`. **⚠️ Sub-gate:** the Gemini-terms placeholder is the app's **only** AI data-handling disclosure since the in-app PII banner was deleted on the grounds that the policy carried it — until it ships, the app discloses AI handling **nowhere**. Do not flip `openSignup` first. | LOW | `docs/PRELAUNCH_CHECKLIST.md` |
+| 1.2 | **Open public signup (legal-gated).** Fill 8 `[PLACEHOLDER]`s (18 occurrences) in `PrivacyPolicy.tsx` + `TermsOfService.tsx` → counsel → PR removing the DRAFT banner. Bumping `CONSENT_VERSION` affects **new signups only** (nothing compares a stored `consentVersion`; no re-consent flow exists). Then add the prod origin to Auth authorized domains and flip `openSignup=true`. **⚠️ Sub-gate:** the Gemini-terms placeholder is the app's **only** AI data-handling disclosure since the in-app PII banner was deleted on the grounds that the policy carried it — until it ships, the app discloses AI handling **nowhere**. Do not flip `openSignup` first. | LOW | `docs/PRELAUNCH_CHECKLIST.md` |
 | 1.3 | **Activate Stripe billing.** Code first: export `createcheckoutsession` + `stripewebhook` from `functions/src/index.ts` (deliberately unexported), add an emulator subscription-write test, verify entitlements in Test Mode. The secrets must exist **before** CI can deploy secret-bound functions. Then Stripe account/product → secrets/webhook → flip `billingEnabled`. ⚠️ That flip drops the free AI cap for alpha users — sequence with comms. Member/kid cap enforcement is already live. | MED | `docs/STRIPE_SETUP_RUNBOOK.md` |
 | 1.4 | **Reveal Kid Mode.** Test-Mode kid-loop walkthrough (add kid → switch → dashboard → chore → points → reward → approval → exit PIN), fix breakage, flip `kidModeEnabled`. Code-complete and deployed dormant. | LOW | — |
 | 1.5 | **Populate the `VITE_SENTRY_DSN` GitHub Actions secret.** Wiring already shipped; error tracking stays dark until the real DSN is set. | LOW | — |
@@ -45,7 +46,7 @@ human-watched PR.
 
 ### 2A. Performance & scale
 
-- [ ] **Split the `calendarItems` listener** (`contexts/household/listeners/financeListeners.ts:105`)
+- [ ] **Split the `calendarItems` listener** (`contexts/household/listeners/financeListeners.ts:108`)
   into an *unbounded recurring-templates* listener + a *date-windowed instances* listener. The last of
   the three unbounded listeners (grocery catalog and meals are done). **[index]** ships first —
   composite index, human watches it reach *Enabled* — then the query change; verify Safe-to-Spend and
@@ -65,11 +66,11 @@ human-watched PR.
 
 - [ ] **SEC-06 — missing audit-log rule.** Add an explicit `firestore.rules` match for
   `logs/api_calls/requests` (only `logs/ai_usage/requests` is covered). **S / LOW.**
-- [ ] **SEC-10 — catch-all subcollection write rule** (`firestore.rules` ~907-912) is
+- [ ] **SEC-10 — catch-all subcollection write rule** (`firestore.rules` ~1242-1271) is
   exclusion-list-permits. Change to deny-by-default after grepping every `.collection()` usage so
   nothing untracked breaks. **S / LOW-MED.**
 - [ ] **Sub-bucket field cleanup.** Drop the dead `subBucketId` / `subBuckets` references from
-  `firestore.rules` (~389, 482, 497, 506) — the app code was removed; rules just permit an unused
+  `firestore.rules` (~568, 684, 699, 708) — the app code was removed; rules just permit an unused
   field. Bundle with the next rules PR. **S / LOW.**
 
 ### 2C. Money-path follow-ups (from the settled-bill work, #1134 / 2H)
@@ -94,9 +95,9 @@ human-watched PR.
 
 ### 2D. Small / hygiene
 
-- [ ] **Unify `HouseholdBadge` onto `MemberAvatar`.** #1164 shipped a standalone
-  `components/ui/HouseholdBadge.tsx` because a parallel PR owned `MemberAvatar.tsx`. Two components now
-  draw the same circle/size/ring and can drift. **XS.**
+- [ ] **`components/habits/ReflectionDrawer.tsx` is built but never mounted.** A complete quick
+  note/mood drawer that nothing imports — the F-HABITS-06 reflection UI shipped inside
+  `HabitSubmissionLogModal` instead. Wire it in or delete it. **XS.**
 - [ ] **`payCalendarItem` atomicity test flake under heavy parallel load** —
   `checkPointsReset`'s 100ms midnight-scheduler timer can add a second batch to the test's capture. Fix
   is to reset/filter `batches` in that test (`contexts/FirebaseHouseholdContext.test.tsx`), not the
@@ -132,28 +133,19 @@ counsel's input, which the policy does not yet have.
 From the 2026-07-30 six-stage ship (#1152–#1158); spec in `.claude/PER_MEMBER_POINTS_HANDOFF.md`.
 Accepted trade-offs from that review are in `docs/DECISIONS.md`, not here.
 
-- **Automated completions carry NO per-member attribution.** The Cloud Functions quickAdd path (iOS
-  Shortcuts) and the habit-trigger fires in `utils/habitTriggerFire.ts` /
-  `contexts/household/mutations/{todo,transaction}Mutations.ts` write no `completedBy`, so an automated
-  completion credits the household at the legacy habit-level multiplier and counts toward nobody's
-  personal score. Self-consistent under grandfathering, but this household leans on automations, so
-  personal scores under-count. **Decide WHO gets credit** — the Shortcut key's owner? the transaction's
-  member? the habit's `linkedMemberId`? — before wiring. **M / MED.**
-- **`deleteHabitSubmission` treats the OPERATOR as the creditee — live on `main`.**
-  `hooks/useHabitActions.tsx:1590` computes `submission.attributedTo ?? submission.createdBy`, but the
-  same file documents `createdBy` at :1380 as "the OPERATOR, always". Three of the four submission
-  writers set **neither** `attributedTo` nor `creditsHousehold`: `transactionMutations.ts:627`
-  (`createdBy` is whoever verified the triggering transaction — a real member uid),
-  `functions/src/quickAdd/noSpendFire.ts:356` (`"system"`), and `scripts/migrateHabitSubmissions.ts:130`
-  (`'migration_script'`). For those docs the fallback debits the wrong member, and
-  `HabitSubmissionLogModal` lists all submissions unfiltered behind a delete button. Probed: a
-  neither-field doc with `createdBy` user1, on a date carrying `completedBy { jen-uid: 1 }`, debits
-  **jen-uid** — a member with no link to the doc at all.
-  **The trap:** widening `isHouseholdSubmission` to `attributedTo == null` also flips
-  `attributionMoved` (:1652), which suppresses `legacyDelta` (:1654) — the only record of a
-  pre-attribution doc's award — so the obvious one-liner breaks grandfathered reversal. `points.total`
-  drift is permanent. **Decide the creditee rule and the grandfathered-reversal split before coding.
-  S–M, own PR + test sweep.**
+- **TWO of the three automated-completion paths still carry NO per-member attribution.**
+  Transaction-fired habits were fixed by #1210 (ATTR-1): `contexts/household/mutations/transactionMutations.ts`
+  resolves the card's owner via `utils/habitCardAttribution.ts` and writes `completedBy` + `attributedTo`
+  — falling back to unattributed household credit only for a chore, an untagged card, or a uid off the
+  roster. Still unattributed: the **to-do-fired** trigger (`fireLinkedHabitInBatch` in
+  `contexts/household/mutations/todoMutations.ts`, which writes points only to the habit's `assignedTo`
+  or the household doc) and the **Cloud Functions quickAdd** habit endpoint
+  (`functions/src/quickAdd/index.ts`, which increments `households/{id}.points.*` only). Both credit the
+  household at the legacy habit-level multiplier and count toward nobody's personal score, so a
+  household leaning on automations under-counts personal scores. `noSpendFire` is deliberately
+  unattributed — a household-wide fact, pinned by `cardOwnerAttributionParity.test.ts`, not a gap.
+  **Decide WHO gets credit for the remaining two** — the Shortcut key's owner? the to-do's assignee? —
+  before wiring. **M / MED.**
 - **Reversal never rescores surviving periods whose streak multiplier the clear changed.** Clearing
   period A shifts the multiplier of *later* periods that survive it, and neither
   `attributionReversalForDates` branch scores those dates (`periodPointsMove` is period-scoped by
@@ -167,14 +159,17 @@ Accepted trade-offs from that review are in `docs/DECISIONS.md`, not here.
 ### 3C. Product scope (2026-07-09 audit — grounded, not greenlit)
 
 - **Meals/grocery spend → Groceries budget-bucket linkage** — flagged the highest-value net-new
-  differentiator; needs a matching-logic decision. **M / MED.**
+  differentiator; needs a matching-logic decision. Per-meal cost tracking now exists
+  (`utils/mealCost.ts`) but is deliberately informational — never wired into `safeToSpendCalculator.ts`
+  or bucket math. That wiring is the open decision. **M / MED.**
 - **AI Weekly Planner: full save-back to the calendar/meal-plan** (today it only writes the shopping
   list). **M / LOW-MED.**
 - **G1** — full shared family calendar (beyond the bills-only ICS feed).
 - **G8** — generalized email-in inbox (per-household inbound address → existing parser).
-- **G9** — printable "fridge" views (`@media print` + `/print` route). **S.**
+- **G9** — printable "fridge" views (`@media print` + `/print` route). Distinct from the shipped
+  "Print week for the fridge" action in `MealPlanTab` (`utils/printWeekHtml.ts`), which is tab-scoped
+  and meal-plan/shopping only; G9 is the app-wide print surface. **S.**
 - **G10** — receipt-image persistence / document shelf (`firebase/storage` + a new rules surface).
-- **G11** — kid allowance payout ledger (parent-confirmed IOU + savings jar; not a real-money tier).
 - **G12** — Alexa/Google Home shopping entry (skill + platform certification).
 - **Marketing/landing page + waitlist capture** (DIR-08) — needs a hosting/domain decision + copy.
 - **Deferred pre-traction by the roadmap:** referral/invite rewards, achievements/badges layer,
@@ -186,7 +181,7 @@ Accepted trade-offs from that review are in `docs/DECISIONS.md`, not here.
 ## Reference docs
 
 - `docs/DECISIONS.md` — decisions not to re-litigate + standing traps (**read before re-filing a bug**)
-- `FEATURES_ROADMAP.md` — the sibling backlog: features only, 96 briefs, none greenlit
+- `FEATURES_ROADMAP.md` — the sibling backlog: features only, 36 open briefs, none greenlit
 - `docs/plans/phase-2b-deterministic-nl-quickadd.md` — execution detail for §2A's Phase 2b
 - `docs/PRODUCT_ROADMAP.md` — product strategy + the analytics event dictionary (Part 7)
 - `docs/PRELAUNCH_CHECKLIST.md` — the ordered public-launch gate (legal → open signup)
