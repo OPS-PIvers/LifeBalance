@@ -10,6 +10,7 @@ import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import GroceryCatalogModal from '@/components/modals/GroceryCatalogModal';
 import ShoppingSettingsModal from '@/components/meals/ShoppingSettingsModal';
 import { ShoppingItemRow } from '@/components/meals/ShoppingItemRow';
+import { SavedForLaterShoppingSection } from '@/components/meals/SavedForLaterShoppingSection';
 import { QuickRestockDrawer } from '@/components/meals/QuickRestockDrawer';
 import { PasteImportDrawer } from '@/components/meals/PasteImportDrawer';
 import { ShoppingItemForm } from '@/components/meals/ShoppingItemForm';
@@ -32,6 +33,7 @@ import { haptic } from '@/utils/haptics';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { formatShoppingListForShare } from '@/utils/shoppingListFormatter';
 import { resolveItemDefaults, suggestItemDefaults } from '@/utils/grocerySmartDefaults';
+import { describeError } from '@/utils/errorMessages';
 import {
   ShoppingSortMode,
   SHOPPING_SORT_LABELS,
@@ -139,11 +141,13 @@ const ShoppingListTab: React.FC = () => {
   const powerToolsEnabled = usePowerToolsEnabled();
   const {
     shoppingList,
+    savedForLaterShopping,
     addShoppingItem,
     deleteShoppingItem,
     toggleShoppingItemPurchased,
     updateShoppingItem,
     reorderShoppingItems,
+    setShoppingItemSavedForLater,
     clearPurchasedShoppingItems,
     stores,
     groceryCategories,
@@ -255,24 +259,40 @@ const ShoppingListTab: React.FC = () => {
   // --- Global search deep-link (v1.2) ---------------------------------------
   // A shopping result navigates to `/lists` with `state: { tab: 'shopping',
   // highlightId }`; ListsPage switches the tab and this scrolls to + flashes
-  // the row. Deliberately DEFERRED until the list has actually arrived: the
-  // first commit after a cold navigation has an empty `shoppingList`, and
-  // `useScrollToHighlight` fires once per id — a rAF against an empty list
-  // would consume the highlight and find nothing. Passing `null` until the
-  // data lands means the effect re-runs with the real id when it does.
+  // the row. Deliberately DEFERRED until a list has actually arrived: the
+  // first commit after a cold navigation has an empty `shoppingList` AND an
+  // empty `savedForLaterShopping`, and `useScrollToHighlight` fires once per
+  // id — a rAF against an empty list would consume the highlight and find
+  // nothing. Passing `null` until the data lands means the effect re-runs
+  // with the real id when it does. Checking EITHER array (not just
+  // `shoppingList`) matters now that a search result (PR-5) can target a
+  // parked item — a household whose active list is empty but whose parked
+  // section isn't (the common case right after this feature ships) must
+  // still fire.
   const incomingHighlightId = useDeepLinkHighlight();
-  const highlightId = !isLoading && shoppingList.length > 0 ? incomingHighlightId : null;
-  // The target may be filtered out of view by an active store filter. Clear the
-  // filter ONLY when the target actually fails it — a deep link must never
-  // silently discard a scoping choice it didn't need to. Looked up in the full
-  // `shoppingList`, not the filtered `items`, precisely because a failing target
-  // is absent from the latter. The Reorder.Group's mirrored `items` state is
-  // left alone: it is load-bearing for drag, and a deep link never races one.
+  const highlightId = !isLoading && (shoppingList.length > 0 || savedForLaterShopping.length > 0)
+    ? incomingHighlightId
+    : null;
+  // The target may be filtered out of view by an active store filter, OR
+  // (PR-5) live in the parked section. Clear the filter ONLY when the target
+  // actually fails it — a deep link must never silently discard a scoping
+  // choice it didn't need to. Looked up in the full `shoppingList` /
+  // `savedForLaterShopping`, not the filtered `items`, precisely because a
+  // failing target is absent from the latter. The Reorder.Group's mirrored
+  // `items` state is left alone: it is load-bearing for drag, and a deep
+  // link never races one. Auto-EXPANDING a collapsed "Saved for later"
+  // section for a parked target is `SavedForLaterShoppingSection`'s own
+  // responsibility (a render-phase edge check on its own `highlightId`
+  // prop — see that component) — a `hidden` (display:none) subtree is a
+  // silent no-op for both `scrollIntoView` and the flash class, so that
+  // expand must land before this hook's rAF looks for the row, same as the
+  // filter-clear below.
   const revealHighlightedItem = useCallback(() => {
     if (!highlightId || !filterStore) return;
-    const target = shoppingList.find(item => item.id === highlightId);
+    const target = shoppingList.find(item => item.id === highlightId)
+      ?? savedForLaterShopping.find(item => item.id === highlightId);
     if (target && target.store !== filterStore) setFilterStore(null);
-  }, [highlightId, filterStore, shoppingList]);
+  }, [highlightId, filterStore, shoppingList, savedForLaterShopping]);
   useScrollToHighlight(highlightId, revealHighlightedItem);
 
   // Input State
@@ -283,6 +303,13 @@ const ShoppingListTab: React.FC = () => {
   useEffect(() => {
     if (newItemText.trim()) void loadFullGroceryCatalog();
   }, [newItemText, loadFullGroceryCatalog]);
+
+  // "Saved for later" section's own add bar — a separate input so typing
+  // there never disturbs the main list's quick-add text (or its autofocus).
+  const [newParkedItemText, setNewParkedItemText] = useState('');
+  useEffect(() => {
+    if (newParkedItemText.trim()) void loadFullGroceryCatalog();
+  }, [newParkedItemText, loadFullGroceryCatalog]);
   // Focus the quick-add field on desktop only. On touch devices this would pop
   // the iOS keyboard every time the tab/page mounts (this component is shared by
   // the Lists "Shopping" tab, the Meals "Shopping List" tab, and the standalone
@@ -364,6 +391,35 @@ const ShoppingListTab: React.FC = () => {
     if (store || (category !== 'Uncategorized')) {
         // Optional feedback, skipping to keep UI clean
     }
+  };
+
+  // "Saved for later" section's own add bar — creates a PARKED item directly
+  // (savedForLater: true), no triage. Mirrors handleSmartAdd's defaulting
+  // exactly, but the entry-order `order` value is computed against
+  // `savedForLaterShopping` (that section's own ordering space), not the
+  // active `shoppingList`.
+  const handleParkedSmartAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const rawName = newParkedItemText.trim();
+    if (!rawName) return;
+
+    setNewParkedItemText('');
+
+    const { category, store, quantity } = resolveItemDefaults(rawName, groceryCatalog);
+    const maxOrder = savedForLaterShopping.length > 0
+      ? Math.max(...savedForLaterShopping.map(i => i.order || 0))
+      : 0;
+
+    haptic('success');
+    await addShoppingItem({
+        name: rawName,
+        category,
+        store,
+        quantity,
+        isPurchased: false,
+        order: maxOrder + 1,
+        savedForLater: true,
+    });
   };
 
   // Memoized flags derived from shoppingList to avoid two O(N) scans on every render
@@ -532,6 +588,31 @@ const ShoppingListTab: React.FC = () => {
         deleteShoppingItem(item.id);
         showDeleteUndoToast(item);
     }, [deleteShoppingItem, showDeleteUndoToast]);
+
+    // "Saved for later": park an active item / promote a parked one back to
+    // the active list. `setShoppingItemSavedForLater` deliberately shows no
+    // toast of its own (see its doc comment) — both directions are reversible
+    // right from the row (the Plus control / a swipe back the other way), so
+    // the caller just needs to report success/failure honestly.
+    const handleSaveForLater = useCallback(async (item: ShoppingItem) => {
+        try {
+            await setShoppingItemSavedForLater(item.id, true);
+            toast.success('Saved for later');
+        } catch (error) {
+            console.error('[handleSaveForLater] Failed:', error);
+            toast.error(describeError(error, 'save the item for later'));
+        }
+    }, [setShoppingItemSavedForLater]);
+
+    const handlePromote = useCallback(async (item: ShoppingItem) => {
+        try {
+            await setShoppingItemSavedForLater(item.id, false);
+            toast.success('Added to shopping list');
+        } catch (error) {
+            console.error('[handlePromote] Failed:', error);
+            toast.error(describeError(error, 'move the item'));
+        }
+    }, [setShoppingItemSavedForLater]);
 
     // Toggles a single list's membership for an item, leaving every OTHER
     // list untouched (the old handler forced exclusive single-list membership;
@@ -889,6 +970,7 @@ const ShoppingListTab: React.FC = () => {
                                 onCheck={handleCheck}
                                 onDelete={handleDelete}
                                 onEdit={setEditingItem}
+                                onSaveForLater={handleSaveForLater}
                                 isReorderable={false}
                             />
                         </React.Fragment>
@@ -908,6 +990,7 @@ const ShoppingListTab: React.FC = () => {
                             onCheck={handleCheck}
                             onDelete={handleDelete}
                             onEdit={setEditingItem}
+                            onSaveForLater={handleSaveForLater}
                             onReorderDragStart={handleReorderDragStart}
                             onReorderDragEnd={handleReorderDragEnd}
                         />
@@ -916,6 +999,22 @@ const ShoppingListTab: React.FC = () => {
             )}
             </div>
         </div>
+
+        <SavedForLaterShoppingSection
+            items={savedForLaterShopping}
+            sortMode={sortMode}
+            filterStore={filterStore}
+            categories={categories}
+            storeOrder={storeOrder}
+            onPromote={handlePromote}
+            onDelete={handleDelete}
+            onEdit={setEditingItem}
+            onReorder={reorderShoppingItems}
+            addValue={newParkedItemText}
+            onAddValueChange={setNewParkedItemText}
+            onAddSubmit={handleParkedSmartAdd}
+            highlightId={highlightId}
+        />
 
         {/* Modals */}
         <QuickRestockDrawer
@@ -961,6 +1060,26 @@ const ShoppingListTab: React.FC = () => {
                 >
                   <Trash2 size={20} />
                 </Button>
+                {/* Kebab → this drawer IS the row's "options" surface, so the
+                    spec's "kebab/options menu ALSO gets a Save for later
+                    entry" lives here rather than as a second dropdown.
+                    Omitted for a purchased item (can't be parked) and for an
+                    already-parked item (promotion is the Plus control /
+                    swipe, not this drawer). */}
+                {!editingItem.isPurchased && !editingItem.savedForLater && (
+                  <Button
+                    type="button"
+                    variant="subtle"
+                    size="lg"
+                    aria-label="Save for later"
+                    onClick={() => {
+                      void handleSaveForLater(editingItem);
+                      setEditingItem(null);
+                    }}
+                  >
+                    <Clock size={20} />
+                  </Button>
+                )}
                 <Button
                   variant="primary"
                   size="lg"

@@ -130,3 +130,94 @@ describe('ShoppingItemRow', () => {
     expect(container.querySelector('[data-highlight-target="item-1"]')).not.toBeNull();
   });
 });
+
+// Saved-for-later (PR-2): the 'parked' variant swaps the checkbox for a
+// circular Plus promote control and swaps the swipe actions (right =
+// promote, left = delete only — no purchased concept at all).
+describe('ShoppingItemRow — parked variant', () => {
+  const onPromote = vi.fn();
+
+  beforeEach(() => {
+    onPromote.mockClear();
+  });
+
+  it('renders a circular Plus promote control instead of the checkbox', () => {
+    render(
+      <ShoppingItemRow item={item} {...handlers} variant="parked" onPromote={onPromote} isReorderable={false} />
+    );
+    expect(screen.queryByLabelText('Mark Milk as purchased')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Move Milk to your shopping list')).toBeInTheDocument();
+  });
+
+  it('promotes on tap of the leading control, without touching onCheck', async () => {
+    const user = userEvent.setup();
+    render(
+      <ShoppingItemRow item={item} {...handlers} variant="parked" onPromote={onPromote} isReorderable={false} />
+    );
+    await user.click(screen.getByLabelText('Move Milk to your shopping list'));
+    expect(onPromote).toHaveBeenCalledWith(item);
+    expect(handlers.onCheck).not.toHaveBeenCalled();
+  });
+
+  it('does not toggle purchased from a tap on the content area', async () => {
+    const user = userEvent.setup();
+    render(
+      <ShoppingItemRow item={item} {...handlers} variant="parked" onPromote={onPromote} isReorderable={false} />
+    );
+    await user.click(screen.getByText('Milk'));
+    expect(handlers.onCheck).not.toHaveBeenCalled();
+  });
+
+  it('offers Move to list (promote) and Delete as swipe actions, never Purchased or Save for later', () => {
+    render(
+      <ShoppingItemRow item={item} {...handlers} variant="parked" onPromote={onPromote} isReorderable={false} />
+    );
+    expect(screen.getByText('Move to list')).toBeInTheDocument();
+    expect(screen.getByText('Delete')).toBeInTheDocument();
+    expect(screen.queryByText('Purchased')).not.toBeInTheDocument();
+    expect(screen.queryByText('Save for later')).not.toBeInTheDocument();
+  });
+
+  it('still opens the edit drawer from the kebab', async () => {
+    const user = userEvent.setup();
+    render(
+      <ShoppingItemRow item={item} {...handlers} variant="parked" onPromote={onPromote} isReorderable={false} />
+    );
+    await user.click(screen.getByRole('button', { name: 'Options for Milk' }));
+    expect(handlers.onEdit).toHaveBeenCalledWith(item);
+  });
+});
+
+// Saved-for-later (PR-2): active rows gain an OPTIONAL secondary "Save for
+// later" swipe action beside the still-primary Delete — but never for a
+// purchased item, which can never be parked.
+describe('ShoppingItemRow — active variant with onSaveForLater', () => {
+  const onSaveForLater = vi.fn();
+
+  beforeEach(() => {
+    onSaveForLater.mockClear();
+  });
+
+  it('adds a Save for later swipe action for an unpurchased item', () => {
+    render(
+      <ShoppingItemRow item={item} {...handlers} onSaveForLater={onSaveForLater} isReorderable={false} />
+    );
+    expect(screen.getByText('Save for later')).toBeInTheDocument();
+    // Delete stays present too — it's the primary, Save for later a secondary.
+    expect(screen.getByText('Delete')).toBeInTheDocument();
+  });
+
+  it('omits Save for later entirely for a purchased item — it cannot be parked', () => {
+    const purchasedItem: ShoppingItem = { ...item, isPurchased: true };
+    render(
+      <ShoppingItemRow item={purchasedItem} {...handlers} onSaveForLater={onSaveForLater} isReorderable={false} />
+    );
+    expect(screen.queryByText('Save for later')).not.toBeInTheDocument();
+    expect(screen.getByText('Delete')).toBeInTheDocument();
+  });
+
+  it('omits Save for later when no handler is supplied (existing call sites unaffected)', () => {
+    render(<ShoppingItemRow item={item} {...handlers} isReorderable={false} />);
+    expect(screen.queryByText('Save for later')).not.toBeInTheDocument();
+  });
+});
