@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { X } from 'lucide-react';
@@ -73,8 +73,19 @@ export const Drawer: React.FC<DrawerProps> = ({
   // close threshold. Gating the drag to the handle lets the body scroll natively
   // (like an iOS sheet) while still allowing swipe-down-to-close from the grip.
   const dragControls = useDragControls();
-  // Focus trap + restoration (moves focus in on open, traps Tab, restores on close).
-  const contentRef = useFocusTrap<HTMLDivElement>(isOpen);
+  // This sheet's identity on the shared open-drawer stack. Declared here (above
+  // the focus trap) because the trap needs it too — see the registration effect
+  // below for what the stack is for. A lazily-initialised `useState` rather
+  // than a ref: the trap reads it DURING RENDER (it's a hook argument), and a
+  // ref read in render is exactly what `react-hooks/refs` forbids. The value is
+  // per-instance and never set again, so it is as stable as the ref was.
+  const [stackId] = useState(() => Symbol('drawer'));
+  // Focus trap + restoration (moves focus in on open, traps Tab, restores on
+  // close). The stack id scopes Tab to the TOPMOST sheet, exactly as Escape is
+  // scoped below — without it, a lower sheet's document-level Tab handler sees
+  // focus sitting in the sheet above (a portal SIBLING, not a descendant),
+  // concludes it escaped, and drags it back on every keystroke.
+  const contentRef = useFocusTrap<HTMLDivElement>(isOpen, stackId);
 
   // Lock body scroll when open
   useEffect(() => {
@@ -91,30 +102,29 @@ export const Drawer: React.FC<DrawerProps> = ({
     }
   }, [isOpen]);
 
-  // Register on the shared open-drawer stack. Two consumers: Escape only
+  // Register on the shared open-drawer stack. Three consumers: Escape only
   // reaches the TOPMOST sheet when drawers nest (e.g. the habit picker inside
   // the review drawer) — otherwise every open drawer's window listener fires
-  // and all sheets close — and self-opening surfaces (MainLayout's
-  // once-per-app-open review drawer) wait for the stack to empty rather than
-  // stacking a second sheet over whatever the user is already reading.
-  const stackIdRef = useRef<symbol | null>(null);
-  if (stackIdRef.current === null) stackIdRef.current = Symbol('drawer');
+  // and all sheets close — the focus trap above scopes Tab the same way, and
+  // self-opening surfaces (MainLayout's once-per-app-open review drawer) wait
+  // for the stack to empty rather than stacking a second sheet over whatever
+  // the user is already reading.
   useEffect(() => {
     if (!isOpen) return;
-    return registerOpenDrawer(stackIdRef.current as symbol);
-  }, [isOpen]);
+    return registerOpenDrawer(stackId);
+  }, [isOpen, stackId]);
 
   // Handle Escape key
   useEffect(() => {
     if (!isOpen || disableClose) return;
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && getTopOpenDrawerId() === stackIdRef.current) {
+      if (e.key === 'Escape' && getTopOpenDrawerId() === stackId) {
         onClose();
       }
     };
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [isOpen, onClose, disableClose]);
+  }, [isOpen, onClose, disableClose, stackId]);
 
   return createPortal(
     <AnimatePresence>

@@ -11,15 +11,27 @@ import { roundMoney, subtractMoney } from '@/utils/money';
  * Below this shortfall, don't raise an alarm — a $3 rounding-scale overlap
  * between bucket limits and free cash isn't a real budgeting problem.
  *
- * This $10 floor DELIBERATELY diverges from `SafeToSpendBreakdownDrawer`'s
- * own `overAllocated` (via `computeSafeToSpendDistribution`), which fires at
- * any negative leftover — one cent. Consequence today: a $5 shortfall shows
- * no header mark here, but the drawer still labels that same row
- * "Over-allocated" in red. That's pre-existing drawer behaviour, not a
- * regression introduced by this header mark, and reconciling the two floors
- * is deliberately deferred to the follow-up PR that rebuilds the drawer's
- * over-allocation section — don't "fix" this by lowering this constant to 0
- * or raising the drawer's floor to match without doing that work.
+ * RECONCILED (PR B2) — this floor is the ALARM threshold, shared, and it is
+ * deliberately NOT the same thing as the truth about whether budgets over-claim:
+ *
+ *  - THE TRUTH fires at one cent. `computeSafeToSpendDistribution`'s
+ *    `overAllocated` and `BucketPlanEditor`'s "Short by $X" verdict both stay
+ *    on it, so a $5 over-claim is still reported as a $5 over-claim.
+ *  - THE ALARM fires at this constant. The toolbar's amber mark,
+ *    `SafeToSpendBreakdownDrawer`'s red closing-row treatment / red caption /
+ *    over-allocation lead-in + "Rebalance buckets" CTA, and
+ *    `BucketPlanEditor`'s warning styling all key off it, so nothing shouts
+ *    about $3 of rounding-scale overlap.
+ *
+ * STAYING QUIET IS NOT THE SAME AS SAYING IT BALANCES — do NOT extend this
+ * floor to a verdict. An earlier draft gated the fit meter's verdict on it and
+ * a $9.99 shortfall rendered "Fully planned"; both of those surfaces now carry
+ * a regression test pinning the split.
+ *
+ * `SafeToSpendBreakdownDrawer` applies the threshold but NOT this function's
+ * additional `safeToSpend >= 0` suppression: the mark suppresses itself there
+ * to avoid a second alarm beside an already-red figure, while the drawer is
+ * the surface that has to explain that exact case.
  */
 export const OVER_ALLOCATION_MIN_SHORTFALL = 10;
 
