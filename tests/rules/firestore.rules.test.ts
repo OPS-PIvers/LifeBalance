@@ -2066,6 +2066,72 @@ describe('todos (Eisenhower importance + shared notes — additive optional fiel
     );
   });
 
+  // "Saved for later" — the same allowlist trap as needsReview. Because
+  // request.resource.data is the MERGED post-write doc, omitting the key would
+  // deny EVERY client write to a parked to-do, promotion included.
+  it('a member can park a to-do (savedForLater: true)', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'todos', TODO), {
+        savedForLater: true,
+      }),
+    );
+  });
+
+  it('a member can create a parked to-do directly', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'todos', 'todo-parked'), {
+        text: 'Look into a bike rack',
+        completeByDate: '2026-06-22', // inert placeholder — never rendered
+        isCompleted: false,
+        savedForLater: true,
+        createdBy: BOB,
+      }),
+    );
+  });
+
+  // Promotion: clears the flag AND applies the triage classification in ONE
+  // write, so the merged doc carries savedForLater alongside the real fields.
+  it('a member can promote a parked to-do (clears savedForLater with classification)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = asFirestore(ctx.firestore());
+      await setDoc(doc(db, 'households', H1, 'todos', 'todo-promote'), {
+        text: 'Look into a bike rack',
+        completeByDate: '2026-06-22',
+        isCompleted: false,
+        savedForLater: true,
+        createdBy: BOB,
+      });
+    });
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'todos', 'todo-promote'), {
+        savedForLater: false,
+        completeByDate: '2026-07-04',
+        assignedTo: BOB,
+        category: 'Home',
+        isImportant: true,
+      }),
+    );
+  });
+
+  it('rejects a non-boolean savedForLater', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'todos', TODO), {
+        savedForLater: 'yes',
+      }),
+    );
+  });
+
+  // Control for the two allow-cases above: the allowlist still bites for a
+  // field that genuinely isn't listed, so those passes aren't vacuous.
+  it('still rejects an unlisted field written alongside savedForLater', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'todos', TODO), {
+        savedForLater: true,
+        parkedReason: 'someday',
+      }),
+    );
+  });
+
   it('rejects an update carrying an unknown field (storage abuse)', async () => {
     await assertFails(
       updateDoc(doc(dbFor(BOB), 'households', H1, 'todos', TODO), {

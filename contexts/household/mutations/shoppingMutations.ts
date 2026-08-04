@@ -39,6 +39,16 @@ export function makeShoppingListMutations(deps: {
 }) {
   const { db, householdId } = deps;
 
+  /**
+   * Adds a shopping item.
+   *
+   * "Saved for later": this is ALSO the parked-item creation path — pass
+   * `savedForLater: true` on `item` and the row lands directly in the parked
+   * section (the provider split keys off the stored flag, so nothing else is
+   * needed). No dedicated add function exists because a shopping item is built
+   * the same way either way — unlike a to-do, it has no required date field to
+   * fabricate (see `addSavedForLaterTodo` in todoMutations.ts).
+   */
   const addShoppingItem = async (item: Omit<ShoppingItem, 'id'>) => {
     if (!householdId) return;
     try {
@@ -149,6 +159,32 @@ export function makeShoppingListMutations(deps: {
     }
   };
 
+  /**
+   * "Saved for later": parks an active shopping item, or promotes a parked one
+   * back to the active list. A single-field write — the doc id, `order`, store,
+   * quantity and notes all survive, which is the whole reason the feature is one
+   * flag rather than a second collection. Shopping promotion needs NO triage
+   * (unlike a to-do), so this is the complete promotion path for the domain.
+   *
+   * Toast Behavior: none here, deliberately. Both directions are offered with an
+   * undo affordance on the row, so the caller owns the message (and can only do
+   * that honestly if a failed write REJECTS).
+   *
+   * @throws Re-throws any caught error so callers don't report success for a
+   *         write that never landed.
+   */
+  const setShoppingItemSavedForLater = async (id: string, value: boolean) => {
+    if (!householdId) return;
+    try {
+      await updateDoc(doc(db, `households/${householdId}/shoppingList`, id), {
+        savedForLater: value,
+      });
+    } catch (error) {
+      console.error('[setShoppingItemSavedForLater] Failed:', error);
+      throw error;
+    }
+  };
+
   const addStore = async (store: Omit<Store, 'id'>) => {
     if (!householdId) return;
     try {
@@ -248,7 +284,8 @@ export function makeShoppingListMutations(deps: {
 
   return {
     addShoppingItem, addShoppingItems, updateShoppingItem, reorderShoppingItems,
-    deleteShoppingItem, approveShoppingItem, addStore, updateGroceryCategories,
+    deleteShoppingItem, approveShoppingItem, setShoppingItemSavedForLater,
+    addStore, updateGroceryCategories,
     addQuickStockList, updateQuickStockLists,
     addGroceryCatalogItem, updateGroceryCatalogItem, deleteGroceryCatalogItem,
   };
@@ -274,6 +311,21 @@ export function makeToggleShoppingItemPurchased(deps: {
       if (!item) return;
 
       if (!item.isPurchased) {
+        // A parked ("saved for later") item is explicitly NOT committed work
+        // — see ShoppingItem.savedForLater — and is therefore not purchasable.
+        // Refusing here (not just omitting the checkbox in the UI) prevents a
+        // doc from ever NEWLY reaching {savedForLater: true, isPurchased:
+        // true}: `savedForLaterShopping` deliberately does not filter out
+        // purchased items (see that selector's comment), so such a doc would
+        // become a zombie invisible to every exposed slice. This guards only
+        // the forward (purchase) direction, mirroring `completeToDo` — the
+        // reverse (undo) branch below stays open as the recovery route for
+        // any zombie that already existed before this guard shipped.
+        if (item.savedForLater === true) {
+          toast.error('Cannot mark a saved-for-later item as purchased');
+          return;
+        }
+
         // Commit the purchase flag and the catalog (history) upsert in a single
         // batch so they can never diverge (item checked off but its purchase
         // history never recorded, or vice versa).

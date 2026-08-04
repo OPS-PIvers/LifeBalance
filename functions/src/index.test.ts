@@ -869,6 +869,42 @@ describe("sendactionqueuereminders", () => {
       })
     );
   });
+
+  it("does not send a reminder when the only due-today todo is saved for later", async () => {
+    // A parked to-do's completeByDate is an inert placeholder stamped with
+    // the day it was parked — it can legitimately equal todayString on that
+    // day, but it must never trigger a reminder (see the comment on the
+    // savedForLater filter in index.ts).
+    configureActionQueueReminderHousehold([
+      {
+        id: "parked",
+        data: { assignedTo: "u1", isCompleted: false, completeByDate: "2026-07-14", savedForLater: true },
+      },
+    ]);
+
+    await runActionQueueReminders();
+
+    expect(adminMock.sendEachForMulticast).not.toHaveBeenCalled();
+  });
+
+  it("excludes saved-for-later todos from the count but still sends for the rest", async () => {
+    configureActionQueueReminderHousehold([
+      {
+        id: "parked",
+        data: { assignedTo: "u1", isCompleted: false, completeByDate: "2026-07-14", savedForLater: true },
+      },
+      { id: "normal", data: { assignedTo: "u1", isCompleted: false, completeByDate: "2026-07-14" } },
+    ]);
+
+    await runActionQueueReminders();
+
+    expect(adminMock.sendEachForMulticast).toHaveBeenCalledTimes(1);
+    expect(adminMock.sendEachForMulticast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        notification: expect.objectContaining({ title: expect.stringContaining("1 task") }),
+      })
+    );
+  });
 });
 
 // ===========================================================================

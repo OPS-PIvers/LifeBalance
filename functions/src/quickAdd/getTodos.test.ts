@@ -380,6 +380,36 @@ describe("getTodos — filtering and query params", () => {
     expect((res.body as { data: { count: number } }).data.count).toBe(2);
   });
 
+  // "Saved for later": this endpoint bypasses the client context's split, so
+  // without an explicit exclusion an iOS Shortcut would pull parked items into
+  // Apple Reminders as real tasks (with a fabricated due date).
+  it("excludes parked (savedForLater) to-dos", async () => {
+    todoDocs = [
+      todoDoc("active", { isCompleted: false }),
+      todoDoc("parked", { isCompleted: false, savedForLater: true }),
+      // false / absent both mean "not parked" — no migration, absent is the norm.
+      todoDoc("unparked", { isCompleted: false, savedForLater: false }),
+    ];
+    const res = makeRes();
+    await asHandler(getTodos)(makeReq(), res);
+
+    const body = res.body as { data: { todos: { id: string }[]; count: number } };
+    expect(body.data.count).toBe(2);
+    expect(body.data.todos.map((t) => t.id).sort()).toEqual(["active", "unparked"]);
+  });
+
+  it("excludes parked to-dos even when includeCompleted is set", async () => {
+    todoDocs = [
+      todoDoc("done", { isCompleted: true }),
+      todoDoc("parked", { isCompleted: false, savedForLater: true }),
+    ];
+    const res = makeRes();
+    await asHandler(getTodos)(makeReq({ query: { includeCompleted: "true" } }), res);
+
+    const body = res.body as { data: { todos: { id: string }[]; count: number } };
+    expect(body.data.todos.map((t) => t.id)).toEqual(["done"]);
+  });
+
   it("assignedTo filters to a single member", async () => {
     todoDocs = [
       todoDoc("a", { assignedTo: "user1" }),

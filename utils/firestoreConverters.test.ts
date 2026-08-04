@@ -697,6 +697,22 @@ describe('shoppingItemConverter', () => {
     expect(result.needsReview).toBeUndefined();
   });
 
+  it('(a) savedForLater round-trips through both directions', () => {
+    const fromDb = shoppingItemConverter.fromFirestore(fakeSnap('si-11', { ...wellFormed, savedForLater: true }));
+    expect(fromDb.savedForLater).toBe(true);
+    const out = callToFirestore(shoppingItemConverter, { ...wellFormed, id: 'si-11', savedForLater: true });
+    expect(out['savedForLater']).toBe(true);
+  });
+
+  it('(b) savedForLater stays undefined when absent (legacy/normal docs)', () => {
+    const result = shoppingItemConverter.fromFirestore(fakeSnap('si-12', wellFormed));
+    expect(result.savedForLater).toBeUndefined();
+    // …and toFirestore must not INVENT the key for an item that never had it,
+    // or every existing item would start writing an explicit `savedForLater`.
+    const out = callToFirestore(shoppingItemConverter, { ...wellFormed, id: 'si-12' });
+    expect('savedForLater' in out).toBe(false);
+  });
+
   it('(a) source round-trips through both directions', () => {
     const fromDb = shoppingItemConverter.fromFirestore(fakeSnap('si-5', { ...wellFormed, source: 'shortcut' }));
     expect(fromDb.source).toBe('shortcut');
@@ -1381,6 +1397,31 @@ describe('todoConverter', () => {
   it('(b) needsReview stays undefined when absent (legacy/normal docs)', () => {
     const result = todoConverter.fromFirestore(fakeSnap('todo-9', wellFormed));
     expect(result.needsReview).toBeUndefined();
+  });
+
+  it('(a) savedForLater round-trips through both directions', () => {
+    const fromDb = todoConverter.fromFirestore(fakeSnap('todo-14', { ...wellFormed, savedForLater: true }));
+    expect(fromDb.savedForLater).toBe(true);
+    const out = callToFirestore(todoConverter, { ...wellFormed, id: 'todo-14', savedForLater: true });
+    expect(out['savedForLater']).toBe(true);
+  });
+
+  it('(b) savedForLater stays undefined when absent (legacy/normal docs)', () => {
+    const result = todoConverter.fromFirestore(fakeSnap('todo-15', wellFormed));
+    expect(result.savedForLater).toBeUndefined();
+    // …and toFirestore must not INVENT the key for a to-do that never had it,
+    // or every existing to-do would start writing an explicit `savedForLater`.
+    const out = callToFirestore(todoConverter, { ...wellFormed, id: 'todo-15' });
+    expect('savedForLater' in out).toBe(false);
+  });
+
+  it('(a) a parked to-do keeps its placeholder completeByDate verbatim', () => {
+    // The placeholder is inert, not special: the converter must NOT strip or
+    // rewrite it — suppression is a RENDER concern (see ToDo.completeByDate).
+    const result = todoConverter.fromFirestore(
+      fakeSnap('todo-16', { ...wellFormed, savedForLater: true, completeByDate: '2026-08-04' }),
+    );
+    expect(result.completeByDate).toBe('2026-08-04');
   });
 
   it('(b) a null category (firestoreSanitizer round-trip of a cleared category) comes back as undefined', () => {

@@ -86,6 +86,17 @@ describe("shouldSendTodoReminder", () => {
   it("skips held-for-review todos (captureReview) until approved", () => {
     expect(shouldSendTodoReminder({ ...base, needsReview: true }, reminderAt, TZ)).toBe(false);
   });
+
+  // "Saved for later": defence in depth. `base` deliberately carries a valid
+  // dueTime + offset, so this asserts the FLAG blocks the send rather than
+  // passing vacuously because a parked todo happens to have no reminder — the
+  // positive control on line above (`base` alone sends) is what makes it real.
+  it("skips parked todos (savedForLater) even with an armed reminder", () => {
+    expect(shouldSendTodoReminder(base, reminderAt, TZ)).toBe(true);
+    expect(shouldSendTodoReminder({ ...base, savedForLater: true }, reminderAt, TZ)).toBe(false);
+    // false / absent are both "not parked" — no migration, so absent is the norm.
+    expect(shouldSendTodoReminder({ ...base, savedForLater: false }, reminderAt, TZ)).toBe(true);
+  });
 });
 
 describe("buildTodoReminderBody", () => {

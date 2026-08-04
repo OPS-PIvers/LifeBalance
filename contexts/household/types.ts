@@ -43,7 +43,7 @@ import { type BudgetFit } from '@/utils/budgetFit';
 import { type BucketSpent } from '@/utils/bucketSpentCalculator';
 import { type TrashedItem } from '@/utils/trash';
 import { type TriggerSource } from '@/utils/habitTriggers';
-import { type TodoSubtaskToggleResult, type TodoCompletionOptions } from '@/contexts/household/mutations/todoMutations';
+import { type TodoSubtaskToggleResult, type TodoCompletionOptions, type TodoPromotionFields } from '@/contexts/household/mutations/todoMutations';
 import { type MerchantRuleDraft } from '@/contexts/household/mutations/merchantRuleMutations';
 
 /** Options accepted by mutations that normally toast per call. `silent: true`
@@ -183,15 +183,26 @@ export interface HouseholdContextType {
   insightsHistory: Insight[];
   isGeneratingInsight: boolean;
   meals: Meal[];
-  /** Visible shopping items — excludes held-for-review captures (`needsReview === true`). */
+  /** Visible shopping items — excludes held-for-review captures
+   *  (`needsReview === true`) AND parked items (`savedForLater === true`). */
   shoppingList: ShoppingItem[];
   /** Held-for-review shopping captures (`needsReview === true`), hidden from `shoppingList`. */
   shoppingAwaitingReview: ShoppingItem[];
+  /** "Saved for later" parked shopping items (`savedForLater === true`), hidden
+   *  from `shoppingList` and shown in their own section. Held-for-review
+   *  captures are excluded — `needsReview` takes precedence. */
+  savedForLaterShopping: ShoppingItem[];
   mealPlan: MealPlanItem[];
-  /** Visible to-dos — excludes held-for-review captures (`needsReview === true`). */
+  /** Visible to-dos — excludes held-for-review captures (`needsReview === true`)
+   *  AND parked to-dos (`savedForLater === true`). */
   todos: ToDo[];
   /** Held-for-review todo captures (`needsReview === true`), hidden from `todos`. */
   todosAwaitingReview: ToDo[];
+  /** "Saved for later" parked to-dos (`savedForLater === true`), hidden from
+   *  `todos` and shown in their own section. Held-for-review captures are
+   *  excluded — `needsReview` takes precedence. Their `completeByDate` is an
+   *  inert placeholder that must never be rendered (see types/schema.ts). */
+  savedForLaterTodos: ToDo[];
   /** F-TODO-16 — household-defined to-do categories (reusable chips on the
    *  to-do surfaces). Mirrors `habitCategories`: only user-added values are
    *  stored/persisted, and defaults to `[]` when the household doc has none. */
@@ -677,6 +688,8 @@ export interface HouseholdContextType {
   deleteMeal: (id: string) => Promise<void>;
 
   // Shopping List Actions
+  /** Adds a shopping item. Also the parked-item creation path — pass
+   *  `savedForLater: true` and it lands in the "Saved for later" section. */
   addShoppingItem: (item: Omit<ShoppingItem, 'id'>) => Promise<void>;
   addShoppingItems: (items: Omit<ShoppingItem, 'id'>[]) => Promise<void>;
   updateShoppingItem: (item: ShoppingItem) => Promise<void>;
@@ -693,6 +706,14 @@ export interface HouseholdContextType {
     id: string,
     overrides?: Partial<Pick<ShoppingItem, 'name' | 'quantity' | 'category' | 'store'>>
   ) => Promise<void>;
+  /**
+   * "Saved for later": parks an active shopping item (`true`) or promotes a
+   * parked one back to the active list (`false`). A single-field write — the doc
+   * id, `order` and every detail survive. Shopping promotion needs no triage, so
+   * this is the whole promotion path for the domain. Rejects on failure; the
+   * caller owns both messages (the row offers undo).
+   */
+  setShoppingItemSavedForLater: (id: string, value: boolean) => Promise<void>;
 
   // Shopping Settings Actions
   addStore: (store: Omit<Store, 'id'>) => Promise<void>;
@@ -725,8 +746,34 @@ export interface HouseholdContextType {
 
   // To-Do Actions
   addToDo: (todo: Omit<ToDo, 'id' | 'createdAt' | 'createdBy'>) => Promise<void>;
+  /**
+   * "Saved for later": parks a thought directly from the parked section's own
+   * add bar. Stamps the required `completeByDate` with `getLocalDateString()` as
+   * an INERT PLACEHOLDER that is never rendered (promotion overwrites it) — the
+   * single home of that rule. Nothing else is classified.
+   */
+  addSavedForLaterTodo: (text: string) => Promise<void>;
   updateToDo: (id: string, updates: Partial<ToDo>) => Promise<void>;
   deleteToDo: (id: string) => Promise<void>;
+  /**
+   * "Saved for later": parks an ACTIVE to-do (`true`) or un-parks one without
+   * triage (`false`, the undo of a park). Writes ONLY the flag — an existing
+   * to-do keeps its real `completeByDate`. The triage promotion is `promoteTodo`.
+   *
+   * ⚠️ `false` is only safe for a to-do that was parked FROM ACTIVE. One created
+   * parked from scratch (`addSavedForLaterTodo`) has only the placeholder date,
+   * so it must reach the active list via `promoteTodo` — otherwise it renders a
+   * fabricated "Overdue" label.
+   */
+  setTodoSavedForLater: (id: string, value: boolean) => Promise<void>;
+  /**
+   * "Saved for later": PROMOTES a parked to-do, applying the triage sheet's
+   * classification AND clearing `savedForLater` in ONE write — so a to-do can
+   * never reach the active list half-classified, still carrying the inert
+   * placeholder date that would render a fabricated "Overdue" label. Backing out
+   * of the sheet calls nothing, leaving the item parked and untouched.
+   */
+  promoteTodo: (id: string, fields: TodoPromotionFields) => Promise<void>;
   /** @param options.subtaskToggle by-id subtask flip persisted in the SAME
    *  completion batch — used by inline subtask auto-complete so the triggering
    *  step is written (merged onto a fresh read) atomically with the completion. */
@@ -823,9 +870,9 @@ export type MealPlanContextValue = Pick<HouseholdContextType,
 >;
 
 export type ShoppingContextValue = Pick<HouseholdContextType,
-  | 'shoppingList' | 'shoppingAwaitingReview' | 'groceryCatalog' | 'loadFullGroceryCatalog' | 'stores' | 'groceryCategories' | 'quickStockLists'
+  | 'shoppingList' | 'shoppingAwaitingReview' | 'savedForLaterShopping' | 'groceryCatalog' | 'loadFullGroceryCatalog' | 'stores' | 'groceryCategories' | 'quickStockLists'
   | 'addShoppingItem' | 'addShoppingItems' | 'updateShoppingItem' | 'reorderShoppingItems'
-  | 'deleteShoppingItem' | 'approveShoppingItem' | 'toggleShoppingItemPurchased' | 'clearPurchasedShoppingItems'
+  | 'deleteShoppingItem' | 'approveShoppingItem' | 'setShoppingItemSavedForLater' | 'toggleShoppingItemPurchased' | 'clearPurchasedShoppingItems'
   | 'addStore' | 'updateStore' | 'deleteStore' | 'reorderStores' | 'updateGroceryCategories'
   | 'addQuickStockList' | 'updateQuickStockList' | 'updateQuickStockLists' | 'deleteQuickStockList'
   | 'addGroceryCatalogItem' | 'updateGroceryCatalogItem' | 'deleteGroceryCatalogItem'
@@ -835,7 +882,9 @@ export type ShoppingContextValue = Pick<HouseholdContextType,
 export type MealsContextValue = MealPlanContextValue & ShoppingContextValue;
 
 export type TodosContextValue = Pick<HouseholdContextType,
-  | 'todos' | 'todosAwaitingReview' | 'addToDo' | 'updateToDo' | 'deleteToDo' | 'approveTodo' | 'completeToDo' | 'uncompleteToDo' | 'toggleTodoSubtask'
+  | 'todos' | 'todosAwaitingReview' | 'savedForLaterTodos'
+  | 'addToDo' | 'addSavedForLaterTodo' | 'updateToDo' | 'deleteToDo' | 'approveTodo'
+  | 'setTodoSavedForLater' | 'promoteTodo' | 'completeToDo' | 'uncompleteToDo' | 'toggleTodoSubtask'
   | 'todoCategories' | 'updateTodoCategories' | 'renameTodoCategory' | 'deleteTodoCategory'
   | 'isLoadingOlderTodos' | 'hasMoreCompletedTodos' | 'loadOlderCompletedTodos'
   | 'taskTemplates' | 'addTaskTemplate' | 'updateTaskTemplate' | 'deleteTaskTemplate' | 'applyTaskTemplate'

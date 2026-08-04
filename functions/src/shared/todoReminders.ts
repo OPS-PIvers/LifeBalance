@@ -20,6 +20,13 @@ export interface ReminderTodo {
   // Held-for-review capture (captureReview) — must not fire a timed reminder
   // until approved. See types/schema.ts's `ToDo.needsReview`.
   needsReview?: unknown;
+  // "Saved for later" parked to-do — never fires a reminder. Dead in practice
+  // (a parked to-do carries no dueTime, so computeReminderAtMs already returns
+  // null) but guarded explicitly as defence in depth: the placeholder
+  // completeByDate is fabricated, so a dueTime arriving by any route — an
+  // import, a future edit path, a to-do parked AFTER a reminder was set — must
+  // not produce a push about a task the user has not committed to.
+  savedForLater?: unknown;
 }
 
 /**
@@ -88,6 +95,7 @@ export function shouldSendTodoReminder(
 ): boolean {
   if (todo.isCompleted === true) return false;
   if (todo.needsReview === true) return false;
+  if (todo.savedForLater === true) return false;
   if (todo.reminderSentAt != null) return false;
   const reminderAtMs = computeReminderAtMs(todo, timezone);
   if (reminderAtMs === null) return false;

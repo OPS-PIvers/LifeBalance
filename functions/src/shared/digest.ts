@@ -29,6 +29,12 @@ export interface DigestTodo {
   // digest's "N to-dos today" line until approved. See types/schema.ts's
   // `ToDo.needsReview`.
   needsReview?: boolean;
+  // "Saved for later" parked to-do — must not count either. Its
+  // `completeByDate` is an INERT PLACEHOLDER stamped with the day it was
+  // parked, so it MATCHES `today` on that day and would silently inflate the
+  // digest's task count with work the user never committed to. See
+  // types/schema.ts's `ToDo.savedForLater`.
+  savedForLater?: boolean;
 }
 
 /**
@@ -59,7 +65,10 @@ export function computeStreaksAtRisk(habits: DigestHabit[], today: string): numb
  * Count of a specific member's incomplete todos due today — mirrors the
  * `todayTodos` filter in sendactionqueuereminders. Held-for-review captures
  * (`needsReview === true`) are excluded — they haven't been approved into the
- * real to-do list yet, so they must not trigger a reminder.
+ * real to-do list yet, so they must not trigger a reminder. "Saved for later"
+ * parked to-dos (`savedForLater === true`) are excluded for the same reason,
+ * and one sharper: their placeholder `completeByDate` matches `today` on the
+ * day they were parked.
  */
 export function computeTodosToday(todos: DigestTodo[], uid: string, today: string): number {
   return todos.filter(
@@ -67,7 +76,8 @@ export function computeTodosToday(todos: DigestTodo[], uid: string, today: strin
       t.assignedTo === uid &&
       !t.isCompleted &&
       t.completeByDate === today &&
-      t.needsReview !== true
+      t.needsReview !== true &&
+      t.savedForLater !== true
   ).length;
 }
 

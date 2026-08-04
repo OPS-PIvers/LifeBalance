@@ -1669,6 +1669,64 @@ describe("quickAddShoppingItem", () => {
       expect("needsReview" in updatePayload).toBe(false);
     });
 
+    // -----------------------------------------------------------------------
+    // Saved-for-later foundation: a PARKED item must never be a dedup target.
+    // Parking never touches `isPurchased`, so the `where("isPurchased", "==",
+    // false)` query alone would still return a parked row — this MUST be
+    // filtered in memory (never a `.where('savedForLater', '!=', true)`
+    // clause, which would exclude every pre-existing item entirely, since
+    // that field is absent on all of them, and duplicate everything instead).
+    // -----------------------------------------------------------------------
+
+    it("a capture does not merge into a PARKED (saved-for-later) row with the same name — creates a new active row instead", async () => {
+      const parkedUpdate = vi.fn(() => Promise.resolve());
+      const add = vi.fn(() => Promise.resolve({ id: "s-new" }));
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        add,
+        whereGetDocs: [shoppingDoc("parked1", { name: "milk", quantity: 1, savedForLater: true }, parkedUpdate)],
+      };
+      configureCollections();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { item: "Milk", quantity: 2 } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      // The parked row is left completely untouched...
+      expect(parkedUpdate).not.toHaveBeenCalled();
+      // ...and a new, active row is created instead of silently merging into
+      // it (the bug: `isPurchased: false` alone still matched a parked row).
+      expect(add).toHaveBeenCalledTimes(1);
+      const written = add.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(written).toMatchObject({ name: "Milk", quantity: "2" });
+    });
+
+    it("positive control: a capture DOES merge into a normal (non-parked) row with the same name", async () => {
+      // Same fixture shape as above, minus `savedForLater` — proves the guard
+      // above is a real exclusion and not e.g. a query that now matches
+      // nothing at all (which would also make the first test pass).
+      const update = vi.fn(() => Promise.resolve());
+      const add = vi.fn(() => Promise.resolve({ id: "s-new" }));
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        add,
+        whereGetDocs: [shoppingDoc("normal1", { name: "milk", quantity: 1 }, update)],
+      };
+      configureCollections();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { item: "Milk", quantity: 2 } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(add).not.toHaveBeenCalled();
+      expect(update).toHaveBeenCalledTimes(1);
+      expect(res.body).toMatchObject({ data: { updated: true, quantity: "3" } });
+    });
+
     // -------------------------------------------------------------------------
     // F-2G.2: stop inventing a quantity. A submission with no quantity must
     // write no quantity field; a supplied non-positive value still 400s; a
@@ -1865,6 +1923,54 @@ describe("quickAddShoppingItem", () => {
       const updatePayload = lastBatch.update.mock.calls[0]?.[1] as Record<string, unknown>;
       expect(updatePayload).toMatchObject({ quantity: "3" });
       expect("needsReview" in updatePayload).toBe(false);
+    });
+
+    // -----------------------------------------------------------------------
+    // Saved-for-later foundation (batch mode): same dedup-into-parked-item
+    // exposure as the single-item path above.
+    // -----------------------------------------------------------------------
+
+    it("a batch capture does not merge into a PARKED (saved-for-later) row with the same name — creates a new active row instead", async () => {
+      const parkedUpdate = vi.fn(() => Promise.resolve());
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        whereGetDocs: [shoppingDoc("parked1", { name: "milk", quantity: 1, savedForLater: true }, parkedUpdate)],
+      };
+      configureCollections();
+      configureBatch();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { items: [{ item: "Milk", quantity: 2 }] } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(parkedUpdate).not.toHaveBeenCalled();
+      expect(lastBatch.update).not.toHaveBeenCalled();
+      expect(lastBatch.set).toHaveBeenCalledTimes(1);
+      const written = lastBatch.set.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(written).toMatchObject({ name: "Milk", quantity: "2" });
+    });
+
+    it("positive control: a batch capture DOES merge into a normal (non-parked) row with the same name", async () => {
+      const update = vi.fn(() => Promise.resolve());
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        whereGetDocs: [shoppingDoc("normal1", { name: "milk", quantity: 1 }, update)],
+      };
+      configureCollections();
+      configureBatch();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { items: [{ item: "Milk", quantity: 2 }] } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(lastBatch.set).not.toHaveBeenCalled();
+      expect(lastBatch.update).toHaveBeenCalledTimes(1);
+      const updatePayload = lastBatch.update.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(updatePayload).toMatchObject({ quantity: "3" });
     });
 
     // -------------------------------------------------------------------------
