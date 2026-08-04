@@ -8,8 +8,12 @@ import type { ModuleKey } from '@/types/schema';
 // Narrow context slices TopToolbar reads. Stub each with the minimal shape.
 // `currentUser`/`members` back the profile chip's MemberColorMap (paper cut:
 // the chip now resolves the SAME color as this member's badge elsewhere).
+// `useFinance` is a `vi.fn()` (not a fixed object) so individual tests can
+// reconfigure `budgetFit` for the over-allocation mark, mirroring the
+// `setEnabledModules` pattern used for `useModuleVisibility` below.
+const useFinanceMock = vi.fn();
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
-  useFinance: () => ({ safeToSpendBreakdown: { safeToSpend: 1234 } }),
+  useFinance: () => useFinanceMock(),
   useGamification: () => ({ dailyPoints: 10, weeklyPoints: 50 }),
   useHouseholdCore: () => ({
     unreadNotificationCount: 0,
@@ -107,6 +111,7 @@ describe('TopToolbar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setEnabledModules(['habits', 'money', 'lists', 'todos', 'meals', 'shopping']);
+    useFinanceMock.mockReturnValue({ safeToSpendBreakdown: { safeToSpend: 1234 } });
   });
 
   it('shows Safe-to-Spend and the points/Rewards cluster when both domains are on', () => {
@@ -171,5 +176,53 @@ describe('TopToolbar', () => {
       expect(screen.getByTestId('points-breakdown-drawer')).toBeInTheDocument();
     });
     expect(trackMock).toHaveBeenCalledWith('points_drawer_opened');
+  });
+
+  // PR A — Safe-to-Spend header over-allocation mark. Regression risk called
+  // out explicitly: a mark that shows even when Safe-to-Spend itself is
+  // negative would double up with the figure already rendering red.
+  describe('budget over-allocation mark', () => {
+    const OVER_ALLOCATED_LABEL = 'View Safe to Spend details, your budgets are over-allocated';
+
+    it('shows the amber mark when budgetFit.isOverAllocated is true', () => {
+      useFinanceMock.mockReturnValue({
+        safeToSpendBreakdown: { safeToSpend: 356.22 },
+        budgetFit: { claimed: 423.76, leftover: -67.54, shortfall: 67.54, isOverAllocated: true },
+      });
+      renderToolbar();
+
+      expect(screen.getByTitle('Budgets over-allocated')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: OVER_ALLOCATED_LABEL })).toBeInTheDocument();
+      // The plain (non-over-allocated) label must NOT also match — otherwise
+      // this assertion would pass vacuously via a substring match.
+      expect(screen.queryByRole('button', { name: STS_LABEL })).not.toBeInTheDocument();
+    });
+
+    it('does NOT show the mark when the shortfall is below the $10 threshold', () => {
+      useFinanceMock.mockReturnValue({
+        safeToSpendBreakdown: { safeToSpend: 100 },
+        // isOverAllocated is what the toolbar reads — this is what
+        // computeBudgetFit would produce for a $9.99 shortfall.
+        budgetFit: { claimed: 109.99, leftover: -9.99, shortfall: 9.99, isOverAllocated: false },
+      });
+      renderToolbar();
+
+      expect(screen.queryByTitle('Budgets over-allocated')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: STS_LABEL })).toBeInTheDocument();
+    });
+
+    it('does NOT show the mark when Safe-to-Spend itself is negative (figure already reads red)', () => {
+      useFinanceMock.mockReturnValue({
+        safeToSpendBreakdown: { safeToSpend: -50 },
+        // A negative StS forces isOverAllocated false regardless of the
+        // buckets' claim (see utils/budgetFit.ts) — the biggest regression
+        // risk this feature has, so assert it directly here too.
+        budgetFit: { claimed: 500, leftover: -550, shortfall: 550, isOverAllocated: false },
+      });
+      renderToolbar();
+
+      expect(screen.queryByTitle('Budgets over-allocated')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: STS_LABEL })).toBeInTheDocument();
+    });
   });
 });

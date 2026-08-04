@@ -14,6 +14,7 @@ import { buildNextRecurringTodo, isTodoFrequency } from '@/utils/todoRecurrence'
 import { buildToDosFromTemplate } from '@/utils/taskTemplates';
 import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
+import { computeBudgetFit } from '@/utils/budgetFit';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { processToggleHabit, processStaleDownToggle, isHabitStale, calculateResetPoints, streakForHabit, habitPeriodStart } from '@/utils/habitLogic';
 import {
@@ -4142,6 +4143,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     () => calculateBucketSpent(buckets, transactions, currentPeriodId),
     [buckets, transactions, currentPeriodId]
   );
+  // Mirrors the real Firebase context's `budgetFit` memo (PR A — Safe-to-Spend
+  // header amber mark) so Test Mode's useFinance() slice stays in parity.
+  const budgetFit = useMemo(
+    () => computeBudgetFit(safeToSpendBreakdown, buckets, bucketSpentMap),
+    [safeToSpendBreakdown, buckets, bucketSpentMap]
+  );
 
   // captureReview (F-CAPTURE-01 foundation): mirror the real context's
   // visible/awaiting-review split so the settings UI + list views behave
@@ -4173,6 +4180,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // Computed State
     safeToSpend,
     safeToSpendBreakdown,
+    budgetFit,
     dailyPoints,
     weeklyPoints,
     totalPoints,

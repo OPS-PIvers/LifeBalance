@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Star, TrendingUp, User } from 'lucide-react';
+import { AlertCircle, Star, TrendingUp, User } from 'lucide-react';
 import { useFinance, useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
@@ -49,10 +49,14 @@ const loadPointsBreakdownDrawer = () => import('@/components/habits/PointsBreakd
 const PointsBreakdownDrawer = React.lazy(loadPointsBreakdownDrawer);
 
 const TopToolbar: React.FC = () => {
-  const { safeToSpendBreakdown } = useFinance();
+  const { safeToSpendBreakdown, budgetFit } = useFinance();
   // Fall back to 0 while the breakdown hasn't been computed yet (matches the
   // toolbar's prior initial render with the raw `safeToSpend` field).
   const safeToSpend = safeToSpendBreakdown?.safeToSpend ?? 0;
+  // PR A — Safe-to-Spend header amber mark. `isOverAllocated` is already
+  // false whenever StS itself is negative (see utils/budgetFit.ts), so this
+  // mark never doubles up with the figure already rendering red below.
+  const isOverAllocated = budgetFit?.isOverAllocated ?? false;
   const { dailyPoints, weeklyPoints } = useGamification();
   // `currentUser` here is the household MEMBER record (not the Firebase Auth
   // user below) — it's what carries the uid a MemberColorMap is keyed on, so
@@ -141,16 +145,37 @@ const TopToolbar: React.FC = () => {
           {isModuleEnabled('money') && (
             <button
               type="button"
-              aria-label="View Safe to Spend details"
+              aria-label={
+                isOverAllocated
+                  ? 'View Safe to Spend details, your budgets are over-allocated'
+                  : 'View Safe to Spend details'
+              }
               className="flex flex-col text-left cursor-pointer active:opacity-80 transition-opacity focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-400 focus-visible:rounded-lg"
               onClick={() => setStsOpen(true)}
             >
-              <span
-                // No theme split: the toolbar band is brand-800 in BOTH themes,
-                // so the figure always needs the light-on-dark money variants.
-                className={`text-2xl font-mono font-bold tracking-tight tabular-nums ${isPositive ? 'text-money-posDark' : 'text-money-negDark'}`}
-              >
-                {fmt(safeToSpend)}
+              <span className="flex items-center gap-1.5">
+                <span
+                  // No theme split: the toolbar band is brand-800 in BOTH themes,
+                  // so the figure always needs the light-on-dark money variants.
+                  className={`text-2xl font-mono font-bold tracking-tight tabular-nums ${isPositive ? 'text-money-posDark' : 'text-money-negDark'}`}
+                >
+                  {fmt(safeToSpend)}
+                </span>
+                {isOverAllocated && (
+                  // Same mark as ActionQueueItem's "Overdue" badge
+                  // (components/dashboard/ActionQueueItem.tsx) — solid
+                  // warm-500 fill + white AlertCircle. Deliberately no dollar
+                  // amount here: measured in the running app at 375pt, a mark
+                  // plus a figure collides with the points cluster on an
+                  // SE/mini/8-width screen. The full breakdown is one tap away.
+                  <span
+                    className="w-4 h-4 rounded-full bg-warm-500 ring-2 ring-warm-700 flex items-center justify-center text-white shrink-0"
+                    title="Budgets over-allocated"
+                  >
+                    <AlertCircle size={10} />
+                    <span className="sr-only">Your budgets expect to spend more than is safe to spend</span>
+                  </span>
+                )}
               </span>
               <span className="font-display text-xs text-brand-300 uppercase tracking-wider font-semibold leading-tight">
                 Safe to Spend
