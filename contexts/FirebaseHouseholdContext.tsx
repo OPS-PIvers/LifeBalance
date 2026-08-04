@@ -2643,12 +2643,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [householdId]);
 
   /**
-   * "Saved for later": parks an ACTIVE to-do, or un-parks one without triage.
-   * Writes only the flag — the real `completeByDate` is left alone
-   * (see makeTodoCrudMutations).
+   * "Saved for later": PARKS an active to-do. Writes only the flag — the real
+   * `completeByDate` is left alone. There is deliberately no bare un-park
+   * counterpart; `promoteTodo` is the only path back (see makeTodoCrudMutations).
    */
-  const setTodoSavedForLater = useCallback(async (id: string, value: boolean) => {
-    await makeTodoCrudMutations({ db, householdId }).setTodoSavedForLater(id, value);
+  const parkTodo = useCallback(async (id: string) => {
+    await makeTodoCrudMutations({ db, householdId }).parkTodo(id);
   }, [householdId]);
 
   /**
@@ -3018,7 +3018,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateToDo,
     deleteToDo,
     approveTodo,
-    setTodoSavedForLater,
+    parkTodo,
     promoteTodo,
     completeToDo,
     uncompleteToDo,
@@ -3034,7 +3034,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     applyTaskTemplate,
   }), [
     visibleTodos, todosAwaitingReview, savedForLaterTodos, isLoadingOlderTodos, hasMoreCompletedTodos, loadOlderCompletedTodos,
-    addToDo, addSavedForLaterTodo, updateToDo, deleteToDo, approveTodo, setTodoSavedForLater, promoteTodo, completeToDo, uncompleteToDo, toggleTodoSubtask,
+    addToDo, addSavedForLaterTodo, updateToDo, deleteToDo, approveTodo, parkTodo, promoteTodo, completeToDo, uncompleteToDo, toggleTodoSubtask,
     todoCategories, updateTodoCategories, renameTodoCategory, deleteTodoCategory,
     taskTemplates, addTaskTemplate, updateTaskTemplate, deleteTaskTemplate, applyTaskTemplate,
   ]);

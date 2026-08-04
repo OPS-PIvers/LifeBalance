@@ -1355,7 +1355,7 @@ describe('MockHouseholdContext saved-for-later split', () => {
     const originalDate = before.completeByDate;
 
     await act(async () => {
-      await result.current.setTodoSavedForLater('todo_later_1', true);
+      await result.current.parkTodo('todo_later_1');
     });
 
     expect(result.current.todos.find(t => t.id === 'todo_later_1')).toBeUndefined();

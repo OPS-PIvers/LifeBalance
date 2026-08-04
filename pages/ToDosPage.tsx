@@ -45,6 +45,7 @@ import { EisenhowerGridView } from '@/components/todos/EisenhowerGridView';
 import { TaskTemplateDrawer } from '@/components/todos/TaskTemplateDrawer';
 import { TodoCategoryManagerDrawer } from '@/components/todos/TodoCategoryManagerDrawer';
 import { TodoTriageDrawer } from '@/components/todos/TodoTriageDrawer';
+import { PromoteToDoSheet } from '@/components/todos/PromoteToDoSheet';
 import { sortFlatTodos, groupTodosByCategory, TODO_SORT_MODES, TODO_SORT_LABELS, type TodoSortMode } from '@/utils/todoSort';
 import { getTodoCategoryColor, UNCATEGORIZED_LABEL } from '@/utils/todoCategoryColor';
 import {
@@ -109,6 +110,15 @@ function writeLastUsedCategory(category: string | undefined): void {
     // Ignore persistence errors
   }
 }
+
+/**
+ * Collapse key for the "Saved for later" section. It shares `collapsedCategories`
+ * — the same session-only Set the category sections use — because the collapse
+ * rule is identical: momentary "get this out of my way", deliberately not
+ * persisted. Prefixed so it can never collide with a real category's key (which
+ * is always `cat:`/`uncat:`).
+ */
+const SAVED_FOR_LATER_SECTION_KEY = 'section:saved-for-later';
 
 /** Stable section key for a category group (null = the Uncategorized section). */
 const categorySectionKey = (category: string | null): string =>
@@ -276,7 +286,12 @@ const SubtaskEditorRow: React.FC<SubtaskEditorRowProps> = ({
 const ToDosPage: React.FC = () => {
   const {
     todos,
+    // "Saved for later": the parked slice. `todos` already excludes these (and
+    // held-for-review captures) at the context, so nothing on this page needs a
+    // per-consumer `savedForLater` filter.
+    savedForLaterTodos,
     addToDo,
+    addSavedForLaterTodo,
     updateToDo,
     deleteToDo,
     completeToDo,
@@ -544,6 +559,16 @@ const ToDosPage: React.FC = () => {
   // that already has any secondary value auto-expands so nothing is hidden.
   const [moreOpen, setMoreOpen] = useState(false);
 
+  // "Saved for later": the parked section's OWN add bar, so a thought can be
+  // parked directly without routing it through the active list first. Separate
+  // text state from the main quick-add — the two bars are on screen together and
+  // must not share a draft. Same synchronous in-flight ref guard against a
+  // same-tick double submit.
+  const [parkedQuickText, setParkedQuickText] = useState('');
+  const submittingParkedAddRef = useRef(false);
+  // The parked to-do currently being triaged in the promote sheet (null = closed).
+  const [promotingTodo, setPromotingTodo] = useState<ToDo | null>(null);
+
   // Sticky quick-add bar state — mirrors the shopping list's inline add. The
   // input is desktop-only autofocused (useAutoFocus skips touch so it doesn't
   // pop the iOS keyboard on mount; this page is also embedded in /lists).
@@ -611,6 +636,44 @@ const ToDosPage: React.FC = () => {
   const uncategorizedActiveCount = useMemo(
     () => todos.filter(t => !t.isCompleted && !(t.category ?? '').trim()).length,
     [todos],
+  );
+
+  // "Saved for later" — the parked section below the active list. It obeys the
+  // page's live filters and sort exactly as the active list does, so a filtered
+  // view never shows parked items it would have hidden above.
+  //
+  // Two counts, deliberately: `parkedTotal` is every parked item, `parkedRows`
+  // is what survives the filters. Parked items usually carry no assignee and no
+  // category, so they filter out easily — the header reads "3 of 12" whenever
+  // the two disagree, which is the agreed mitigation for "my parked list looks
+  // empty and I don't know why".
+  //
+  // Ordering follows the page's sort mode. `ToDo` has NO `order` field and none
+  // is being added, so there is deliberately no drag-reorder here (unlike the
+  // Shopping list, which has one).
+  const { parkedRows, parkedTotal } = useMemo(() => {
+    const parked = savedForLaterTodos.filter(t => !t.isCompleted);
+    const filtered = parked.filter(t =>
+      (assigneeFilter === null || t.assignedTo === assigneeFilter) &&
+      matchesCategoryFilter(t, categoryFilter));
+    return { parkedRows: sortFlatTodos(filtered, sortMode), parkedTotal: parked.length };
+  }, [savedForLaterTodos, assigneeFilter, categoryFilter, sortMode]);
+
+  // Batch selection spans BOTH lists — but a parked row is selectable for DELETE
+  // ONLY (owner-locked spec). Complete is suppressed because a parked item is
+  // not completable at all (`completeToDo` refuses one), and Reschedule because
+  // there is no real due date to reschedule: its stored `completeByDate` is an
+  // inert placeholder, so "move these to Friday" would silently promote nothing
+  // and rewrite a date nobody can see. Promotion is the one-at-a-time triage
+  // sheet, deliberately not a batch action.
+  const parkedIdSet = useMemo(() => new Set(parkedRows.map(t => t.id)), [parkedRows]);
+  const selectableIds = useMemo(
+    () => [...allActiveIds, ...parkedRows.map(t => t.id)],
+    [allActiveIds, parkedRows],
+  );
+  const selectionIncludesParked = useMemo(
+    () => Array.from(selectedIds).some(id => parkedIdSet.has(id)),
+    [selectedIds, parkedIdSet],
   );
 
   // Session-only (deliberately NOT persisted): collapsing a section is a
@@ -797,6 +860,29 @@ const ToDosPage: React.FC = () => {
       submittingQuickAddRef.current = false;
     }
   }, [quickText, members, currentUser, addToDo]);
+
+  // "Saved for later" quick-add: parks a thought with NO classification at all —
+  // no assignee, no category, no importance, and an inert placeholder due date
+  // owned by `addSavedForLaterTodo`. That is the whole point: a parked item is
+  // explicitly not committed work, and the promote sheet is where it becomes so.
+  const handleParkedQuickAdd = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = parkedQuickText.trim();
+    if (!trimmed || submittingParkedAddRef.current) return;
+    submittingParkedAddRef.current = true;
+    setParkedQuickText('');
+    haptic('success'); // at gesture time — dead after the await on iOS
+    try {
+      await addSavedForLaterTodo(trimmed);
+      toast.success('Saved for later');
+    } catch (error) {
+      console.error('Error saving a to-do for later:', error);
+      toast.error('Failed to save that for later. Please try again.');
+      setParkedQuickText(trimmed); // restore so the user doesn't lose their input
+    } finally {
+      submittingParkedAddRef.current = false;
+    }
+  }, [parkedQuickText, addSavedForLaterTodo]);
 
   // Open modal for editing
   const openEditModal = useCallback((todo: ToDo) => {
@@ -1098,7 +1184,7 @@ const ToDosPage: React.FC = () => {
   const blockingLayerOpen =
     isSelectionMode || drawerOpen || isPhotoImportOpen || isTemplateDrawerOpen ||
     isBatchRescheduleOpen || showBatchDeleteConfirm ||
-    isCategoryManagerOpen || isTriageOpen;
+    isCategoryManagerOpen || isTriageOpen || promotingTodo !== null;
   if (!isLandscape) {
     if (gridActive) setGridActive(false);
     if (gridDismissed) setGridDismissed(false);
@@ -1118,7 +1204,14 @@ const ToDosPage: React.FC = () => {
   // it points at, but it must not stomp view choices it didn't need to touch.
   const revealHighlightedTodo = useCallback(() => {
     if (!highlightId) return;
-    const target = todos.find(t => t.id === highlightId);
+    // A deep link / search hit can point at a PARKED to-do too — `todos`
+    // excludes those at the context, so both slices have to be consulted or a
+    // parked target would fall out here and nothing below would run.
+    const activeTarget = todos.find(t => t.id === highlightId);
+    const parkedTarget = activeTarget
+      ? undefined
+      : savedForLaterTodos.find(t => t.id === highlightId);
+    const target = activeTarget ?? parkedTarget;
     if (!target) return;
 
     // 1. The landscape Eisenhower overlay genuinely UNMOUNTS the flat list, so
@@ -1141,9 +1234,25 @@ const ToDosPage: React.FC = () => {
       setCategoryFilter([]);
     }
 
-    // 4. Category sort collapses sections with `hidden` (display:none) rather
-    //    than unmounting them, and `scrollIntoView` on a display:none subtree is
-    //    a no-op — so expanding the target's section is required, not optional.
+    // 4. Sections collapse with `hidden` (display:none) rather than unmounting,
+    //    and BOTH `scrollIntoView` and the flash class are silent no-ops on a
+    //    display:none subtree — so expanding the target's section is required,
+    //    not optional. `useScrollToHighlight` calls this synchronously and then
+    //    waits exactly one rAF before querying the DOM, so this has to happen
+    //    here (in the reveal callback) and not a frame later.
+    //
+    //    A parked to-do lives in the "Saved for later" section, never in a
+    //    category section — the two are mutually exclusive, so the branch
+    //    returns rather than falling through.
+    if (parkedTarget) {
+      setCollapsedCategories(prev => {
+        if (!prev.has(SAVED_FOR_LATER_SECTION_KEY)) return prev;
+        const next = new Set(prev);
+        next.delete(SAVED_FOR_LATER_SECTION_KEY);
+        return next;
+      });
+      return;
+    }
     if (sortMode === 'category') {
       const sectionKey = categorySectionKeyForTodo(target);
       setCollapsedCategories(prev => {
@@ -1153,7 +1262,7 @@ const ToDosPage: React.FC = () => {
         return next;
       });
     }
-  }, [highlightId, todos, gridActive, assigneeFilter, categoryFilter, sortMode]);
+  }, [highlightId, todos, savedForLaterTodos, gridActive, assigneeFilter, categoryFilter, sortMode]);
   useScrollToHighlight(highlightId, revealHighlightedTodo);
 
   // Body-scroll lock for the immersive grid overlay, held at PAGE level as a
@@ -1432,11 +1541,13 @@ const ToDosPage: React.FC = () => {
 
   // --- Batch Mode Handlers ---
 
+  // Covers every row currently on screen — active AND parked — so "Select all"
+  // never silently skips rows the user can see and tap.
   const handleSelectAll = () => {
-    if (selectedIds.size === allActiveCount && allActiveCount > 0) {
+    if (selectedIds.size === selectableIds.length && selectableIds.length > 0) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(allActiveIds));
+      setSelectedIds(new Set(selectableIds));
     }
   };
 
@@ -1937,6 +2048,113 @@ const ToDosPage: React.FC = () => {
     </div>
   );
 
+  // "Saved for later" row — the same TodoRow in its parked variant, never a
+  // fork. The leading control becomes a circular `+` that opens the promote
+  // sheet, right-swipe promotes, left-swipe deletes, and BOTH completion paths
+  // (checkbox and swipe) are suppressed inside the component.
+  const renderParkedRow = (item: ToDo) => (
+    <div
+      key={item.id}
+      data-highlight-target={item.id}
+      className="relative scroll-mt-32"
+    >
+      <TodoRow
+        variant="parked"
+        item={item}
+        // A parked row renders no due date at all, so the urgency color is
+        // inert here — pass the neutral 'blue' rather than deriving one from
+        // the placeholder date.
+        color="blue"
+        assignee={item.assignedTo ? memberMap.get(item.assignedTo) : undefined}
+        isSelected={selectedIds.has(item.id)}
+        isSelectionMode={isSelectionMode}
+        onPromote={setPromotingTodo}
+        onComplete={completeToDo}
+        onUncomplete={handleUncomplete}
+        onEdit={openEditModal}
+        onDelete={deleteToDo}
+        onMore={setActionTodo}
+        onToggleSelection={toggleSelection}
+        onToggleSubtask={toggleTodoSubtask}
+        memberMap={memberMap}
+      />
+    </div>
+  );
+
+  // The parked section's header count. Plain total when nothing narrows it;
+  // "3 of 12" the moment the page's filters do — parked items usually carry no
+  // assignee/category, so they filter out easily and a bare "3" would read as
+  // "I lost nine things".
+  const parkedCollapsed = collapsedCategories.has(SAVED_FOR_LATER_SECTION_KEY);
+  const parkedCountLabel =
+    parkedRows.length === parkedTotal ? `${parkedTotal}` : `${parkedRows.length} of ${parkedTotal}`;
+  const savedForLaterSection = (
+    <section aria-label="Saved for later" className="pt-1">
+      <h3>
+        <button
+          type="button"
+          onClick={() => toggleCategorySection(SAVED_FOR_LATER_SECTION_KEY)}
+          aria-expanded={!parkedCollapsed}
+          aria-controls="saved-for-later-content"
+          className="w-full min-h-11 flex items-center gap-2 px-1 py-1.5 text-left rounded-card focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+        >
+          <span className="font-display text-sm font-semibold tracking-tight text-brand-700 dark:text-brand-200">
+            Saved for later
+          </span>
+          <span className="text-xs tabular-nums text-brand-500 dark:text-brand-400">
+            · {parkedCountLabel}
+          </span>
+          <ChevronDown
+            size={16}
+            aria-hidden="true"
+            className={cn(
+              'ml-auto shrink-0 text-brand-400 dark:text-brand-450 transition-transform duration-(--duration-fast) ease-(--ease-standard)',
+              parkedCollapsed && '-rotate-90'
+            )}
+          />
+        </button>
+      </h3>
+      {/* Always mounted (hidden when collapsed) so the header's aria-controls
+          never references an absent id — the same discipline as the category
+          sections above. */}
+      <div id="saved-for-later-content" hidden={parkedCollapsed}>
+        {/* Own add bar, so a thought can be parked directly rather than being
+            routed through the active list first. Hidden in selection mode,
+            matching the main list's add row. */}
+        {!isSelectionMode && (
+          <div className={cn('surface-section overflow-hidden', parkedRows.length > 0 && 'rounded-b-none')}>
+            <QuickAddBar
+              attached
+              onSubmit={handleParkedQuickAdd}
+              value={parkedQuickText}
+              onChange={setParkedQuickText}
+              placeholder="Save something for later..."
+              aria-label="Save a task for later"
+              disabled={!parkedQuickText.trim()}
+              submitLabel="Save for later"
+            />
+          </div>
+        )}
+        {parkedRows.length > 0 ? (
+          <SurfaceList
+            className={cn(
+              '[&>*:first-child_.hairline-divider]:border-t-0',
+              !isSelectionMode && 'rounded-t-none border-t-0'
+            )}
+          >
+            {parkedRows.map(renderParkedRow)}
+          </SurfaceList>
+        ) : (
+          <p className="px-1 pt-2 text-sm text-brand-400 dark:text-brand-450">
+            {parkedTotal === 0
+              ? 'Nothing parked yet — save an idea here and triage it when you are ready.'
+              : 'Nothing parked matches the current filters.'}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+
   return (
     // NO min-h-screen here: the page renders inside MainLayout's <main>
     // scroller, so a 100vh floor (measured against the WINDOW, not the
@@ -1970,9 +2188,9 @@ const ToDosPage: React.FC = () => {
               size="sm"
               onClick={handleSelectAll}
               className="min-h-11 gap-1 px-2 text-accent-600 dark:text-accent-300 hover:text-accent-700 dark:hover:text-accent-200"
-              leftIcon={<CheckSquare size={14} aria-hidden="true" className={selectedIds.size === allActiveCount && allActiveCount > 0 ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-450'} />}
+              leftIcon={<CheckSquare size={14} aria-hidden="true" className={selectedIds.size === selectableIds.length && selectableIds.length > 0 ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-450'} />}
             >
-              {selectedIds.size === allActiveCount && allActiveCount > 0 ? 'Deselect all' : 'Select all'}
+              {selectedIds.size === selectableIds.length && selectableIds.length > 0 ? 'Deselect all' : 'Select all'}
             </Button>
             {/* While selecting, a visible Cancel (X) stays in the header so the
                way out is always one tap away — the overflow menu is hidden. */}
@@ -2164,6 +2382,14 @@ const ToDosPage: React.FC = () => {
                  </p>
             )}
 
+            {/* "Saved for later" — below the active list, in the LIST
+                arrangement only. It always renders (header + add bar) even when
+                empty, so direct-add is always reachable. Hidden with the list
+                while the immersive Eisenhower overlay is up, for the same reason
+                the list is: the overlay covers the viewport, and rendering these
+                rows underneath would double every parked task's controls. */}
+            {!gridOverlayVisible && savedForLaterSection}
+
             {/* Immersive 2×2 Eisenhower grid — landscape-only overlay, shown
                 automatically on rotation (see the gridActive edge logic). */}
             {gridOverlayVisible && (
@@ -2257,29 +2483,40 @@ const ToDosPage: React.FC = () => {
               {selectedIds.size} selected
             </div>
 
-            <Button
-              variant="ghost-inverted"
-              layout="vertical"
-              onClick={handleBatchComplete}
-              disabled={isBatchProcessing}
-              className="h-auto py-1 px-3 font-normal"
-              aria-label="Mark selected as completed"
-            >
-              <Check size={18} />
-              <span className="text-xxs font-medium">Complete</span>
-            </Button>
+            {/* "Saved for later": Complete and Reschedule are REMOVED (not
+                merely disabled) the moment the selection includes a parked row —
+                a parked item is not completable and has no real due date to
+                reschedule, so offering either would be a control that lies. A
+                disabled button would still read as "this applies here, just not
+                right now". Delete stays, which is the whole permitted set for a
+                parked row per the spec. */}
+            {!selectionIncludesParked && (
+              <>
+                <Button
+                  variant="ghost-inverted"
+                  layout="vertical"
+                  onClick={handleBatchComplete}
+                  disabled={isBatchProcessing}
+                  className="h-auto py-1 px-3 font-normal"
+                  aria-label="Mark selected as completed"
+                >
+                  <Check size={18} />
+                  <span className="text-xxs font-medium">Complete</span>
+                </Button>
 
-            <Button
-              variant="ghost-inverted"
-              layout="vertical"
-              onClick={() => setIsBatchRescheduleOpen(true)}
-              disabled={isBatchProcessing}
-              className="h-auto py-1 px-3 font-normal"
-              aria-label="Reschedule selected items"
-            >
-              <Calendar size={18} />
-              <span className="text-xxs font-medium">Reschedule</span>
-            </Button>
+                <Button
+                  variant="ghost-inverted"
+                  layout="vertical"
+                  onClick={() => setIsBatchRescheduleOpen(true)}
+                  disabled={isBatchProcessing}
+                  className="h-auto py-1 px-3 font-normal"
+                  aria-label="Reschedule selected items"
+                >
+                  <Calendar size={18} />
+                  <span className="text-xxs font-medium">Reschedule</span>
+                </Button>
+              </>
+            )}
 
             <Button
               variant="ghost-inverted"
@@ -2295,6 +2532,14 @@ const ToDosPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* "Saved for later": single-item triage. Confirm commits the promotion
+          AND the classification as ONE write (promoteTodo); backing out calls
+          nothing, leaving the item parked and untouched. */}
+      <PromoteToDoSheet
+        todo={promotingTodo}
+        onClose={() => setPromotingTodo(null)}
+      />
 
       {/* Batch Reschedule Modal */}
       <BatchRescheduleModal

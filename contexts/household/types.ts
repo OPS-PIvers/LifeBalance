@@ -756,16 +756,18 @@ export interface HouseholdContextType {
   updateToDo: (id: string, updates: Partial<ToDo>) => Promise<void>;
   deleteToDo: (id: string) => Promise<void>;
   /**
-   * "Saved for later": parks an ACTIVE to-do (`true`) or un-parks one without
-   * triage (`false`, the undo of a park). Writes ONLY the flag — an existing
-   * to-do keeps its real `completeByDate`. The triage promotion is `promoteTodo`.
+   * "Saved for later": PARKS an active to-do. Writes ONLY the flag — the to-do
+   * keeps its real `completeByDate`.
    *
-   * ⚠️ `false` is only safe for a to-do that was parked FROM ACTIVE. One created
-   * parked from scratch (`addSavedForLaterTodo`) has only the placeholder date,
-   * so it must reach the active list via `promoteTodo` — otherwise it renders a
-   * fabricated "Overdue" label.
+   * ⚠️ There is deliberately NO bare un-park mutation. Clearing the flag alone
+   * is correct for a to-do parked FROM active and wrong for one created parked
+   * from scratch (`addSavedForLaterTodo`), which holds only the inert
+   * placeholder date and would land on the active list wearing a fabricated
+   * "Overdue" label — and the two are indistinguishable to consumers. The ONLY
+   * path back to active is `promoteTodo`; an undo-after-park restores through it
+   * with the item's original fields.
    */
-  setTodoSavedForLater: (id: string, value: boolean) => Promise<void>;
+  parkTodo: (id: string) => Promise<void>;
   /**
    * "Saved for later": PROMOTES a parked to-do, applying the triage sheet's
    * classification AND clearing `savedForLater` in ONE write — so a to-do can
@@ -884,7 +886,7 @@ export type MealsContextValue = MealPlanContextValue & ShoppingContextValue;
 export type TodosContextValue = Pick<HouseholdContextType,
   | 'todos' | 'todosAwaitingReview' | 'savedForLaterTodos'
   | 'addToDo' | 'addSavedForLaterTodo' | 'updateToDo' | 'deleteToDo' | 'approveTodo'
-  | 'setTodoSavedForLater' | 'promoteTodo' | 'completeToDo' | 'uncompleteToDo' | 'toggleTodoSubtask'
+  | 'parkTodo' | 'promoteTodo' | 'completeToDo' | 'uncompleteToDo' | 'toggleTodoSubtask'
   | 'todoCategories' | 'updateTodoCategories' | 'renameTodoCategory' | 'deleteTodoCategory'
   | 'isLoadingOlderTodos' | 'hasMoreCompletedTodos' | 'loadOlderCompletedTodos'
   | 'taskTemplates' | 'addTaskTemplate' | 'updateTaskTemplate' | 'deleteTaskTemplate' | 'applyTaskTemplate'

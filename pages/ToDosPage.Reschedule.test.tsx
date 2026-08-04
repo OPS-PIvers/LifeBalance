@@ -180,6 +180,11 @@ describe('ToDosPage Reschedule Features', () => {
       // F-TODO-16: category vocabulary (empty = no category filter control).
       todoCategories: [],
       updateTodoCategories: vi.fn(),
+      // "Saved for later": nothing parked, so batch Reschedule stays offered
+      // (the delete-only rule for parked rows is covered in its own suite).
+      savedForLaterTodos: [],
+      addSavedForLaterTodo: vi.fn(),
+      promoteTodo: vi.fn(),
     });
     render(<ToDosPage />);
   };

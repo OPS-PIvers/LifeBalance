@@ -1,7 +1,7 @@
 /**
  * Unit tests for the "Saved for later" to-do mutations —
- * `addSavedForLaterTodo` (park a thought from scratch), `setTodoSavedForLater`
- * (park / un-park an existing to-do) and `promoteTodo` (promote WITH triage).
+ * `addSavedForLaterTodo` (park a thought from scratch), `parkTodo` (park an
+ * existing to-do) and `promoteTodo` (the ONLY path back to the active list).
  *
  * `firebase/firestore` is mocked locally so these are pure logic tests:
  * `updateDoc` calls are captured with their target path and patch payload, and
@@ -107,10 +107,10 @@ describe('addSavedForLaterTodo', () => {
   });
 });
 
-describe('setTodoSavedForLater', () => {
+describe('parkTodo', () => {
   it('parks an existing to-do by writing ONLY the flag', async () => {
-    const { setTodoSavedForLater } = makeTodoCrudMutations({ db, householdId: 'h1' });
-    await setTodoSavedForLater('todo-1', true);
+    const { parkTodo } = makeTodoCrudMutations({ db, householdId: 'h1' });
+    await parkTodo('todo-1');
 
     expect(capturedUpdates).toHaveLength(1);
     expect(capturedUpdates[0]?.ref.__path).toBe('households/h1/todos/todo-1');
@@ -121,28 +121,36 @@ describe('setTodoSavedForLater', () => {
     expect(capturedUpdates[0]?.data).toEqual({ savedForLater: true });
   });
 
-  it('un-parks without triage (the undo of a park) with the same single write', async () => {
-    const { setTodoSavedForLater } = makeTodoCrudMutations({ db, householdId: 'h1' });
-    await setTodoSavedForLater('todo-2', false);
+  it('exposes NO bare un-park path — promotion is the only way back to active', () => {
+    const crud = makeTodoCrudMutations({ db, householdId: 'h1' });
 
-    expect(capturedUpdates).toHaveLength(1);
-    // No date is written — which is exactly why this direction is safe ONLY for
-    // a to-do parked FROM ACTIVE (it still has its real date). A from-scratch
-    // parked to-do carries only the placeholder and must use `promoteTodo`, or
-    // it lands on the active list rendering a fabricated "Overdue" label.
-    expect(capturedUpdates[0]?.data).toEqual({ savedForLater: false });
-    expect('completeByDate' in (capturedUpdates[0]?.data ?? {})).toBe(false);
+    // The whole point of the hardening: a `setSavedForLater(id, false)` that
+    // writes only the flag is correct for a to-do parked FROM active and WRONG
+    // for one created parked from scratch (it holds only the inert placeholder
+    // date and would land on the active list wearing a fabricated red "Overdue"
+    // label). The two are indistinguishable to consumers and the owner ruled out
+    // a second schema field to tell them apart — so the unsafe direction is not
+    // implemented at all. Re-adding one (under ANY name) must fail this test.
+    const exported = Object.keys(crud);
+    expect(exported).toContain('parkTodo');
+    expect(exported).toContain('promoteTodo');
+    expect(exported).not.toContain('setTodoSavedForLater');
+    expect(exported).not.toContain('unparkTodo');
+    expect(exported).not.toContain('setTodoSavedForLaterValue');
+
+    // `parkTodo` takes ONLY an id — no boolean to pass `false` to.
+    expect(crud.parkTodo.length).toBe(1);
   });
 
-  it('does not toast — the caller owns both messages (the row offers undo)', async () => {
-    const { setTodoSavedForLater } = makeTodoCrudMutations({ db, householdId: 'h1' });
-    await setTodoSavedForLater('todo-3', true);
+  it('does not toast — the caller owns the message (the row offers undo)', async () => {
+    const { parkTodo } = makeTodoCrudMutations({ db, householdId: 'h1' });
+    await parkTodo('todo-3');
     expect(toast.success).not.toHaveBeenCalled();
   });
 
   it('throws when no household is selected (propagated from updateToDo)', async () => {
-    const { setTodoSavedForLater } = makeTodoCrudMutations({ db, householdId: null });
-    await expect(setTodoSavedForLater('todo-4', true)).rejects.toThrow('Household not selected');
+    const { parkTodo } = makeTodoCrudMutations({ db, householdId: null });
+    await expect(parkTodo('todo-4')).rejects.toThrow('Household not selected');
     expect(capturedUpdates).toHaveLength(0);
   });
 });

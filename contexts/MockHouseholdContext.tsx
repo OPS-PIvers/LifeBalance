@@ -3589,10 +3589,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: ToDo updated');
   }, []);
 
-  // "Saved for later": park an ACTIVE to-do / un-park without triage. Flag only —
-  // an existing to-do keeps its real completeByDate (makeTodoCrudMutations parity).
-  const setTodoSavedForLater = useCallback(async (id: string, value: boolean) => {
-    setTodos(prev => prev.map(t => t.id === id ? { ...t, savedForLater: value } : t));
+  // "Saved for later": PARK an active to-do. Flag only — an existing to-do keeps
+  // its real completeByDate (makeTodoCrudMutations parity). One direction only:
+  // there is no bare un-park, because clearing the flag alone would strand a
+  // from-scratch parked to-do on the active list with its inert placeholder date.
+  // `promoteTodo` is the only path back.
+  const parkTodo = useCallback(async (id: string) => {
+    setTodos(prev => prev.map(t => t.id === id ? { ...t, savedForLater: true } : t));
   }, []);
 
   // "Saved for later": promote a parked to-do — clears the flag AND applies the
@@ -4421,7 +4424,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     deleteMealPlanItem: deleteMealPlan,
     addToDo,
     addSavedForLaterTodo,
-    setTodoSavedForLater,
+    parkTodo,
     promoteTodo,
     updateToDo,
     toggleTodoSubtask,

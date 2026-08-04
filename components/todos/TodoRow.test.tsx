@@ -354,3 +354,83 @@ describe('TodoRow', () => {
     });
   });
 });
+
+/**
+ * "Saved for later" — the PARKED variant of this same row (never a fork).
+ *
+ * The load-bearing assertions are the two suppressions: a parked item is not
+ * completable, so BOTH the checkbox and swipe-to-complete must be gone (leaving
+ * either reachable would let a parked to-do be completed while still carrying
+ * its inert placeholder date), and the due-date cluster must not render at all
+ * (rendering the placeholder ships a fabricated red "Overdue" label).
+ */
+describe('TodoRow — saved-for-later (parked) variant', () => {
+  // Deliberately dated in the PAST: the active row renders a red "Overdue (…)"
+  // label for this date, so the positive control below proves the suppression
+  // tests would notice a regression rather than passing on a neutral fixture.
+  const parkedItem: ToDo = {
+    ...item,
+    id: 'parked-1',
+    text: 'Look into a bike rack',
+    completeByDate: format(addDays(new Date(), -5), 'yyyy-MM-dd'),
+    savedForLater: true,
+  };
+  const onPromote = vi.fn();
+  const parkedProps = { ...baseProps, item: parkedItem, variant: 'parked' as const, onPromote };
+
+  beforeEach(() => {
+    onPromote.mockClear();
+  });
+
+  it('positive control: the SAME fixture as an ACTIVE row does show an overdue label and a checkbox', () => {
+    render(<TodoRow {...baseProps} item={parkedItem} />);
+    expect(screen.getByTestId('todo-due-label').textContent).toMatch(/Overdue/);
+    expect(
+      screen.getByRole('checkbox', { name: `Complete task: ${parkedItem.text}` }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders NO due date — the stored date is an inert placeholder', () => {
+    render(<TodoRow {...parkedProps} />);
+    expect(screen.queryByTestId('todo-due-label')).toBeNull();
+    expect(screen.queryByText(/Overdue/)).toBeNull();
+  });
+
+  it('cannot be completed via the checkbox — there is no checkbox at all', () => {
+    render(<TodoRow {...parkedProps} />);
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(handlers.onComplete).not.toHaveBeenCalled();
+  });
+
+  it('cannot be completed via swipe — the right-swipe action is Add, not Complete', () => {
+    render(<TodoRow {...parkedProps} />);
+    // SwipeActionRow renders every action as a real button (aria-hidden until
+    // the row sticks open), so the absence of a Complete action is directly
+    // observable without driving a pointer gesture.
+    const swipeLabels = Array.from(document.querySelectorAll('button')).map(b => b.textContent);
+    expect(swipeLabels.some(t => t?.includes('Complete'))).toBe(false);
+    expect(swipeLabels.some(t => t?.includes('Add'))).toBe(true);
+    expect(swipeLabels.some(t => t?.includes('Delete'))).toBe(true);
+  });
+
+  it('offers a keyboard-reachable + control that opens the promote sheet', () => {
+    render(<TodoRow {...parkedProps} />);
+    const promote = screen.getByRole('button', { name: `Add to your list: ${parkedItem.text}` });
+    fireEvent.click(promote);
+    expect(onPromote).toHaveBeenCalledWith(parkedItem);
+  });
+
+  it('still opens the edit drawer on a body tap (parking does not make a row inert)', () => {
+    render(<TodoRow {...parkedProps} />);
+    fireEvent.click(screen.getByRole('button', { name: `Edit task: ${parkedItem.text}` }));
+    expect(handlers.onEdit).toHaveBeenCalledWith(parkedItem);
+  });
+
+  it('is selectable in selection mode, with no completion affordance', () => {
+    render(<TodoRow {...parkedProps} isSelectionMode />);
+    fireEvent.click(screen.getByRole('button', { name: `Select task: ${parkedItem.text}` }));
+    expect(handlers.onToggleSelection).toHaveBeenCalledWith(parkedItem.id);
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByTestId('todo-due-label')).toBeNull();
+  });
+});

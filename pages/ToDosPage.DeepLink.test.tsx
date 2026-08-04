@@ -94,6 +94,10 @@ const setup = (highlightId: string, overrides: Partial<TodosContextValue & House
     isLoading: false,
     todoCategories: ['Home', 'Errands'],
     updateTodoCategories: vi.fn(),
+    // "Saved for later": nothing parked (covered in its own suite).
+    savedForLaterTodos: [],
+    addSavedForLaterTodo: vi.fn(),
+    promoteTodo: vi.fn(),
     addToDo: vi.fn(),
     updateToDo: vi.fn(),
     deleteToDo: vi.fn(),
@@ -175,6 +179,67 @@ describe('ToDosPage deep-link highlight', () => {
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
   });
 
+  /**
+   * "Saved for later": a parked to-do is a legitimate search/deep-link target
+   * (PR-5 indexes them), and its section collapses the same `hidden` way the
+   * category sections do. `scrollIntoView` AND the flash class are both silent
+   * no-ops on a display:none subtree, and the highlight self-clears after ~2.2s
+   * — so a collapsed section would mean landing on the page with zero feedback
+   * that the search found anything.
+   *
+   * Also note the target is NOT in `todos` at all: the context split hides
+   * parked items from that slice, so the reveal callback has to consult
+   * `savedForLaterTodos` or it bails before doing anything.
+   */
+  const parkedTodo: ToDo = {
+    ...todo('parked-1', 'Look into a bike rack'),
+    assignedTo: undefined,
+    savedForLater: true,
+  };
+
+  it('expands a COLLAPSED "Saved for later" section for a parked target', async () => {
+    const { container } = setup('parked-1', { savedForLaterTodos: [parkedTodo] });
+
+    fireEvent.click(screen.getByRole('button', { name: /Saved for later/ }));
+    expect(rowIsReachable('Look into a bike rack')).toBe(false);
+    expect(document.getElementById('saved-for-later-content')).toHaveAttribute('hidden');
+
+    fireEvent.click(screen.getByText('deep-link'));
+    await flushHighlight();
+
+    expect(rowIsReachable('Look into a bike rack')).toBe(true);
+    expect(document.getElementById('saved-for-later-content')).not.toHaveAttribute('hidden');
+    expect(container.querySelector('[data-highlight-target="parked-1"]')).not.toBeNull();
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it('clears a filter that hides a parked target, and leaves the category sections alone', async () => {
+    setup('parked-1', { savedForLaterTodos: [parkedTodo] });
+
+    // Parked items usually carry no category, so a category filter hides them.
+    applyCategoryFilter('Errands');
+    expect(rowIsReachable('Look into a bike rack')).toBe(false);
+
+    fireEvent.click(screen.getByText('deep-link'));
+    await flushHighlight();
+
+    expect(rowIsReachable('Look into a bike rack')).toBe(true);
+    expect(window.localStorage.getItem('todos-category-filter')).toBe('[]');
+  });
+
+  it('leaves a collapsed "Saved for later" section alone for an ACTIVE target', async () => {
+    setup('home-1', { savedForLaterTodos: [parkedTodo] });
+
+    fireEvent.click(screen.getByRole('button', { name: /Saved for later/ }));
+
+    fireEvent.click(screen.getByText('deep-link'));
+    await flushHighlight();
+
+    // The deep link must reveal what it points at — and nothing else.
+    expect(rowIsReachable('Mow the lawn')).toBe(true);
+    expect(document.getElementById('saved-for-later-content')).toHaveAttribute('hidden');
+  });
+
   it('leaves a category filter alone when the target already passes it', async () => {
     setup('errand-1');
 
@@ -210,6 +275,9 @@ describe('ToDosPage deep-link highlight', () => {
       isLoading: false,
       todoCategories: [],
       updateTodoCategories: vi.fn(),
+      savedForLaterTodos: [],
+      addSavedForLaterTodo: vi.fn(),
+      promoteTodo: vi.fn(),
       addToDo: vi.fn(),
       updateToDo: vi.fn(),
       deleteToDo: vi.fn(),

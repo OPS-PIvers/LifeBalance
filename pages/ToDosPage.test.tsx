@@ -203,6 +203,12 @@ describe('ToDosPage', () => {
       // filter control stays hidden and existing expectations are unaffected.
       todoCategories: [],
       updateTodoCategories: vi.fn(),
+      // "Saved for later": empty by default, so the parked section renders its
+      // header + add bar only and existing expectations are unaffected. The
+      // section's own behaviour is covered in ToDosPage.SavedForLater.test.tsx.
+      savedForLaterTodos: [],
+      addSavedForLaterTodo: vi.fn(),
+      promoteTodo: vi.fn(),
     });
     render(<ToDosPage />);
   };
@@ -520,6 +526,9 @@ describe('ToDosPage', () => {
         applyTaskTemplate: vi.fn(),
         todoCategories: [],
         updateTodoCategories: vi.fn(),
+        savedForLaterTodos: [],
+        addSavedForLaterTodo: vi.fn(),
+        promoteTodo: vi.fn(),
       });
       render(<ToDosPage />);
 

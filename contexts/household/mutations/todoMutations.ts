@@ -268,7 +268,7 @@ export function makeAddToDo(deps: {
    * parked item is explicitly NOT committed work.
    *
    * Note this is the from-scratch path only. PARKING AN EXISTING to-do is
-   * `setTodoSavedForLater`, which leaves its real date alone.
+   * `parkTodo`, which leaves its real date alone.
    *
    * Toast Behavior: omitted, consistent with `addToDo` above.
    *
@@ -365,8 +365,8 @@ export function makeTodoCrudMutations(deps: {
   };
 
   /**
-   * "Saved for later": parks an ACTIVE to-do, or un-parks one without triage
-   * (the undo of a park).
+   * "Saved for later": PARKS an active to-do. One direction only — there is
+   * deliberately NO bare un-park mutation.
    *
    * Writes ONLY the flag. Parking deliberately does NOT touch `completeByDate` —
    * an existing to-do already has a real date, and overwriting it with the
@@ -375,24 +375,27 @@ export function makeTodoCrudMutations(deps: {
    * item is the one case that needs a fabricated date, and that lives in
    * `addSavedForLaterTodo`.
    *
-   * This is NOT the promotion path for the triage flow — `promoteTodo` is, so
-   * that clearing the flag and applying the classification land as one write.
+   * ⚠️ WHY THE UN-PARK DIRECTION DOES NOT EXIST. A `setSavedForLater(id, false)`
+   * that writes only the flag is correct for a to-do parked FROM the active list
+   * (its real date survived the park) and WRONG for one created parked from
+   * scratch (`addSavedForLaterTodo`), which holds only the inert placeholder —
+   * clearing the flag alone drops it on the active list wearing a fabricated red
+   * "Overdue" label. The two cases are INDISTINGUISHABLE to any consumer, and
+   * the owner's decision was not to add a second schema field to tell them
+   * apart. So the unsafe direction simply does not exist: the ONLY path from
+   * parked back to active is `promoteTodo`, which writes a real date in the same
+   * write. An undo-after-park affordance restores via `promoteTodo` with the
+   * item's ORIGINAL fields (the caller holds the whole to-do at that moment),
+   * which restores more faithfully than clearing a flag ever did.
    *
-   * ⚠️ ASYMMETRY on the `false` direction: un-parking here is only safe for a
-   * to-do that was PARKED FROM ACTIVE, which still carries the real date it had.
-   * A to-do created parked from scratch (`addSavedForLaterTodo`) carries only
-   * the placeholder, so clearing the flag alone would drop it on the active list
-   * with a stale date that renders a fabricated red "Overdue" label — those MUST
-   * go through `promoteTodo`, which replaces the date in the same write.
-   *
-   * Toast Behavior: none here. Both directions are offered with an undo
-   * affordance on the row, so the caller owns the message.
+   * Toast Behavior: none here. Parking is offered with an undo affordance on the
+   * row, so the caller owns the message.
    *
    * @throws Re-throws (via updateToDo) so callers don't report success for a
    *         write that never landed.
    */
-  const setTodoSavedForLater = async (id: string, value: boolean) => {
-    await updateToDo(id, { savedForLater: value });
+  const parkTodo = async (id: string) => {
+    await updateToDo(id, { savedForLater: true });
   };
 
   /**
@@ -419,7 +422,7 @@ export function makeTodoCrudMutations(deps: {
     await updateToDo(id, { ...fields, savedForLater: false });
   };
 
-  return { updateToDo, deleteToDo, approveTodo, setTodoSavedForLater, promoteTodo };
+  return { updateToDo, deleteToDo, approveTodo, parkTodo, promoteTodo };
 }
 
 /**
