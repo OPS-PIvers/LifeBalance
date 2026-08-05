@@ -153,6 +153,13 @@ describe('EisenhowerGridView — parked chips in the later quadrant', () => {
     expect(texts).toEqual(['Later one', 'Saved for later', 'Look into a bike rack']);
   });
 
+  it('exposes the "Saved for later" subheader as a real heading (h4), reachable by role — not a styled span', () => {
+    render(<EisenhowerGridView {...baseProps} parkedTodos={[parkedOverdueDated]} />);
+    const laterCell = screen.getByTestId('grid-cell-later');
+    const heading = within(laterCell).getByRole('heading', { name: 'Saved for later', level: 4 });
+    expect(heading.tagName).toBe('H4');
+  });
+
   it('still lets the star toggle fire for a parked chip without moving it out of later', () => {
     render(<EisenhowerGridView {...baseProps} parkedTodos={[parkedOverdueDated]} />);
     const starButton = screen.getByRole('button', { name: `Mark important: ${parkedOverdueDated.text}` });

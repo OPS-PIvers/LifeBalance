@@ -230,9 +230,14 @@ const GridCell = React.memo(function GridCell({ quadrant, items, parkedItems, on
             {hasParked && (
               <>
                 <div className="px-2.5 pt-1.5 pb-0.5 mt-0.5 border-t border-brand-100 dark:border-brand-700">
-                  <span className="text-xxs font-semibold uppercase tracking-wide text-brand-400 dark:text-brand-450">
+                  {/* Real heading (h4 — the quadrant title above it in this
+                      same cell is an h3), not a styled <span>: without this a
+                      screen-reader user has no way to jump to the parked
+                      group and must read linearly through every active chip
+                      first to discover it exists. */}
+                  <h4 className="text-xxs font-semibold uppercase tracking-wide text-brand-400 dark:text-brand-450">
                     Saved for later
-                  </span>
+                  </h4>
                 </div>
                 {parkedItems.map(item => (
                   <GridChip
@@ -264,26 +269,36 @@ const GridCell = React.memo(function GridCell({ quadrant, items, parkedItems, on
 // to-do's `completeByDate` is an inert placeholder (see the schema field
 // comment), so rendering it would ship a fabricated date and, once the
 // stamp-day passes, a fabricated red "Overdue" label.
-const GridChip = React.memo(function GridChip({ item, color, variant = 'active', onComplete, onPromote, onEdit, onToggleImportant }: {
+//
+// Props are a discriminated union on `variant`, not two optional callbacks:
+// each variant requires its OWN handler and forbids the other's, so a call
+// site that omits `onComplete`/`onPromote` fails to typecheck instead of
+// reaching a runtime `?.` that silently resolves to `undefined` (a missed
+// `onComplete` used to still toast "To-Do completed!" — see PR review on
+// this file).
+type GridChipProps = {
   item: ToDo;
   color: SectionColor;
-  variant?: 'active' | 'parked';
-  /** Required in practice for `variant="active"`. */
-  onComplete?: (id: string) => void;
-  /** Required in practice for `variant="parked"`. */
-  onPromote?: (todo: ToDo) => void;
   onEdit: (todo: ToDo) => void;
   onToggleImportant: (todo: ToDo) => void;
-}) {
-  const isParked = variant === 'parked';
+} & (
+  | { variant?: 'active'; onComplete: (id: string) => void; onPromote?: never }
+  | { variant: 'parked'; onPromote: (todo: ToDo) => void; onComplete?: never }
+);
+
+const GridChip = React.memo(function GridChip(props: GridChipProps) {
+  const { item, color, onEdit, onToggleImportant } = props;
+  const isParked = props.variant === 'parked';
   const dueDate = isParked ? null : parseISO(item.completeByDate);
   const isOverdue = dueDate !== null && isBefore(dueDate, startOfToday());
 
-  // F-TODO-16: the same category chip the list rows show, at chip-in-a-chip
-  // scale. Read-only here — the grid overlay has no filter control to toggle,
-  // and the landscape cells are too dense for another tap target. Absent /
-  // blank category renders nothing, exactly as in the list. Still shown on a
-  // parked chip — refining a parked idea's category is fine while parked.
+  // The grid's only per-row category display — read-only here (the grid
+  // overlay has no filter control to toggle, and the landscape cells are too
+  // dense for another tap target). Absent/blank category renders nothing.
+  // The flat list, by contrast, never puts category on the row itself; it
+  // surfaces category as a section GROUPING HEADER instead (F-TODO-16,
+  // `groupTodosByCategory` in ToDosPage). Still shown on a parked chip —
+  // refining a parked idea's category is fine while parked.
   const categoryLabel = item.category?.trim() ?? '';
   const categoryColor = categoryLabel ? getTodoCategoryColor(categoryLabel) : null;
 
@@ -291,19 +306,27 @@ const GridChip = React.memo(function GridChip({ item, color, variant = 'active',
     // min-h-11 (44px) row + generous complete-toggle hit area: the immersive
     // overlay gives the chips room to meet touch-target size without a redesign.
     <div className="flex items-center gap-1.5 px-2 py-1.5 min-h-11 hairline-divider first:border-t-0">
-      {isParked ? (
+      {props.variant === 'parked' ? (
         /* "Saved for later": a circular outline PLUS in place of the complete
-           checkbox — same geometry as the active checkbox below so the two
-           states line up, accent-toned rather than neutral because promoting
-           is a parked chip's primary (and only constructive) action. */
+           checkbox — the visible ring stays w-4.5 h-4.5, matched to the active
+           checkbox's ring below so the two states line up in the same cell;
+           the hit area is expanded INDEPENDENTLY of the ring via padding
+           (p-3.5, content 18px + 2*14px = 46px ≥ the 44px house minimum).
+           The negative margin stays at -m-1.5 (NOT matched to the padding,
+           unlike TodoRow's p-2.5/-m-2.5 pair) — this row's gap-1.5 (6px) is
+           narrower than TodoRow's gap-3, so a fully-matched pad/margin pair
+           would let the expanded hit box overlap the adjacent title button's;
+           -m-1.5 keeps the two flush without overlapping. Accent-toned rather
+           than neutral because promoting is a parked chip's primary (and
+           only constructive) action. */
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            onPromote?.(item);
+            props.onPromote(item);
           }}
           aria-label={`Add to your list: ${item.text}`}
-          className="group p-2.5 -m-1.5 shrink-0 rounded-full focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+          className="group p-3.5 -m-1.5 shrink-0 rounded-full focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
         >
           <span className="w-4.5 h-4.5 rounded-full border-2 border-accent-500/60 text-accent-600 flex items-center justify-center transition-colors group-hover:border-accent-500 group-hover:bg-accent-50 group-active:bg-accent-100 dark:border-accent-400/60 dark:text-accent-300 dark:group-hover:border-accent-400 dark:group-hover:bg-accent-900/30">
             <Plus size={10} aria-hidden="true" />
@@ -314,7 +337,7 @@ const GridChip = React.memo(function GridChip({ item, color, variant = 'active',
           checked={false}
           onCheckedChange={async () => {
             try {
-              await onComplete?.(item.id);
+              await props.onComplete(item.id);
               toast.success('To-Do completed!');
             } catch (error) {
               console.error('Failed to complete task:', error);

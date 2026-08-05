@@ -681,6 +681,37 @@ describe('ToDosPage', () => {
       { id: 'q4', text: 'Later Task', completeByDate: farOut, assignedTo: 'user2', isCompleted: false, createdBy: 'user1', createdAt: new Date().toISOString() },
     ];
 
+    // The outer `setup(todos, members)` always mocks `savedForLaterTodos: []`
+    // — the parked-chip tests below (FIX 1 / FIX 5 regression coverage) need
+    // their own mock call so they can inject parked items.
+    const setupWithParked = (todos: ToDo[], savedForLaterTodos: ToDo[]) => {
+      setHouseholdMock({
+        todos,
+        members: mockMembers,
+        currentUser: mockMembers[0] ?? null,
+        addToDo: mockAddToDo,
+        updateToDo: mockUpdateToDo,
+        deleteToDo: mockDeleteToDo,
+        completeToDo: mockCompleteToDo,
+        uncompleteToDo: mockUncompleteToDo,
+        taskTemplates: [],
+        addTaskTemplate: vi.fn(),
+        updateTaskTemplate: vi.fn(),
+        deleteTaskTemplate: vi.fn(),
+        applyTaskTemplate: vi.fn(),
+        todoCategories: [],
+        updateTodoCategories: vi.fn(),
+        savedForLaterTodos,
+        addSavedForLaterTodo: vi.fn(),
+        promoteTodo: vi.fn(),
+        parkTodo: vi.fn(),
+        toggleTodoSubtask: vi.fn(),
+        renameTodoCategory: vi.fn(),
+        deleteTodoCategory: vi.fn(),
+      });
+      render(<ToDosPage />);
+    };
+
     it('renders the flat list in spec order: starred first, then overdue → ascending date', () => {
       setOrientation(false);
       setup(quadrantTodos);
@@ -874,6 +905,84 @@ describe('ToDosPage', () => {
       // Escape here belongs to the drawer — the grid overlay must stay put.
       fireEvent.keyDown(window, { key: 'Escape' });
       expect(screen.getByTestId('grid-overlay')).toBeInTheDocument();
+    });
+
+    it('does NOT exit on Escape while the promote sheet is open above the grid', () => {
+      // Regression test: the promote sheet is reachable from a parked chip's
+      // "+" INSIDE the grid overlay, but `promotingTodo` was not part of the
+      // `escapeDisabled` flag passed to EisenhowerGridView — only `drawerOpen`
+      // (isAddModalOpen || !!actionTodo) was. With the sheet open, one Escape
+      // keypress fired BOTH the sheet's own stack-aware handler AND
+      // GridOverlay's bare `window` keydown listener, closing the grid out
+      // from under the still-open sheet.
+      setOrientation(true);
+      const parkedIdea: ToDo = {
+        id: 'parked-1',
+        text: 'Parked Idea',
+        completeByDate: today,
+        isCompleted: false,
+        savedForLater: true,
+        createdBy: 'user1',
+        createdAt: new Date().toISOString(),
+      };
+      setupWithParked(quadrantTodos, [parkedIdea]);
+
+      expect(screen.getByTestId('grid-overlay')).toBeInTheDocument();
+
+      // Open the promote sheet from the parked chip's "+" — reachable only
+      // from inside the grid overlay's `later` cell.
+      fireEvent.click(screen.getByRole('button', { name: 'Add to your list: Parked Idea' }));
+      expect(screen.getByRole('button', { name: 'Add to list' })).toBeInTheDocument();
+
+      // Escape belongs to the promote sheet — the grid overlay must stay put
+      // underneath it, exactly like the edit-drawer case above.
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(screen.getByTestId('grid-overlay')).toBeInTheDocument();
+    });
+
+    it("only shows parked items passing the active assignee filter in the grid's later cell, and its \"+\" opens the promote sheet (page-level integration)", async () => {
+      // The PR-4 wiring (`parkedTodos={parkedRows}`, `onPromote={setPromotingTodo}`)
+      // has no page-level test — both props are structurally compatible with
+      // wrong alternatives (e.g. the unfiltered `savedForLaterTodos`), so a
+      // silent regression that drops the filter would compile and pass every
+      // component-level test.
+      setOrientation(true);
+      const passesFilter: ToDo = {
+        id: 'parked-pass',
+        text: 'Passes the filter',
+        completeByDate: today,
+        isCompleted: false,
+        savedForLater: true,
+        assignedTo: 'user1',
+        createdBy: 'user1',
+        createdAt: new Date().toISOString(),
+      };
+      const failsFilter: ToDo = {
+        id: 'parked-fail',
+        text: 'Fails the filter',
+        completeByDate: today,
+        isCompleted: false,
+        savedForLater: true,
+        assignedTo: 'user2',
+        createdBy: 'user1',
+        createdAt: new Date().toISOString(),
+      };
+      setupWithParked(quadrantTodos, [passesFilter, failsFilter]);
+
+      // Apply the SAME title-row person filter `quadrants` is derived from,
+      // to Alice (user1) — only `passesFilter` (also assignedTo user1) survives.
+      fireEvent.click(screen.getByRole('button', { name: 'Filter by person' }));
+      fireEvent.click(screen.getByRole('menuitemradio', { name: 'Filter to Alice Smith' }));
+
+      const laterCell = screen.getByTestId('grid-cell-later');
+      await waitFor(() => {
+        expect(within(laterCell).getByText('Passes the filter')).toBeInTheDocument();
+      });
+      expect(within(laterCell).queryByText('Fails the filter')).toBeNull();
+
+      // Clicking the passing chip's "+" opens the promote sheet.
+      fireEvent.click(within(laterCell).getByRole('button', { name: 'Add to your list: Passes the filter' }));
+      expect(screen.getByRole('button', { name: 'Add to list' })).toBeInTheDocument();
     });
 
     it('locks body scroll while the overlay is shown and restores it on exit', () => {
