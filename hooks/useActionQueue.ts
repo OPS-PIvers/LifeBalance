@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import {
   endOfDay, isBefore, parseISO, isSameDay, subMonths, addMonths,
-  isToday, isTomorrow, isValid
+  isToday, isValid
 } from 'date-fns';
 import { Transaction, CalendarItem, ToDo } from '@/types/schema';
 import { useFinance, useTodos, useExpandedCalendarItems, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
@@ -215,7 +215,7 @@ export const useActionQueue = () => {
     });
   }, [pendingTx, matchedBills]);
 
-  // 3. Immediate To-Dos (Overdue, Today or Tomorrow) — Plan→To-Dos domain
+  // 3. Immediate To-Dos (Overdue or Today) — Plan→To-Dos domain
   // Filter out todos with invalid dates early to prevent issues downstream
   const immediateToDos: ActionQueueItem[] = useMemo(() => !showTodos ? [] : todos.filter(t => {
     if (t.isCompleted) return false;
@@ -241,8 +241,13 @@ export const useActionQueue = () => {
       }
       return false;
     }
-    // Use consistent date-only comparisons: Overdue (before today), Today, or Tomorrow
-    return isBefore(date, today) || isToday(date) || isTomorrow(date);
+    // Use consistent date-only comparisons: Overdue (before today) or Today.
+    // Today-only (not tomorrow) to match every other queue source — calendar
+    // bills are today-or-overdue (dueCalendarItems above) and the server's
+    // sendactionqueuereminders counts due-TODAY to-dos only — and because
+    // MainLayout drives the installed PWA's home-screen badge count off
+    // actionQueue.length, a not-yet-due to-do would badge the icon early.
+    return isBefore(date, today) || isToday(date);
   }).map(t => ({ ...t, queueType: 'todo' as const, date: t.completeByDate })), [showTodos, todos, today, currentUser?.uid]);
 
   // 4. Combined & Sorted (Chronological: Oldest First)
