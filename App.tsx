@@ -14,6 +14,11 @@ import OfflineBanner from './components/layout/OfflineBanner';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ConfirmDialogHost } from './components/ui/ConfirmDialogHost';
 import { ToastLimiter } from './components/ui/ToastLimiter';
+// Static import (not lazy): ProtectedRoute already statically imports Loading,
+// so this adds zero bytes to the boot bundle. Reusing it as the Suspense
+// fallback keeps the boot sequence on one loading look instead of flipping
+// between ProtectedRoute's dark-aware Loading and a second, different surface.
+import Loading from './pages/Loading';
 
 // Lazy load pages for code splitting and faster initial load
 const Login = React.lazy(() => import('./pages/Login'));
@@ -26,12 +31,6 @@ const Habits = React.lazy(() => import('./pages/Habits'));
 const Settings = React.lazy(() => import('./pages/Settings'));
 const OnboardingWizard = React.lazy(() => import('./components/onboarding/OnboardingWizard'));
 const ListsPage = React.lazy(() => import('./pages/ListsPage'));
-
-const LoadingFallback = () => (
-  <div className="min-h-screen bg-brand-50 flex items-center justify-center">
-    <div className="text-brand-600 font-medium">Loading...</div>
-  </div>
-);
 
 const App: React.FC = () => {
   // Track notification permission state to react to changes
@@ -122,8 +121,8 @@ const App: React.FC = () => {
   // If test mode is active but providers aren't loaded yet, show loading state
   if (isTestMode && !MockProviders) {
     return (
-      <div className="min-h-screen bg-brand-50 flex items-center justify-center">
-        <div className="text-brand-600 font-medium">Loading test mode...</div>
+      <div className="min-h-screen bg-brand-50 dark:bg-brand-900 flex items-center justify-center">
+        <div className="text-brand-600 dark:text-brand-400 font-medium">Loading test mode...</div>
       </div>
     );
   }
@@ -139,7 +138,13 @@ const App: React.FC = () => {
                 TEST MODE - MOCK DATA (Development Only)
               </div>
             )}
-            <Suspense fallback={<LoadingFallback />}>
+            {/* Deliberately the SAME surface ProtectedRoute renders while auth
+                resolves — before this fix, the two loading looks differed
+                (dark-aware Loading vs. a light-only inline fallback), so the
+                boot sequence visibly flipped from one to the other. Reusing
+                <Loading /> here means whichever one paints first, the boot
+                sequence never flips looks. */}
+            <Suspense fallback={<Loading />}>
               <Routes>
                 {/* Public Routes */}
                 <Route path="/login" element={<Login />} />

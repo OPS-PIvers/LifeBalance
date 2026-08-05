@@ -32,12 +32,45 @@
     <meta name="theme-color" content="#242220" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#161512" media="(prefers-color-scheme: dark)" />
 
-    <!-- Fonts are self-hosted from /public/fonts and declared via @font-face in index.css -->
+    <!-- Fonts are self-hosted from /public/fonts and declared via @font-face in
+         index.css with font-display: swap. Without a preload, the .woff2 URLs
+         are only discovered once index.css has been parsed, so first-paint
+         text renders in the fallback face and then swaps — on every load,
+         including warm ones (this is a discovery-order problem, not a
+         bandwidth one; firebase.json already serves these immutable). The
+         always-mounted TopToolbar uses all three families in its top row, so
+         all three are first-paint faces and are preloaded below. Only the
+         `latin` subsets are preloaded — `latin-ext` stays lazily discovered
+         under its own unicode-range, since the app's everyday strings are
+         latin-only. `crossorigin` is required even though these are
+         same-origin: fonts are always fetched in CORS mode, and without the
+         attribute the browser treats the preload and the @font-face fetch as
+         different requests and double-fetches instead of reusing the
+         preload. These files live in /public, which Vite copies verbatim
+         without content-hashing, so the URLs are stable across builds and
+         safe to hardcode. -->
+    <link rel="preload" href="/fonts/besley-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/schibsted-grotesk-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/spline-sans-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
+
     <!-- Warm up Firebase connections (auth + Firestore) ahead of the first SDK request -->
     <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
     <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
 
-    <!-- Apply saved theme before paint to avoid a flash of the wrong color scheme -->
+    <!-- Settle every pre-paint-visible <html> attribute before first paint, so
+         nothing about the page's appearance changes after the user already
+         sees it (theme color scheme, base font-scale, and contrast retinting
+         all change layout/paint via CSS keyed off these attributes/class).
+         Without this, ThemeContext applies them in a useEffect — i.e. after
+         React mounts, after first paint — so a user on 115%/130% font scale
+         or high contrast would see the page painted at defaults and then
+         resize/retint a moment later.
+         These three localStorage keys and their validation/default rules are
+         DUPLICATED from contexts/ThemeContext.tsx (readStoredPreference,
+         readStoredFontScale, readStoredHighContrast) — keep them in sync: an
+         unrecognised or absent value must fall back to the same default the
+         context uses, so the pre-paint value and the post-mount value can
+         never disagree. -->
     <script>
       (function () {
         try {
@@ -48,6 +81,20 @@
           // Always set color-scheme to the resolved theme so UA-native controls
           // (scrollbars, form widgets) match even when the choice opposes the OS.
           document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+
+          // Mirrors ThemeContext's readStoredFontScale: only '100'/'115'/'130'
+          // are valid, anything else (including absent) falls back to '100'.
+          var storedFontScale = localStorage.getItem('LIFEBALANCE_FONT_SCALE');
+          var fontScale = (storedFontScale === '100' || storedFontScale === '115' || storedFontScale === '130')
+            ? storedFontScale
+            : '100';
+          document.documentElement.setAttribute('data-font-scale', fontScale);
+
+          // Mirrors ThemeContext's readStoredHighContrast: only the literal
+          // string 'true' means high contrast; anything else (including
+          // absent) falls back to normal contrast.
+          var storedHighContrast = localStorage.getItem('LIFEBALANCE_HIGH_CONTRAST');
+          document.documentElement.setAttribute('data-contrast', storedHighContrast === 'true' ? 'high' : 'normal');
         } catch (e) {}
       })();
     </script>
