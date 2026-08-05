@@ -128,21 +128,21 @@ describe('useActionQueue midnight rollover', () => {
     expect(result.current.actionQueue.map(i => i.id)).toEqual(['snoozed']);
   });
 
-  it('re-anchors the to-do today/tomorrow window after midnight', async () => {
+  it('re-anchors the to-do today-only window after midnight', async () => {
     mockData.todos = [
-      makeTodo({ id: 'todo-day-after', completeByDate: '2026-06-18' }),
+      makeTodo({ id: 'todo-tomorrow', completeByDate: '2026-06-17' }),
     ];
 
     const { result } = renderHook(() => useActionQueue());
-    // Two days out: neither overdue, today, nor tomorrow yet.
+    // Due tomorrow (06-17), not yet overdue or today (still 06-16): excluded.
     expect(result.current.actionQueue).toEqual([]);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(MS_TO_MIDNIGHT);
     });
 
-    // Now 2026-06-17, so the 06-18 to-do qualifies as "tomorrow".
-    expect(result.current.actionQueue.map(i => i.id)).toEqual(['todo-day-after']);
+    // Now 2026-06-17, so the 06-17 to-do has become today's and qualifies.
+    expect(result.current.actionQueue.map(i => i.id)).toEqual(['todo-tomorrow']);
   });
 
   it('keeps rolling on subsequent midnights', async () => {

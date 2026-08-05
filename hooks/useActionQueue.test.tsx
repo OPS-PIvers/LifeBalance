@@ -172,7 +172,7 @@ describe('useActionQueue', () => {
     expect(result.current.actionQueue.map((i) => i.id)).toEqual(['today']);
   });
 
-  it('includes overdue/today/tomorrow todos but excludes ones beyond tomorrow', () => {
+  it('includes overdue/today todos but excludes tomorrow and beyond', () => {
     setMocks({
       todos: [
         makeTodo({ id: 'overdue', completeByDate: '2026-06-10' }),
@@ -185,7 +185,10 @@ describe('useActionQueue', () => {
     const ids = result.current.actionQueue.map((i) => i.id);
     expect(ids).toContain('overdue');
     expect(ids).toContain('today');
-    expect(ids).toContain('tomorrow');
+    // Not-yet-due to-dos never queue — matches the calendar/bill sources and
+    // the server's due-TODAY reminder, and keeps the PWA app badge count from
+    // firing on work that isn't actionable yet.
+    expect(ids).not.toContain('tomorrow');
     expect(ids).not.toContain('far');
   });
 
