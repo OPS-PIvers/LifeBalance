@@ -1,12 +1,13 @@
 import { render, screen, within, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { addDays, format } from 'date-fns';
+import { addDays } from 'date-fns';
 import { ToDo } from '@/types/schema';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import { type Quadrant } from '@/utils/eisenhower';
 import { EisenhowerGridView, type EisenhowerGridViewProps } from './EisenhowerGridView';
 
 const makeTodo = (overrides: Partial<ToDo> & Pick<ToDo, 'id' | 'text'>): ToDo => ({
-  completeByDate: format(addDays(new Date(), 3), 'yyyy-MM-dd'),
+  completeByDate: getLocalDateString(addDays(new Date(), 3)),
   isCompleted: false,
   createdBy: 'user-1',
   createdAt: new Date().toISOString(),
@@ -19,7 +20,7 @@ const makeTodo = (overrides: Partial<ToDo> & Pick<ToDo, 'id' | 'text'>): ToDo =>
 const activeLaterToday = makeTodo({
   id: 'active-later-today',
   text: 'Water the plants',
-  completeByDate: format(new Date(), 'yyyy-MM-dd'),
+  completeByDate: getLocalDateString(),
 });
 
 // A parked to-do. Deliberately dated in the PAST — an active row with this
@@ -28,7 +29,7 @@ const activeLaterToday = makeTodo({
 const parkedOverdueDated = makeTodo({
   id: 'parked-1',
   text: 'Look into a bike rack',
-  completeByDate: format(addDays(new Date(), -5), 'yyyy-MM-dd'),
+  completeByDate: getLocalDateString(addDays(new Date(), -5)),
   savedForLater: true,
 });
 
@@ -90,7 +91,7 @@ describe('EisenhowerGridView — parked chips in the later quadrant', () => {
     const urgentLookingParked = makeTodo({
       id: 'parked-urgent-looking',
       text: 'Sort the garage',
-      completeByDate: format(new Date(), 'yyyy-MM-dd'),
+      completeByDate: getLocalDateString(),
       isImportant: true,
       savedForLater: true,
     });
