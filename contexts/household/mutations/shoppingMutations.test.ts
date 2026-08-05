@@ -154,3 +154,26 @@ describe('addShoppingItem — parked creation', () => {
     expect('savedForLater' in data).toBe(false);
   });
 });
+
+describe('addShoppingItem — successMessage override', () => {
+  // Review finding: an item that never reaches the active list (parked-
+  // delete undo, direct saved-for-later creation) must not toast the
+  // default "Added to shopping list" — the mutation itself stays
+  // savedForLater-UNAWARE (no branch on the flag in here); the CALLER
+  // threads the accurate copy through instead.
+  it('toasts the default "Added to shopping list" when no override is given', async () => {
+    const { addShoppingItem } = makeShoppingListMutations({ db, householdId: 'h1' });
+    await addShoppingItem({ name: 'Milk', category: 'Dairy', isPurchased: false });
+    expect(toast.success).toHaveBeenCalledWith('Added to shopping list');
+  });
+
+  it('toasts the caller-supplied message instead, when given', async () => {
+    const { addShoppingItem } = makeShoppingListMutations({ db, householdId: 'h1' });
+    await addShoppingItem(
+      { name: 'Cast iron skillet', category: 'Household', isPurchased: false, savedForLater: true },
+      'Saved for later'
+    );
+    expect(toast.success).toHaveBeenCalledWith('Saved for later');
+    expect(toast.success).not.toHaveBeenCalledWith('Added to shopping list');
+  });
+});

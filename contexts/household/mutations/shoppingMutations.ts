@@ -48,8 +48,15 @@ export function makeShoppingListMutations(deps: {
    * needed). No dedicated add function exists because a shopping item is built
    * the same way either way — unlike a to-do, it has no required date field to
    * fabricate (see `addSavedForLaterTodo` in todoMutations.ts).
+   *
+   * `successMessage` lets the CALLER override the default "Added to shopping
+   * list" toast — the mutation itself stays savedForLater-UNAWARE (no branch
+   * on the flag in here); callers whose item never reaches the active list
+   * (the parked-delete undo path, direct saved-for-later creation) thread
+   * their own accurate copy through instead. Omit it and behavior is
+   * byte-identical to before.
    */
-  const addShoppingItem = async (item: Omit<ShoppingItem, 'id'>) => {
+  const addShoppingItem = async (item: Omit<ShoppingItem, 'id'>, successMessage?: string) => {
     if (!householdId) return;
     try {
       const sanitizedItem = sanitizeFirestoreData(item);
@@ -57,7 +64,7 @@ export function makeShoppingListMutations(deps: {
         ...sanitizedItem,
         createdAt: serverTimestamp(),
       });
-      toast.success('Added to shopping list');
+      toast.success(successMessage ?? 'Added to shopping list');
     } catch (error) {
       console.error('[addShoppingItem] Failed:', error);
       toast.error(describeError(error, 'add the item'));

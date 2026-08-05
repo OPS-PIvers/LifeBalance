@@ -2453,8 +2453,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // --- ACTIONS: SHOPPING LIST ---
 
-  const addShoppingItem = useCallback(async (item: Omit<ShoppingItem, 'id'>) => {
-    await makeShoppingListMutations({ db, householdId }).addShoppingItem(item);
+  const addShoppingItem = useCallback(async (item: Omit<ShoppingItem, 'id'>, successMessage?: string) => {
+    await makeShoppingListMutations({ db, householdId }).addShoppingItem(item, successMessage);
   }, [householdId]);
 
   const addShoppingItems = useCallback(async (items: Omit<ShoppingItem, 'id'>[]) => {
