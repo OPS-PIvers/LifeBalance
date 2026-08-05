@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, ChevronDown, Crown, Gift, TrendingDown, TrendingUp, X } from 'lucide-react';
+import { ArrowRight, ChevronDown, Crown, Gift, TrendingUp, X } from 'lucide-react';
 import { format, parseISO, startOfWeek, endOfWeek } from 'date-fns';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
@@ -296,27 +296,23 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
               </span>
               <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                 <span className="text-xxs text-brand-450 dark:text-brand-450">{dateLabel}</span>
-                {trend && (
+                {/* Positive-only: an in-progress week starts at 0 and only
+                    climbs, so it reads BEHIND a completed week for most of
+                    every week by construction — a negative reading here
+                    measures the calendar, not the household, so it's
+                    suppressed rather than shown as a false "down" signal. */}
+                {trend && trend.percent > 0 && (
                   <span
-                    className={cn(
-                      'inline-flex items-center gap-0.5 rounded-full border px-1.5 py-px text-xxs font-semibold',
-                      trend.percent >= 0
-                        ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark border-money-pos/20'
-                        : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg dark:text-money-negDark border-money-neg/20',
-                    )}
+                    className="inline-flex items-center gap-0.5 rounded-full border px-1.5 py-px text-xxs font-semibold bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark border-money-pos/20"
                   >
-                    {trend.percent >= 0 ? (
-                      <TrendingUp size={11} aria-hidden="true" />
-                    ) : (
-                      <TrendingDown size={11} aria-hidden="true" />
-                    )}
+                    <TrendingUp size={11} aria-hidden="true" />
                     {Math.abs(trend.percent)}%
                     {/* The arrow supplying the direction is aria-hidden, so
                         without this a screen reader gets an unqualified "12%"
                         with nothing to say whether it is up or down. Matches
                         the ScoreboardWidget chip. */}
                     <span className="sr-only">
-                      {trend.percent >= 0 ? ' up' : ' down'} vs last week
+                      up vs last week
                     </span>
                   </span>
                 )}

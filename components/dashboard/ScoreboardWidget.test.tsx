@@ -159,6 +159,105 @@ describe('ScoreboardWidget', () => {
     expect(screen.getByText('Best week this month')).toBeInTheDocument();
   });
 
+  // `ScoreboardWidget` takes no props and is wrapped in `React.memo` (see the
+  // "submission fetch caching" describe block below), so a plain `rerender()`
+  // with new mock return values is a no-op — each case here gets its own
+  // fresh `render()` instead, sharing the fixture builder so the ONLY thing
+  // that differs between the negative and positive case is last week's total.
+  const recapAtWeek = (totalLastWeek: number): WeeklyRecap => ({
+    id: '2026-W30',
+    isoWeek: '2026-W30',
+    generatedAt: '2026-07-27T12:00:00.000Z',
+    totalSpend: 0,
+    priorWeekSpend: 0,
+    topCategoryDeltas: [],
+    habitCompletions: 0,
+    streaksAtRisk: [],
+    pointsByMember: [
+      { memberId: 'paul', name: 'Paul', points: Math.round(totalLastWeek / 2) },
+      { memberId: 'jen', name: 'Jen', points: totalLastWeek - Math.round(totalLastWeek / 2) },
+    ],
+    upcomingBills: [],
+    narrative: '',
+    narrativeSource: 'template',
+    premium: true,
+  });
+
+  it('suppresses the trend chip when the in-progress week is behind the completed week, but still renders the row', () => {
+    // An in-progress week starts at 0 and only climbs, so it trails a
+    // completed week for most of every week by construction — that's a
+    // statement about the calendar, not the household, so no chip renders
+    // (positive-only rule). The row itself — household name + total — must
+    // still render; only the chip is gone.
+    mockMembers.mockReturnValue([
+      makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 10, weekly: 200, total: 900 } }),
+      makeMember({ uid: 'jen', displayName: 'Jen', points: { daily: 10, weekly: 200, total: 950 } }),
+    ]);
+    mockWeeklyPoints.mockReturnValue(400);
+    mockRecaps.mockReturnValue([recapAtWeek(610)]); // 400 vs 610 -> behind
+
+    render(<ScoreboardWidget />);
+
+    expect(within(screen.getByTestId('scoreboard-hero-row')).getByText('Household')).toBeInTheDocument();
+    expect(screen.getByTestId('scoreboard-total')).toHaveTextContent('400');
+    expect(screen.queryByText(/vs last week/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+  });
+
+  it('shows the trend chip when the same shape of fixture is flipped positive, proving the suppression above is a real gate, not a broken chip', () => {
+    mockMembers.mockReturnValue([
+      makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 10, weekly: 200, total: 900 } }),
+      makeMember({ uid: 'jen', displayName: 'Jen', points: { daily: 10, weekly: 200, total: 950 } }),
+    ]);
+    mockWeeklyPoints.mockReturnValue(400);
+    mockRecaps.mockReturnValue([recapAtWeek(300)]); // 400 vs 300 -> ahead
+
+    render(<ScoreboardWidget />);
+
+    expect(screen.getByText(/vs last week/)).toBeInTheDocument();
+    expect(screen.getByText('33%')).toBeInTheDocument();
+  });
+
+  it('still shows "Best week this month" when there is no trend chip to show beside it', () => {
+    // `isBestWeek` and `trendPct` are independent outputs of
+    // `deriveScoreboardTrend` — a strictly NEGATIVE trend can't co-occur with
+    // `isBestWeek: true` (best-week requires the current total to be >= the
+    // max of every completed week's total, including the most recent one
+    // trendPct compares against, which forces trendPct >= 0 whenever
+    // isBestWeek holds). The reachable "no chip, but best week" case is a
+    // NULL trend — the most recent completed week scored 0, so there's
+    // nothing to divide by — which is exactly what this fixture drives.
+    mockMembers.mockReturnValue([
+      makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 10, weekly: 200, total: 900 } }),
+      makeMember({ uid: 'jen', displayName: 'Jen', points: { daily: 10, weekly: 200, total: 950 } }),
+    ]);
+    mockWeeklyPoints.mockReturnValue(400);
+    mockRecaps.mockReturnValue([
+      {
+        id: '2026-W30',
+        isoWeek: '2026-W30',
+        generatedAt: '2026-07-27T12:00:00.000Z',
+        totalSpend: 0,
+        priorWeekSpend: 0,
+        topCategoryDeltas: [],
+        habitCompletions: 0,
+        streaksAtRisk: [],
+        pointsByMember: [], // total 0 -> trendPct is null, not a percentage
+        upcomingBills: [],
+        narrative: '',
+        narrativeSource: 'template',
+        premium: true,
+      },
+    ]);
+
+    render(<ScoreboardWidget />);
+
+    expect(screen.queryByText(/vs last week/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+    // 400 > 0 and >= the only completed week's total (0) -> still a best week.
+    expect(screen.getByText('Best week this month')).toBeInTheDocument();
+  });
+
   it('colors each standing row through the shared MemberColorMap (memberColorFor), not a uid-hashed resolveAvatarColor', () => {
     const members = [
       makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 45, weekly: 285, total: 900 } }),

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseISO } from 'date-fns';
-import { Sparkle, Crown, TrendingUp, TrendingDown, Calendar, ChevronDown } from 'lucide-react';
+import { Sparkle, Crown, TrendingUp, Calendar, ChevronDown } from 'lucide-react';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
@@ -334,9 +334,6 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
   }));
   const triggerLabel = isPastWeek && selectedWeek ? selectedWeek.label : 'This week';
 
-  const TrendIcon = (trend.trendPct ?? 0) >= 0 ? TrendingUp : TrendingDown;
-  const trendPositive = (trend.trendPct ?? 0) >= 0;
-
   const displayTotal = isPastWeek ? pastWeekData?.total : weeklyPoints;
   // The Household row's value — see `currentWeekHouseholdShare`'s doc comment
   // for why this is a derived figure, not `displayTotal - Σ rows.value`.
@@ -445,23 +442,23 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
             <div className="text-[13.5px] font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate">
               Household
             </div>
-            {!isPastWeek && (trend.isBestWeek || (trend.trendPct !== null && trend.trendPct !== 0)) && (
+            {!isPastWeek && (trend.isBestWeek || (trend.trendPct !== null && trend.trendPct > 0)) && (
               <div className="mt-[3px] flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                 {trend.isBestWeek && (
                   <span className="text-[10.5px] text-brand-500 dark:text-brand-400">
                     Best week this month
                   </span>
                 )}
-                {trend.trendPct !== null && trend.trendPct !== 0 && (
+                {/* Positive-only: an in-progress week starts at 0 and only
+                    climbs, so it reads BEHIND a completed week for most of
+                    every week by construction — a negative reading here
+                    measures the calendar, not the household, so it's
+                    suppressed rather than shown as a false "down" signal. */}
+                {trend.trendPct !== null && trend.trendPct > 0 && (
                   <span
-                    className={cn(
-                      'inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-[10px] font-semibold border',
-                      trendPositive
-                        ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark border-money-pos/18 dark:border-money-pos/35'
-                        : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg dark:text-money-negDark border-money-neg/18 dark:border-money-neg/35'
-                    )}
+                    className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-[10px] font-semibold border bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark border-money-pos/18 dark:border-money-pos/35"
                   >
-                    <TrendIcon size={10} aria-hidden="true" />
+                    <TrendingUp size={10} aria-hidden="true" />
                     {Math.abs(trend.trendPct)}%
                     {/* Visually just the percentage, matching the drawer's chip.
                         Spelled out for screen readers because the arrow that
@@ -471,7 +468,7 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
                         a second line — which is exactly the ragged silhouette
                         this row was restructured to fix. */}
                     <span className="sr-only">
-                      {trendPositive ? ' up' : ' down'} vs last week
+                      up vs last week
                     </span>
                   </span>
                 )}
