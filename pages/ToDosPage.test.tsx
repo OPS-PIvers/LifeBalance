@@ -77,6 +77,9 @@ vi.mock('lucide-react', () => ({
   GripVertical: () => <div data-testid="grip-vertical-icon" />,
   UserPlus: () => <div data-testid="user-plus-icon" />,
   ListChecks: () => <div data-testid="list-checks-icon" />,
+  // "Saved for later": the park action's glyph, in the swipe rail and the
+  // Task-options drawer.
+  Bookmark: () => <div data-testid="bookmark-icon" />,
   Repeat: () => <div data-testid="repeat-icon" />,
   Filter: () => <div data-testid="filter-icon" />,
   Tag: () => <div data-testid="tag-icon" />,
@@ -203,6 +206,21 @@ describe('ToDosPage', () => {
       // filter control stays hidden and existing expectations are unaffected.
       todoCategories: [],
       updateTodoCategories: vi.fn(),
+      // "Saved for later": empty by default, so the parked section renders its
+      // header + add bar only and existing expectations are unaffected. The
+      // section's own behaviour is covered in ToDosPage.SavedForLater.test.tsx.
+      savedForLaterTodos: [],
+      addSavedForLaterTodo: vi.fn(),
+      promoteTodo: vi.fn(),
+      parkTodo: vi.fn(),
+      // Reachable from this page but never exercised here. Stubbed anyway: the
+      // `as ...ContextValue` cast hides a missing FUNCTION until a future test
+      // trips the code path, which then fails as `x is not a function` instead
+      // of a clean assertion. `toggleTodoSubtask` comes from TodoRow, the two
+      // category fns from the always-mounted TodoCategoryManagerDrawer.
+      toggleTodoSubtask: vi.fn(),
+      renameTodoCategory: vi.fn(),
+      deleteTodoCategory: vi.fn(),
     });
     render(<ToDosPage />);
   };
@@ -520,6 +538,14 @@ describe('ToDosPage', () => {
         applyTaskTemplate: vi.fn(),
         todoCategories: [],
         updateTodoCategories: vi.fn(),
+        savedForLaterTodos: [],
+        addSavedForLaterTodo: vi.fn(),
+        promoteTodo: vi.fn(),
+        parkTodo: vi.fn(),
+        uncompleteToDo: vi.fn(),
+        toggleTodoSubtask: vi.fn(),
+        renameTodoCategory: vi.fn(),
+        deleteTodoCategory: vi.fn(),
       });
       render(<ToDosPage />);
 

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { addDays, format, isSaturday, isSunday, nextSaturday, parseISO } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ChevronLeft, Star, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useTodos } from '@/contexts/FirebaseHouseholdContext';
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { CategoryChipPicker } from '@/components/ui/CategoryChipPicker';
 import Input from '@/components/ui/Input';
-import { getLocalDateString } from '@/utils/dateHelpers';
+import { buildQuickPicks, type QuickPick } from '@/utils/todoQuickPicks';
 import { cn } from '@/utils/cn';
 import { haptic } from '@/utils/haptics';
 
@@ -58,28 +58,6 @@ const isUncategorized = (todo: ToDo): boolean => !(todo.category ?? '').trim();
  */
 const buildQueue = (todos: ToDo[]): ToDo[] =>
   todos.filter(todo => !todo.isCompleted && isUncategorized(todo));
-
-interface QuickPick {
-  key: string;
-  label: string;
-  date: string;
-}
-
-/**
- * Due-date shortcuts, all derived from `getLocalDateString()` (never the UTC
- * day — see CLAUDE.md). "This weekend" is the coming Saturday, or today when it
- * already is the weekend.
- */
-const buildQuickPicks = (): QuickPick[] => {
-  const today = parseISO(getLocalDateString());
-  const weekend = isSaturday(today) || isSunday(today) ? today : nextSaturday(today);
-  return [
-    { key: 'today', label: 'Today', date: format(today, 'yyyy-MM-dd') },
-    { key: 'tomorrow', label: 'Tomorrow', date: format(addDays(today, 1), 'yyyy-MM-dd') },
-    { key: 'weekend', label: 'This weekend', date: format(weekend, 'yyyy-MM-dd') },
-    { key: 'next-week', label: 'Next week', date: format(addDays(today, 7), 'yyyy-MM-dd') },
-  ];
-};
 
 type BusyAction = 'category' | 'date' | 'star' | 'delete';
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Trash2, AlertCircle, Clock, CheckSquare, Bell, Star, ListChecks } from 'lucide-react';
+import { Check, Trash2, AlertCircle, Clock, CheckSquare, Bell, Star, ListChecks, Plus, Bookmark } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, startOfToday } from 'date-fns';
 import { ToDo, HouseholdMember } from '@/types/schema';
 import type { TodoSubtaskToggleResult, TodoCompletionOptions } from '@/contexts/household/mutations/todoMutations';
@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { haptic } from '@/utils/haptics';
 import { HapticCheck } from '@/components/ui/HapticCheck';
-import { SwipeActionRow } from '@/components/ui/SwipeActionRow';
+import { SwipeActionRow, type SwipeAction } from '@/components/ui/SwipeActionRow';
 import { Row } from '@/components/ui/Section';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { UndoToast } from '@/components/ui/UndoToast';
@@ -122,6 +122,36 @@ export interface TodoRowProps {
    *  (read-only here — assignment happens in the edit drawer). Optional so
    *  existing callers/tests that don't pass it still render (no chips shown). */
   memberMap?: ReadonlyMap<string, HouseholdMember>;
+  /**
+   * "Saved for later" (`ToDo.savedForLater`). `'parked'` renders the SAME row
+   * in its parked form rather than forking the component:
+   *
+   * - the leading control becomes a circular outline **Plus** (accent-toned,
+   *   reusing the checkbox's `w-6 h-6 rounded-full border-2` geometry) that opens
+   *   the promote sheet — a parked item is NOT completable, so both the complete
+   *   checkbox AND swipe-to-complete are suppressed;
+   * - the swipe model becomes right = promote (`positive`), left = delete;
+   * - the due-date cluster is DROPPED from the meta line. A parked to-do's
+   *   `completeByDate` is an inert placeholder (see types/schema.ts); rendering
+   *   it ships a fabricated red "Overdue" label.
+   *
+   * Defaults to `'active'`, so every existing caller is unchanged.
+   */
+  variant?: 'active' | 'parked';
+  /** Opens the promote sheet. Required in practice for `variant="parked"` (the
+   *  `+` control and the promote swipe both call it); ignored when active. */
+  onPromote?: (todo: ToDo) => void;
+  /**
+   * "Saved for later": parks this ACTIVE to-do (`parkTodo`). Offered as a
+   * SECONDARY left-swipe action behind Delete, and — because swipes are
+   * disabled entirely under `prefers-reduced-motion` and are unreachable by
+   * keyboard — as an entry in the Task-options drawer the host owns.
+   *
+   * Omitted for a parked row (already parked) and for a COMPLETED one: a
+   * completed to-do cannot be parked, the mirror of PR-1's guard stopping a
+   * parked to-do being completed.
+   */
+  onSaveForLater?: (todo: ToDo) => void;
 }
 
 // Memoized row for a single active to-do.
@@ -142,7 +172,13 @@ export const TodoRow = React.memo(function TodoRow({
   onToggleSelection,
   onToggleSubtask,
   memberMap,
+  variant = 'active',
+  onPromote,
+  onSaveForLater,
 }: TodoRowProps) {
+  // "Saved for later": a parked row is not committed work — no due date, no
+  // completion. See the `variant` prop doc above.
+  const isParked = variant === 'parked';
   // Parse the due date once per row render to avoid repeated parseISO calls
   const dueDate = parseISO(item.completeByDate);
   const isOverdue = isBefore(dueDate, startOfToday());
@@ -172,7 +208,12 @@ export const TodoRow = React.memo(function TodoRow({
   // swipe-to-complete at all (even when there's no linked-habit gate) — the
   // "right swipe = done" gesture is only for tasks that are actually finishable
   // in one motion. Swipe-to-delete stays available either way.
-  const swipeCompleteAllowed = subtaskCount === 0 || stepsLeft === 0;
+  //
+  // A PARKED row never offers it: the right swipe is reassigned to Promote, and
+  // both completion paths (the checkbox AND the swipe) must be suppressed
+  // together — leaving either one reachable would let a parked item be completed
+  // while still carrying its inert placeholder date.
+  const swipeCompleteAllowed = !isParked && (subtaskCount === 0 || stepsLeft === 0);
 
   // `assignee` is undefined both for a household-wide todo AND for a stale
   // reference to a since-removed member — key off `item.assignedTo` itself.
@@ -426,7 +467,15 @@ export const TodoRow = React.memo(function TodoRow({
   const pillToneClass = completionGated
     ? 'text-warm-700 dark:text-warm-300'
     : 'text-brand-400 dark:text-brand-450';
-  const subtaskPill = subtaskCount > 0 && (
+  //
+  // "Saved for later": the pill and its checklist are SUPPRESSED on a parked
+  // row. A parked to-do keeps its subtasks (`parkTodo` writes only the flag),
+  // but its steps are not actionable work — and checking the LAST one escalates
+  // to `completeToDo`, which refuses a parked to-do. That refusal would surface
+  // through `handleSubtaskCheck`'s catch as a bare "Failed to update subtask",
+  // an unexplained error for a control that should never have been offered.
+  // The steps remain visible and editable in the edit drawer.
+  const subtaskPill = !isParked && subtaskCount > 0 && (
     isSelectionMode ? (
       <span
         data-testid="todo-subtask-pill"
@@ -468,7 +517,11 @@ export const TodoRow = React.memo(function TodoRow({
   // stay vertically centered against the checkbox no matter how many steps are
   // expanded; `pl-9` (checkbox 24px + gap 12px) keeps it indented under the
   // title exactly as it was when it lived inside that column.
-  const subtaskList = subtasksExpanded && subtaskCount > 0 && (
+  // Suppressed for a parked row alongside its pill (see above) — the pill is the
+  // only way to expand it, but gating both means a stale `subtasksExpanded`
+  // (expanded, then parked from the options drawer) can't leave the checklist
+  // — and its swipe-to-toggle rows — reachable.
+  const subtaskList = !isParked && subtasksExpanded && subtaskCount > 0 && (
     <ul
       id={subtaskListId}
       aria-label={`Subtasks for ${item.text}`}
@@ -548,7 +601,12 @@ export const TodoRow = React.memo(function TodoRow({
           section-accent `dateColorMap` reserved for the two urgent cases.
           (`dateColorMap` itself is untouched — it's shared with the
           Eisenhower section accents.) */}
-      {isOverdue ? (
+      {/* "Saved for later": a parked to-do's completeByDate is an INERT
+          PLACEHOLDER (see types/schema.ts) — rendering it would ship a
+          fabricated red "Overdue" label, which is precisely the bug this
+          suppression exists to prevent. Nothing replaces it: a parked item has
+          no due date, and saying so with a dash would be inventing metadata. */}
+      {isParked ? null : isOverdue ? (
         <span data-testid="todo-due-label" className="flex items-center gap-1 font-semibold text-warm-700 dark:text-warm-300">
           <AlertCircle size={11} />
           Overdue ({format(dueDate, 'MMM d')}{dueTimeLabel ? ` · ${dueTimeLabel}` : ''})
@@ -637,6 +695,29 @@ export const TodoRow = React.memo(function TodoRow({
           <div className={`w-6 h-6 flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-500'}`}>
             {isSelected ? <CheckSquare aria-hidden="true" size={24} /> : <div className="w-5 h-5 border-2 border-current rounded-sm" />}
           </div>
+        ) : isParked ? (
+          /* "Saved for later": a circular outline PLUS in place of the complete
+             checkbox — same `w-6 h-6 rounded-full border-2` geometry so the two
+             lists line up, accent-toned rather than neutral because promoting is
+             the row's primary (and only constructive) action. A real <button>,
+             so the promote-swipe gesture has a keyboard/pointer equal. The
+             p-2.5/-m-2.5 pair is the house trick for a ≥44px target that costs
+             no layout height (same one HapticCheck uses below). */
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              haptic('light');
+              onPromote?.(item);
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            aria-label={`Add to your list: ${item.text}`}
+            className="group p-2.5 -m-2.5 shrink-0 rounded-full focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+          >
+            <span className="w-6 h-6 rounded-full border-2 border-accent-500/60 text-accent-600 flex items-center justify-center transition-colors group-hover:border-accent-500 group-hover:bg-accent-50 group-active:bg-accent-100 dark:border-accent-400/60 dark:text-accent-300 dark:group-hover:border-accent-400 dark:group-hover:bg-accent-900/30">
+              <Plus size={14} aria-hidden="true" />
+            </span>
+          </button>
         ) : (
           <HapticCheck
             checked={false}
@@ -764,27 +845,71 @@ export const TodoRow = React.memo(function TodoRow({
   // Partial swipes stick open to a tappable button; SwipeActionRow handles
   // thresholds, reveal, haptics, and the reduced-motion fallback (the row's
   // own checkbox and the options drawer remain the accessible path).
+  //
+  // "Saved for later": on a parked row the right swipe is PROMOTE, not
+  // Complete — `swipeCompleteAllowed` is forced false above, so the two can
+  // never both be offered. Swipes are disabled entirely under
+  // prefers-reduced-motion, which is why the row's own `+` button (above) is the
+  // real affordance and this is the shortcut.
+  //
+  // The END rail keeps DELETE AS THE PRIMARY — zero muscle-memory change for
+  // an action people already swipe by feel. "Save for later" rides behind it as
+  // a SECONDARY, which `SwipeActionRow` renders as a tappable button once the
+  // row sticks open rather than something a full swipe can fire by accident.
+  // Promoting it over Delete was explicitly rejected.
+  const endActions: SwipeAction[] = [{
+    icon: Trash2,
+    label: 'Delete',
+    // With two buttons in the rail, a bare "Delete" is announced without
+    // saying what it deletes — the stuck-open buttons precede the row content.
+    ariaLabel: `Delete task: ${item.text}`,
+    tone: 'destructive',
+    hapticPattern: 'medium',
+    onAction: () => {
+      showDeleteConfirmation(async () => {
+        await onDelete(item.id);
+        toast.success('Task deleted');
+      }, 'task');
+    },
+  }];
+  // A COMPLETED to-do cannot be parked (the mirror of PR-1's guard against
+  // completing a parked one), and a parked row is already parked.
+  if (!isParked && !item.isCompleted && onSaveForLater) {
+    endActions.push({
+      icon: Bookmark,
+      label: 'Later',
+      ariaLabel: `Save for later: ${item.text}`,
+      // Warm, not destructive: parking loses nothing (parkTodo writes only the
+      // flag) and is not a completion either.
+      tone: 'warm',
+      hapticPattern: 'light',
+      onAction: () => onSaveForLater(item),
+    });
+  }
+
+  const startActions = isParked
+    ? [{
+        icon: Plus,
+        label: 'Add',
+        ariaLabel: `Add to your list: ${item.text}`,
+        tone: 'positive' as const,
+        hapticPattern: 'light' as const,
+        onAction: () => onPromote?.(item),
+      }]
+    : swipeCompleteAllowed
+      ? [{
+          icon: Check,
+          label: 'Complete',
+          tone: 'positive' as const,
+          hapticPattern: 'success' as const,
+          onAction: handleComplete,
+        }]
+      : undefined;
+
   return (
     <SwipeActionRow
-      startActions={swipeCompleteAllowed ? [{
-        icon: Check,
-        label: 'Complete',
-        tone: 'positive',
-        hapticPattern: 'success',
-        onAction: handleComplete,
-      }] : undefined}
-      endActions={[{
-        icon: Trash2,
-        label: 'Delete',
-        tone: 'destructive',
-        hapticPattern: 'medium',
-        onAction: () => {
-          showDeleteConfirmation(async () => {
-            await onDelete(item.id);
-            toast.success('Task deleted');
-          }, 'task');
-        },
-      }]}
+      startActions={startActions}
+      endActions={endActions}
       onSwipeStart={handleSwipeStart}
     >
       {cardInner}

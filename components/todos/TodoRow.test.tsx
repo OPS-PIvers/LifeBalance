@@ -354,3 +354,197 @@ describe('TodoRow', () => {
     });
   });
 });
+
+/**
+ * "Saved for later" — the PARKED variant of this same row (never a fork).
+ *
+ * The load-bearing assertions are the two suppressions: a parked item is not
+ * completable, so BOTH the checkbox and swipe-to-complete must be gone (leaving
+ * either reachable would let a parked to-do be completed while still carrying
+ * its inert placeholder date), and the due-date cluster must not render at all
+ * (rendering the placeholder ships a fabricated red "Overdue" label).
+ */
+describe('TodoRow — saved-for-later (parked) variant', () => {
+  // Deliberately dated in the PAST: the active row renders a red "Overdue (…)"
+  // label for this date, so the positive control below proves the suppression
+  // tests would notice a regression rather than passing on a neutral fixture.
+  const parkedItem: ToDo = {
+    ...item,
+    id: 'parked-1',
+    text: 'Look into a bike rack',
+    completeByDate: format(addDays(new Date(), -5), 'yyyy-MM-dd'),
+    savedForLater: true,
+  };
+  const onPromote = vi.fn();
+  const parkedProps = { ...baseProps, item: parkedItem, variant: 'parked' as const, onPromote };
+
+  beforeEach(() => {
+    onPromote.mockClear();
+  });
+
+  it('positive control: the SAME fixture as an ACTIVE row does show an overdue label and a checkbox', () => {
+    render(<TodoRow {...baseProps} item={parkedItem} />);
+    expect(screen.getByTestId('todo-due-label').textContent).toMatch(/Overdue/);
+    expect(
+      screen.getByRole('checkbox', { name: `Complete task: ${parkedItem.text}` }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders NO due date — the stored date is an inert placeholder', () => {
+    render(<TodoRow {...parkedProps} />);
+    expect(screen.queryByTestId('todo-due-label')).toBeNull();
+    expect(screen.queryByText(/Overdue/)).toBeNull();
+  });
+
+  it('cannot be completed via the checkbox — there is no checkbox at all', () => {
+    render(<TodoRow {...parkedProps} />);
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(handlers.onComplete).not.toHaveBeenCalled();
+  });
+
+  it('suppresses the subtask pill and checklist — no path to completeToDo', () => {
+    const withSteps: ToDo = {
+      ...parkedItem,
+      subtasks: [
+        { id: 's1', text: 'First step', isDone: true },
+        { id: 's2', text: 'Last step', isDone: false },
+      ],
+    };
+    render(<TodoRow {...parkedProps} item={withSteps} />);
+
+    // Checking the LAST step escalates to `completeToDo`, which refuses a
+    // parked to-do — surfacing as a bare "Failed to update subtask". The
+    // control should never have been offered.
+    expect(screen.queryByTestId('todo-subtask-pill')).toBeNull();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByText('Last step')).toBeNull();
+  });
+
+  it('positive control: the SAME fixture as an ACTIVE row DOES show the pill', () => {
+    const withSteps: ToDo = {
+      ...parkedItem,
+      subtasks: [
+        { id: 's1', text: 'First step', isDone: true },
+        { id: 's2', text: 'Last step', isDone: false },
+      ],
+    };
+    render(<TodoRow {...baseProps} item={withSteps} />);
+    expect(screen.getByTestId('todo-subtask-pill')).toBeInTheDocument();
+  });
+
+  it('offers NO path to completeToDo at all', () => {
+    const withSteps: ToDo = {
+      ...parkedItem,
+      subtasks: [{ id: 's1', text: 'Only step', isDone: false }],
+    };
+    render(<TodoRow {...parkedProps} item={withSteps} />);
+
+    // The three doors: the leading control, the start-swipe action, and the
+    // subtask checklist's auto-complete escalation. Click everything the row
+    // exposes and assert onComplete/onToggleSubtask were never reached.
+    document.querySelectorAll('button').forEach(b => fireEvent.click(b));
+    expect(handlers.onComplete).not.toHaveBeenCalled();
+    expect(handlers.onToggleSubtask).not.toHaveBeenCalled();
+  });
+
+  it('offers no "Save for later" action — it is already parked', () => {
+    render(<TodoRow {...parkedProps} onSaveForLater={vi.fn()} />);
+    // By attribute: rail buttons are aria-hidden until the row opens, and an
+    // aria-hidden element's accessible name computes to ''.
+    expect(document.querySelector('button[aria-label^="Save for later"]')).toBeNull();
+  });
+
+  it('cannot be completed via swipe — the right-swipe action is Add, not Complete', () => {
+    render(<TodoRow {...parkedProps} />);
+    // SwipeActionRow renders every action as a real button (aria-hidden until
+    // the row sticks open), so the absence of a Complete action is directly
+    // observable without driving a pointer gesture.
+    const swipeLabels = Array.from(document.querySelectorAll('button')).map(b => b.textContent);
+    expect(swipeLabels.some(t => t?.includes('Complete'))).toBe(false);
+    expect(swipeLabels.some(t => t?.includes('Add'))).toBe(true);
+    expect(swipeLabels.some(t => t?.includes('Delete'))).toBe(true);
+  });
+
+  it('offers a keyboard-reachable + control that opens the promote sheet', () => {
+    render(<TodoRow {...parkedProps} />);
+    const promote = screen.getByRole('button', { name: `Add to your list: ${parkedItem.text}` });
+    fireEvent.click(promote);
+    expect(onPromote).toHaveBeenCalledWith(parkedItem);
+  });
+
+  it('still opens the edit drawer on a body tap (parking does not make a row inert)', () => {
+    render(<TodoRow {...parkedProps} />);
+    fireEvent.click(screen.getByRole('button', { name: `Edit task: ${parkedItem.text}` }));
+    expect(handlers.onEdit).toHaveBeenCalledWith(parkedItem);
+  });
+
+  it('is selectable in selection mode, with no completion affordance', () => {
+    render(<TodoRow {...parkedProps} isSelectionMode />);
+    fireEvent.click(screen.getByRole('button', { name: `Select task: ${parkedItem.text}` }));
+    expect(handlers.onToggleSelection).toHaveBeenCalledWith(parkedItem.id);
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByTestId('todo-due-label')).toBeNull();
+  });
+});
+
+/**
+ * "Saved for later" — parking an ACTIVE row. Delete stays the PRIMARY end-rail
+ * action (zero muscle-memory change); "Save for later" is a secondary, tappable
+ * only once the row sticks open. The host also carries it in the Task-options
+ * drawer, because swipes are disabled outright under prefers-reduced-motion.
+ */
+describe('TodoRow — save-for-later action on an active row', () => {
+  const onSaveForLater = vi.fn();
+
+  const railLabels = () =>
+    Array.from(document.querySelectorAll('button'))
+      .map(b => b.getAttribute('aria-label'))
+      .filter((label): label is string => label !== null)
+      .filter(label => label.endsWith(item.text) && !label.startsWith('Edit task'));
+
+  beforeEach(() => {
+    onSaveForLater.mockClear();
+  });
+
+  it('adds "Save for later" as a SECONDARY behind Delete', () => {
+    render(<TodoRow {...baseProps} onSaveForLater={onSaveForLater} />);
+    // The end rail renders `[...actions].reverse()` so the primary sits at the
+    // outer edge — DOM order [secondary, primary] proves Delete is actions[0].
+    expect(railLabels()).toEqual([
+      `Save for later: ${item.text}`,
+      `Delete task: ${item.text}`,
+    ]);
+  });
+
+  it('fires onSaveForLater with the whole item (the caller needs it for undo)', () => {
+    render(<TodoRow {...baseProps} onSaveForLater={onSaveForLater} />);
+    // Queried by attribute, not by role+name: a rail button is `aria-hidden`
+    // until the row sticks open, and an aria-hidden element's ACCESSIBLE NAME
+    // computes to '' — so `getByRole(..., { name })` can't reach it even with
+    // `hidden: true`. (Tapping it for real happens after the row opens, which
+    // clears aria-hidden; this is a shortcut past the drag gesture.)
+    const button = document.querySelector<HTMLButtonElement>(
+      `button[aria-label="Save for later: ${item.text}"]`,
+    );
+    expect(button).not.toBeNull();
+    fireEvent.click(button as HTMLButtonElement);
+    expect(onSaveForLater).toHaveBeenCalledWith(item);
+  });
+
+  it('omits the action for a COMPLETED to-do — it cannot be parked', () => {
+    render(
+      <TodoRow
+        {...baseProps}
+        item={{ ...item, isCompleted: true }}
+        onSaveForLater={onSaveForLater}
+      />,
+    );
+    // The mirror of PR-1's guard stopping a parked to-do being completed.
+    expect(railLabels()).toEqual([`Delete task: ${item.text}`]);
+  });
+
+  it('omits the action when the host passes no handler (unchanged for old callers)', () => {
+    render(<TodoRow {...baseProps} />);
+    expect(railLabels()).toEqual([`Delete task: ${item.text}`]);
+  });
+});

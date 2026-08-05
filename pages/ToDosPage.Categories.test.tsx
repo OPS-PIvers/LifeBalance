@@ -71,6 +71,19 @@ const setup = (overrides: Partial<TodosContextValue & HouseholdCoreContextValue>
     isLoading: false,
     todoCategories: ['Home', 'Errands'],
     updateTodoCategories: vi.fn(),
+    // "Saved for later": nothing parked, so the section renders header + add
+    // bar only (covered in ToDosPage.SavedForLater.test.tsx).
+    savedForLaterTodos: [],
+    addSavedForLaterTodo: vi.fn(),
+    promoteTodo: vi.fn(),
+    parkTodo: vi.fn(),
+    // Reachable from this page but never exercised here. Stubbed anyway: the
+    // `as ...ContextValue` cast hides a missing FUNCTION until a future test
+    // trips the code path, which then fails as `x is not a function` instead of
+    // a clean assertion. These two come from the always-mounted
+    // TodoCategoryManagerDrawer — squarely this suite's own subject matter.
+    renameTodoCategory: vi.fn(),
+    deleteTodoCategory: vi.fn(),
     addToDo: vi.fn(),
     updateToDo: vi.fn(),
     deleteToDo: vi.fn(),
@@ -274,10 +287,18 @@ describe('ToDosPage — category sort mode sections', () => {
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Category' }));
   };
 
+  // The "Saved for later" section below the list is a disclosure too, so it
+  // carries aria-expanded. These assertions are about the CATEGORY sections
+  // specifically, so it is filtered out by name rather than by counting.
+  const categoryHeaders = () =>
+    screen
+      .getAllByRole('button', { expanded: true })
+      .filter(h => !h.textContent?.includes('Saved for later'));
+
   it('renders one collapsible section per category with Uncategorized last', () => {
     setup();
     chooseCategorySort();
-    const headers = screen.getAllByRole('button', { expanded: true });
+    const headers = categoryHeaders();
     expect(headers.map(h => h.textContent?.trim())).toEqual([
       'Errands1',
       'Home1',
@@ -288,7 +309,7 @@ describe('ToDosPage — category sort mode sections', () => {
   it('accepts a persisted "category" sort mode on mount', () => {
     window.localStorage.setItem('todos-sort-mode', 'category');
     setup();
-    expect(screen.getAllByRole('button', { expanded: true })).toHaveLength(3);
+    expect(categoryHeaders()).toHaveLength(3);
   });
 
   it('collapsing a section hides its rows without touching the others', () => {
@@ -343,7 +364,7 @@ describe('ToDosPage — category sort mode sections', () => {
     openCategoryFilter();
     fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Errands/ }));
     fireEvent.keyDown(window, { key: 'Escape' });
-    const headers = screen.getAllByRole('button', { expanded: true });
+    const headers = categoryHeaders();
     expect(headers).toHaveLength(1);
     expect(within(headers[0] as HTMLElement).getByText('Errands')).toBeInTheDocument();
   });

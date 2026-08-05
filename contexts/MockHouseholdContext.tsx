@@ -3589,10 +3589,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: ToDo updated');
   }, []);
 
-  // "Saved for later": park an ACTIVE to-do / un-park without triage. Flag only —
-  // an existing to-do keeps its real completeByDate (makeTodoCrudMutations parity).
-  const setTodoSavedForLater = useCallback(async (id: string, value: boolean) => {
-    setTodos(prev => prev.map(t => t.id === id ? { ...t, savedForLater: value } : t));
+  // "Saved for later": PARK an active to-do. Flag only — an existing to-do keeps
+  // its real completeByDate (makeTodoCrudMutations parity). One direction only:
+  // there is no bare un-park, because clearing the flag alone would strand a
+  // from-scratch parked to-do on the active list with its inert placeholder date.
+  // `promoteTodo` is the only path back.
+  const parkTodo = useCallback(async (id: string) => {
+    setTodos(prev => prev.map(t => t.id === id ? { ...t, savedForLater: true } : t));
   }, []);
 
   // "Saved for later": promote a parked to-do — clears the flag AND applies the
@@ -3615,6 +3618,17 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     }
     if (found.isCompleted) {
       return; // already completed — avoid duplicate points
+    }
+    // Parked-to-do guard — PARITY WITH makeCompleteToDo, not decoration. A
+    // parked ("saved for later") to-do is not completable, and this mock is the
+    // path Test Mode takes: without this the same interaction that THROWS in
+    // production SILENTLY SUCCEEDS here and mints `{savedForLater: true,
+    // isCompleted: true}` — a doc `savedForLaterTodos` still matches (it
+    // deliberately does not filter completed items) but the completed view does
+    // not, i.e. a zombie invisible to every exposed slice. `toggleTodoSubtask`
+    // delegates its last-subtask escalation here, so this covers that too.
+    if (found.savedForLater === true) {
+      throw new Error(`Cannot complete "${found.text}" — it is saved for later`);
     }
     const subtaskToggle = options?.subtaskToggle;
     const effectiveSubtasks = subtaskToggle
@@ -4421,7 +4435,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     deleteMealPlanItem: deleteMealPlan,
     addToDo,
     addSavedForLaterTodo,
-    setTodoSavedForLater,
+    parkTodo,
     promoteTodo,
     updateToDo,
     toggleTodoSubtask,
