@@ -459,7 +459,7 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
                     className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-[10px] font-semibold border bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark border-money-pos/18 dark:border-money-pos/35"
                   >
                     <TrendingUp size={10} aria-hidden="true" />
-                    {Math.abs(trend.trendPct)}%
+                    {trend.trendPct}%
                     {/* Visually just the percentage, matching the drawer's chip.
                         Spelled out for screen readers because the arrow that
                         supplies the direction is aria-hidden, and because at
@@ -467,9 +467,10 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
                         overruns the subtitle slot by ~7px and wraps the hero to
                         a second line — which is exactly the ragged silhouette
                         this row was restructured to fix. */}
-                    <span className="sr-only">
-                      up vs last week
-                    </span>
+                    {/* Leading space is load-bearing: this is a sibling
+                        element to the "N%" text node, and without it a screen
+                        reader can run the two together as "33%up". */}
+                    <span className="sr-only"> up vs last week</span>
                   </span>
                 )}
               </div>

@@ -306,14 +306,14 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
                     className="inline-flex items-center gap-0.5 rounded-full border px-1.5 py-px text-xxs font-semibold bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark border-money-pos/20"
                   >
                     <TrendingUp size={11} aria-hidden="true" />
-                    {Math.abs(trend.percent)}%
+                    {trend.percent}%
                     {/* The arrow supplying the direction is aria-hidden, so
                         without this a screen reader gets an unqualified "12%"
                         with nothing to say whether it is up or down. Matches
                         the ScoreboardWidget chip. */}
-                    <span className="sr-only">
-                      up vs last week
-                    </span>
+                    {/* Leading space is load-bearing — see the same note on
+                        the ScoreboardWidget chip. */}
+                    <span className="sr-only"> up vs last week</span>
                   </span>
                 )}
               </span>
