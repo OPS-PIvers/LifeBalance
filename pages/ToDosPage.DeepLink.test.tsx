@@ -98,6 +98,14 @@ const setup = (highlightId: string, overrides: Partial<TodosContextValue & House
     savedForLaterTodos: [],
     addSavedForLaterTodo: vi.fn(),
     promoteTodo: vi.fn(),
+    parkTodo: vi.fn(),
+    // Reachable from this page but never exercised here. Stubbed anyway: the
+    // `as ...ContextValue` cast hides a missing FUNCTION until a future test
+    // trips the code path, which then fails as `x is not a function` instead of
+    // a clean assertion. Both come from the always-mounted
+    // TodoCategoryManagerDrawer.
+    renameTodoCategory: vi.fn(),
+    deleteTodoCategory: vi.fn(),
     addToDo: vi.fn(),
     updateToDo: vi.fn(),
     deleteToDo: vi.fn(),
@@ -278,6 +286,9 @@ describe('ToDosPage deep-link highlight', () => {
       savedForLaterTodos: [],
       addSavedForLaterTodo: vi.fn(),
       promoteTodo: vi.fn(),
+      parkTodo: vi.fn(),
+      renameTodoCategory: vi.fn(),
+      deleteTodoCategory: vi.fn(),
       addToDo: vi.fn(),
       updateToDo: vi.fn(),
       deleteToDo: vi.fn(),

@@ -76,6 +76,14 @@ const setup = (overrides: Partial<TodosContextValue & HouseholdCoreContextValue>
     savedForLaterTodos: [],
     addSavedForLaterTodo: vi.fn(),
     promoteTodo: vi.fn(),
+    parkTodo: vi.fn(),
+    // Reachable from this page but never exercised here. Stubbed anyway: the
+    // `as ...ContextValue` cast hides a missing FUNCTION until a future test
+    // trips the code path, which then fails as `x is not a function` instead of
+    // a clean assertion. These two come from the always-mounted
+    // TodoCategoryManagerDrawer — squarely this suite's own subject matter.
+    renameTodoCategory: vi.fn(),
+    deleteTodoCategory: vi.fn(),
     addToDo: vi.fn(),
     updateToDo: vi.fn(),
     deleteToDo: vi.fn(),

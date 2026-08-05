@@ -26,7 +26,7 @@ import {
   type TodosContextValue,
   type HouseholdCoreContextValue,
 } from '@/contexts/FirebaseHouseholdContext';
-import { format, startOfToday } from 'date-fns';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import toast from 'react-hot-toast';
 
 const render = (ui: ReactElement) =>
@@ -46,7 +46,15 @@ vi.mock('react-hot-toast', () => ({
   default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }),
 }));
 
-const today = format(startOfToday(), 'yyyy-MM-dd');
+// `getLocalDateString()` is the app's single source of truth for "today" (see
+// CLAUDE.md) — same value `addSavedForLaterTodo` stamps as the placeholder.
+//
+// DATE STABILITY: nothing in this suite is weekday- or boundary-dependent. The
+// parked fixtures' dates are never rendered (that is the invariant under test),
+// and no assertion reads a due-date label or a relative offset — so this cannot
+// reproduce the "green in PR CI, red on the UTC deploy runner" failure. The two
+// tests that DO care about a specific date pin a literal one.
+const today = getLocalDateString();
 
 const members = [
   { uid: 'user1', displayName: 'Alice Smith', role: 'member' as const, points: { daily: 0, weekly: 0, total: 0 } },
@@ -98,6 +106,12 @@ const applyContext = (savedForLaterTodos: ToDo[], todos: ToDo[] = [activeTodo]) 
     toggleTodoSubtask: vi.fn(),
     promoteTodo: mockPromoteTodo,
     parkTodo: mockParkTodo,
+    // Reachable from this page but never exercised here — stubbed so a future
+    // test tripping the always-mounted TodoCategoryManagerDrawer fails as a
+    // clean assertion rather than "x is not a function" (the
+    // `as ...ContextValue` cast hides a missing function until then).
+    renameTodoCategory: vi.fn(),
+    deleteTodoCategory: vi.fn(),
     taskTemplates: [],
     addTaskTemplate: vi.fn(),
     updateTaskTemplate: vi.fn(),
