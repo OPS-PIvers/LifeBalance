@@ -20,6 +20,11 @@ const items: ShoppingItem[] = [
 
 const shoppingValue = {
   shoppingList: items,
+  // "Saved for later" (PR-2): the section always renders below the main
+  // list, so its inputs need to exist even in tests that don't otherwise
+  // care about it.
+  savedForLaterShopping: [] as ShoppingItem[],
+  setShoppingItemSavedForLater: vi.fn(),
   addShoppingItem: vi.fn(),
   addShoppingItems: vi.fn(),
   deleteShoppingItem: vi.fn(),

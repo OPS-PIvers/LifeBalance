@@ -1,10 +1,10 @@
 import React, { memo, useRef } from 'react';
 import { ShoppingItem } from '@/types/schema';
 import { Reorder, useDragControls } from 'framer-motion';
-import { Check, Trash2 } from 'lucide-react';
+import { Check, Trash2, Plus, Clock } from 'lucide-react';
 import { haptic } from '@/utils/haptics';
 import { HapticCheck } from '@/components/ui/HapticCheck';
-import { SwipeActionRow } from '@/components/ui/SwipeActionRow';
+import { SwipeActionRow, type SwipeAction } from '@/components/ui/SwipeActionRow';
 import { ListRow } from '@/components/ui/ListRow';
 import clsx from 'clsx';
 
@@ -15,13 +15,35 @@ interface ShoppingItemRowProps {
   onCheck: (item: ShoppingItem) => void;
   onDelete: (item: ShoppingItem) => void;
   onEdit: (item: ShoppingItem) => void;
+  /**
+   * 'active' (default) is the ordinary checkbox row. 'parked' renders the
+   * "Saved for later" variant: a circular outline Plus leading control
+   * instead of the checkbox, and a promote (not purchase) swipe on the
+   * start side. See SAVED_FOR_LATER_SPEC.md.
+   */
+  variant?: 'active' | 'parked';
+  /** 'parked' rows only: promotes the item back to the active shopping list
+   *  (tapping the leading Plus control, or a right swipe). Required when
+   *  `variant === 'parked'`. */
+  onPromote?: (item: ShoppingItem) => void;
+  /**
+   * 'active' rows only: when provided, adds a SECONDARY "Save for later"
+   * swipe action beside the (still-primary) Delete. Omitted from the row's
+   * actions entirely for a purchased item — a purchased item can never be
+   * parked (see `toggleShoppingItemPurchased`'s guard, the reverse rule).
+   */
+  onSaveForLater?: (item: ShoppingItem) => void;
   isReorderable?: boolean;
   onReorderDragStart?: () => void;
   onReorderDragEnd?: () => void;
 }
 
-const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, onCheck, onDelete, onEdit, isReorderable = true, onReorderDragStart, onReorderDragEnd }) => {
+const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({
+  item, onCheck, onDelete, onEdit, variant = 'active', onPromote, onSaveForLater,
+  isReorderable = true, onReorderDragStart, onReorderDragEnd,
+}) => {
   const dragControls = useDragControls();
+  const isParked = variant === 'parked';
 
   // --- Gesture model: TAP anywhere on the row (checkbox or content) toggles
   // purchased; LONG-PRESS anywhere on the row opens the edit drawer (as does
@@ -88,9 +110,12 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, onChec
 
   // Check toggle with light haptic — for the content-area tap, where the
   // haptic must be triggered programmatically (dead on iOS 26.5+, works
-  // elsewhere; see utils/haptics.ts).
+  // elsewhere; see utils/haptics.ts). A parked row has no purchased concept
+  // (and the context guard would reject it anyway) — a content tap is a
+  // no-op there; the row's control for promoting is the leading Plus button.
   const handleCheck = () => {
     if (consumeSuppressedClick()) return;
+    if (isParked) return;
     haptic('light');
     onCheck(item);
   };
@@ -100,6 +125,14 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, onChec
   const handleCheckFromControl = () => {
     if (consumeSuppressedClick()) return;
     onCheck(item);
+  };
+
+  // Leading-control promote for a parked row. Not a toggle (no "checked"
+  // state to reflect), so this is a plain button rather than HapticCheck.
+  const handlePromote = () => {
+    if (consumeSuppressedClick()) return;
+    haptic('light');
+    onPromote?.(item);
   };
 
   // Right-click / keyboard context-menu → edit drawer. Guarded by
@@ -118,26 +151,64 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, onChec
     onEdit(item);
   };
 
-  const Content = (
-    // Gmail-style swipe: right = purchased (unchecked items only — a checked
-    // item's right swipe stays a no-op, so no affordance is advertised), left
-    // = delete, checked or not (owner decision: swiping a checked item removes
-    // it; unchecking is a tap, not a swipe). Partial swipes stick open to a
-    // tappable button; SwipeActionRow handles thresholds, reveal, and haptics.
-    <SwipeActionRow
-      startActions={item.isPurchased ? undefined : [{
-        icon: Check,
-        label: 'Purchased',
+  // Parked rows: right swipe = promote (positive), left swipe = delete
+  // (destructive) — no purchased concept at all. Active rows: right swipe =
+  // purchased (unchecked items only — a checked item's right swipe stays a
+  // no-op, so no affordance is advertised); left swipe keeps Delete as the
+  // PRIMARY (zero muscle-memory change) with "Save for later" as a
+  // SECONDARY, reachable once the row sticks open — never for a purchased
+  // item, which can't be parked.
+  const startActions: SwipeAction[] | undefined = isParked
+    ? [{
+        icon: Plus,
+        label: 'Move to list',
+        // No custom ariaLabel: the leading control already carries "Move
+        // {name} to your shopping list" (see below) — a matching label on
+        // this stuck-open swipe button would be an ambiguous duplicate
+        // accessible name within the same row.
         tone: 'positive',
-        onAction: () => onCheck(item),
-      }]}
-      endActions={[{
+        onAction: () => onPromote?.(item),
+      }]
+    : item.isPurchased
+      ? undefined
+      : [{
+          icon: Check,
+          label: 'Purchased',
+          tone: 'positive',
+          onAction: () => onCheck(item),
+        }];
+
+  const endActions: SwipeAction[] = isParked
+    ? [{
         icon: Trash2,
         label: 'Delete',
         tone: 'destructive',
         hapticPattern: 'medium',
         onAction: () => onDelete(item),
-      }]}
+      }]
+    : [
+        {
+          icon: Trash2,
+          label: 'Delete',
+          tone: 'destructive',
+          hapticPattern: 'medium',
+          onAction: () => onDelete(item),
+        },
+        ...(!item.isPurchased && onSaveForLater ? [{
+          icon: Clock,
+          label: 'Save for later',
+          ariaLabel: `Save ${item.name} for later`,
+          tone: 'warm',
+          onAction: () => onSaveForLater(item),
+        } satisfies SwipeAction] : []),
+      ];
+
+  const Content = (
+    // Partial swipes stick open to a tappable button; SwipeActionRow handles
+    // thresholds, reveal, and haptics.
+    <SwipeActionRow
+      startActions={startActions}
+      endActions={endActions}
       onSwipeStart={handleGestureDragStart}
     >
       {/* Foreground layer — the checkbox and tap/long-press-to-edit live here.
@@ -156,26 +227,44 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, onChec
           item.isPurchased && "opacity-70 bg-brand-50 dark:bg-brand-800/60"
         )}
         leading={
-          /* Checkbox (Alternative to Swipe) - p-3 -m-3 enlarges tappable area to
-             ~44px. HapticCheck (real switch input) so the tap fires the native
-             iOS system haptic even on 26.5+. */
-          <HapticCheck
-              checked={item.isPurchased}
-              onCheckedChange={handleCheckFromControl}
-              aria-label={item.isPurchased ? `Mark ${item.name} as not purchased` : `Mark ${item.name} as purchased`}
-              className="p-3 -m-3 shrink-0"
-          >
-              <span
-                  className={clsx(
-                      "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors",
-                      item.isPurchased
-                          ? "bg-money-pos border-money-pos text-white"
-                          : "border-brand-300 group-hover:border-accent-500 text-transparent dark:border-brand-600 dark:group-hover:border-accent-400"
-                  )}
-              >
-                  <Check size={12} strokeWidth={3} />
+          isParked ? (
+            /* Parked leading control: a circular outline Plus (reusing the
+               checkbox's exact geometry — w-5 h-5 rounded-full border-2 —
+               accent-toned rather than money-pos) that PROMOTES the item.
+               A plain button, not HapticCheck: there is no "checked" state
+               to reflect, only a one-way action. */
+            <button
+              type="button"
+              onClick={handlePromote}
+              aria-label={`Move ${item.name} to your shopping list`}
+              className="p-3 -m-3 shrink-0 rounded-full focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+            >
+              <span className="w-5 h-5 rounded-full border-2 border-accent-400 hover:border-accent-500 flex items-center justify-center text-accent-500 dark:border-accent-500 dark:hover:border-accent-400 dark:text-accent-400 transition-colors">
+                <Plus size={12} strokeWidth={3} />
               </span>
-          </HapticCheck>
+            </button>
+          ) : (
+            /* Checkbox (Alternative to Swipe) - p-3 -m-3 enlarges tappable area to
+               ~44px. HapticCheck (real switch input) so the tap fires the native
+               iOS system haptic even on 26.5+. */
+            <HapticCheck
+                checked={item.isPurchased}
+                onCheckedChange={handleCheckFromControl}
+                aria-label={item.isPurchased ? `Mark ${item.name} as not purchased` : `Mark ${item.name} as purchased`}
+                className="p-3 -m-3 shrink-0"
+            >
+                <span
+                    className={clsx(
+                        "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors",
+                        item.isPurchased
+                            ? "bg-money-pos border-money-pos text-white"
+                            : "border-brand-300 group-hover:border-accent-500 text-transparent dark:border-brand-600 dark:group-hover:border-accent-400"
+                    )}
+                >
+                    <Check size={12} strokeWidth={3} />
+                </span>
+            </HapticCheck>
+          )
         }
         grip={isReorderable ? {
             onPointerDownCapture: (e) => {
@@ -280,12 +369,16 @@ const arePropsEqual = (prev: ShoppingItemRowProps, next: ShoppingItemRowProps) =
     prevItem.isPurchased === nextItem.isPurchased &&
     prevItem.notes === nextItem.notes &&
     prevItem.addedFromMealId === nextItem.addedFromMealId &&
-    prevItem.order === nextItem.order;
+    prevItem.order === nextItem.order &&
+    prevItem.savedForLater === nextItem.savedForLater;
 
   return isItemEqual &&
          prev.onCheck === next.onCheck &&
          prev.onDelete === next.onDelete &&
          prev.onEdit === next.onEdit &&
+         prev.variant === next.variant &&
+         prev.onPromote === next.onPromote &&
+         prev.onSaveForLater === next.onSaveForLater &&
          prev.isReorderable === next.isReorderable &&
          prev.onReorderDragStart === next.onReorderDragStart &&
          prev.onReorderDragEnd === next.onReorderDragEnd;

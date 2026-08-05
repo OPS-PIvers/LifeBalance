@@ -689,8 +689,12 @@ export interface HouseholdContextType {
 
   // Shopping List Actions
   /** Adds a shopping item. Also the parked-item creation path — pass
-   *  `savedForLater: true` and it lands in the "Saved for later" section. */
-  addShoppingItem: (item: Omit<ShoppingItem, 'id'>) => Promise<void>;
+   *  `savedForLater: true` and it lands in the "Saved for later" section.
+   *  Optional `successMessage` overrides the default "Added to shopping
+   *  list" toast — for callers whose item never reaches the active list
+   *  (parked-delete undo, direct saved-for-later creation), so the toast
+   *  never claims something that didn't happen. */
+  addShoppingItem: (item: Omit<ShoppingItem, 'id'>, successMessage?: string) => Promise<void>;
   addShoppingItems: (items: Omit<ShoppingItem, 'id'>[]) => Promise<void>;
   updateShoppingItem: (item: ShoppingItem) => Promise<void>;
   reorderShoppingItems: (items: ShoppingItem[]) => Promise<void>;
