@@ -34,6 +34,18 @@ const getSystemTheme = (): 'light' | 'dark' =>
     ? 'dark'
     : 'light';
 
+/*
+  🛡️ The three readers below are MIRRORED by the pre-paint inline script in
+  index.html — change both together. These run in a useEffect (after mount,
+  after first paint), so index.html stamps the same three <html> attributes
+  synchronously in <head> to stop the page repainting under the user: the
+  theme class/color-scheme, `data-font-scale` (which scales the ROOT
+  font-size, so a mismatch resizes every text node at once) and
+  `data-contrast` (which retints the color tokens). If a reader here gains a
+  new accepted value or a different default, the inline script must gain it
+  too, or the pre-paint value and this post-mount value will disagree and the
+  flash comes back.
+*/
 const readStoredPreference = (): ThemePreference => {
   if (typeof window === 'undefined') return 'system';
   try {
