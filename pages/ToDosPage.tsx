@@ -2565,11 +2565,23 @@ const ToDosPage: React.FC = () => {
             {gridOverlayVisible && (
               <EisenhowerGridView
                 quadrants={quadrants}
+                // Same filter set `quadrants` was built from — see the
+                // memo above; reused rather than re-derived so the two
+                // arrangements can't disagree on what's in view.
+                parkedTodos={parkedRows}
                 onComplete={completeToDo}
                 onEdit={openEditModal}
                 onToggleImportant={handleToggleImportant}
+                onPromote={setPromotingTodo}
                 onExit={exitGrid}
-                escapeDisabled={drawerOpen}
+                // The promote sheet (a Drawer) is reachable from inside the
+                // grid via a parked chip's "+" and owns Escape itself while
+                // open — `drawerOpen` alone doesn't cover it (it's tracked
+                // separately from `isAddModalOpen`/`actionTodo`), so without
+                // this the sheet's own Escape handler AND GridOverlay's bare
+                // `window` listener both fire on one keypress, closing the
+                // grid out from under the still-open sheet.
+                escapeDisabled={drawerOpen || promotingTodo !== null}
               />
             )}
           </>
