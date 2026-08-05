@@ -270,6 +270,19 @@ describe('PointsBreakdownDrawer', () => {
     expect(screen.queryByText(/%$/)).not.toBeInTheDocument();
   });
 
+  it('omits the trend chip when the in-progress week is behind the completed week (positive-only)', () => {
+    // An in-progress week starts at 0 and only climbs, so it trails a
+    // completed week for most of every week by construction — that's a
+    // statement about the calendar, not the household, so no chip renders.
+    // 400 vs last week's 610 is behind.
+    setup({ weeklyPoints: 400, recaps: [recap([{ memberId: 'jen', name: 'Jen', points: 610 }])] });
+    renderDrawer();
+
+    expect(hero().getByText('400')).toBeInTheDocument();
+    expect(screen.queryByText(/vs last week/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/%$/)).not.toBeInTheDocument();
+  });
+
   it('shows the lifetime reward pool total and a Rewards link that navigates and closes', () => {
     const onClose = vi.fn();
     setup({ totalPoints: 12480 });
