@@ -2565,9 +2565,14 @@ const ToDosPage: React.FC = () => {
             {gridOverlayVisible && (
               <EisenhowerGridView
                 quadrants={quadrants}
+                // Same filter set `quadrants` was built from — see the
+                // memo above; reused rather than re-derived so the two
+                // arrangements can't disagree on what's in view.
+                parkedTodos={parkedRows}
                 onComplete={completeToDo}
                 onEdit={openEditModal}
                 onToggleImportant={handleToggleImportant}
+                onPromote={setPromotingTodo}
                 onExit={exitGrid}
                 escapeDisabled={drawerOpen}
               />
