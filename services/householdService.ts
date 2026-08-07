@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '@/firebase.config';
 import { generateInviteCode } from '@/utils/inviteCodeGenerator';
+import { DEFAULT_HABIT_CATEGORIES } from '@/utils/habitCategories';
 import { CONSENT_VERSION } from '@/utils/legal';
 import { track } from '@/services/analytics';
 
@@ -60,6 +61,12 @@ export const createHousehold = async (userId: string, householdName: string): Pr
       createdAt: serverTimestamp(),
       createdBy: userId,
       memberUids: [userId],
+      // Seed the starter habit categories as REAL DATA rather than leaving them
+      // as a hardcoded list in the habit form: a built-in the household never
+      // uses is chip noise the manage drawer could not delete, because it
+      // wouldn't be a document field. Seeded here, every starter category can be
+      // renamed or deleted like any other. See utils/habitCategories.ts.
+      habitCategories: [...DEFAULT_HABIT_CATEGORIES],
       points: {
         daily: 0,
         weekly: 0,

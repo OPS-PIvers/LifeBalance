@@ -94,6 +94,7 @@ describe('HabitFormModal — Automations save-payload contract (PRD #1065)', () 
       addHabit: mockAddHabit,
       updateHabit: mockUpdateHabit,
       setHabitPause: mockSetHabitPause,
+      habits: [],
       habitCategories: [],
       updateHabitCategories: vi.fn(),
     });
@@ -189,23 +190,32 @@ describe('HabitFormModal — category chip seeding', () => {
   const mockUpdateHabit = vi.fn(() => Promise.resolve());
   const mockOnClose = vi.fn();
 
-  beforeEach(() => {
-    vi.clearAllMocks();
+  // The chips are the HOUSEHOLD's vocabulary now — the hardcoded defaults are no
+  // longer prepended (they're only a fallback for a household with neither a
+  // stored list nor a habit), so "Health" has to be real data here.
+  const mockGamification = (overrides: Record<string, unknown> = {}) => {
     (useGamification as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       addHabit: vi.fn(),
       updateHabit: mockUpdateHabit,
       setHabitPause: vi.fn(() => Promise.resolve()),
-      habitCategories: [],
+      habits: [],
+      habitCategories: ['Health'],
       updateHabitCategories: vi.fn(),
+      ...overrides,
     });
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGamification();
     (useHouseholdCore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ members: [] });
     (useTodos as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ todos: [] });
   });
 
   it('lights up the canonical chip when a legacy category differs only in case', async () => {
     // Legacy habit stored "health" (lower-case) — must still select the
-    // "Health" default chip, since the chip-only UI has no text field to show
-    // the raw value.
+    // household's "Health" chip, since the chip-only UI has no text field to
+    // show the raw value.
     render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit({ category: 'health' })} />);
 
     const healthChip = screen.getByRole('button', { name: 'Health' });
@@ -225,16 +235,47 @@ describe('HabitFormModal — category chip seeding', () => {
     expect(chip).toHaveAttribute('aria-pressed', 'true');
   });
 
+  // 🛡️ PAPER CUT #4: the built-in list is no longer prepended. A household that
+  // has its own categories must see ONLY its own — a "Work" nobody uses is chip
+  // noise the manage drawer could never delete, because it isn't data.
+  it('offers only the household vocabulary, not the hardcoded defaults', () => {
+    mockGamification({ habitCategories: ['Weekly Goals', 'Household'] });
+    render(<HabitFormModal isOpen onClose={mockOnClose} />);
+
+    expect(screen.getByRole('button', { name: 'Weekly Goals' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Household' })).toBeInTheDocument();
+    for (const builtIn of ['Health', 'Finance', 'Personal', 'Home', 'Work']) {
+      expect(screen.queryByRole('button', { name: builtIn })).not.toBeInTheDocument();
+    }
+    // The first chip is the create-mode default.
+    expect(screen.getByRole('button', { name: 'Weekly Goals' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  // 🛡️ PAPER CUT #4: `habitCategories` was append-only and missed categories
+  // real habits use, so a new habit could not be created into them at all.
+  // Deriving them from the habits themselves heals that with no migration.
+  it('backfills a category that only exists on a habit, so a NEW habit can use it', () => {
+    mockGamification({
+      habitCategories: ['Household'],
+      habits: [baseHabit({ id: 'h9', category: 'Food & Nutrition' })],
+    });
+    render(<HabitFormModal isOpen onClose={mockOnClose} />);
+
+    expect(screen.getByRole('button', { name: 'Food & Nutrition' })).toBeInTheDocument();
+  });
+
+  it('falls back to the built-ins only when the household has no categories AND no habits', () => {
+    mockGamification({ habitCategories: [], habits: [] });
+    render(<HabitFormModal isOpen onClose={mockOnClose} />);
+
+    expect(screen.getByRole('button', { name: 'Health' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Work' })).toBeInTheDocument();
+  });
+
   it('guards a category add in flight: disables the control and ignores a second tap', async () => {
     let resolveWrite!: () => void;
     const mockUpdateHabitCategories = vi.fn(() => new Promise<void>(r => { resolveWrite = r; }));
-    (useGamification as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      addHabit: vi.fn(),
-      updateHabit: mockUpdateHabit,
-      setHabitPause: vi.fn(() => Promise.resolve()),
-      habitCategories: [],
-      updateHabitCategories: mockUpdateHabitCategories,
-    });
+    mockGamification({ habitCategories: [], updateHabitCategories: mockUpdateHabitCategories });
 
     render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={undefined} />);
 
@@ -273,6 +314,7 @@ describe('HabitFormModal — per-habit reminder save path (F-HABITS-03)', () => 
       addHabit: vi.fn(),
       updateHabit: mockUpdateHabit,
       setHabitPause: vi.fn(() => Promise.resolve()),
+      habits: [],
       habitCategories: [],
       updateHabitCategories: vi.fn(),
     });
@@ -365,6 +407,7 @@ describe('HabitFormModal — Credit (household credit mode)', () => {
       addHabit: mockAddHabit,
       updateHabit: mockUpdateHabit,
       setHabitPause: vi.fn(() => Promise.resolve()),
+      habits: [],
       habitCategories: [],
       updateHabitCategories: vi.fn(),
     });
@@ -445,6 +488,7 @@ describe('HabitFormModal — a chore never carries a stale creditMode (Kid Mode 
       addHabit: mockAddHabit,
       updateHabit: mockUpdateHabit,
       setHabitPause: vi.fn(() => Promise.resolve()),
+      habits: [],
       habitCategories: [],
       updateHabitCategories: vi.fn(),
     });
@@ -541,6 +585,7 @@ describe('HabitFormModal — basePoints is always saved as a positive magnitude'
       addHabit: mockAddHabit,
       updateHabit: mockUpdateHabit,
       setHabitPause: mockSetHabitPause,
+      habits: [],
       habitCategories: [],
       updateHabitCategories: vi.fn(),
     });

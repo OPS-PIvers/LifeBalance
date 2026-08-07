@@ -206,6 +206,7 @@ import {
   makeRolloverFreezeBankTokens,
   makeUpdateHabitCategories,
 } from '@/contexts/household/mutations/gamificationMutations';
+import { makeHabitCategoryEditMutations } from '@/contexts/household/mutations/habitCategoryMutations';
 import {
   makeHouseholdSettingsMutations,
   makeRefreshInsight,
@@ -2252,9 +2253,21 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeRewardCrudMutations({ db, householdId }).deleteReward(id);
   }, [householdId]);
 
+  // Habit categories. `updateHabitCategories` is the household-doc list write;
+  // rename/delete also rewrite every matching habit in chunked batches, so they
+  // additionally need the current vocabulary — see
+  // makeHabitCategoryEditMutations (the twin of the to-do trio below).
   const updateHabitCategories = useCallback(async (categories: string[]) => {
     await makeUpdateHabitCategories({ db, householdId }).updateHabitCategories(categories);
   }, [householdId]);
+
+  const renameHabitCategory = useCallback(async (oldName: string, newName: string) => {
+    await makeHabitCategoryEditMutations({ db, householdId, habitCategories }).renameHabitCategory(oldName, newName);
+  }, [householdId, habitCategories]);
+
+  const deleteHabitCategory = useCallback(async (name: string) => {
+    await makeHabitCategoryEditMutations({ db, householdId, habitCategories }).deleteHabitCategory(name);
+  }, [householdId, habitCategories]);
 
   const requestRedemption = useCallback(async (rewardId: string, memberId: string) => {
     await makeRequestRedemption({ db, householdId, user, rewards }).requestRedemption(rewardId, memberId);
@@ -2925,6 +2938,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     refreshHabitPatterns,
     ...habitActions,
     updateHabitCategories,
+    renameHabitCategory,
+    deleteHabitCategory,
     updateChallenge,
     addChallenge,
     markChallengeComplete,
@@ -2944,7 +2959,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }), [
     dailyPoints, weeklyPoints, totalPoints, habits, habitCategories, activeChallenge, challenges, yearlyGoals, activeYearlyGoals,
     primaryYearlyGoal, rewards, visibleFreezeBankValue, habitPatterns, isGeneratingHabitPatterns, refreshHabitPatterns, habitActions,
-    updateHabitCategories, updateChallenge, addChallenge, markChallengeComplete, redeemReward,
+    updateHabitCategories, renameHabitCategory, deleteHabitCategory,
+    updateChallenge, addChallenge, markChallengeComplete, redeemReward,
     addReward, updateReward, deleteReward,
     requestRedemption, approveRedemption, denyRedemption,
     createYearlyGoal, updateYearlyGoal, updateYearlyGoalProgress, deleteYearlyGoal,

@@ -23,6 +23,7 @@ import SmartHabitReorderModal from '@/components/modals/SmartHabitReorderModal';
 import { HabitCoach } from '@/components/habits/HabitCoach';
 import HabitHistoryCalendar from '@/components/habits/HabitHistoryCalendar';
 import HabitsHeaderMenu from '@/components/habits/HabitsHeaderMenu';
+import { HabitCategoryManagerDrawer } from '@/components/habits/HabitCategoryManagerDrawer';
 import { HabitsModelPrimerLink } from '@/components/habits/HabitsModelPrimer';
 import PageHeader from '@/components/ui/PageHeader';
 import HabitsRewardsTab from '@/components/habits/HabitsRewardsTab';
@@ -264,6 +265,10 @@ const Habits: React.FC = () => {
   // null = create mode.
   const [isHabitFormOpen, setIsHabitFormOpen] = useState(false);
   const [habitFormTarget, setHabitFormTarget] = useState<Habit | null>(null);
+  // Habit category manager. Mounted as a SIBLING of the other drawers below —
+  // never nested inside one, since nested Drawers are portal siblings with
+  // document-level listeners and fight over the Tab focus trap.
+  const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
   const [isSmartAdjustOpen, setIsSmartAdjustOpen] = useState(false);
   const [isSmartReorderOpen, setIsSmartReorderOpen] = useState(false);
   const [isChallengeHubOpen, setIsChallengeHubOpen] = useState(false);
@@ -610,6 +615,7 @@ const Habits: React.FC = () => {
                 onAdjust={() => setIsSmartAdjustOpen(true)}
                 onReorder={() => setIsSmartReorderOpen(true)}
                 onManage={() => setIsWizardOpen(true)}
+                onManageCategories={() => setIsCategoryManagerOpen(true)}
                 onCatchUpYesterday={handleCatchUpYesterday}
                 actionsDisabled={hasNoHabits}
                 catchUpDisabled={catchUpEligibleHabits.length === 0 || isCatchingUp}
@@ -817,6 +823,10 @@ const Habits: React.FC = () => {
         isOpen={isHabitFormOpen}
         onClose={() => setIsHabitFormOpen(false)}
         editingHabit={habitFormTarget ?? undefined}
+      />
+      <HabitCategoryManagerDrawer
+        isOpen={isCategoryManagerOpen}
+        onClose={() => setIsCategoryManagerOpen(false)}
       />
       {powerToolsEnabled && (
         <>

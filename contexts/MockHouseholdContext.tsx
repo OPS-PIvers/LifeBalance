@@ -44,6 +44,7 @@ import { setSubtaskDone, subtaskProgress } from '@/utils/subtasks';
 import type { TodoSubtaskToggleResult, TodoCompletionOptions, TodoPromotionFields } from '@/contexts/household/mutations/todoMutations';
 import type { MergeLearnAlias } from '@/contexts/household/types';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
+import { UNCATEGORIZED_HABIT_CATEGORY } from '@/utils/habitCategories';
 import { attributionString, type TriggerSource } from '@/utils/habitTriggers';
 import { selectAutoFreezeCandidates, selectMemberAutoFreezeCandidates } from '@/utils/freezeBank';
 import {
@@ -3780,10 +3781,59 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Categories updated');
   }, []);
 
-  // Habit categories — mutate in-memory so newly added chips appear immediately.
+  // Habit categories — in-memory equivalents of the real mutations
+  // (makeUpdateHabitCategories / makeHabitCategoryEditMutations): same
+  // case-insensitive matching, same merge-on-collision rule, and the same
+  // "deleting a category REASSIGNS its habits to Uncategorized" invariant
+  // (`Habit.category` is required — see utils/habitCategories.ts), so Test Mode
+  // exercises the real semantics. Deliberately silent, matching the real
+  // mutations' "callers own the toast" contract — the manage-categories drawer
+  // reports the outcome itself, so toasting here would double every message
+  // (and would announce a plain rename on the merge path).
   const updateHabitCategories = useCallback(async (categories: string[]) => {
     setHabitCategories(categories);
-    toast.success('Mock: Categories updated');
+  }, []);
+
+  const renameHabitCategory = useCallback(async (oldName: string, newName: string) => {
+    const trimmedNew = newName.trim();
+    if (!trimmedNew || trimmedNew === oldName) return;
+    const oldKey = normalizeCategory(oldName);
+    if (!oldKey) return;
+
+    // Resolve the target OUTSIDE the state updaters (updaters must stay pure —
+    // React may invoke them twice in StrictMode) so both writes agree on it.
+    const mergeTarget = habitCategories.find(
+      c => normalizeCategory(c) === normalizeCategory(trimmedNew) && normalizeCategory(c) !== oldKey,
+    );
+    const targetName = mergeTarget ?? trimmedNew;
+
+    const next: string[] = [];
+    const seen = new Set<string>();
+    for (const category of habitCategories) {
+      const value = normalizeCategory(category) === oldKey ? targetName : category;
+      const key = normalizeCategory(value);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      next.push(value);
+    }
+    if (!seen.has(normalizeCategory(targetName))) next.push(targetName);
+
+    setHabits(prev => prev.map(h =>
+      normalizeCategory(h.category) === oldKey ? { ...h, category: targetName } : h,
+    ));
+    setHabitCategories(next);
+  }, [habitCategories]);
+
+  const deleteHabitCategory = useCallback(async (name: string) => {
+    const key = normalizeCategory(name);
+    if (!key) return;
+    setHabitCategories(prev => prev.filter(c => normalizeCategory(c) !== key));
+    if (key === normalizeCategory(UNCATEGORIZED_HABIT_CATEGORY)) return;
+    setHabits(prev => prev.map(h =>
+      normalizeCategory(h.category) === key
+        ? { ...h, category: UNCATEGORIZED_HABIT_CATEGORY }
+        : h,
+    ));
   }, []);
 
   // F-TODO-16 — to-do categories. In-memory equivalents of the real mutations
@@ -4409,6 +4459,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     resetHabit,
     setHabitPause,
     updateHabitCategories,
+    renameHabitCategory,
+    deleteHabitCategory,
     addHabitSubmission,
     resetHabitDay: noOp,
     creditHabitCompletion,

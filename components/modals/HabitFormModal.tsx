@@ -14,6 +14,8 @@ import HabitReminderEditor from '@/components/habits/HabitReminderEditor';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { getHabitReminder } from '@/utils/habitReminders';
 import { computeAnyNotificationsEnabled } from '@/utils/notificationFlags';
+import { DEFAULT_HABIT_CATEGORIES, habitCategoryVocabulary } from '@/utils/habitCategories';
+import { describeError } from '@/utils/errorMessages';
 
 interface HabitFormModalProps {
   isOpen: boolean;
@@ -21,10 +23,8 @@ interface HabitFormModalProps {
   editingHabit?: Habit;
 }
 
-const CATEGORIES = ['Health', 'Finance', 'Personal', 'Home', 'Work'];
-
 const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editingHabit }) => {
-  const { addHabit, updateHabit, setHabitPause, habitCategories, updateHabitCategories } = useGamification();
+  const { addHabit, updateHabit, setHabitPause, habits, habitCategories, updateHabitCategories } = useGamification();
   // F-HABITS-03: reminders are per-MEMBER, so they live on the current member's
   // doc rather than on the (shared) habit — see NotificationPreferences.
   const { members, householdId, currentUser } = useHouseholdCore();
@@ -49,6 +49,24 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   );
   const showAssignControl = kidModeEnabled && managedKids.length > 0;
 
+  // Category chips: the household's OWN vocabulary — the stored
+  // `habitCategories` list, plus every category a habit actually uses (a
+  // backfill-on-read, since the stored list was append-only and never recorded
+  // some of them), plus the habit being edited so its own category is always
+  // selectable. The hardcoded defaults are NOT prepended: a built-in nobody uses
+  // is pure chip noise that the manage drawer could never delete, because it
+  // isn't data. They survive only as the last-resort fallback below, for a
+  // household with neither a stored list nor a single habit — that one must
+  // never open an empty picker on a required field.
+  const mergedCategories = useMemo(() => {
+    const vocabulary = habitCategoryVocabulary(habitCategories, habits, editingHabit?.category);
+    return vocabulary.length > 0 ? vocabulary : [...DEFAULT_HABIT_CATEGORIES];
+  }, [habitCategories, habits, editingHabit?.category]);
+  // The chip a fresh habit starts on, and the value a blank category falls back
+  // to on save. `mergedCategories` is never empty (see the fallback above), so
+  // the extra `?? 'Health'` is only there to satisfy noUncheckedIndexedAccess.
+  const defaultCategory = mergedCategories[0] ?? 'Health';
+
   // Seed the category to the canonical chip form when it matches an existing
   // chip case-insensitively, so an existing habit whose stored category differs
   // only in case from a chip (e.g. legacy "health" vs "Health") still lights up
@@ -57,13 +75,13 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   // `mergedCategories`) when there's no match.
   const canonicalCategory = (raw: string): string => {
     const key = raw.trim().toLowerCase();
-    return [...CATEGORIES, ...habitCategories].find(c => c.trim().toLowerCase() === key) ?? raw;
+    return mergedCategories.find(c => c.trim().toLowerCase() === key) ?? raw;
   };
 
   // Form State — lazy initializers so the first render is already populated for
   // the edit case; the defaults match the reset branch below for the new case.
   const [title, setTitle] = useState(() => editingHabit?.title ?? '');
-  const [category, setCategory] = useState<string>(() => editingHabit ? canonicalCategory(editingHabit.category) : (CATEGORIES[0] ?? 'Health'));
+  const [category, setCategory] = useState<string>(() => editingHabit ? canonicalCategory(editingHabit.category) : defaultCategory);
   const [type, setType] = useState<'positive' | 'negative'>(() => editingHabit?.type ?? 'positive');
   const [scoringType, setScoringType] = useState<'incremental' | 'threshold'>(() => editingHabit?.scoringType || 'threshold');
   const [period, setPeriod] = useState<'daily' | 'weekly'>(() => editingHabit?.period ?? 'daily');
@@ -166,7 +184,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
     } else {
       // Reset defaults
       setTitle('');
-      setCategory(CATEGORIES[0] ?? 'Health');
+      setCategory(defaultCategory);
       setType('positive');
       setScoringType('threshold');
       setPeriod('daily');
@@ -190,27 +208,6 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   }
 
   const [isSaving, setIsSaving] = useState(false);
-
-  // Category chips: the UI-only defaults first, then the household's custom
-  // categories (case-insensitive de-dupe), then the habit's own category if it
-  // is a legacy/custom value not otherwise represented — so an existing habit's
-  // category always renders as a selectable chip.
-  const mergedCategories = useMemo(() => {
-    const result = [...CATEGORIES];
-    const seen = new Set(CATEGORIES.map(c => c.toLowerCase()));
-    for (const c of habitCategories) {
-      const key = c.trim().toLowerCase();
-      if (key && !seen.has(key)) {
-        seen.add(key);
-        result.push(c);
-      }
-    }
-    const editingCat = editingHabit?.category?.trim();
-    if (editingCat && !seen.has(editingCat.toLowerCase())) {
-      result.push(editingCat);
-    }
-    return result;
-  }, [habitCategories, editingHabit?.category]);
 
   // Inline "+ Add" category editor.
   const [isAddingCategory, setIsAddingCategory] = useState(false);
@@ -254,7 +251,10 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       setCategory(trimmed);
     } catch (error) {
       console.error('[HabitFormModal] Add category failed:', error);
-      // Error toast is handled by updateHabitCategories.
+      // `updateHabitCategories` re-throws and toasts nothing (its callers own
+      // the message), so a failed write has to be reported here — otherwise the
+      // editor would just close as if the chip had been saved.
+      toast.error(describeError(error, 'add the category'));
     } finally {
       setIsAddingCategoryBusy(false);
       cancelAddCategory();
@@ -319,8 +319,9 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   const handleSave = async () => {
     if (!title || !basePoints || !targetCount || isSaving) return;
 
-    // Enforce non-empty category
-    const finalCategory = category.trim() || CATEGORIES[0] || 'Health';
+    // Enforce non-empty category — `Habit.category` is required (firestore.rules
+    // rejects a blank one).
+    const finalCategory = category.trim() || defaultCategory;
 
     // Habit Automations (PRD #1065): rebuild `triggers` from the live-edited
     // keyword/location state (mirrors HabitCreatorWizard.handleSaveCustom).

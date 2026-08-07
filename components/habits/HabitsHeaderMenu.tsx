@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MoreVertical, Download, Sparkles, ListOrdered, Settings, CalendarClock, Archive } from 'lucide-react';
+import { MoreVertical, Download, Sparkles, ListOrdered, Settings, CalendarClock, Archive, Tags } from 'lucide-react';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 
 /**
@@ -17,6 +17,9 @@ export interface HabitsHeaderMenuProps {
   onAdjust: () => void;
   onReorder: () => void;
   onManage: () => void;
+  /** Opens HabitCategoryManagerDrawer (add / rename / delete the household's
+   *  habit category vocabulary). */
+  onManageCategories: () => void;
   onCatchUpYesterday: () => void;
   /** Disable the actions that operate on existing habits (Export/Adjust/Reorder). */
   actionsDisabled?: boolean;
@@ -38,6 +41,7 @@ const HabitsHeaderMenu: React.FC<HabitsHeaderMenuProps> = ({
   onAdjust,
   onReorder,
   onManage,
+  onManageCategories,
   onCatchUpYesterday,
   actionsDisabled = false,
   catchUpDisabled = false,
@@ -49,6 +53,15 @@ const HabitsHeaderMenu: React.FC<HabitsHeaderMenuProps> = ({
 
   const items: MenuItem[] = [
     { key: 'manage', label: 'Manage habits', icon: <Settings size={16} />, onSelect: onManage, tone: 'primary' },
+    {
+      // Never gated on `actionsDisabled`: a household with no habits yet is
+      // exactly the one that wants to set its categories up first.
+      key: 'categories',
+      label: 'Manage categories',
+      icon: <Tags size={16} />,
+      onSelect: onManageCategories,
+      ariaLabel: 'Manage habit categories',
+    },
     {
       key: 'catch-up',
       label: 'Catch up yesterday',
