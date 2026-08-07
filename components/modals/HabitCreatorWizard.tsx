@@ -111,7 +111,10 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({
 
     try {
       await deleteHabit(deleteConfirmHabit.id);
-      toast.success(`Deleted "${deleteConfirmHabit.title}"`);
+      // Says where it went, not that it's gone — the confirmation the user just
+      // accepted promised it was restorable, and "Deleted …" would contradict
+      // that one tap later. Matches HabitFormModal's wording.
+      toast.success('Habit moved to Recently deleted');
       setDeleteConfirmHabit(null);
     } catch (error) {
       console.error('[HabitCreatorWizard] Delete failed:', error);
