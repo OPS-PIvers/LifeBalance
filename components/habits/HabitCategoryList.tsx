@@ -53,14 +53,23 @@ const HabitCategoryList: React.FC<HabitCategoryListProps> = ({ category, habits,
     // Calculate new orders and save.
     // To preserve global ordering structure:
     // 1. Get the list of 'order' values currently assigned to these habits (sorted).
-    // 2. Assign these values to the new habit arrangement in sequence.
+    // 2. Bump any duplicates up to the next free integer so every slot is
+    //    STRICTLY INCREASING, then assign these values to the new habit
+    //    arrangement in sequence.
     // This effectively swaps the habits into the existing 'slots' for this category.
-
-    const existingOrders = dragItems.map(h => h.order ?? 999).sort((a, b) => a - b);
+    // Slot values must be DISTINCT or the reassignment is a no-op and the drag
+    // snaps back: no creation path sets `order`, so every habit that has never
+    // been dragged shares the same 999 fallback. Bump ties to the next free
+    // value, preserving this category's global anchor.
+    const slots: number[] = [];
+    for (const value of dragItems.map(h => h.order ?? 999).sort((a, b) => a - b)) {
+      const prev = slots[slots.length - 1];
+      slots.push(prev === undefined ? value : Math.max(value, prev + 1));
+    }
 
     const updates = dragItems.map((h, index) => ({
       id: h.id,
-      order: existingOrders[index] ?? index, // Fallback to index if orders ran out (unlikely)
+      order: slots[index] ?? index, // Fallback to index if orders ran out (unlikely)
       // We don't change category here, just order within category
     }));
     reorderHabits(updates).catch(console.error);
