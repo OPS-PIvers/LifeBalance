@@ -175,6 +175,13 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       setPausedUntil('');
       setKeywords([]);
       setLocations([]);
+      // Every other trigger is cleared here, so this one must be too. It was
+      // previously the only omission, and harmless while this modal was
+      // mounted once per habit by HabitCard and never entered create mode.
+      // Now that pages/Habits keeps ONE long-lived instance whose
+      // `editingHabit` flips between habits and null, an un-reset value would
+      // survive from the last habit edited into the next create session.
+      setNoSpend(undefined);
       setReminder(null);
       setEditAssignedUid(undefined);
       setAssignedKidUids([]);
