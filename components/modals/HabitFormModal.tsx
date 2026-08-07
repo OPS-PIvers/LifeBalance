@@ -364,6 +364,13 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       // Preserve ownership fields when editing
       isShared: editingHabit?.isShared,
       ownerId: editingHabit?.ownerId,
+      // A hand-authored habit is by definition custom — it carries no
+      // `presetId` — and the habit manager's "Your Custom Habits" list is
+      // `habits.filter(h => h.isCustom)`, so a habit created here would
+      // otherwise vanish from the very list it was created from. EDIT never
+      // touches the flag: the `...editingHabit` spread above carries the
+      // stored value forward (a preset-derived habit stays `isCustom: false`).
+      ...(editingHabit ? {} : { isCustom: true }),
       // Habit Automations (PRD #1065): when EDITING, always set `triggers` from
       // the live form state (overriding the spread-forward stored copy). The key
       // is present even when the value is `undefined` — a full clear must reach
