@@ -13,6 +13,7 @@ import PresetHabitList from '@/components/habits/PresetHabitList';
 import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { generateId } from '@/utils/id';
+import { TRASH_RETENTION_DAYS } from '@/utils/trash';
 
 interface HabitCreatorWizardProps {
   isOpen: boolean;
@@ -202,8 +203,12 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({
         isOpen={!!deleteConfirmHabit}
         onClose={cancelDelete}
         onConfirm={handleDeleteConfirmed}
-        title="Delete Habit?"
-        message={deleteConfirmHabit ? `Are you sure you want to delete "${deleteConfirmHabit.title}"? This action cannot be undone.` : ''}
+        title="Delete habit?"
+        message={
+          deleteConfirmHabit
+            ? `"${deleteConfirmHabit.title}" moves to Recently deleted, where you can restore it for ${TRASH_RETENTION_DAYS} days. Its history goes with it.`
+            : ''
+        }
         confirmLabel="Delete"
         confirmVariant="destructive"
       />
