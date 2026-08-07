@@ -193,7 +193,18 @@ export const HabitCategoryManagerDrawer: React.FC<HabitCategoryManagerDrawerProp
     // different existing category (habits adopt that category's stored
     // spelling). Resolve the same target here so the confirmation matches what
     // happened instead of claiming a rename to the typed spelling.
-    const mergeTarget = habitCategories.find(
+    //
+    // 🛡️ Resolved against the DERIVED vocabulary, not the stored
+    // `habitCategories` array — matching `handleAdd`, and it has to be. A
+    // category can be in use on habits while absent from the stored list (the
+    // legacy gap this feature heals), and the mutation resolves its own merge
+    // target from the stored list alone. So renaming into a case-variant of an
+    // in-use-only category used to write the TYPED spelling to the renamed
+    // habits while every other habit kept the original — two spellings of one
+    // category in the raw data, invisible because the derived vocabulary
+    // de-dupes them. Passing the resolved spelling down makes the mutation
+    // write the one that already exists.
+    const mergeTarget = categories.find(
       category =>
         habitCategoryKey(category) === habitCategoryKey(trimmed) &&
         habitCategoryKey(category) !== habitCategoryKey(original),
@@ -201,7 +212,7 @@ export const HabitCategoryManagerDrawer: React.FC<HabitCategoryManagerDrawerProp
 
     setRenamingName(original);
     try {
-      await renameHabitCategory(original, trimmed);
+      await renameHabitCategory(original, mergeTarget ?? trimmed);
       toast.success(mergeTarget ? `Merged into "${mergeTarget}"` : `Renamed to "${trimmed}"`);
       setEditing(null);
     } catch (error) {
