@@ -111,4 +111,52 @@ describe('HabitCategoryList — the drag path', () => {
     act(() => harness.onDragEnd!());
     expect(reorderHabits).toHaveBeenCalledTimes(1);
   });
+
+  it('assigns distinct ascending orders when the whole category shares the 999 fallback', () => {
+    // No creation path sets `order`, so a category no habit has ever been
+    // individually drag-sorted in has every habit sitting at the same
+    // fallback value — the exact collision that made the reassignment a
+    // no-op and the drag snap back.
+    const noOrderHabits: Habit[] = [
+      { id: 'x', title: 'Habit x', category: 'Household' } as Habit,
+      { id: 'y', title: 'Habit y', category: 'Household' } as Habit,
+      { id: 'z', title: 'Habit z', category: 'Household' } as Habit,
+    ];
+
+    render(<HabitCategoryList category="Household" habits={noOrderHabits} />);
+
+    const dragged = [noOrderHabits[2]!, noOrderHabits[0]!, noOrderHabits[1]!];
+    act(() => harness.onReorder!(dragged));
+    act(() => harness.onDragEnd!());
+
+    expect(reorderHabits).toHaveBeenCalledTimes(1);
+    const call = reorderHabits.mock.calls[0]?.[0];
+    expect(call).toEqual([
+      { id: 'z', order: 999 },
+      { id: 'x', order: 1000 },
+      { id: 'y', order: 1001 },
+    ]);
+
+    // Distinct — never the same value repeated, which is what made the
+    // original reassignment a no-op.
+    const orders = call?.map(u => u.order) ?? [];
+    expect(new Set(orders).size).toBe(orders.length);
+  });
+
+  it("reuses each habit's own pre-existing distinct order slot", () => {
+    const distinctHabits = [makeHabit('p', 5), makeHabit('q', 8), makeHabit('r', 12)];
+
+    render(<HabitCategoryList category="Morning" habits={distinctHabits} />);
+
+    const dragged = [distinctHabits[2]!, distinctHabits[0]!, distinctHabits[1]!];
+    act(() => harness.onReorder!(dragged));
+    act(() => harness.onDragEnd!());
+
+    expect(reorderHabits).toHaveBeenCalledTimes(1);
+    expect(reorderHabits.mock.calls[0]?.[0]).toEqual([
+      { id: 'r', order: 5 },
+      { id: 'p', order: 8 },
+      { id: 'q', order: 12 },
+    ]);
+  });
 });
