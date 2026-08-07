@@ -520,10 +520,18 @@ export interface HouseholdContextType {
    *  date. A paused habit skips the auto-reset penalty and freeze-token
    *  consumption, and its streak bridges the break. */
   setHabitPause: (id: string, pausedUntil: string | null) => Promise<void>;
-  /** Persists the household's custom habit-category chip list to the household
-   *  doc (mirrors updateGroceryCategories). Pass only the user-added extras —
-   *  the default categories are UI-only and not stored. */
+  /** Persists the household's habit-category vocabulary to the household doc
+   *  (mirrors `updateTodoCategories`). Callers pass the WHOLE next list. */
   updateHabitCategories: (categories: string[]) => Promise<void>;
+  /** Renames a category across every matching habit (active, archived and kid
+   *  chores; case-insensitive match) and the household list, in chunked
+   *  batches. No-op for a blank or unchanged name; MERGES into an existing
+   *  category when the new name collides with one case-insensitively. */
+  renameHabitCategory: (oldName: string, newName: string) => Promise<void>;
+  /** Removes a category from the household list and REASSIGNS every habit that
+   *  used it to `UNCATEGORIZED_HABIT_CATEGORY` — `Habit.category` is required,
+   *  so unlike `deleteTodoCategory` the field can never simply be cleared. */
+  deleteHabitCategory: (name: string) => Promise<void>;
 
   // Habit Submission Actions
   addHabitSubmission: (
@@ -858,7 +866,8 @@ export type GamificationContextValue = Pick<HouseholdContextType,
   | 'yearlyGoals' | 'activeYearlyGoals' | 'primaryYearlyGoal'
   | 'rewardsInventory' | 'freezeBank'
   | 'habitPatterns' | 'isGeneratingHabitPatterns' | 'refreshHabitPatterns'
-  | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'archiveHabit' | 'unarchiveHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit' | 'setHabitPause' | 'updateHabitCategories'
+  | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'archiveHabit' | 'unarchiveHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit' | 'setHabitPause'
+  | 'updateHabitCategories' | 'renameHabitCategory' | 'deleteHabitCategory'
   | 'addHabitSubmission' | 'updateHabitSubmission' | 'deleteHabitSubmission' | 'getHabitSubmissions'
   | 'resetHabitDay' | 'creditHabitCompletion' | 'uncreditHabitCompletion'
   | 'creditHouseholdCompletion' | 'uncreditHouseholdCompletion'

@@ -189,10 +189,18 @@ export function makeUpdateYearlyGoalProgress(deps: {
 /**
  * updateHabitCategories — original closure captures only `householdId`.
  *
- * Persists the household's custom habit-category chip list to the household
- * doc (mirrors updateGroceryCategories in shoppingMutations). The default
- * categories are UI-only; only the user-added extras are stored here so they
- * become reusable chips in the habit form on every device.
+ * Persists the household's habit-category vocabulary to the household doc.
+ * Callers pass the WHOLE next list.
+ *
+ * Toast Behavior: none — matching `updateTodoCategories`, its to-do twin. Its
+ * callers (the habit form's inline "+ Add" editor, HabitCategoryManagerDrawer)
+ * own both the success and the failure message, and they can only do that
+ * honestly if a failed write actually REJECTS. It used to toast "Categories
+ * updated" and swallow the error, which would have made the drawer report
+ * success on top of a write that never landed.
+ *
+ * @throws Re-throws any caught error so callers don't report success for a write
+ *         that never landed.
  */
 export function makeUpdateHabitCategories(deps: {
   db: Firestore;
@@ -206,10 +214,9 @@ export function makeUpdateHabitCategories(deps: {
       await updateDoc(doc(db, `households/${householdId}`), {
         habitCategories: categories,
       });
-      toast.success('Categories updated');
     } catch (error) {
       console.error('[updateHabitCategories] Failed:', error);
-      toast.error(describeError(error, 'update the categories'));
+      throw error; // Re-throw so callers can handle the error with contextual messaging
     }
   };
 
