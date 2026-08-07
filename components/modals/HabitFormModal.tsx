@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import { Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 import { doc, deleteField, updateDoc } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import { Habit, HabitLocationTrigger, HabitReminderConfig, NoSpendScope } from '@/types/schema';
@@ -7,6 +8,8 @@ import { useGamification, useHouseholdCore, useTodos } from '@/contexts/Firebase
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { TRASH_RETENTION_DAYS } from '@/utils/trash';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Input from '@/components/ui/Input';
 import HabitAutomationsSection from '@/components/habits/HabitAutomationsSection';
@@ -24,7 +27,17 @@ interface HabitFormModalProps {
 }
 
 const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editingHabit }) => {
-  const { addHabit, updateHabit, setHabitPause, habits, habitCategories, updateHabitCategories } = useGamification();
+  const {
+    addHabit,
+    updateHabit,
+    setHabitPause,
+    archiveHabit,
+    unarchiveHabit,
+    deleteHabit,
+    habits,
+    habitCategories,
+    updateHabitCategories,
+  } = useGamification();
   // F-HABITS-03: reminders are per-MEMBER, so they live on the current member's
   // doc rather than on the (shared) habit — see NotificationPreferences.
   const { members, householdId, currentUser } = useHouseholdCore();
@@ -209,6 +222,18 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
 
   const [isSaving, setIsSaving] = useState(false);
 
+  // Archive / delete (edit mode only). `isSaving` is the SAVE button's own
+  // state — reusing it here would spin (and disable) Save while an archive or a
+  // delete runs, so these get their own in-flight guard, exactly as
+  // `isAddingCategoryBusy` is kept separate above. One flag for both actions:
+  // they are mutually exclusive, and naming which one is running is what lets
+  // the confirm dialog show its spinner only for the delete.
+  const [destructiveAction, setDestructiveAction] = useState<'archive' | 'delete' | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const isDestructiveBusy = destructiveAction !== null;
+  // `Habit.archivedAt` is the archived marker (the same idiom HabitCard uses).
+  const isArchived = !!editingHabit?.archivedAt;
+
   // Inline "+ Add" category editor.
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryDraft, setNewCategoryDraft] = useState('');
@@ -222,6 +247,11 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   if (shouldReset && (isAddingCategory || newCategoryDraft)) {
     setIsAddingCategory(false);
     setNewCategoryDraft('');
+  }
+  // Same rule for the delete confirmation: a pending confirm must never survive
+  // into a session for a DIFFERENT habit (it would delete the wrong one).
+  if (shouldReset && isDeleteConfirmOpen) {
+    setIsDeleteConfirmOpen(false);
   }
 
   const cancelAddCategory = () => {
@@ -324,7 +354,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   const showCreditControl = !willBeAssignedChore;
 
   const handleSave = async () => {
-    if (!title || !basePoints || !targetCount || isSaving) return;
+    if (!title || !basePoints || !targetCount || isSaving || isDestructiveBusy) return;
 
     // Enforce non-empty category — `Habit.category` is required (firestore.rules
     // rejects a blank one).
@@ -469,10 +499,57 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
     }
   };
 
+  /**
+   * Archive / unarchive the habit being edited. No confirmation: it is
+   * reversible from the very same control, and `archiveHabit`/`unarchiveHabit`
+   * own BOTH their success and their failure toast (they re-throw after
+   * toasting), so nothing is reported here — a second toast would double up.
+   * On success the form closes; on failure it stays open so the user can retry.
+   */
+  const handleArchiveToggle = async () => {
+    if (!editingHabit || isSaving || isDestructiveBusy) return;
+    setDestructiveAction('archive');
+    try {
+      if (isArchived) {
+        await unarchiveHabit(editingHabit.id);
+      } else {
+        await archiveHabit(editingHabit.id);
+      }
+      onClose();
+    } catch (error) {
+      console.error('[HabitFormModal] Archive toggle failed:', error);
+    } finally {
+      setDestructiveAction(null);
+    }
+  };
+
+  /**
+   * Delete the habit being edited — a SOFT delete into the unified trash
+   * (`deleteHabit` → `softDeleteDoc`), recoverable from Settings → Recently
+   * deleted for TRASH_RETENTION_DAYS. It re-throws and toasts NOTHING, so both
+   * the success and the failure message are owned here; a rejected write leaves
+   * the confirmation (and the form) open rather than reading as a success.
+   */
+  const handleDeleteConfirmed = async () => {
+    if (!editingHabit || isSaving || isDestructiveBusy) return;
+    setDestructiveAction('delete');
+    try {
+      await deleteHabit(editingHabit.id);
+      toast.success('Habit moved to Recently deleted');
+      setIsDeleteConfirmOpen(false);
+      onClose();
+    } catch (error) {
+      console.error('[HabitFormModal] Delete failed:', error);
+      toast.error(describeError(error, 'delete the habit'));
+    } finally {
+      setDestructiveAction(null);
+    }
+  };
+
   return (
     <Drawer
       isOpen={isOpen}
-      onClose={isSaving ? () => {} : onClose}
+      onClose={isSaving || isDestructiveBusy ? () => {} : onClose}
       title={editingHabit ? 'Edit Habit' : 'New Habit'}
       noPadding={true}
       footer={
@@ -483,6 +560,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
             size="lg"
             onClick={handleSave}
             isLoading={isSaving}
+            disabled={isDestructiveBusy}
             className="w-full"
           >
             {editingHabit ? 'Save Changes' : 'Create Habit'}
@@ -802,7 +880,68 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
           />
         )}
 
+        {/* Archive / delete — EDIT MODE ONLY (a habit being created has neither
+            to offer). Separated from the fields above by a rule so it reads as
+            its own area, and deliberately NOT of equal weight: archive is the
+            light, reversible action (a plain secondary button), delete is the
+            destructive one (bordered money-neg, the treatment the retired
+            CustomHabitForm used). */}
+        {editingHabit && (
+          <div className="pt-4 border-t border-brand-200 dark:border-brand-700 space-y-2">
+            <h3 className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase">
+              Manage this habit
+            </h3>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void handleArchiveToggle()}
+              isLoading={destructiveAction === 'archive'}
+              disabled={isSaving || isDestructiveBusy}
+              leftIcon={isArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
+              className="w-full"
+            >
+              {isArchived ? 'Unarchive habit' : 'Archive habit'}
+            </Button>
+            <p className="text-xxs text-brand-400 dark:text-brand-400">
+              {isArchived
+                ? 'Puts the habit back on your habit list.'
+                : 'Hides the habit without losing its history. You can unarchive it any time.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => setIsDeleteConfirmOpen(true)}
+              disabled={isSaving || isDestructiveBusy}
+              className="w-full py-3 text-money-neg dark:text-money-negDark font-semibold rounded-card border border-money-neg/30 dark:border-money-neg/40 hover:bg-money-bgNeg dark:hover:bg-money-neg/15 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              aria-label={`Delete habit: ${editingHabit.title}`}
+            >
+              <Trash2 size={16} />
+              Delete This Habit
+            </button>
+          </div>
+        )}
+
       </div>
+
+      {/* Delete confirmation. The copy is DELIBERATELY not "this cannot be
+          undone": `deleteHabit` soft-deletes into the unified trash, so the
+          habit is restorable from Settings → Recently deleted for
+          TRASH_RETENTION_DAYS. */}
+      <ConfirmDialog
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => {
+          if (destructiveAction !== 'delete') setIsDeleteConfirmOpen(false);
+        }}
+        onConfirm={() => void handleDeleteConfirmed()}
+        title="Delete habit?"
+        message={
+          editingHabit
+            ? `"${editingHabit.title}" moves to Recently deleted, where you can restore it for ${TRASH_RETENTION_DAYS} days. Its history goes with it.`
+            : ''
+        }
+        confirmLabel="Delete"
+        confirmVariant="destructive"
+        isConfirming={destructiveAction === 'delete'}
+      />
     </Drawer>
   );
 };

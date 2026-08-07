@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import HabitFormModal from './HabitFormModal';
 import { useGamification, useHouseholdCore, useTodos } from '@/contexts/FirebaseHouseholdContext';
@@ -637,5 +637,158 @@ describe('HabitFormModal — basePoints is always saved as a positive magnitude'
 
     await waitFor(() => expect(mockUpdateHabit).toHaveBeenCalledTimes(1));
     expect(lastUpdatePayload().basePoints).toBe(15);
+  });
+});
+
+// 🩹 PAPER CUT #5: PR #1230 consolidated create+edit onto this form and retired
+// CustomHabitForm, which had carried the only "Delete This Habit" affordance
+// inside a habit form. Archive AND delete now live here, edit mode only.
+describe('HabitFormModal — archive & delete (edit mode only)', () => {
+  const mockArchiveHabit = vi.fn(() => Promise.resolve());
+  const mockUnarchiveHabit = vi.fn(() => Promise.resolve());
+  const mockDeleteHabit = vi.fn(() => Promise.resolve());
+  const mockUpdateHabit = vi.fn(() => Promise.resolve());
+  const mockAddHabit = vi.fn(() => Promise.resolve());
+  const mockOnClose = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (useGamification as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      addHabit: mockAddHabit,
+      updateHabit: mockUpdateHabit,
+      setHabitPause: vi.fn(() => Promise.resolve()),
+      archiveHabit: mockArchiveHabit,
+      unarchiveHabit: mockUnarchiveHabit,
+      deleteHabit: mockDeleteHabit,
+      habits: [],
+      habitCategories: [],
+      updateHabitCategories: vi.fn(),
+    });
+    (useHouseholdCore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ members: [] });
+    (useTodos as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ todos: [] });
+  });
+
+  const deleteTrigger = () => screen.getByRole('button', { name: 'Delete habit: Coffee run' });
+  // Scoped to the confirmation dialog: the form's own trigger also matches
+  // /delete/i, and the confirm button's accessible name gains a "Loading…"
+  // prefix while the write is in flight.
+  const confirmButton = () =>
+    within(screen.getByRole('dialog', { name: 'Delete habit?' })).getByRole('button', { name: /delete/i });
+
+  it('offers neither control when CREATING — there is nothing to archive or delete', () => {
+    render(<HabitFormModal isOpen onClose={mockOnClose} />);
+
+    expect(screen.queryByRole('button', { name: /archive habit/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^delete habit:/i })).not.toBeInTheDocument();
+  });
+
+  it('archives the habit and closes the form', async () => {
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Archive habit' }));
+
+    await waitFor(() => expect(mockArchiveHabit).toHaveBeenCalledWith('h1'));
+    expect(mockUnarchiveHabit).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockOnClose).toHaveBeenCalledTimes(1));
+    // No confirmation: archiving is reversible from the very same control.
+    expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument();
+  });
+
+  it('shows the UNarchive affordance for an archived habit and calls unarchiveHabit', async () => {
+    render(
+      <HabitFormModal
+        isOpen
+        onClose={mockOnClose}
+        editingHabit={baseHabit({ archivedAt: '2026-07-04' })}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Archive habit' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Unarchive habit' }));
+
+    await waitFor(() => expect(mockUnarchiveHabit).toHaveBeenCalledWith('h1'));
+    expect(mockArchiveHabit).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockOnClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('deletes only AFTER the confirmation is accepted, then closes', async () => {
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit()} />);
+
+    fireEvent.click(deleteTrigger());
+    // The tap opens the dialog; nothing is written yet.
+    expect(mockDeleteHabit).not.toHaveBeenCalled();
+    expect(mockOnClose).not.toHaveBeenCalled();
+
+    fireEvent.click(confirmButton());
+
+    await waitFor(() => expect(mockDeleteHabit).toHaveBeenCalledWith('h1'));
+    await waitFor(() => expect(mockOnClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('cancelling the confirmation deletes nothing and leaves the form open', () => {
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit()} />);
+
+    fireEvent.click(deleteTrigger());
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Delete habit?' })).getByRole('button', { name: 'Cancel' }));
+
+    expect(mockDeleteHabit).not.toHaveBeenCalled();
+    expect(mockOnClose).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog', { name: 'Delete habit?' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the form (and the confirmation) open when the delete write is rejected', async () => {
+    mockDeleteHabit.mockRejectedValueOnce(new Error('network down'));
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit()} />);
+
+    fireEvent.click(deleteTrigger());
+    fireEvent.click(confirmButton());
+
+    await waitFor(() => expect(mockDeleteHabit).toHaveBeenCalledTimes(1));
+    // A rejected write must never read as a success: the form stays put so the
+    // user can retry, and the confirmation is still on screen.
+    await waitFor(() => expect(confirmButton()).not.toBeDisabled());
+    expect(mockOnClose).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Title')).toBeInTheDocument();
+  });
+
+  it('keeps the form open when the archive write is rejected', async () => {
+    mockArchiveHabit.mockRejectedValueOnce(new Error('permission denied'));
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Archive habit' }));
+
+    await waitFor(() => expect(mockArchiveHabit).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Archive habit' })).not.toBeDisabled(),
+    );
+    expect(mockOnClose).not.toHaveBeenCalled();
+  });
+
+  it('guards a delete in flight: the confirm control disables and a second tap is ignored', async () => {
+    let resolveDelete!: () => void;
+    mockDeleteHabit.mockReturnValueOnce(new Promise<void>(r => { resolveDelete = r; }));
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit()} />);
+
+    fireEvent.click(deleteTrigger());
+    fireEvent.click(confirmButton());
+
+    await waitFor(() => expect(confirmButton()).toBeDisabled());
+    expect(mockDeleteHabit).toHaveBeenCalledTimes(1);
+    fireEvent.click(confirmButton());
+    expect(mockDeleteHabit).toHaveBeenCalledTimes(1);
+
+    resolveDelete();
+    await waitFor(() => expect(mockOnClose).toHaveBeenCalledTimes(1));
+  });
+
+  // 🛡️ The confirmation must tell the TRUTH: `deleteHabit` soft-deletes into the
+  // 30-day trash, so "this action cannot be undone" was simply false.
+  it('promises recovery rather than claiming the delete is permanent', () => {
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit()} />);
+
+    fireEvent.click(deleteTrigger());
+
+    expect(screen.getByText(/restore it for 30 days/i)).toBeInTheDocument();
+    expect(screen.queryByText(/cannot be undone/i)).not.toBeInTheDocument();
   });
 });
