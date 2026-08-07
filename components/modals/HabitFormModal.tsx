@@ -14,7 +14,7 @@ import HabitReminderEditor from '@/components/habits/HabitReminderEditor';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { getHabitReminder } from '@/utils/habitReminders';
 import { computeAnyNotificationsEnabled } from '@/utils/notificationFlags';
-import { DEFAULT_HABIT_CATEGORIES, habitCategoryVocabulary } from '@/utils/habitCategories';
+import { DEFAULT_HABIT_CATEGORIES, habitCategoryVocabulary, MAX_HABIT_CATEGORY_LENGTH } from '@/utils/habitCategories';
 import { describeError } from '@/utils/errorMessages';
 
 interface HabitFormModalProps {
@@ -235,6 +235,13 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
     // Empty → just close the editor (no write).
     if (!trimmed) {
       cancelAddCategory();
+      return;
+    }
+    // Over the length firestore.rules accepts on a habit's category → refuse.
+    // Saving it would create a chip that selects fine and then fails every
+    // habit write permission-denied. See MAX_HABIT_CATEGORY_LENGTH.
+    if (trimmed.length > MAX_HABIT_CATEGORY_LENGTH) {
+      toast.error(`Keep the category to ${MAX_HABIT_CATEGORY_LENGTH} characters or fewer.`);
       return;
     }
     // Case-insensitive dupe of an existing chip → select the existing one, no write.
@@ -534,6 +541,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
                   type="text"
                   value={newCategoryDraft}
                   onChange={e => setNewCategoryDraft(e.target.value)}
+                  maxLength={MAX_HABIT_CATEGORY_LENGTH}
                   onKeyDown={e => {
                     if (e.key === 'Enter') {
                       e.preventDefault();

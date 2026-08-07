@@ -36,6 +36,19 @@ export const DEFAULT_HABIT_CATEGORIES = ['Health', 'Finance', 'Personal', 'Home'
  */
 export const UNCATEGORIZED_HABIT_CATEGORY = 'Uncategorized';
 
+/**
+ * Longest category name that can actually be used.
+ *
+ * 🛡️ This is NOT a cosmetic cap — it MIRRORS `firestore.rules`, which validates
+ * every habit write with `isValidString(request.resource.data.get('category',
+ * null), 50)`. The vocabulary array itself has no such rule, so without this
+ * check a longer name saves happily into `habitCategories`, renders as a
+ * perfectly normal chip, and then makes every habit write that selects it fail
+ * permission-denied — a category that looks fine and silently cannot be used.
+ * If the rules limit ever changes, change it here in the same commit.
+ */
+export const MAX_HABIT_CATEGORY_LENGTH = 50;
+
 /** Category comparison key: trimmed + lowercased ('' for absent/blank). */
 export const habitCategoryKey = (value: string | undefined): string =>
   (value ?? '').trim().toLowerCase();

@@ -5,6 +5,7 @@ import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import {
   habitCategoryKey,
   habitCategoryVocabulary,
+  MAX_HABIT_CATEGORY_LENGTH,
   UNCATEGORIZED_HABIT_CATEGORY,
 } from '@/utils/habitCategories';
 import { Drawer } from '@/components/ui/Drawer';
@@ -143,6 +144,10 @@ export const HabitCategoryManagerDrawer: React.FC<HabitCategoryManagerDrawerProp
       setAddError('Give the category a name.');
       return;
     }
+    if (trimmed.length > MAX_HABIT_CATEGORY_LENGTH) {
+      setAddError(`Keep it to ${MAX_HABIT_CATEGORY_LENGTH} characters or fewer.`);
+      return;
+    }
     // Checked against the DISPLAYED vocabulary, not the stored array, so a name
     // that already exists only on habits is caught too.
     const existing = categories.find(category => habitCategoryKey(category) === habitCategoryKey(trimmed));
@@ -175,6 +180,12 @@ export const HabitCategoryManagerDrawer: React.FC<HabitCategoryManagerDrawerProp
     // Blank or unchanged is a cancel, not a write.
     if (!trimmed || trimmed === original) {
       setEditing(null);
+      return;
+    }
+    // Same rules-mirroring cap as the add form: renaming into an over-long name
+    // would break every habit currently in the category, not just future ones.
+    if (trimmed.length > MAX_HABIT_CATEGORY_LENGTH) {
+      toast.error(`Keep it to ${MAX_HABIT_CATEGORY_LENGTH} characters or fewer.`);
       return;
     }
 
@@ -251,6 +262,7 @@ export const HabitCategoryManagerDrawer: React.FC<HabitCategoryManagerDrawerProp
               if (addError) setAddError(null);
             }}
             placeholder="e.g. Wellbeing"
+            maxLength={MAX_HABIT_CATEGORY_LENGTH}
             error={addError ?? undefined}
             disabled={isAdding}
           />
@@ -287,6 +299,7 @@ export const HabitCategoryManagerDrawer: React.FC<HabitCategoryManagerDrawerProp
                         type="text"
                         value={editing.draft}
                         onChange={event => setEditing({ original: category, draft: event.target.value })}
+                        maxLength={MAX_HABIT_CATEGORY_LENGTH}
                         onKeyDown={event => {
                           if (event.key === 'Enter') {
                             event.preventDefault();
