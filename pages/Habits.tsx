@@ -17,6 +17,7 @@ import { TabSubViewMenu } from '@/components/ui/TabSubViewMenu';
 import { tabValueAtPoint } from '@/components/ui/tabValueAtPoint';
 import { SubViewHint } from '@/components/ui/SubViewHint';
 import HabitCreatorWizard from '@/components/modals/HabitCreatorWizard';
+import HabitFormModal from '@/components/modals/HabitFormModal';
 import SmartHabitAdjustModal from '@/components/modals/SmartHabitAdjustModal';
 import SmartHabitReorderModal from '@/components/modals/SmartHabitReorderModal';
 import { HabitCoach } from '@/components/habits/HabitCoach';
@@ -256,6 +257,13 @@ const Habits: React.FC = () => {
   const kidModeEnabled = useKidModeEnabled();
   const powerToolsEnabled = usePowerToolsEnabled();
   const [isWizardOpen, setIsWizardOpen] = useState(false);
+  // The ONE habit form (create + edit). It is mounted as a SIBLING of the
+  // wizard rather than inside it: nested Drawers are portal siblings with
+  // document-level listeners and fight over the Tab focus trap, so the wizard
+  // hands the page a callback and closes itself instead. `habitFormTarget`
+  // null = create mode.
+  const [isHabitFormOpen, setIsHabitFormOpen] = useState(false);
+  const [habitFormTarget, setHabitFormTarget] = useState<Habit | null>(null);
   const [isSmartAdjustOpen, setIsSmartAdjustOpen] = useState(false);
   const [isSmartReorderOpen, setIsSmartReorderOpen] = useState(false);
   const [isChallengeHubOpen, setIsChallengeHubOpen] = useState(false);
@@ -496,6 +504,14 @@ const Habits: React.FC = () => {
   // header with an empty tab strip and no panel — degrade to the redirect
   // instead, even if the nav and this page ever disagree again.
   if (!location) return null;
+
+  // The wizard's "Create Custom Habit" / per-habit edit buttons hand off here:
+  // close the wizard Drawer, then open the shared HabitFormModal beside it.
+  const openHabitForm = (habit: Habit | null) => {
+    setIsWizardOpen(false);
+    setHabitFormTarget(habit);
+    setIsHabitFormOpen(true);
+  };
 
   const handleExport = () => {
     try {
@@ -791,7 +807,17 @@ const Habits: React.FC = () => {
         </div>
       </Tabs>
 
-      <HabitCreatorWizard isOpen={isWizardOpen} onClose={() => setIsWizardOpen(false)} />
+      <HabitCreatorWizard
+        isOpen={isWizardOpen}
+        onClose={() => setIsWizardOpen(false)}
+        onCreateCustom={() => openHabitForm(null)}
+        onEditCustom={habit => openHabitForm(habit)}
+      />
+      <HabitFormModal
+        isOpen={isHabitFormOpen}
+        onClose={() => setIsHabitFormOpen(false)}
+        editingHabit={habitFormTarget ?? undefined}
+      />
       {powerToolsEnabled && (
         <>
           <SmartHabitAdjustModal isOpen={isSmartAdjustOpen} onClose={() => setIsSmartAdjustOpen(false)} />

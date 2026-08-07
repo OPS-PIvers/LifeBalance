@@ -34,6 +34,13 @@ vi.mock('@/components/modals/HabitCreatorWizard', () => ({
   default: () => <div data-testid="habit-wizard" />,
 }));
 
+// The page now owns the shared habit form (create + edit) as a sibling of the
+// wizard, so it mounts on every render. Stubbed like the wizard above — these
+// suites assert on the habit list, not on the form.
+vi.mock('@/components/modals/HabitFormModal', () => ({
+  default: () => <div data-testid="habit-form-modal" />,
+}));
+
 const habit = (id: string, title: string, category: string): Habit =>
   ({
     id,
