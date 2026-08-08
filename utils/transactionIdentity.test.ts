@@ -4,6 +4,8 @@ import { INCOME_CATEGORY } from '@/types/schema';
 import {
   fingerprint,
   merchantSimilar,
+  identityNames,
+  namesSimilar,
   isLikelyDuplicate,
   DUPLICATE_WINDOW_DAYS,
   type IdentityTransaction,
@@ -44,6 +46,77 @@ describe('merchantSimilar', () => {
     expect(merchantSimilar("Trader Joe's", 's')).toBe(false);
     // Exact equality of short names still works via the equality path.
     expect(merchantSimilar('H&M', 'h&m')).toBe(true);
+  });
+});
+
+describe('identityNames', () => {
+  it('returns both names when both are present', () => {
+    expect(identityNames({ merchant: 'Jimmy Johns', bankDescriptor: 'PURCHASE JIMMY JOHNS MPLS MN CARD7752' }))
+      .toEqual(['Jimmy Johns', 'PURCHASE JIMMY JOHNS MPLS MN CARD7752']);
+  });
+
+  it('drops empty/whitespace-only values', () => {
+    expect(identityNames({ merchant: 'Jimmy Johns', bankDescriptor: '   ' })).toEqual(['Jimmy Johns']);
+    expect(identityNames({ merchant: '', bankDescriptor: undefined })).toEqual([]);
+  });
+
+  it('de-duplicates exact repeats', () => {
+    expect(identityNames({ merchant: 'Jimmy Johns', bankDescriptor: 'Jimmy Johns' })).toEqual(['Jimmy Johns']);
+  });
+
+  it('returns just the merchant when there is no bankDescriptor', () => {
+    expect(identityNames({ merchant: 'Amatista Cookhouse' })).toEqual(['Amatista Cookhouse']);
+  });
+});
+
+describe('namesSimilar', () => {
+  it('matches via the CLEANED display merchant (crux example: cleaned name is a subset of the other side)', () => {
+    // Screenshot row: "PURCHASE JIMMY JOHNS MINNEAPOLIS MN CARD7752" is cleaned
+    // to "Jimmy Johns" for display. The nightly email's own raw descriptor
+    // ("JIMMY JOHNS # 123 MINNEAPOLIS MN") is a superset of the cleaned name's
+    // tokens, so the cleaned name alone recognises it.
+    const scanned = { merchant: 'Jimmy Johns', bankDescriptor: 'PURCHASE JIMMY JOHNS MINNEAPOLIS MN CARD7752' };
+    const email = { merchant: 'JIMMY JOHNS # 123 MINNEAPOLIS MN' };
+    expect(namesSimilar(scanned, email)).toBe(true);
+    expect(namesSimilar(email, scanned)).toBe(true);
+  });
+
+  it('matches via the RAW bankDescriptor when the cleaned name invents tokens the raw text lacks (Amazon example)', () => {
+    // "AMZN Mktp US*2H4KL" is cleaned to "Amazon" for display — a token
+    // ("amazon") that appears NOWHERE in the raw bank text, so comparing only
+    // the cleaned merchant against another system's raw descriptor misses.
+    const scanned = { merchant: 'Amazon', bankDescriptor: 'AMZN Mktp US*2H4KL' };
+    const other = { merchant: 'AMZN MKTP US*2H4KL AMZN.COM/BILL WA' };
+    // The cleaned name alone would NOT match (different tokens entirely).
+    expect(merchantSimilar(scanned.merchant, other.merchant)).toBe(false);
+    // But the raw descriptor pairing recognises it.
+    expect(namesSimilar(scanned, other)).toBe(true);
+    expect(namesSimilar(other, scanned)).toBe(true);
+  });
+
+  it('behaves exactly like merchantSimilar(merchant, merchant) when neither side has a bankDescriptor', () => {
+    const cases: [string, string][] = [
+      ['Amatista Cookhouse', 'amatista   cookhouse'],
+      ['Amatista', 'Amatista Cookhouse'],
+      ['Loews Sapphire Falls Fb', 'Amatista Cookhouse'],
+      ['', 'Amatista'],
+      ['!!!', 'Amatista'],
+      ['', ''],
+    ];
+    for (const [a, b] of cases) {
+      expect(namesSimilar({ merchant: a }, { merchant: b })).toBe(merchantSimilar(a, b));
+    }
+  });
+
+  it('returns false when either side has no usable name at all', () => {
+    expect(namesSimilar({ merchant: '' }, { merchant: 'Amatista', bankDescriptor: 'AMATISTA #4' })).toBe(false);
+    expect(namesSimilar({ merchant: 'Amatista' }, { merchant: '   ', bankDescriptor: '   ' })).toBe(false);
+  });
+
+  it('ignores an empty/whitespace-only bankDescriptor rather than treating it as a usable name', () => {
+    const a = { merchant: 'Jimmy Johns', bankDescriptor: '   ' };
+    const b = { merchant: 'Jimmy Johns' };
+    expect(namesSimilar(a, b)).toBe(true); // still matches via merchant
   });
 });
 
@@ -174,6 +247,28 @@ describe('isLikelyDuplicate — table-driven policy matrix', () => {
       a: { accountId: 'checking', amount: 40, date: '2026-06-23', merchant: 'Gas' },
       b: { accountId: 'checking', amount: 40, date: '2026-06-27', merchant: 'Gas' },
       expected: 'distinct',
+    },
+    {
+      // FIX 1 regression: two genuinely DIFFERENT merchants that only share
+      // generic/geographic tokens via a raw bank descriptor must never
+      // auto-merge. `merchantSimilar('Chipotle', 'Edina Grill')` is false, but
+      // `namesSimilar` (which also pairs the bankDescriptor) would call them
+      // similar — "SQ *CHIPOTLE MEXICAN GRILL EDINA MN" token-subsumes "Edina
+      // Grill" via the shared "edina"/"grill" tokens. If `isLikelyDuplicate`
+      // consulted `namesSimilar` here it would return 'duplicate', and
+      // quickAddExpense (functions/src/quickAdd/index.ts) would silently
+      // discard the second purchase as an "already recorded" merge instead of
+      // writing it. It must stay 'possible' so a human reviews the pair.
+      name: 'different merchants sharing only geographic tokens via bankDescriptor → possible, never duplicate',
+      a: {
+        accountId: 'checking',
+        amount: 15,
+        date: '2026-06-15',
+        merchant: 'Chipotle',
+        bankDescriptor: 'SQ *CHIPOTLE MEXICAN GRILL EDINA MN',
+      },
+      b: { accountId: 'checking', amount: 15, date: '2026-06-15', merchant: 'Edina Grill' },
+      expected: 'possible',
     },
   ];
 

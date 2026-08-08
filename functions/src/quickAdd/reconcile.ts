@@ -28,16 +28,19 @@
  * Pure + dependency-light on purpose (mirrors `utils/transactionMatch.ts` on the
  * client): data in, decision out — no Firestore here, trivially unit-testable.
  *
- * `pickFillTarget`'s merchant-match decision delegates to `merchantSimilar`
- * from `./transactionIdentity` (plan 03 PR-1) — the shared token-overlap
- * comparator now used across all reconciliation call sites. `normalizeMerchant`
- * stays HERE (not delegated) because it is itself directly unit-tested for
- * exact string output in reconcile.test.ts, and its punctuation handling
- * differs from the identity module's own normalizer (see the divergence note
- * in transactionIdentity.ts) — swapping its output would be an unrelated
- * behavior change this PR does not make.
+ * `pickFillTarget`'s (and `pickDuplicateShortcutRow`'s) merchant-match
+ * decision runs the STRICT `merchantSimilar` comparison first and only
+ * consults the looser `namesSimilar` (which additionally pairs each row's
+ * optional `bankDescriptor` against the other side's `merchant`, plan 03
+ * PR-1) when the strict pass is silent — a tiebreak of last resort that can
+ * only convert "no match" into "match", never regress a strict-unique winner
+ * into ambiguity. `normalizeMerchant` stays HERE (not delegated) because it is itself
+ * directly unit-tested for exact string output in reconcile.test.ts, and its
+ * punctuation handling differs from the identity module's own normalizer
+ * (see the divergence note in transactionIdentity.ts) — swapping its output
+ * would be an unrelated behavior change this PR does not make.
  */
-import { merchantSimilar } from "./transactionIdentity";
+import { namesSimilar, merchantSimilar } from "./transactionIdentity";
 
 /**
  * How close in time the two triggers must fire to be considered the same
@@ -77,6 +80,11 @@ export interface ReconcileCandidate {
    *  functions, so adding this field cannot change which row a merge
    *  targets or whether a merge happens at all. */
   cardLast4?: string;
+  /** The bank's verbatim descriptor text for this row, when known (e.g. an
+   *  AI statement-scan capture's raw row text, kept alongside the cleaned
+   *  display `merchant`). Consulted by the `pick*` matchers via `namesSimilar`
+   *  alongside `merchant`, so a row is recognisable by either name. */
+  bankDescriptor?: string;
 }
 
 /** The incoming capture, already parsed/normalized. Depending on the call site
@@ -193,9 +201,14 @@ export function pickFillTarget(
 
   const key = normalizeMerchant(incoming.merchant);
   if (key) {
-    const byMerchant = stubs.filter((s) => merchantSimilar(s.merchant, incoming.merchant));
-    if (byMerchant.length === 1) return byMerchant[0] ?? null; // strong match
-    if (byMerchant.length > 1) return null; // ambiguous → don't guess
+    const strict = stubs.filter((s) => merchantSimilar(s.merchant, incoming.merchant));
+    if (strict.length === 1) return strict[0] ?? null; // strong match
+    if (strict.length > 1) return null; // ambiguous → don't guess (UNCHANGED)
+    // strict matched nothing: give the raw bank descriptor a chance BEFORE
+    // the time-only fallback. A non-unique loose result must fall through to
+    // that fallback, NOT short-circuit to null the way a strict ambiguity does.
+    const loose = stubs.filter((s) => namesSimilar(s, { merchant: incoming.merchant }));
+    if (loose.length === 1) return loose[0] ?? null;
   }
 
   // Cross-system fallback: the bank and Apple Pay merchant strings never match
@@ -268,9 +281,17 @@ export function buildFillUpdates(
  *    keeps two real identical purchases captured via the bank-only shortcut from
  *    collapsing into one.
  *  - Account must not conflict (a different tagged card ⇒ a different purchase).
- *  - Amount must match to the cent and the merchant must be {@link merchantSimilar}.
- *  - EXACTLY ONE candidate must qualify. Zero → new row; two or more → ambiguous,
- *    so we under-merge (new row the user reconciles) rather than guess.
+ *  - Amount must match to the cent, and the merchant match is strict-then-loose:
+ *    the candidate's cleaned display {@link merchantSimilar} against the
+ *    incoming merchant runs first and wins whenever it's decisive (unique →
+ *    that candidate; 2+ → ambiguous, stop); only when it matches NOTHING does
+ *    the looser {@link namesSimilar} (which also pairs the candidate's raw
+ *    `bankDescriptor`) get a say — so a strict-unique winner can never regress
+ *    into ambiguity just because a second candidate's bankDescriptor also
+ *    loosely matches.
+ *  - EXACTLY ONE candidate must qualify at whichever tier decides it. Zero →
+ *    new row; two or more at the deciding tier → ambiguous, so we under-merge
+ *    (new row the user reconciles) rather than guess.
  *
  * Combined with the caller's tight {@link RECONCILE_WINDOW_MS} createdAt window,
  * a false merge would require two real purchases of the identical amount at a
@@ -282,7 +303,7 @@ export function pickDuplicateShortcutRow(
   incoming: IncomingExpense,
   candidates: readonly ReconcileCandidate[],
 ): ReconcileCandidate | null {
-  const eligible = candidates.filter((c) => {
+  const base = candidates.filter((c) => {
     // Stubs are pickFillTarget's domain — never absorb one here.
     if (c.needsAmount || c.amount === 0) return false;
     // Only merge a bank notification INTO a non-bank (Apple Pay) capture.
@@ -292,9 +313,18 @@ export function pickDuplicateShortcutRow(
       return false;
     }
     if (amountCents(c.amount) !== amountCents(incoming.amount)) return false;
-    return merchantSimilar(c.merchant, incoming.merchant);
+    return true;
   });
-  return eligible.length === 1 ? (eligible[0] ?? null) : null;
+  // Strict-then-loose, same rule as pickFillTarget: the cleaned-merchant
+  // comparison runs first and wins whenever it's decisive, so a unique
+  // today's-winner can't regress into ambiguity via the looser bankDescriptor
+  // pairing. strict.length > 1 preserves today's eligible.length === 1 ? … :
+  // null outcome exactly.
+  const strict = base.filter((c) => merchantSimilar(c.merchant, incoming.merchant));
+  if (strict.length === 1) return strict[0] ?? null;
+  if (strict.length > 1) return null;
+  const loose = base.filter((c) => namesSimilar(c, { merchant: incoming.merchant }));
+  return loose.length === 1 ? (loose[0] ?? null) : null;
 }
 
 /**
@@ -348,6 +378,11 @@ export function buildDuplicateMergeUpdates(
  *    captured via the bank-only shortcut from collapsing into one.
  *  - Account must not conflict (a different tagged card ⇒ a different purchase).
  *  - Amount must match to the cent and the merchant must be {@link merchantSimilar}.
+ *    NOTE: unlike {@link pickFillTarget}/{@link pickDuplicateShortcutRow}, this
+ *    picker is deliberately NOT migrated to `namesSimilar` — its candidate here
+ *    is always a bank-notification row (`c.fromBankNotification`), and the
+ *    incoming side is always a non-bank Apple Pay capture that carries no
+ *    `bankDescriptor` of its own, so there is no raw-descriptor pairing to gain.
  *  - EXACTLY ONE candidate must qualify. Zero → new row; two or more → ambiguous,
  *    so we under-merge (new row the user reconciles) rather than guess.
  *

@@ -47,6 +47,43 @@ describe('geminiValidation - validateBankTransactions', () => {
     expect(() => validateBankTransactions([{ merchant: 'A', amount: 1, category: 'X' }]))
       .toThrow(/date must be a string/);
   });
+
+  it('trims and passes through a well-formed rawDescriptor', () => {
+    const result = validateBankTransactions([
+      { merchant: 'Jimmy Johns', amount: 1, category: 'X', date: '2026-01-01', rawDescriptor: '  PURCHASE JIMMY JOHNS MPLS MN CARD7752  ' },
+    ]);
+    expect(result[0]?.rawDescriptor).toBe('PURCHASE JIMMY JOHNS MPLS MN CARD7752');
+  });
+
+  it('drops a rawDescriptor that is empty/whitespace-only rather than keeping ""', () => {
+    const result = validateBankTransactions([
+      { merchant: 'A', amount: 1, category: 'X', date: '2026-01-01', rawDescriptor: '   ' },
+    ]);
+    expect(result[0]?.rawDescriptor).toBeUndefined();
+    expect('rawDescriptor' in (result[0] as object)).toBe(false);
+  });
+
+  it('coerces a non-string rawDescriptor to absent instead of failing the parse', () => {
+    const result = validateBankTransactions([
+      { merchant: 'A', amount: 1, category: 'X', date: '2026-01-01', rawDescriptor: 12345 },
+    ]);
+    expect(result[0]?.rawDescriptor).toBeUndefined();
+  });
+
+  it('caps rawDescriptor at 200 chars to match the firestore.rules limit', () => {
+    const long = 'X'.repeat(250);
+    const result = validateBankTransactions([
+      { merchant: 'A', amount: 1, category: 'X', date: '2026-01-01', rawDescriptor: long },
+    ]);
+    expect(result[0]?.rawDescriptor).toHaveLength(200);
+  });
+
+  it('is absent when the model omits rawDescriptor entirely', () => {
+    const result = validateBankTransactions([
+      { merchant: 'A', amount: 1, category: 'X', date: '2026-01-01' },
+    ]);
+    expect(result[0]?.rawDescriptor).toBeUndefined();
+  });
 });
 
 describe('geminiValidation - validateMealSuggestion', () => {

@@ -847,6 +847,8 @@ export const quickAddExpense = onRequest(
               // already carries a card digit before deciding to write one.
               cardLast4:
                 typeof data.cardLast4 === "string" ? data.cardLast4 : undefined,
+              bankDescriptor:
+                typeof data.bankDescriptor === "string" ? data.bankDescriptor : undefined,
             });
           }
 
@@ -867,6 +869,8 @@ export const quickAddExpense = onRequest(
               accountId:
                 typeof data.accountId === "string" ? data.accountId : undefined,
               needsAmount: data.needsAmount === true,
+              bankDescriptor:
+                typeof data.bankDescriptor === "string" ? data.bankDescriptor : undefined,
             });
           }
         }

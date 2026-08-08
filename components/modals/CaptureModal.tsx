@@ -456,6 +456,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
         selected: true,
         relatedHabitIds: matchHabits(tx.suggestedHabits),
         store: tx.store,
+        bankDescriptor: tx.rawDescriptor,
       })));
       track('statement_scanned', { count: bankTransactions.length });
       setView('review');
@@ -525,6 +526,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
         accountId: tx.accountId,
         creditPayment: tx.creditPayment,
         receiptGroupId: tx.receiptGroupId,
+        // Omitted entirely (not written as '') when the AI didn't capture one —
+        // see Transaction.bankDescriptor.
+        ...(tx.bankDescriptor ? { bankDescriptor: tx.bankDescriptor } : {}),
       };
     };
 

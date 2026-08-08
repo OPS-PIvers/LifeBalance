@@ -336,6 +336,52 @@ describe('CaptureModal', () => {
     });
   });
 
+  // --- Statement-scan round trip carries the bank's raw descriptor ---
+  //
+  // The AI response → addTransaction round trip had NO differential coverage
+  // for `bankDescriptor` (see Transaction.bankDescriptor / rawDescriptor on
+  // BankTransactionData): a future refactor could drop the field silently
+  // with CI fully green, quietly breaking the identity matching this field
+  // exists for (functions/src/quickAdd/reconcile.ts, bankSyncMatch.ts).
+  describe('statement scan bankDescriptor round trip', () => {
+    beforeEach(() => {
+      parseReceiptLineItemsMock.mockReset();
+      parseBankStatementMock.mockReset();
+      mockUseHousehold.addTransaction.mockReset();
+    });
+
+    it('carries the raw bank descriptor from a statement scan through to the written transaction', async () => {
+      parseReceiptLineItemsMock.mockResolvedValue({
+        documentType: 'transaction_list',
+        merchant: 'Chase',
+        items: [],
+      });
+      parseBankStatementMock.mockResolvedValue([
+        {
+          merchant: 'Jimmy Johns',
+          amount: 12.34,
+          category: 'Dining',
+          date: '2026-07-23',
+          rawDescriptor: 'PURCHASE JIMMY JOHNS MINNEAPOLIS MN CARD7752',
+        },
+      ]);
+      render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
+
+      fireEvent.click(screen.getByTestId('add-from-image'));
+      await screen.findByTestId('capture-transaction-review');
+
+      // The statement-scan path writes one row at a time via addTransaction
+      // (not the batched addTransactions used by a multi-category receipt
+      // split) — there is no receiptGroupId on a statement row.
+      fireEvent.click(screen.getByRole('button', { name: 'Add 1 to Action Queue' }));
+
+      await waitFor(() => expect(mockUseHousehold.addTransaction).toHaveBeenCalledTimes(1));
+      expect(mockUseHousehold.addTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({ bankDescriptor: 'PURCHASE JIMMY JOHNS MINNEAPOLIS MN CARD7752' }),
+      );
+    });
+  });
+
   // --- Plan 090: capture-tab cascade ---
 
   it('only renders tabs whose module is enabled', () => {

@@ -785,6 +785,12 @@ export function makeAddTransaction(deps: {
       if (tx.receiptGroupId && tx.receiptGroupId.trim()) {
         docData.receiptGroupId = tx.receiptGroupId.trim();
       }
+      // AI statement-scan capture: the bank's verbatim row text, kept
+      // alongside the cleaned `merchant` for identity matching only — see
+      // `Transaction.bankDescriptor`.
+      if (tx.bankDescriptor && tx.bankDescriptor.trim()) {
+        docData.bankDescriptor = tx.bankDescriptor.trim();
+      }
 
       // VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE: a new transaction touches a
       // balance only if it is created `verified`. A `pending_review` capture
@@ -1033,6 +1039,7 @@ export function makeAddTransactions(deps: {
         if (tx.creditPayment === true) docData.creditPayment = true;
         if (tx.notes && tx.notes.trim()) docData.notes = tx.notes.trim();
         if (tx.receiptGroupId && tx.receiptGroupId.trim()) docData.receiptGroupId = tx.receiptGroupId.trim();
+        if (tx.bankDescriptor && tx.bankDescriptor.trim()) docData.bankDescriptor = tx.bankDescriptor.trim();
 
         const txRef = doc(collection(db, `households/${householdId}/transactions`));
         batch.set(txRef, docData);

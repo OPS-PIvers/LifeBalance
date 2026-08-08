@@ -42,6 +42,14 @@ export interface IdentityTransaction {
   accountId?: string;
   /** Apple Pay $0 pre-authorization stub awaiting its real amount. */
   needsAmount?: boolean;
+  /**
+   * The bank's verbatim descriptor text for this purchase, when known — e.g.
+   * a statement screenshot's raw row text ("PURCHASE JIMMY JOHNS MINNEAPOLIS
+   * MN CARD7752") captured alongside a cleaned display `merchant` ("Jimmy
+   * Johns"). Used ONLY for identity comparison ({@link identityNames} /
+   * {@link namesSimilar}), never for display.
+   */
+  bankDescriptor?: string;
 }
 
 /** Calendar-day window within which a Plaid post-date can lag the original capture. */
@@ -104,6 +112,52 @@ export function merchantSimilar(a: string, b: string): boolean {
 }
 
 /**
+ * The names a row can be recognised by: its display `merchant` plus, when
+ * known, the bank's verbatim `bankDescriptor`. Drops empty/whitespace-only
+ * values and de-duplicates exact repeats (e.g. a row that never had its
+ * merchant cleaned, so both fields hold the same raw text).
+ *
+ * A cleaned display name and the bank's raw text carry DIFFERENT tokens —
+ * cleaning drops noise ("PURCHASE", "CARD7752") and sometimes invents a
+ * canonical brand name absent from the raw string ("AMZN Mktp US*2H4KL" →
+ * "Amazon"). Neither name alone is guaranteed to `merchantSimilar`-match
+ * every other system's own name for the same purchase, so a row must be
+ * recognisable by BOTH.
+ */
+export function identityNames(row: { merchant?: string; bankDescriptor?: string }): string[] {
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const candidate of [row.merchant, row.bankDescriptor]) {
+    if (typeof candidate !== "string") continue;
+    const trimmed = candidate.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    names.push(trimmed);
+  }
+  return names;
+}
+
+/**
+ * True when ANY pairing of the two rows' {@link identityNames} is
+ * {@link merchantSimilar}. This is what makes a cleaned display name on one
+ * side match a raw bank descriptor on the other (or vice versa) — comparing
+ * only `merchant` vs `merchant` would miss it since the two names carry
+ * different tokens (see {@link identityNames}).
+ *
+ * Matches `merchantSimilar`'s empty-vs-empty contract: false when either row
+ * has no usable name at all.
+ */
+export function namesSimilar(
+  a: { merchant?: string; bankDescriptor?: string },
+  b: { merchant?: string; bankDescriptor?: string }
+): boolean {
+  const namesA = identityNames(a);
+  const namesB = identityNames(b);
+  if (namesA.length === 0 || namesB.length === 0) return false;
+  return namesA.some((na) => namesB.some((nb) => merchantSimilar(na, nb)));
+}
+
+/**
  * Candidate key for cheaply finding *possible* duplicates — NOT a unique id
  * (two distinct purchases can share one; a real duplicate check must still
  * run {@link isLikelyDuplicate}). Uses `'none'` for an unknown account so two
@@ -162,6 +216,18 @@ export function isLikelyDuplicate(a: IdentityTransaction, b: IdentityTransaction
   if (accountsConflict) return "distinct";
 
   const eitherIsStub = Boolean(a.needsAmount || b.needsAmount);
+  // Deliberately the STRICT `merchantSimilar(merchant, merchant)` comparison,
+  // not `namesSimilar` — `similar` here gates ONLY the upgrade to the
+  // `'duplicate'` verdict (the `'possible'` verdict is returned regardless of
+  // similarity), so consulting `bankDescriptor` buys nothing while costing a
+  // silent-data-loss path: a `'duplicate'` verdict makes `quickAddExpense`
+  // return `success: true, merged: true` and never write the incoming
+  // transaction at all (functions/src/quickAdd/index.ts). A raw bank
+  // descriptor is long and full of city/state/processor filler, so a short
+  // unrelated merchant name can token-subset into it and silently discard a
+  // real purchase. `namesSimilar` stays available to the OTHER call sites in
+  // this module (and to bankSyncMatch.ts/reconcile.ts), which only use it as
+  // a tiebreak among candidates a strict pass already narrowed down.
   const similar = merchantSimilar(a.merchant, b.merchant);
 
   const withinAutoWindow = dayDistance <= AUTO_DUPLICATE_WINDOW_DAYS;
