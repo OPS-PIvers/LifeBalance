@@ -249,6 +249,25 @@ describe("pickPendingToConfirm", () => {
     expect(pickPendingToConfirm(w, [correct, other])?.id).toBe("correct");
   });
 
+  // Monotonicity: a candidate the STRICT pass already resolved uniquely must
+  // keep winning even when a second candidate's bankDescriptor would ALSO
+  // loosely match the withdrawal — namesSimilar is strictly more permissive
+  // than merchantSimilar, so consulting it unconditionally (rather than only
+  // when the strict pass is silent) would turn this clean win into a false
+  // ambiguity (both candidates match → null → falls through to CREATE, i.e. a
+  // duplicate transaction).
+  it("a strict-unique winner is not regressed into ambiguity by a second candidate's matching bankDescriptor", () => {
+    const a = pending({ id: "a", merchant: "Target", date: "2026-07-20" });
+    const b = pending({
+      id: "b",
+      merchant: "Costco",
+      bankDescriptor: "TARGET T-2189 MINNEAPOLIS MN",
+      date: "2026-07-20",
+    });
+    const w = withdrawal({ descriptor: "TARGET T-2189 MINNEAPOLIS MN" });
+    expect(pickPendingToConfirm(w, [a, b])?.id).toBe("a");
+  });
+
   it("returns null when the tie cannot be broken (ambiguous → falls through to CREATE)", () => {
     const a = pending({ id: "a", merchant: "Mystery", date: "2026-07-20" });
     const b = pending({ id: "b", merchant: "Enigma", date: "2026-07-20" });

@@ -142,6 +142,25 @@ describe("pickFillTarget", () => {
     const target = pickFillTarget(incoming, [withDescriptor, unrelated]);
     expect(target?.id).toBe("s1");
   });
+
+  // Monotonicity: a stub the STRICT pass already resolved uniquely must keep
+  // winning even when a second stub's bankDescriptor would ALSO loosely match
+  // the incoming merchant — namesSimilar is strictly more permissive than
+  // merchantSimilar, so consulting it unconditionally (rather than only when
+  // the strict pass matched nothing) would turn this clean win into a false
+  // ambiguity (both stubs match → null → the fill is skipped entirely).
+  it("a strict-unique winner is not regressed into ambiguity by a second stub's matching bankDescriptor", () => {
+    const s1 = stub("s1", "Amatista Cookhouse");
+    const s2: ReconcileCandidate = {
+      id: "s2",
+      merchant: "Gas",
+      amount: 0,
+      needsAmount: true,
+      bankDescriptor: "AMATISTA COOKHOUSE #4",
+    };
+    const target = pickFillTarget({ amount: 13.31, merchant: "Amatista Cookhouse" }, [s1, s2]);
+    expect(target?.id).toBe("s1");
+  });
 });
 
 describe("buildFillUpdates", () => {
@@ -514,6 +533,43 @@ describe("pickDuplicateShortcutRow", () => {
     const target = pickDuplicateShortcutRow(
       { amount: 18.86, merchant: "TARGET T-2189", cardLast4: "9999" },
       candidates,
+    );
+    expect(target?.id).toBe("ap1");
+  });
+
+  // No prior coverage of bankDescriptor for this picker at all. Mirrors the
+  // pickFillTarget crux case: a candidate's cleaned display merchant can
+  // invent a token the incoming raw bank text never had ("AMZN Mktp US*2H4KL"
+  // → "Amazon"), so comparing only `merchant` vs `merchant` misses the pair.
+  // Carrying the candidate's raw `bankDescriptor` alongside its cleaned
+  // merchant lets the match recognise it via EITHER name.
+  it("folds via the candidate's raw bankDescriptor when its cleaned merchant doesn't overlap the incoming raw text", () => {
+    const withDescriptor = applePay("ap1", "Amazon", 42, { bankDescriptor: "AMZN Mktp US*2H4KL" });
+    const incoming = { amount: 42, merchant: "AMZN MKTP US*2H4KL AMZN.COM/BILL WA" };
+
+    // The cleaned name alone would NOT match — confirms this is really the
+    // raw-descriptor path, not a coincidental merchant match.
+    expect(
+      pickDuplicateShortcutRow(incoming, [{ ...withDescriptor, bankDescriptor: undefined }]),
+    ).toBeNull();
+
+    const target = pickDuplicateShortcutRow(incoming, [withDescriptor]);
+    expect(target?.id).toBe("ap1");
+  });
+
+  // Monotonicity: a candidate the STRICT pass already resolved uniquely must
+  // keep winning even when a second candidate's bankDescriptor would ALSO
+  // loosely match the incoming merchant — namesSimilar is strictly more
+  // permissive than merchantSimilar, so consulting it unconditionally (rather
+  // than only when the strict pass matched nothing) would turn this clean win
+  // into a false ambiguity (both candidates match → null → a duplicate row
+  // survives instead of being folded).
+  it("a strict-unique winner is not regressed into ambiguity by a second candidate's matching bankDescriptor", () => {
+    const ap1 = applePay("ap1", "Target", 18.86);
+    const ap2 = applePay("ap2", "Costco", 18.86, { bankDescriptor: "TARGET T-2189 MINNEAPOLIS MN" });
+    const target = pickDuplicateShortcutRow(
+      { amount: 18.86, merchant: "TARGET T-2189 MINNEAPOLIS MN" },
+      [ap1, ap2],
     );
     expect(target?.id).toBe("ap1");
   });

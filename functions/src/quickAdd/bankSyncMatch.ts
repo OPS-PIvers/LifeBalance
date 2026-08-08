@@ -38,7 +38,7 @@
  */
 
 import type { BankEmailWithdrawal } from "./bankEmailParser";
-import { namesSimilar, INCOME_CATEGORY } from "./transactionIdentity";
+import { namesSimilar, merchantSimilar, INCOME_CATEGORY } from "./transactionIdentity";
 import { pickFillTarget, type ReconcileCandidate } from "./reconcile";
 import { pickMerchantRule, type MerchantRule } from "./merchantRules";
 
@@ -288,11 +288,17 @@ export function pickPendingToConfirm(
   if (near.length === 1) return near[0] ?? null;
 
   // Ambiguous on amount+date alone → break the tie with merchant similarity.
-  // namesSimilar checks every pairing of each side's {merchant, bankDescriptor}
-  // names, so a candidate recognises the withdrawal via EITHER its cleaned
-  // display merchant or its raw bank descriptor (see transactionIdentity.ts).
-  const similar = near.filter((c) => namesSimilar(c, { merchant: withdrawal.descriptor }));
-  return similar.length === 1 ? (similar[0] ?? null) : null;
+  // Run the STRICT cleaned-merchant comparison first and keep its answer
+  // whenever it's decisive, so a unique winner today stays the unique winner
+  // (namesSimilar is strictly more permissive and could otherwise turn a
+  // clean win into a false ambiguity). Only when the strict pass resolves
+  // NOTHING does the withdrawal's raw descriptor get a say via namesSimilar
+  // (checks every pairing of each side's {merchant, bankDescriptor} names) —
+  // a tiebreak of last resort that can only add a match, never remove one.
+  const strict = near.filter((c) => merchantSimilar(c.merchant, withdrawal.descriptor));
+  if (strict.length === 1) return strict[0] ?? null;
+  const loose = near.filter((c) => namesSimilar(c, { merchant: withdrawal.descriptor }));
+  return loose.length === 1 ? (loose[0] ?? null) : null;
 }
 
 // ---------------------------------------------------------------------------

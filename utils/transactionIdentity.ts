@@ -214,7 +214,19 @@ export function isLikelyDuplicate(a: IdentityTransaction, b: IdentityTransaction
   if (accountsConflict) return 'distinct';
 
   const eitherIsStub = Boolean(a.needsAmount || b.needsAmount);
-  const similar = namesSimilar(a, b);
+  // Deliberately the STRICT `merchantSimilar(merchant, merchant)` comparison,
+  // not `namesSimilar` — `similar` here gates ONLY the upgrade to the
+  // `'duplicate'` verdict (the `'possible'` verdict is returned regardless of
+  // similarity), so consulting `bankDescriptor` buys nothing while costing a
+  // silent-data-loss path: a `'duplicate'` verdict makes `quickAddExpense`
+  // return `success: true, merged: true` and never write the incoming
+  // transaction at all (functions/src/quickAdd/index.ts). A raw bank
+  // descriptor is long and full of city/state/processor filler, so a short
+  // unrelated merchant name can token-subset into it and silently discard a
+  // real purchase. `namesSimilar` stays available to the OTHER call sites in
+  // this module (and to bankSyncMatch.ts/reconcile.ts), which only use it as
+  // a tiebreak among candidates a strict pass already narrowed down.
+  const similar = merchantSimilar(a.merchant, b.merchant);
 
   const withinAutoWindow = dayDistance <= AUTO_DUPLICATE_WINDOW_DAYS;
 

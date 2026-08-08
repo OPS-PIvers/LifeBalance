@@ -248,6 +248,28 @@ describe("isLikelyDuplicate — table-driven policy matrix", () => {
       b: { accountId: "checking", amount: 40, date: "2026-06-27", merchant: "Gas" },
       expected: "distinct",
     },
+    {
+      // FIX 1 regression: two genuinely DIFFERENT merchants that only share
+      // generic/geographic tokens via a raw bank descriptor must never
+      // auto-merge. `merchantSimilar('Chipotle', 'Edina Grill')` is false, but
+      // `namesSimilar` (which also pairs the bankDescriptor) would call them
+      // similar — "SQ *CHIPOTLE MEXICAN GRILL EDINA MN" token-subsumes "Edina
+      // Grill" via the shared "edina"/"grill" tokens. If `isLikelyDuplicate`
+      // consulted `namesSimilar` here it would return 'duplicate', and
+      // quickAddExpense (functions/src/quickAdd/index.ts) would silently
+      // discard the second purchase as an "already recorded" merge instead of
+      // writing it. It must stay 'possible' so a human reviews the pair.
+      name: "different merchants sharing only geographic tokens via bankDescriptor → possible, never duplicate",
+      a: {
+        accountId: "checking",
+        amount: 15,
+        date: "2026-06-15",
+        merchant: "Chipotle",
+        bankDescriptor: "SQ *CHIPOTLE MEXICAN GRILL EDINA MN",
+      },
+      b: { accountId: "checking", amount: 15, date: "2026-06-15", merchant: "Edina Grill" },
+      expected: "possible",
+    },
   ];
 
   it.each(cases)("$name", ({ a, b, expected }) => {
