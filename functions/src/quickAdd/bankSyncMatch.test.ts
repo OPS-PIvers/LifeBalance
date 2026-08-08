@@ -223,6 +223,32 @@ describe("pickPendingToConfirm", () => {
     expect(pickPendingToConfirm(withdrawal({ descriptor: posted }), [raw, other])).toBeNull();
   });
 
+  // The crux fix: a candidate's cleaned display merchant and the withdrawal's
+  // raw descriptor can each carry tokens the OTHER lacks (cleaning drops
+  // "AMZN Mktp" → "Amazon"; the raw text drops nothing). Comparing only
+  // `merchant` vs `merchant` misses this pair entirely — today this returns
+  // null and the endpoint would CREATE a duplicate. Carrying the row's raw
+  // `bankDescriptor` alongside its cleaned merchant lets the tie-break
+  // recognise it via EITHER name.
+  it("disambiguates same-amount/date candidates via bankDescriptor when neither display merchant matches the withdrawal (today: null → duplicate)", () => {
+    const correct = pending({
+      id: "correct",
+      merchant: "Amazon",
+      bankDescriptor: "AMZN Mktp US*2H4KL",
+      date: "2026-07-20",
+    });
+    const other = pending({ id: "other", merchant: "Target", date: "2026-07-20" });
+    const w = withdrawal({ descriptor: "AMZN MKTP US*2H4KL AMZN.COM/BILL WA", amount: 18.86 });
+
+    // Without the raw descriptor, neither candidate's display merchant is
+    // similar to the withdrawal's raw text.
+    const correctWithoutDescriptor = { ...correct, bankDescriptor: undefined };
+    expect(pickPendingToConfirm(w, [correctWithoutDescriptor, other])).toBeNull();
+
+    // With it, the correct row is uniquely recognised.
+    expect(pickPendingToConfirm(w, [correct, other])?.id).toBe("correct");
+  });
+
   it("returns null when the tie cannot be broken (ambiguous → falls through to CREATE)", () => {
     const a = pending({ id: "a", merchant: "Mystery", date: "2026-07-20" });
     const b = pending({ id: "b", merchant: "Enigma", date: "2026-07-20" });

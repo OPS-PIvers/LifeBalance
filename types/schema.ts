@@ -475,6 +475,19 @@ export interface Transaction {
    *  transaction, and it is stamped onto rows the sync fills/confirms/pays/creates.
    *  Absent on non-bank-sync transactions. */
   bankRef?: string;
+  /** AI statement-scan capture (`CaptureModal`'s "Add from image" → bank/card
+   *  transaction-list screenshot, `parseBankStatement`): the bank's verbatim
+   *  row text, captured character-for-character alongside the AI-cleaned
+   *  display `merchant` ("PURCHASE JIMMY JOHNS MINNEAPOLIS MN CARD7752" stays
+   *  here while `merchant` becomes "Jimmy Johns"). On a bank-sync row (nightly
+   *  Wells Fargo email, `bankRef`), `merchant` itself already holds the raw
+   *  descriptor — see `functions/src/quickAdd/bankEmailSync.ts` — so this
+   *  field exists ONLY because the statement-scan path is the one writer that
+   *  stores a cleaned name in `merchant` instead. Used ONLY for identity /
+   *  duplicate matching (`utils/transactionIdentity.ts`'s `identityNames`/
+   *  `namesSimilar`), NEVER rendered. Absent on every path that has no raw
+   *  text to capture and on all historical rows — no migration. */
+  bankDescriptor?: string;
   /** The account whose balance is currently AUTHORITATIVE for a bank-sync row
    *  (see `bankRef`/`isBankSyncTransaction`) — the account the nightly sync's
    *  ending-balance write applies to. Stamped once, client-side, the first

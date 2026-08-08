@@ -106,6 +106,23 @@ export interface BankTransactionLike {
   date: string;
   suggestedHabits?: string[];
   store?: string;
+  rawDescriptor?: string;
+}
+
+/** Rules-parity cap (`firestore.rules`'s `bankDescriptor` field limit). */
+const MAX_RAW_DESCRIPTOR_LENGTH = 200;
+
+/**
+ * Coerces the model's optional `rawDescriptor` into a clean value or drops
+ * it: a non-string is treated as absent rather than a validation failure (a
+ * degraded raw descriptor must never fail the whole parse — see
+ * `parseBankStatement`'s schema comment), and the result is trimmed and
+ * capped to match the Firestore rules limit for `Transaction.bankDescriptor`.
+ */
+function coerceRawDescriptor(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim().slice(0, MAX_RAW_DESCRIPTOR_LENGTH);
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 export function validateBankTransactions(raw: unknown): BankTransactionLike[] {
@@ -118,6 +135,12 @@ export function validateBankTransactions(raw: unknown): BankTransactionLike[] {
     if (!isString(o['date'])) fail(`bankStatement[${i}]`, 'date must be a string');
     if (!isOptStringArray(o['suggestedHabits'])) fail(`bankStatement[${i}]`, 'suggestedHabits must be string[]');
     if (!isOptString(o['store'])) fail(`bankStatement[${i}]`, 'store must be a string');
+    const rawDescriptor = coerceRawDescriptor(o['rawDescriptor']);
+    if (rawDescriptor === undefined) {
+      delete o['rawDescriptor'];
+    } else {
+      o['rawDescriptor'] = rawDescriptor;
+    }
     return o as unknown as BankTransactionLike;
   });
 }

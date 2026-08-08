@@ -448,6 +448,11 @@ export interface BankTransactionData {
   date: string;
   suggestedHabits?: string[];
   store?: string;
+  /** The row's text copied exactly as printed in the image — no cleanup, no
+   *  abbreviation expansion, no reformatting. Captured alongside the cleaned
+   *  `merchant` so the bank's own descriptor survives for identity matching
+   *  (see `Transaction.bankDescriptor`). Absent when the model omits it. */
+  rawDescriptor?: string;
 }
 
 export interface GroceryItem {
@@ -934,6 +939,7 @@ export const parseBankStatement = async (
       `Return ONE transaction per row. Never merge or sum rows, not even when two rows share a merchant, an amount, or a date — repeated rows are genuinely separate purchases.`,
       `For each transaction, provide:`,
       `- merchant: The merchant or payee name, cleaned up for a person to read: drop bank prefixes ("PURCHASE", "PURCHASE AUTHORIZED ON 07/22", "RECURRING PAYMENT AUTHORIZED ON"), phone numbers, city/state, card and reference numbers, and website suffixes. "PURCHASE JIMMY JOHNS MINNEAPOLIS MN CARD7752" becomes "Jimmy Johns".`,
+      `- rawDescriptor: That same row's text copied EXACTLY as printed in the image, character for character — no cleanup, no expanding abbreviations, no reformatting. This is the bank's own string, kept so this purchase can be matched against the bank's own records later.`,
       `- amount: The transaction amount in US dollars as a POSITIVE decimal number (even if shown as negative/debit). Parse "1,234.56" as 1234.56 ("." = decimal, "," = thousands separator).`,
       `- date: The transaction date in YYYY-MM-DD format. Today's date is ${today}. If the year is missing, infer it. A row with no date of its own inherits the nearest date header ABOVE it (e.g. a "Posting Date 07/23/2026" separator). Use ${today} only for a row that is marked Pending or Processing and has no date anywhere above it.`,
       `- category: choose exactly one of: ${categoryList}. Use these exact strings only; if none fits, use "${FALLBACK_CATEGORY}".`,
@@ -955,6 +961,7 @@ export const parseBankStatement = async (
           type: Type.OBJECT,
           properties: {
             merchant: { type: Type.STRING },
+            rawDescriptor: { type: Type.STRING },
             amount: { type: Type.NUMBER },
             category: { type: Type.STRING },
             date: { type: Type.STRING },

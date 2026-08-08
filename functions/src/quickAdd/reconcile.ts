@@ -28,16 +28,17 @@
  * Pure + dependency-light on purpose (mirrors `utils/transactionMatch.ts` on the
  * client): data in, decision out — no Firestore here, trivially unit-testable.
  *
- * `pickFillTarget`'s merchant-match decision delegates to `merchantSimilar`
- * from `./transactionIdentity` (plan 03 PR-1) — the shared token-overlap
- * comparator now used across all reconciliation call sites. `normalizeMerchant`
- * stays HERE (not delegated) because it is itself directly unit-tested for
- * exact string output in reconcile.test.ts, and its punctuation handling
- * differs from the identity module's own normalizer (see the divergence note
- * in transactionIdentity.ts) — swapping its output would be an unrelated
- * behavior change this PR does not make.
+ * `pickFillTarget`'s merchant-match decision delegates to `namesSimilar`
+ * from `./transactionIdentity` (plan 03 PR-1, extended to consult each row's
+ * optional `bankDescriptor` alongside its display `merchant`) — the shared
+ * token-overlap comparator now used across all reconciliation call sites.
+ * `normalizeMerchant` stays HERE (not delegated) because it is itself
+ * directly unit-tested for exact string output in reconcile.test.ts, and its
+ * punctuation handling differs from the identity module's own normalizer
+ * (see the divergence note in transactionIdentity.ts) — swapping its output
+ * would be an unrelated behavior change this PR does not make.
  */
-import { merchantSimilar } from "./transactionIdentity";
+import { namesSimilar, merchantSimilar } from "./transactionIdentity";
 
 /**
  * How close in time the two triggers must fire to be considered the same
@@ -77,6 +78,11 @@ export interface ReconcileCandidate {
    *  functions, so adding this field cannot change which row a merge
    *  targets or whether a merge happens at all. */
   cardLast4?: string;
+  /** The bank's verbatim descriptor text for this row, when known (e.g. an
+   *  AI statement-scan capture's raw row text, kept alongside the cleaned
+   *  display `merchant`). Consulted by the `pick*` matchers via `namesSimilar`
+   *  alongside `merchant`, so a row is recognisable by either name. */
+  bankDescriptor?: string;
 }
 
 /** The incoming capture, already parsed/normalized. Depending on the call site
@@ -193,7 +199,10 @@ export function pickFillTarget(
 
   const key = normalizeMerchant(incoming.merchant);
   if (key) {
-    const byMerchant = stubs.filter((s) => merchantSimilar(s.merchant, incoming.merchant));
+    // namesSimilar checks every pairing of the stub's {merchant, bankDescriptor}
+    // against the incoming merchant, so a stub is recognised via EITHER its
+    // cleaned display name or its raw bank descriptor (see transactionIdentity.ts).
+    const byMerchant = stubs.filter((s) => namesSimilar(s, { merchant: incoming.merchant }));
     if (byMerchant.length === 1) return byMerchant[0] ?? null; // strong match
     if (byMerchant.length > 1) return null; // ambiguous → don't guess
   }
@@ -268,7 +277,8 @@ export function buildFillUpdates(
  *    keeps two real identical purchases captured via the bank-only shortcut from
  *    collapsing into one.
  *  - Account must not conflict (a different tagged card ⇒ a different purchase).
- *  - Amount must match to the cent and the merchant must be {@link merchantSimilar}.
+ *  - Amount must match to the cent and the merchant must be {@link namesSimilar}
+ *    (the candidate's cleaned display merchant OR its raw `bankDescriptor`).
  *  - EXACTLY ONE candidate must qualify. Zero → new row; two or more → ambiguous,
  *    so we under-merge (new row the user reconciles) rather than guess.
  *
@@ -292,7 +302,7 @@ export function pickDuplicateShortcutRow(
       return false;
     }
     if (amountCents(c.amount) !== amountCents(incoming.amount)) return false;
-    return merchantSimilar(c.merchant, incoming.merchant);
+    return namesSimilar(c, { merchant: incoming.merchant });
   });
   return eligible.length === 1 ? (eligible[0] ?? null) : null;
 }
@@ -348,6 +358,11 @@ export function buildDuplicateMergeUpdates(
  *    captured via the bank-only shortcut from collapsing into one.
  *  - Account must not conflict (a different tagged card ⇒ a different purchase).
  *  - Amount must match to the cent and the merchant must be {@link merchantSimilar}.
+ *    NOTE: unlike {@link pickFillTarget}/{@link pickDuplicateShortcutRow}, this
+ *    picker is deliberately NOT migrated to `namesSimilar` — its candidate here
+ *    is always a bank-notification row (`c.fromBankNotification`), and the
+ *    incoming side is always a non-bank Apple Pay capture that carries no
+ *    `bankDescriptor` of its own, so there is no raw-descriptor pairing to gain.
  *  - EXACTLY ONE candidate must qualify. Zero → new row; two or more → ambiguous,
  *    so we under-merge (new row the user reconciles) rather than guess.
  *

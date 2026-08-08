@@ -118,6 +118,30 @@ describe("pickFillTarget", () => {
     const target = pickFillTarget({ amount: 13.31, merchant: "   " }, candidates);
     expect(target?.id).toBe("s1");
   });
+
+  // The crux fix: a stub's cleaned display merchant can invent a token the
+  // incoming raw bank text never had ("AMZN Mktp US*2H4KL" → "Amazon"), so
+  // comparing only `merchant` vs `merchant` misses the pair. Carrying the
+  // stub's raw `bankDescriptor` alongside its cleaned merchant lets the
+  // strong match recognise it via EITHER name.
+  it("fills via the stub's raw bankDescriptor when its cleaned merchant doesn't overlap the incoming raw text", () => {
+    const withDescriptor: ReconcileCandidate = {
+      id: "s1",
+      merchant: "Amazon",
+      amount: 0,
+      needsAmount: true,
+      bankDescriptor: "AMZN Mktp US*2H4KL",
+    };
+    const unrelated = stub("s2", "Unrelated Hold");
+    const incoming = { amount: 42, merchant: "AMZN MKTP US*2H4KL AMZN.COM/BILL WA" };
+
+    // The cleaned name alone would NOT match — confirms this is really the
+    // raw-descriptor path, not a coincidental merchant match.
+    expect(pickFillTarget(incoming, [{ ...withDescriptor, bankDescriptor: undefined }, unrelated])).toBeNull();
+
+    const target = pickFillTarget(incoming, [withDescriptor, unrelated]);
+    expect(target?.id).toBe("s1");
+  });
 });
 
 describe("buildFillUpdates", () => {

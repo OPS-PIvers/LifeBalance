@@ -597,9 +597,13 @@ export const bankEmailSync = onRequest(
         const merchant = typeof data.merchant === "string" ? data.merchant : "";
         const date = typeof data.date === "string" ? data.date : today;
         const accountId = typeof data.accountId === "string" ? data.accountId : undefined;
+        // Statement-scan capture's raw row text (see Transaction.bankDescriptor),
+        // when present — lets the CONFIRM/FILL matchers recognise this row via
+        // either its cleaned display merchant or the bank's own raw text.
+        const bankDescriptor = typeof data.bankDescriptor === "string" ? data.bankDescriptor : undefined;
         // accountId gates CONFIRM so a credit-card / other-account pending row is
         // never verified by this checking email (item 3).
-        pendingCandidates.push({ id: d.id, amount, date, merchant, accountId });
+        pendingCandidates.push({ id: d.id, amount, date, merchant, accountId, bankDescriptor });
         stubCandidates.push({
           id: d.id,
           amount,
@@ -612,6 +616,7 @@ export const bankEmailSync = onRequest(
           // an incoming one is safe to write — mirrors index.ts's
           // reconcileCandidates construction (the quickAddExpense endpoint).
           cardLast4: typeof data.cardLast4 === "string" ? data.cardLast4 : undefined,
+          bankDescriptor,
           date,
         });
       }
@@ -715,6 +720,7 @@ export const bankEmailSync = onRequest(
             date: typeof data.date === "string" ? data.date : today,
             merchant: typeof data.merchant === "string" ? data.merchant : "",
             accountId: typeof data.accountId === "string" ? data.accountId : undefined,
+            bankDescriptor: typeof data.bankDescriptor === "string" ? data.bankDescriptor : undefined,
           });
         }
       }

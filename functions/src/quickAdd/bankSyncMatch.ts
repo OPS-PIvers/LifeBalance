@@ -38,7 +38,7 @@
  */
 
 import type { BankEmailWithdrawal } from "./bankEmailParser";
-import { merchantSimilar, INCOME_CATEGORY } from "./transactionIdentity";
+import { namesSimilar, INCOME_CATEGORY } from "./transactionIdentity";
 import { pickFillTarget, type ReconcileCandidate } from "./reconcile";
 import { pickMerchantRule, type MerchantRule } from "./merchantRules";
 
@@ -60,6 +60,11 @@ export interface PendingConfirmCandidate {
    *  resolved account or is undefined (untagged — the common case for
    *  voice/shortcut captures, which land on the checking pool). */
   accountId?: string;
+  /** The bank's verbatim descriptor text for this row, when known (e.g. an
+   *  AI statement-scan capture's raw row text, kept alongside the cleaned
+   *  display `merchant`). Consulted ONLY by the merchant tie-break in
+   *  {@link pickPendingToConfirm} via `namesSimilar`. */
+  bankDescriptor?: string;
 }
 
 /**
@@ -283,7 +288,10 @@ export function pickPendingToConfirm(
   if (near.length === 1) return near[0] ?? null;
 
   // Ambiguous on amount+date alone → break the tie with merchant similarity.
-  const similar = near.filter((c) => merchantSimilar(c.merchant, withdrawal.descriptor));
+  // namesSimilar checks every pairing of each side's {merchant, bankDescriptor}
+  // names, so a candidate recognises the withdrawal via EITHER its cleaned
+  // display merchant or its raw bank descriptor (see transactionIdentity.ts).
+  const similar = near.filter((c) => namesSimilar(c, { merchant: withdrawal.descriptor }));
   return similar.length === 1 ? (similar[0] ?? null) : null;
 }
 

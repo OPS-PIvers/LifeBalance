@@ -107,6 +107,7 @@ export const plaidsynctransactions = onSchedule(
             status: data.status,
             accountId: typeof data.accountId === "string" ? data.accountId : undefined,
             needsAmount: data.needsAmount === true,
+            bankDescriptor: typeof data.bankDescriptor === "string" ? data.bankDescriptor : undefined,
           };
         })
         .filter((row): row is ExistingRow => row !== null);

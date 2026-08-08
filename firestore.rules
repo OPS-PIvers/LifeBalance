@@ -566,6 +566,8 @@ service cloud.firestore {
                               isValidOptionalString(request.resource.data.get('store', null), 100) &&
                               isValidOptionalString(request.resource.data.get('accountId', null), 50) &&
                               isValidOptionalString(request.resource.data.get('subBucketId', null), 50) &&
+                              // Plan: raw bank descriptor captured by the AI statement scan — identity/matching only, never rendered.
+                              isValidOptionalString(request.resource.data.get('bankDescriptor', null), 200) &&
                               isValidOptionalString(request.resource.data.get('needsAmountPromptedAt', null), 30) && // ISO timestamp
                               isValidOptionalString(request.resource.data.get('reviewSnoozedUntil', null), 10) && // YYYY-MM-DD Action-Queue snooze
                               isValidOptionalString(request.resource.data.get('plaidTransactionId', null), 100) && // Plaid dedup key (server writes via Admin SDK; this is defense-in-depth)
