@@ -13,7 +13,7 @@ LifeBalance is a comprehensive household management application designed to gami
 
 ### 🎮 Gamified Habits
 - **Habit Tracking**: Track daily and weekly habits with customizable scoring (threshold vs. incremental).
-- **Streak System**: Earn multipliers for consistency (1.5x for 3-6 days, 2.0x for 7+ days).
+- **Streak System**: Earn multipliers for consistency (2x for 3-6 days, 3x for 7+ days).
 - **Freeze Bank**: Earn "Freeze Tokens" to patch missed days and maintain streaks.
 - **Challenges & Yearly Goals**: Set long-term targets and track progress over time.
 - **Rewards**: Redeem points for real-world rewards defined by the household.
