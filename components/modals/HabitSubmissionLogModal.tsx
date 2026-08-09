@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { X, Plus, Edit2, Trash2, Calendar, TrendingUp, Award, Flame, BarChart3, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { X, Plus, Edit2, Trash2, Calendar, TrendingUp, Award, Flame, BarChart3, ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Habit, HabitMood, HabitSubmission } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { format, parseISO, startOfWeek, endOfWeek, subWeeks, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
@@ -21,6 +21,12 @@ import { Section, StatGroup, Stat } from '@/components/ui/Section';
 const MOOD_EMOJI: Record<HabitMood, string> = { great: '😄', good: '🙂', meh: '😐', rough: '😣' };
 const NOTE_MAX_LENGTH = 280;
 
+// `getHabitSubmissions` never rejects (it catches internally and returns []),
+// so the ONLY way this load fails is a `getDocs` that never settles — which
+// left the modal spinning forever with no way out. Race it so a wedged fetch
+// becomes a visible, retryable error instead of a permanent spinner.
+const SUBMISSION_LOAD_TIMEOUT_MS = 15_000;
+
 interface HabitSubmissionLogModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -36,6 +42,8 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
 
   const [submissions, setSubmissions] = useState<HabitSubmission[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const loadGenerationRef = useRef(0);
   const [editingSubmission, setEditingSubmission] = useState<HabitSubmission | null>(null);
   const [isAddMode, setIsAddMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'log' | 'stats' | 'calendar'>('log');
@@ -51,15 +59,39 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
 
   const loadSubmissions = useCallback(async () => {
+    // Bump the generation before awaiting anything, so a stale in-flight call
+    // can recognize itself as stale and refuse to touch state below. Note this
+    // is NOT about the timed-out fetch: once the timeout branch of the race
+    // below wins, the losing fetch is inert and can never reach setState. The
+    // real overlap is two loads genuinely in flight at once — the user closes
+    // and reopens the modal, or an add/edit/delete triggers its own reload —
+    // which can settle out of order and leave the older result displayed.
+    const generation = ++loadGenerationRef.current;
     setIsLoading(true);
+    setLoadError(false);
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const subs = await getHabitSubmissions(habit.id);
+      const subs = await Promise.race([
+        getHabitSubmissions(habit.id),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(
+            () => reject(new Error('Timed out loading habit submissions')),
+            SUBMISSION_LOAD_TIMEOUT_MS
+          );
+        }),
+      ]);
+      // Another loadSubmissions() call started after this one (e.g. a Retry
+      // click) — let it own the result; applying this stale one would clobber
+      // whatever the newer call already wrote (or is about to write).
+      if (generation !== loadGenerationRef.current) return;
       setSubmissions(subs);
     } catch (error) {
       console.error('Failed to load submissions:', error);
-      toast.error('Failed to load submission history');
+      if (generation !== loadGenerationRef.current) return;
+      setLoadError(true);
     } finally {
-      setIsLoading(false);
+      if (timer) clearTimeout(timer);
+      if (generation === loadGenerationRef.current) setIsLoading(false);
     }
   }, [getHabitSubmissions, habit.id]);
 
@@ -256,7 +288,19 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
 
         {/* Content */}
         <div className="scroll-contain-y">
-          {isLoading ? (
+          {loadError ? (
+            <EmptyState
+              tone="danger"
+              icon={<AlertTriangle />}
+              title="Couldn't load history"
+              description="This habit's history didn't load. Check your connection and try again."
+              action={
+                <Button variant="secondary" onClick={loadSubmissions}>
+                  Try again
+                </Button>
+              }
+            />
+          ) : isLoading ? (
             <div className="text-center py-12 text-brand-400 dark:text-brand-400">
               <div className="animate-spin w-8 h-8 border-4 border-brand-200 dark:border-brand-700 border-t-brand-600 rounded-full mx-auto mb-3"></div>
               Loading...
