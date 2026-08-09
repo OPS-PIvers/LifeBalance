@@ -356,12 +356,12 @@ describe('habitAttribution — per-member streaks', () => {
   });
 
   it('uses the member’s PROSPECTIVE streak for the next completion', () => {
-    // Paul already has Mon+Tue; completing Wed makes it 3 → the 1.5× tier.
+    // Paul already has Mon+Tue; completing Wed makes it 3 → the 2.0× tier.
     const h = habit({
       completedDates: [d(0), d(1)],
       completedBy: { [d(0)]: { [PAUL]: 1 }, [d(1)]: { [PAUL]: 1 } },
     });
-    expect(prospectiveMultiplierForMember(h, PAUL, d(2), d(2))).toBe(1.5);
+    expect(prospectiveMultiplierForMember(h, PAUL, d(2), d(2))).toBe(2.0);
     // Jen starts from nothing, so her first completion is still 1.0×.
     expect(prospectiveMultiplierForMember(h, JEN, d(2), d(2))).toBe(1.0);
   });
@@ -412,10 +412,10 @@ describe('habitAttribution — per-member frozen dates', () => {
   });
 
   it('feeds the PROSPECTIVE multiplier for that member only', () => {
-    // Paul: Mon, (Tue frozen), Wed → completing Thu makes 3 → 1.5×.
+    // Paul: Mon, (Tue frozen), Wed → completing Thu makes 3 → 2.0×.
     // Jen: same completions, no freeze → Thu is only her 2nd in a row → 1.0×.
     const h = monWed({ frozenDatesBy: { [d(1)]: [PAUL] } });
-    expect(prospectiveMultiplierForMember(h, PAUL, d(3), d(3))).toBe(1.5);
+    expect(prospectiveMultiplierForMember(h, PAUL, d(3), d(3))).toBe(2.0);
     expect(prospectiveMultiplierForMember(h, JEN, d(3), d(3))).toBe(1.0);
   });
 
@@ -469,7 +469,7 @@ describe('habitAttribution — per-member scoring', () => {
   });
 
   it('applies the member’s streak tier to every unit of a multi-count day', () => {
-    // Paul's own streak reaches 3 on Wed → 1.5× → floor(10 × 1.5) = 15 per unit.
+    // Paul's own streak reaches 3 on Wed → 2.0× → floor(10 × 2.0) = 20 per unit.
     const h = habit({
       count: 2,
       completedDates: [d(0), d(1), d(2)],
@@ -479,7 +479,7 @@ describe('habitAttribution — per-member scoring', () => {
         [d(2)]: { [PAUL]: 2 },
       },
     });
-    expect(memberPointsForHabitOnDate(h, PAUL, d(2), d(2))).toBe(30);
+    expect(memberPointsForHabitOnDate(h, PAUL, d(2), d(2))).toBe(40);
   });
 
   it('debits a NEGATIVE habit’s attributed units', () => {
@@ -563,8 +563,8 @@ describe('habitAttribution — per-member scoring', () => {
         [d(2)]: { [PAUL]: 1 },
       },
     });
-    // Paul: Mon 10 (streak 1) + Tue 10 (streak 2) + Wed 15 (streak 3 → 1.5×).
-    expect(calculateMemberPointsForDateRange([h], PAUL, d(0), d(2), d(2))).toBe(35);
+    // Paul: Mon 10 (streak 1) + Tue 10 (streak 2) + Wed 20 (streak 3 → 2.0×).
+    expect(calculateMemberPointsForDateRange([h], PAUL, d(0), d(2), d(2))).toBe(40);
     expect(calculateMemberPointsForDateRange([h], JEN, d(0), d(2), d(2))).toBe(20);
     // Range bounds are respected.
     expect(calculateMemberPointsForDateRange([h], PAUL, d(1), d(1), d(2))).toBe(10);
@@ -657,7 +657,7 @@ describe('habitAttribution — household decomposition (grandfathering)', () => 
 
   it('scores an attributed day at the MEMBER’s multiplier, not the habit’s', () => {
     // 🏁 The visible consequence of the flip, pinned. The HABIT has a 3-day
-    // streak (1.5× → 15), but Paul's own chain starts today, so today's single
+    // streak (2.0× → 20), but Paul's own chain starts today, so today's single
     // completion is worth his 1.0× tier (10) — to him AND to the household.
     // Monday's and Tuesday's grandfathered completions still count for the
     // household on THEIR OWN dates; they do not prop up Wednesday.
@@ -667,7 +667,7 @@ describe('habitAttribution — household decomposition (grandfathering)', () => 
       completedBy: { [d(2)]: { [PAUL]: 1 } },
     });
     const wednesday = decomposeDayPoints([h], [PAUL, JEN], d(2), undefined, d(2));
-    expect(wednesday.legacy).toBe(15);
+    expect(wednesday.legacy).toBe(20);
     expect(wednesday.household).toBe(10);
     expect(wednesday.byMember).toEqual({ [PAUL]: 10, [JEN]: 0 });
     expect(wednesday.unattributed).toBe(0);
@@ -741,14 +741,14 @@ describe('habitAttribution — un-credit reversal math', () => {
       },
     });
     const after = { ...withAttributionDelta(before, d(2), PAUL, -1), count: 1 };
-    // Paul is on a 3-day streak → 15/unit, so removing one unit costs 15.
-    expect(memberPeriodPointsDelta(before, after, PAUL, d(2), d(2))).toBe(-15);
+    // Paul is on a 3-day streak → 20/unit, so removing one unit costs 20.
+    expect(memberPeriodPointsDelta(before, after, PAUL, d(2), d(2))).toBe(-20);
   });
 
   it('reverses a HISTORICAL completion at the multiplier that applied THEN', () => {
-    // Paul's streak reached 7 by Sunday (2.0×), but the Wednesday completion
-    // being un-credited only ever earned the 3-day 1.5× tier. Reversing at
-    // today's multiplier would claw back 20 instead of 15.
+    // Paul's streak reached 7 by Sunday (3.0×), but the Wednesday completion
+    // being un-credited only ever earned the 3-day 2.0× tier. Reversing at
+    // today's multiplier would claw back 30 instead of 20.
     const dates = [d(0), d(1), d(2), d(3), d(4), d(5), d(6)];
     const before = habit({
       count: 1,
@@ -756,10 +756,10 @@ describe('habitAttribution — un-credit reversal math', () => {
       completedBy: Object.fromEntries(dates.map(date => [date, { [PAUL]: 1 }])),
     });
     expect(streakEndingOnForMember(before, PAUL, d(6), d(6))).toBe(7);
-    expect(memberPointsForHabitOnDate(before, PAUL, d(6), d(6))).toBe(20);
+    expect(memberPointsForHabitOnDate(before, PAUL, d(6), d(6))).toBe(30);
 
     const after = withAttributionDelta(before, d(2), PAUL, -1);
-    expect(memberPeriodPointsDelta(before, after, PAUL, d(2), d(6))).toBe(-15);
+    expect(memberPeriodPointsDelta(before, after, PAUL, d(2), d(6))).toBe(-20);
   });
 
   it('gates a reversal’s buckets by the date it was earned on', () => {
@@ -1518,7 +1518,7 @@ describe('habitAttribution — household recompute (the written figure)', () => 
 
   it('computeHouseholdPointsSync sums the member awards, not the habit multiplier', () => {
     // Paul on a 7-day habit chain but his OWN chain is 3 days: the household
-    // weekly figure follows HIS 1.5× tier, not the habit's 2.0×.
+    // weekly figure follows HIS 2.0× tier, not the habit's 3.0×.
     const dates = [d(-4), d(-3), d(-2), d(0), d(1), d(2)];
     const h = habit({
       count: 1,
@@ -1531,10 +1531,10 @@ describe('habitAttribution — household recompute (the written figure)', () => 
     });
     const now = parseISO(`${d(2)}T12:00:00`);
     const { points } = computeHouseholdPointsSync([h], { daily: 0, weekly: 0, total: 0 }, now);
-    // Paul: Mon 10 (streak 1) + Tue 10 (streak 2) + Wed 15 (streak 3 → 1.5×).
-    expect(points.weekly).toBe(35);
-    expect(points.daily).toBe(15);
-    expect(calculateMemberPointsForDateRange([h], PAUL, d(0), d(2), d(2))).toBe(35);
+    // Paul: Mon 10 (streak 1) + Tue 10 (streak 2) + Wed 20 (streak 3 → 2.0×).
+    expect(points.weekly).toBe(40);
+    expect(points.daily).toBe(20);
+    expect(calculateMemberPointsForDateRange([h], PAUL, d(0), d(2), d(2))).toBe(40);
   });
 });
 
@@ -1909,11 +1909,11 @@ describe('household credit scores through the UNATTRIBUTED path (no new scorer)'
     expect(decomposed.household).toBe(20);
   });
 
-  it('uses the habit’s flame, not a member’s — a long streak still pays 2.0x', () => {
-    // Seven consecutive days: the HABIT is at 2.0x, and nobody has a personal
+  it('uses the habit’s flame, not a member’s — a long streak still pays 3.0x', () => {
+    // Seven consecutive days: the HABIT is at 3.0x, and nobody has a personal
     // chain at all. That is the locked answer for a household award.
     const dates = [0, 1, 2, 3, 4, 5, 6].map(d);
     const h = habit({ creditMode: 'household', count: 1, completedDates: dates });
-    expect(unattributedPointsForHabitOnDate(h, d(6), d(6))).toBe(20);
+    expect(unattributedPointsForHabitOnDate(h, d(6), d(6))).toBe(30);
   });
 });

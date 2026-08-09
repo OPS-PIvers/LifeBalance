@@ -299,7 +299,7 @@ describe('HabitCard - auto-applied freeze protection (Plan 25)', () => {
 
 describe('HabitCard - period-aware multiplier display', () => {
   // basePoints is 10 everywhere below, so the points badge text directly
-  // encodes the applied multiplier: "10 pts" = 1.0x, "15 pts" = 1.5x, "20 pts" = 2.0x.
+  // encodes the applied multiplier: "10 pts" = 1.0x, "20 pts" = 2.0x, "30 pts" = 3.0x.
   const baseWeekly: Habit = {
     id: 'h1',
     title: 'Weekly Habit',
@@ -321,11 +321,11 @@ describe('HabitCard - period-aware multiplier display', () => {
     setupMatchMedia(true);
   });
 
-  it('weekly habit with a 2-week streak shows the 1.5x multiplier (15 pts), not 1.0x', () => {
+  it('weekly habit with a 2-week streak shows the 2.0x multiplier (20 pts), not 1.0x', () => {
     render(<HabitCard habit={{ ...baseWeekly, streakDays: 2 }} />);
 
-    // 1.5x of 10 base points = 15. The hardcoded daily ladder would show 10 (1.0x).
-    expect(screen.getByText('15 pts')).toBeInTheDocument();
+    // 2.0x of 10 base points = 20. The hardcoded daily ladder would show 10 (1.0x).
+    expect(screen.getByText('20 pts')).toBeInTheDocument();
     expect(screen.queryByText('10 pts')).not.toBeInTheDocument();
   });
 
@@ -341,30 +341,30 @@ describe('HabitCard - period-aware multiplier display', () => {
     expect(screen.queryByText(/5 Days?/)).not.toBeInTheDocument();
   });
 
-  it('weekly habit with a 4-week streak shows the 2.0x multiplier (20 pts)', () => {
+  it('weekly habit with a 4-week streak shows the 3.0x multiplier (30 pts)', () => {
     render(<HabitCard habit={{ ...baseWeekly, streakDays: 4 }} />);
 
-    expect(screen.getByText('20 pts')).toBeInTheDocument();
+    expect(screen.getByText('30 pts')).toBeInTheDocument();
     expect(screen.queryByText(/4 Weeks?/)).not.toBeInTheDocument();
   });
 
-  it('weekly habit with a 1-week streak nudges "1 week from 1.5x" (week unit, not day)', () => {
+  it('weekly habit with a 1-week streak nudges "1 week from 2x" (week unit, not day)', () => {
     render(<HabitCard habit={{ ...baseWeekly, streakDays: 1 }} />);
 
-    expect(screen.getByText('1 week from 1.5x!')).toBeInTheDocument();
+    expect(screen.getByText('1 week from 2x!')).toBeInTheDocument();
     // The old daily-only ladder would never nudge at streakDays === 1, and would
     // use the "day" unit; make sure neither leaks through.
-    expect(screen.queryByText(/from 2x/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/from 3x/)).not.toBeInTheDocument();
     expect(screen.queryByText(/1 day from/)).not.toBeInTheDocument();
   });
 
-  it('weekly habit with a 3-week streak nudges "1 week from 2x"', () => {
+  it('weekly habit with a 3-week streak nudges "1 week from 3x"', () => {
     render(<HabitCard habit={{ ...baseWeekly, streakDays: 3 }} />);
 
-    expect(screen.getByText('1 week from 2x!')).toBeInTheDocument();
+    expect(screen.getByText('1 week from 3x!')).toBeInTheDocument();
   });
 
-  it('regression: daily habit with a 3-day streak still shows 1.5x (15 pts)', () => {
+  it('regression: daily habit with a 3-day streak still shows 2.0x (20 pts)', () => {
     const dailyHabit: Habit = {
       ...baseWeekly,
       title: 'Daily Habit',
@@ -373,13 +373,13 @@ describe('HabitCard - period-aware multiplier display', () => {
     };
     render(<HabitCard habit={dailyHabit} />);
 
-    expect(screen.getByText('15 pts')).toBeInTheDocument();
+    expect(screen.getByText('20 pts')).toBeInTheDocument();
     // Daily nudge ladder unchanged: no nudge fires at a 3-day streak.
-    expect(screen.queryByText(/from 1.5x/)).not.toBeInTheDocument();
     expect(screen.queryByText(/from 2x/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/from 3x/)).not.toBeInTheDocument();
   });
 
-  it('regression: daily habit with a 2-day streak still nudges "1 day from 1.5x"', () => {
+  it('regression: daily habit with a 2-day streak still nudges "1 day from 2x"', () => {
     const dailyHabit: Habit = {
       ...baseWeekly,
       title: 'Daily Habit',
@@ -388,7 +388,7 @@ describe('HabitCard - period-aware multiplier display', () => {
     };
     render(<HabitCard habit={dailyHabit} />);
 
-    expect(screen.getByText('1 day from 1.5x!')).toBeInTheDocument();
+    expect(screen.getByText('1 day from 2x!')).toBeInTheDocument();
   });
 });
 

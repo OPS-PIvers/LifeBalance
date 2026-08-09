@@ -205,7 +205,7 @@ const HABIT_CASES: HabitCase[] = [
     }),
   },
   {
-    name: "weekly, fully grandfathered, 4-week streak (2.0x)",
+    name: "weekly, fully grandfathered, 4-week streak (3.0x)",
     habit: habit({
       title: "Weekly review",
       period: "weekly",

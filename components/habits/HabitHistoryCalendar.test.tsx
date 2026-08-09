@@ -141,7 +141,7 @@ describe('HabitHistoryCalendar', () => {
 
   it('shows signed net points on day cells (green positive)', () => {
     // Jan 15: Workout (+10, streak 1) + Read (+5) = +15; Jan 16: Workout with
-    // a 2-day streak (< the 3-day 1.5x tier) = +10.
+    // a 2-day streak (< the 3-day 2.0x tier) = +10.
     render(<HabitHistoryCalendar />);
 
     expect(screen.getByRole('button', { name: /Jan 15: \+15 points/ })).toBeInTheDocument();

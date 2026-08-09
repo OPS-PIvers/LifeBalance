@@ -184,7 +184,7 @@ describe('memberAttributedPointsOnDate', () => {
     });
     expect(memberAttributedPointsOnDate(h, 'u1', MON, WEEK_END)).toBe(10); // streak 1 → 1.0x
     expect(memberAttributedPointsOnDate(h, 'u1', TUE, WEEK_END)).toBe(10); // streak 2 → 1.0x
-    expect(memberAttributedPointsOnDate(h, 'u1', WED, WEEK_END)).toBe(15); // streak 3 → 1.5x
+    expect(memberAttributedPointsOnDate(h, 'u1', WED, WEEK_END)).toBe(20); // streak 3 → 2.0x
   });
 
   it('never multiplies a NEGATIVE habit, and signs it negative', () => {
@@ -195,7 +195,7 @@ describe('memberAttributedPointsOnDate', () => {
       completedDates: [MON, TUE, WED, THU],
       completedBy: Object.fromEntries([MON, TUE, WED, THU].map(d => [d, { u1: 2 }])),
     });
-    // A 4-day streak would be 1.5x for a positive habit; negatives stay at 1.0x.
+    // A 4-day streak would be 2.0x for a positive habit; negatives stay at 1.0x.
     expect(memberAttributedPointsOnDate(h, 'u1', THU, WEEK_END)).toBe(-20);
   });
 
@@ -232,7 +232,7 @@ describe('unattributedPointsOnDate — the grandfathering term', () => {
   it('scores a habit with an EMPTY completedBy exactly as the legacy scorer did', () => {
     const h = habit({ completedDates: [MON, TUE, WED] });
     expect(unattributedPointsOnDate(h, MON, WEEK_END)).toBe(10); // streak 1
-    expect(unattributedPointsOnDate(h, WED, WEEK_END)).toBe(15); // streak 3 → 1.5x
+    expect(unattributedPointsOnDate(h, WED, WEEK_END)).toBe(20); // streak 3 → 2.0x
   });
 
   it('treats a present-but-empty completedBy map identically', () => {
@@ -299,16 +299,16 @@ describe('weekly-period habits', () => {
     expect(unattributedPointsOnDate(h, SAT, WEEK_END)).toBe(8);
   });
 
-  it('earns week-cadence multipliers (2 weeks → 1.5x, 4 → 2.0x)', () => {
+  it('earns week-cadence multipliers (2 weeks → 2.0x, 4 → 3.0x)', () => {
     const twoWeeks = habit({ period: 'weekly', basePoints: 20, completedDates: [P_TUE, WED] });
-    expect(unattributedPointsOnDate(twoWeeks, WED, WEEK_END)).toBe(30);
+    expect(unattributedPointsOnDate(twoWeeks, WED, WEEK_END)).toBe(40);
 
     const fourWeeks = habit({
       period: 'weekly',
       basePoints: 20,
       completedDates: ['2026-06-08', '2026-06-15', P_TUE, WED],
     });
-    expect(unattributedPointsOnDate(fourWeeks, WED, WEEK_END)).toBe(40);
+    expect(unattributedPointsOnDate(fourWeeks, WED, WEEK_END)).toBe(60);
   });
 
   it('sums to the week’s total exactly once across the 7 days', () => {
@@ -430,7 +430,7 @@ describe('assembleCeremony', () => {
     expect(result.memberFacts).toEqual([]);
     // The household series is still emitted in full.
     expect(result.dailyPoints).toHaveLength(7);
-    expect(result.totalPoints).toBe(10 + 10 + 15);
+    expect(result.totalPoints).toBe(10 + 10 + 20);
     expect(result.dailyPoints.every(d => Object.keys(d.byMember).length === 0)).toBe(true);
   });
 

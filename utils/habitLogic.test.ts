@@ -135,14 +135,14 @@ describe('habitLogic', () => {
       expect(getMultiplier(2, true)).toBe(1.0);
     });
 
-    it('returns 1.5 for streak >= 3 and < 7', () => {
-      expect(getMultiplier(3, true)).toBe(1.5);
-      expect(getMultiplier(6, true)).toBe(1.5);
+    it('returns 2.0 for streak >= 3 and < 7', () => {
+      expect(getMultiplier(3, true)).toBe(2.0);
+      expect(getMultiplier(6, true)).toBe(2.0);
     });
 
-    it('returns 2.0 for streak >= 7', () => {
-      expect(getMultiplier(7, true)).toBe(2.0);
-      expect(getMultiplier(100, true)).toBe(2.0);
+    it('returns 3.0 for streak >= 7', () => {
+      expect(getMultiplier(7, true)).toBe(3.0);
+      expect(getMultiplier(100, true)).toBe(3.0);
     });
 
     it('always returns 1.0 for non-positive habits', () => {
@@ -206,11 +206,11 @@ describe('habitLogic', () => {
         expect(result?.updatedHabit.completedDates).not.toContain(today);
       });
 
-      it('applies multiplier to incremental points — 6-day history gives 7-day new streak (2.0x)', () => {
+      it('applies multiplier to incremental points — 6-day history gives 7-day new streak (3.0x)', () => {
         // History: 6 consecutive days ending yesterday (days 1–6 ago).
         // Today is NOT yet in completedDates when the toggle is called.
         // After the fix, the multiplier is computed from the PROSPECTIVE streak that
-        // includes today → streak becomes 7 → 2.0x.
+        // includes today → streak becomes 7 → 3.0x.
         const history: string[] = [];
         for (let i = 1; i <= 6; i++) {
           history.push(format(subDays(new Date(), i), 'yyyy-MM-dd'));
@@ -218,21 +218,21 @@ describe('habitLogic', () => {
 
         const habit = { ...baseHabit, completedDates: history, streakDays: 6 };
         const result = processToggleHabit(habit, 'up');
-        expect(result?.multiplier).toBe(2.0);
-        expect(result?.pointsChange).toBe(20); // 10 * 2.0
+        expect(result?.multiplier).toBe(3.0);
+        expect(result?.pointsChange).toBe(30); // 10 * 3.0
       });
 
-      it('applies multiplier to incremental points — 2-day history gives 3-day new streak (1.5x)', () => {
+      it('applies multiplier to incremental points — 2-day history gives 3-day new streak (2.0x)', () => {
         // History: 2 consecutive days ending yesterday.
-        // Including today → streak = 3 → 1.5x.
+        // Including today → streak = 3 → 2.0x.
         const history = [
           format(subDays(new Date(), 1), 'yyyy-MM-dd'),
           format(subDays(new Date(), 2), 'yyyy-MM-dd'),
         ];
         const habit = { ...baseHabit, completedDates: history, streakDays: 2 };
         const result = processToggleHabit(habit, 'up');
-        expect(result?.multiplier).toBe(1.5);
-        expect(result?.pointsChange).toBe(15); // 10 * 1.5
+        expect(result?.multiplier).toBe(2.0);
+        expect(result?.pointsChange).toBe(20); // 10 * 2.0
       });
     });
 
@@ -313,40 +313,40 @@ describe('habitLogic', () => {
           expect(result?.pointsChange).toBe(100);
         });
 
-        it('day-3 completion (2-day history) gets 1.5x multiplier', () => {
+        it('day-3 completion (2-day history) gets 2.0x multiplier', () => {
           const history = [
             format(subDays(new Date(), 1), 'yyyy-MM-dd'),
             format(subDays(new Date(), 2), 'yyyy-MM-dd'),
           ];
           const habit = { ...singleStepHabit, completedDates: history };
           const result = processToggleHabit(habit, 'up');
-          // new streak = 3 → 1.5x (previously the bug made this return 1.0x)
-          expect(result?.multiplier).toBe(1.5);
-          expect(result?.pointsChange).toBe(150);
+          // new streak = 3 → 2.0x (previously the bug made this return 1.0x)
+          expect(result?.multiplier).toBe(2.0);
+          expect(result?.pointsChange).toBe(200);
         });
 
-        it('day-6 completion (5-day history) gets 1.5x multiplier', () => {
+        it('day-6 completion (5-day history) gets 2.0x multiplier', () => {
           const history: string[] = [];
           for (let i = 1; i <= 5; i++) {
             history.push(format(subDays(new Date(), i), 'yyyy-MM-dd'));
           }
           const habit = { ...singleStepHabit, completedDates: history };
           const result = processToggleHabit(habit, 'up');
-          // new streak = 6 → still 1.5x
-          expect(result?.multiplier).toBe(1.5);
-          expect(result?.pointsChange).toBe(150);
+          // new streak = 6 → still 2.0x
+          expect(result?.multiplier).toBe(2.0);
+          expect(result?.pointsChange).toBe(200);
         });
 
-        it('day-7 completion (6-day history) gets 2.0x multiplier', () => {
+        it('day-7 completion (6-day history) gets 3.0x multiplier', () => {
           const history: string[] = [];
           for (let i = 1; i <= 6; i++) {
             history.push(format(subDays(new Date(), i), 'yyyy-MM-dd'));
           }
           const habit = { ...singleStepHabit, completedDates: history };
           const result = processToggleHabit(habit, 'up');
-          // new streak = 7 → 2.0x (previously the bug made this return 1.5x)
-          expect(result?.multiplier).toBe(2.0);
-          expect(result?.pointsChange).toBe(200);
+          // new streak = 7 → 3.0x (previously the bug made this return 2.0x)
+          expect(result?.multiplier).toBe(3.0);
+          expect(result?.pointsChange).toBe(300);
         });
 
         it('toggle-down from completed today uses OLD streak (no regression)', () => {
@@ -363,9 +363,9 @@ describe('habitLogic', () => {
             streakDays: 7,
           };
           const result = processToggleHabit(habit, 'down');
-          // Removing today → old streak was 7 → 2.0x removed
-          expect(result?.multiplier).toBe(2.0);
-          expect(result?.pointsChange).toBe(-200);
+          // Removing today → old streak was 7 → 3.0x removed
+          expect(result?.multiplier).toBe(3.0);
+          expect(result?.pointsChange).toBe(-300);
           expect(result?.updatedHabit.completedDates).not.toContain(today);
         });
       });
@@ -454,11 +454,11 @@ describe('habitLogic', () => {
       const endDate = history[history.length - 1]!;
       const total = calculatePointsForDateRange([habit], startDate, endDate);
 
-      // Per-date: days 1-2 = 1.0x (10), days 3-6 = 1.5x (floor(15)=15), days 7-8 = 2.0x (20).
-      // 2*10 + 4*15 + 2*20 = 20 + 60 + 40 = 120.
-      expect(total).toBe(120);
-      // The buggy current-multiplier behavior would have been 8 * 20 = 160.
-      expect(total).not.toBe(160);
+      // Per-date: days 1-2 = 1.0x (10), days 3-6 = 2.0x (floor(20)=20), days 7-8 = 3.0x (30).
+      // 2*10 + 4*20 + 2*30 = 20 + 80 + 60 = 160.
+      expect(total).toBe(160);
+      // The buggy current-multiplier behavior would have been 8 * 30 = 240.
+      expect(total).not.toBe(240);
     });
 
     it('handles a broken-then-resumed streak with correct per-date multipliers', () => {
@@ -478,10 +478,10 @@ describe('habitLogic', () => {
 
       const total = calculatePointsForDateRange([habit], d(7), d(0));
 
-      // First run streaks: 1,2,3,4 → mults 1.0,1.0,1.5,1.5 → 10+10+15+15 = 50.
-      // Second run streaks: 1,2,3 → 1.0,1.0,1.5 → 10+10+15 = 35.
-      // Total = 85.
-      expect(total).toBe(85);
+      // First run streaks: 1,2,3,4 → mults 1.0,1.0,2.0,2.0 → 10+10+20+20 = 60.
+      // Second run streaks: 1,2,3 → 1.0,1.0,2.0 → 10+10+20 = 40.
+      // Total = 100.
+      expect(total).toBe(100);
     });
 
     it('negative (bad) habits always use 1.0x', () => {
@@ -524,7 +524,7 @@ describe('habitLogic', () => {
     it('uses habit.count for today on a WEEKLY incremental habit, 1 for past days', () => {
       // Weekly incremental habit toggled 3 times today, plus one completion in
       // each of the 2 prior ISO weeks. Today's week is the 3rd consecutive ISO
-      // week (streak 3 → 1.5x for weekly), past weeks have their own streaks.
+      // week (streak 3 → 2.0x for weekly), past weeks have their own streaks.
       const weekStartStr = mondayWeeksAgo(0);
       const habit: Habit = {
         ...baseHabit,
@@ -540,10 +540,10 @@ describe('habitLogic', () => {
       // Range = just this ISO week so only today's completion is in range.
       const total = calculatePointsForDateRange([habit], weekStartStr, today);
 
-      // Today is the only in-range completion. Streak ending this week = 3 → 1.5x
-      // → perDay = floor(10 * 1.5) = 15. count=3 → 3 * 15 = 45.
-      // Before the fix this counted only 1 completion (15), erasing earned points.
-      expect(total).toBe(45);
+      // Today is the only in-range completion. Streak ending this week = 3 → 2.0x
+      // → perDay = floor(10 * 2.0) = 20. count=3 → 3 * 20 = 60.
+      // Before the fix this counted only 1 completion (20), erasing earned points.
+      expect(total).toBe(60);
     });
 
     it('counts past in-range weekly incremental days as 1 each', () => {
@@ -564,10 +564,10 @@ describe('habitLogic', () => {
 
       // Per-week streaks ending at each completion's week:
       //   2 weeks ago → streak 1 → 1.0x → 10, counts as 1 completion → 10
-      //   1 week ago  → streak 2 → 1.5x → 15, counts as 1 completion → 15
-      //   this week   → streak 3 → 1.5x → 15, count=3 → 45
-      // Total = 10 + 15 + 45 = 70.
-      expect(total).toBe(70);
+      //   1 week ago  → streak 2 → 2.0x → 20, counts as 1 completion → 20
+      //   this week   → streak 3 → 2.0x → 20, count=3 → 60
+      // Total = 10 + 20 + 60 = 90.
+      expect(total).toBe(90);
     });
   });
 
@@ -639,9 +639,9 @@ describe('habitLogic', () => {
           completedDates: [PREV_MON, PREV_WED, WED],
           streakDays: 2,
         });
-        // Prev week (streak 1 → 1.0x) once = 10; current week (streak 2 → 1.5x) once = 15.
-        // Buggy per-day scoring: 10 + 10 + 15 = 35.
-        expect(calculatePointsForDateRange([habit], PREV_MON, WED)).toBe(25);
+        // Prev week (streak 1 → 1.0x) once = 10; current week (streak 2 → 2.0x) once = 20.
+        // Buggy per-day scoring: 10 + 10 + 20 = 40.
+        expect(calculatePointsForDateRange([habit], PREV_MON, WED)).toBe(30);
       });
 
       it('threshold: current week earns nothing when the counter is back below target', () => {
@@ -750,8 +750,8 @@ describe('habitLogic', () => {
     it('deducts pre-completion increments at the WITHOUT-today multiplier (mirrors the award path)', () => {
       // Incremental, targetCount 2, base 10, 2-day streak entering today.
       // Toggle #1 (before target): prospective streak excludes today → 1.0x → +10.
-      // Toggle #2 (completes):     prospective streak includes today → 1.5x → +15.
-      // Credited +25; the buggy reset deducted 2 x 15 = 30, leaving points 5 short.
+      // Toggle #2 (completes):     prospective streak includes today → 2.0x → +20.
+      // Credited +30; the buggy reset deducted 2 x 20 = 40, leaving points 10 short.
       const habit: Habit = {
         ...baseHabit,
         scoringType: 'incremental',
@@ -762,7 +762,7 @@ describe('habitLogic', () => {
         completedDates: [today, yesterday, twoDaysAgo],
         streakDays: 3,
       };
-      expect(calculateResetPoints(habit)).toBe(25);
+      expect(calculateResetPoints(habit)).toBe(30);
     });
 
     it('deducts every increment at the with-today multiplier when the target is 1 (unchanged)', () => {
@@ -778,8 +778,8 @@ describe('habitLogic', () => {
         completedDates: [today, yesterday, twoDaysAgo],
         streakDays: 3,
       };
-      // Streak 3 → 1.5x → 3 x 15 = 45.
-      expect(calculateResetPoints(habit)).toBe(45);
+      // Streak 3 → 2.0x → 3 x 20 = 60.
+      expect(calculateResetPoints(habit)).toBe(60);
     });
 
     it('deducts the single threshold award at the with-today multiplier (unchanged)', () => {
@@ -793,8 +793,8 @@ describe('habitLogic', () => {
         completedDates: [today, yesterday, twoDaysAgo],
         streakDays: 3,
       };
-      // Streak 3 → 1.5x → 15.
-      expect(calculateResetPoints(habit)).toBe(15);
+      // Streak 3 → 2.0x → 20.
+      expect(calculateResetPoints(habit)).toBe(20);
     });
 
     it('uses 1.0x throughout for negative habits', () => {
@@ -816,7 +816,7 @@ describe('habitLogic', () => {
 
   describe('calculatePointsForDate — per-date streak reconstruction', () => {
     it('uses the streak that ended on the target date, not the current streak', () => {
-      // 8 consecutive days ending today; evaluate a historical day (3 ago, streak 5 → 1.5x).
+      // 8 consecutive days ending today; evaluate a historical day (3 ago, streak 5 → 2.0x).
       const d = (n: number) => format(subDays(new Date(), n), 'yyyy-MM-dd');
       const history: string[] = [];
       for (let i = 0; i < 8; i++) history.push(d(i));
@@ -832,10 +832,10 @@ describe('habitLogic', () => {
         streakDays: 8,
       };
 
-      // Streak ending 3 days ago = 5 → 1.5x → 15.
-      expect(calculatePointsForDate([habit], d(3))).toBe(15);
-      // Today's streak = 8 → 2.0x → 20.
-      expect(calculatePointsForDate([habit], today)).toBe(20);
+      // Streak ending 3 days ago = 5 → 2.0x → 20.
+      expect(calculatePointsForDate([habit], d(3))).toBe(20);
+      // Today's streak = 8 → 3.0x → 30.
+      expect(calculatePointsForDate([habit], today)).toBe(30);
     });
 
     it('returns 0 when the habit was not completed on the target date', () => {
@@ -1138,14 +1138,14 @@ describe('habitLogic', () => {
       expect(getMultiplier(1, true, 'weekly')).toBe(1.0);
     });
 
-    it('returns 1.5 for weekly streak >= 2 and < 4', () => {
-      expect(getMultiplier(2, true, 'weekly')).toBe(1.5);
-      expect(getMultiplier(3, true, 'weekly')).toBe(1.5);
+    it('returns 2.0 for weekly streak >= 2 and < 4', () => {
+      expect(getMultiplier(2, true, 'weekly')).toBe(2.0);
+      expect(getMultiplier(3, true, 'weekly')).toBe(2.0);
     });
 
-    it('returns 2.0 for weekly streak >= 4', () => {
-      expect(getMultiplier(4, true, 'weekly')).toBe(2.0);
-      expect(getMultiplier(10, true, 'weekly')).toBe(2.0);
+    it('returns 3.0 for weekly streak >= 4', () => {
+      expect(getMultiplier(4, true, 'weekly')).toBe(3.0);
+      expect(getMultiplier(10, true, 'weekly')).toBe(3.0);
     });
 
     it('always returns 1.0 for non-positive weekly habits', () => {
@@ -1153,8 +1153,8 @@ describe('habitLogic', () => {
     });
 
     it('daily thresholds are unchanged when period is omitted', () => {
-      expect(getMultiplier(3, true)).toBe(1.5);
-      expect(getMultiplier(7, true)).toBe(2.0);
+      expect(getMultiplier(3, true)).toBe(2.0);
+      expect(getMultiplier(7, true)).toBe(3.0);
     });
   });
 
@@ -1251,8 +1251,8 @@ describe('habitLogic', () => {
 
     it('daily: drives the correct per-period multiplier on each backfilled day', () => {
       const habit = { period: 'daily' as const, completedDates: dailyStreak };
-      // Days 1-2 → 1.0x, days 3-6 → 1.5x, days 7-10 → 2.0x (daily thresholds: 3→1.5, 7→2.0).
-      const expectedMultiplier = [1.0, 1.0, 1.5, 1.5, 1.5, 1.5, 2.0, 2.0, 2.0, 2.0];
+      // Days 1-2 → 1.0x, days 3-6 → 2.0x, days 7-10 → 3.0x (daily thresholds: 3→2.0, 7→3.0).
+      const expectedMultiplier = [1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0, 3.0];
       dailyStreak.forEach((date, idx) => {
         const streak = streakEndingOnForHabit(habit, date);
         expect(getMultiplier(streak, true, 'daily')).toBe(expectedMultiplier[idx]);
@@ -1270,10 +1270,10 @@ describe('habitLogic', () => {
       expect(streakEndingOnForHabit(habit, mondayWeeksAgo(1))).toBe(3);
       expect(streakEndingOnForHabit(habit, today)).toBe(4);
 
-      // Per-period multipliers (weekly thresholds: 2→1.5, 4→2.0).
+      // Per-period multipliers (weekly thresholds: 2→2.0, 4→3.0).
       expect(getMultiplier(streakEndingOnForHabit(habit, mondayWeeksAgo(3)), true, 'weekly')).toBe(1.0);
-      expect(getMultiplier(streakEndingOnForHabit(habit, mondayWeeksAgo(1)), true, 'weekly')).toBe(1.5);
-      expect(getMultiplier(streakEndingOnForHabit(habit, today), true, 'weekly')).toBe(2.0);
+      expect(getMultiplier(streakEndingOnForHabit(habit, mondayWeeksAgo(1)), true, 'weekly')).toBe(2.0);
+      expect(getMultiplier(streakEndingOnForHabit(habit, today), true, 'weekly')).toBe(3.0);
     });
   });
 
@@ -1292,17 +1292,17 @@ describe('habitLogic', () => {
       expect(result?.pointsChange).toBe(100);
     });
 
-    it('week-2 completion (1 week history) gets 1.5x', () => {
+    it('week-2 completion (1 week history) gets 2.0x', () => {
       const result = processToggleHabit(
         { ...weeklyHabit, completedDates: [mondayWeeksAgo(1)] },
         'up'
       );
-      // prospective streak = 2 → 1.5x
-      expect(result?.multiplier).toBe(1.5);
-      expect(result?.pointsChange).toBe(150);
+      // prospective streak = 2 → 2.0x
+      expect(result?.multiplier).toBe(2.0);
+      expect(result?.pointsChange).toBe(200);
     });
 
-    it('week-4 completion (3 weeks history) gets 2.0x', () => {
+    it('week-4 completion (3 weeks history) gets 3.0x', () => {
       const result = processToggleHabit(
         {
           ...weeklyHabit,
@@ -1310,9 +1310,9 @@ describe('habitLogic', () => {
         },
         'up'
       );
-      // prospective streak = 4 → 2.0x
-      expect(result?.multiplier).toBe(2.0);
-      expect(result?.pointsChange).toBe(200);
+      // prospective streak = 4 → 3.0x
+      expect(result?.multiplier).toBe(3.0);
+      expect(result?.pointsChange).toBe(300);
     });
 
     it('skipped week resets multiplier to 1.0x', () => {
@@ -1323,8 +1323,8 @@ describe('habitLogic', () => {
         'up'
       );
       // prospective streak = 2 (this week + last week consecutive)
-      expect(result?.multiplier).toBe(1.5);
-      expect(result?.pointsChange).toBe(150);
+      expect(result?.multiplier).toBe(2.0);
+      expect(result?.pointsChange).toBe(200);
     });
   });
 
@@ -1451,13 +1451,13 @@ describe('Plan 25 — frozen dates: shared client/functions parity table', () =>
   });
 
   describe('getMultiplier continuity across a frozen bridge', () => {
-    it('daily: the bridged 4-completion streak earns the 1.5x tier', () => {
+    it('daily: the bridged 4-completion streak earns the 2.0x tier', () => {
       const streak = calculateStreak(
         ['2026-07-05', '2026-07-06', '2026-07-07', '2026-07-09'],
         T,
         ['2026-07-08']
       );
-      expect(getMultiplier(streak, true, 'daily')).toBe(1.5);
+      expect(getMultiplier(streak, true, 'daily')).toBe(2.0);
     });
   });
 });
@@ -1500,15 +1500,15 @@ describe('Plan 25 — frozen days earn zero points (client points paths)', () =>
   });
 
   it("today's recalculated points get the bridged-streak multiplier (continuity)", () => {
-    // streakEndingOn(today) = 4 across the frozen bridge → 1.5x → 15 pts.
-    expect(calculatePointsForDate([frozenHabit()], localToday)).toBe(15);
+    // streakEndingOn(today) = 4 across the frozen bridge → 2.0x → 20 pts.
+    expect(calculatePointsForDate([frozenHabit()], localToday)).toBe(20);
     // Without the freeze the same history is a 1-day streak → 1.0x → 10 pts.
     expect(calculatePointsForDate([frozenHabit({ frozenDates: [] })], localToday)).toBe(10);
   });
 
   it('calculatePointsForDateRange sums per-day multipliers across the bridge, never scoring the frozen day', () => {
-    // d4:1 → 10, d3:2 → 10, d2:3 → 15, d1 frozen → 0, today:4 → 15.
-    expect(calculatePointsForDateRange([frozenHabit()], d(4), localToday)).toBe(50);
+    // d4:1 → 10, d3:2 → 10, d2:3 → 20, d1 frozen → 0, today:4 → 20.
+    expect(calculatePointsForDateRange([frozenHabit()], d(4), localToday)).toBe(60);
   });
 
   it('streakEndingOn returns 0 for a frozen (non-completed) date', () => {
@@ -1560,9 +1560,9 @@ describe('Plan 25 — frozen-aware streak persistence (reset + toggle)', () => {
 
     const result = processToggleHabit(habit, 'up');
     expect(result).not.toBeNull();
-    // Prospective streak = 3 completions + today across the frozen bridge = 4 → 1.5x.
-    expect(result!.multiplier).toBe(1.5);
-    expect(result!.pointsChange).toBe(15);
+    // Prospective streak = 3 completions + today across the frozen bridge = 4 → 2.0x.
+    expect(result!.multiplier).toBe(2.0);
+    expect(result!.pointsChange).toBe(20);
     expect(result!.updatedHabit.streakDays).toBe(4);
     // The frozen day never enters completedDates.
     expect(result!.updatedHabit.completedDates).not.toContain(d(1));
@@ -1715,6 +1715,39 @@ describe('habitSign / habitPointsMagnitude / signedHabitPoints', () => {
   });
 });
 
+// Regression guard for the bug this ladder change fixes: with the OLD 1.5×/2.0×
+// ladder, `floor(basePoints × multiplier)` for a 1-point habit — the
+// near-universal basePoints in this household — was `floor(1 × 1.5) === 1`,
+// so the FIRST streak tier awarded literally nothing beyond the unmultiplied
+// base. basePoints MUST stay 1 in this block: 10 (or any base ≥ 2) floors
+// cleanly under EITHER ladder and would silently un-cover the exact defect
+// these tests exist to catch, so do not "clean up" this fixture. Each test
+// goes through both `getMultiplier` and `signedHabitPoints` (not a hardcoded
+// multiplier), so a revert to the old ladder values makes these fail.
+describe('signedHabitPoints × getMultiplier — 1-point habit, the floor(1 × 1.5) = 1 bug', () => {
+  const onePointHabit = { type: 'positive', basePoints: 1 } as Habit;
+
+  it('daily: BELOW the first tier (streak 2) still awards exactly 1 point (control)', () => {
+    const multiplier = getMultiplier(2, true, 'daily');
+    expect(signedHabitPoints(onePointHabit, multiplier)).toBe(1);
+  });
+
+  it('daily: AT the first tier (streak 3) awards exactly 2 points — awarded 1 (nothing extra) before this fix', () => {
+    const multiplier = getMultiplier(3, true, 'daily');
+    expect(signedHabitPoints(onePointHabit, multiplier)).toBe(2);
+  });
+
+  it('daily: AT the second tier (streak 7) awards exactly 3 points', () => {
+    const multiplier = getMultiplier(7, true, 'daily');
+    expect(signedHabitPoints(onePointHabit, multiplier)).toBe(3);
+  });
+
+  it('weekly: AT the first tier (streak 2 weeks) awards exactly 2 points — same 1-point exposure, weekly cadence', () => {
+    const multiplier = getMultiplier(2, true, 'weekly');
+    expect(signedHabitPoints(onePointHabit, multiplier)).toBe(2);
+  });
+});
+
 describe('processToggleHabit (negative habit stored with negative basePoints)', () => {
   const localToday = format(new Date(), 'yyyy-MM-dd');
 
@@ -1771,9 +1804,9 @@ describe('pointsForHabitOnDate', () => {
   });
 
   it('scores a past threshold day with the streak that ended on that day', () => {
-    // 3-day chain ending on d(1): that day's streak is 3 → 1.5x → 15.
+    // 3-day chain ending on d(1): that day's streak is 3 → 2.0x → 20.
     const habit = { ...base, completedDates: [d(3), d(2), d(1)] };
-    expect(pointsForHabitOnDate(habit, d(1), localToday)).toBe(15);
+    expect(pointsForHabitOnDate(habit, d(1), localToday)).toBe(20);
     expect(pointsForHabitOnDate(habit, d(3), localToday)).toBe(10);
   });
 
@@ -2078,15 +2111,15 @@ describe('processStaleDownToggle (date-aware stale deselect)', () => {
   });
 
   it('reverses the HISTORICAL multiplier the removed day actually earned', () => {
-    // 3-day chain ending yesterday → yesterday was awarded at 1.5x (15 pts).
+    // 3-day chain ending yesterday → yesterday was awarded at 2.0x (20 pts).
     const habit = staleHabit({ completedDates: [SUN, MON, TUE], streakDays: 3 });
     const result = processStaleDownToggle(habit, WED);
 
     // Only the most recent prior day is removed; older history is preserved.
     expect(result.datesToRemove).toEqual([TUE]);
     expect(result.completedDates).toEqual([SUN, MON]);
-    expect(result.pointsDelta.total).toBe(-15);
-    expect(result.pointsDelta.weekly).toBe(-15);
+    expect(result.pointsDelta.total).toBe(-20);
+    expect(result.pointsDelta.weekly).toBe(-20);
     expect(result.pointsDelta.daily).toBe(0);
     // Remaining chain no longer reaches today/yesterday → streak collapses.
     expect(result.streakDays).toBe(0);

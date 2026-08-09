@@ -114,7 +114,7 @@ export interface BackdatedHabitFireDelta {
   pointsEarned: number;
   /** `pointsEarned` split by bucket — see the DATE gating below. */
   pointsDelta: { daily: number; weekly: number; total: number };
-  /** The multiplier that produced `pointsEarned` (1.0 / 1.5 / 2.0). */
+  /** The multiplier that produced `pointsEarned` (1.0 / 2.0 / 3.0). */
   multiplier: number;
   /** Streak ending on `fireDate`, snapshotted onto the submission doc. */
   streakAtFireDate: number;

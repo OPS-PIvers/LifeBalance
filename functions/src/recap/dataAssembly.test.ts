@@ -333,12 +333,12 @@ describe("assembleWeeklyRecap — a chore-heavy kid week", () => {
   it("still carries the kid's own figure, flagged isManaged so no standing crowns them", () => {
     const result = assembleWeeklyRecap(baseInput({ habits: choreHabits, members: roster }));
     const leoFacts = result.memberFacts.find((f) => f.memberId === "kid_leo");
-    expect(leoFacts?.points).toBe(100);
+    expect(leoFacts?.points).toBe(130);
     expect(leoFacts?.isManaged).toBe(true);
     expect(result.pointsByMember).toContainEqual({
       memberId: "kid_leo",
       name: "Leo",
-      points: 100,
+      points: 130,
     });
   });
 
