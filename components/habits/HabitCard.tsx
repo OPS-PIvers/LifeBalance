@@ -46,8 +46,8 @@ interface HabitCardProps {
   /**
    * Per-member attribution context (roster + colors), built once per roster
    * change by the Habits page. Absent = no attribution UI at all: the pie
-   * counter, the flame-ring avatars and the picker are HABITS-PAGE ONLY, and a
-   * card rendered anywhere else keeps its original look.
+   * counter, the done-by avatars with their streak chips, and the picker are
+   * HABITS-PAGE ONLY, and a card rendered anywhere else keeps its original look.
    */
   attribution?: HabitRowMemberContext;
 }
@@ -96,7 +96,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   const signedPointsDisplay = signedHabitPoints(habit, totalMultiplier);
 
   // Period-aware streak cadence — drives the multiplier nudge's unit word and
-  // the screen-reader text on the badge row's flame-ring avatars.
+  // the screen-reader text on the badge row's streak chips.
   const isWeekly = habit.period === 'weekly';
 
   // Period-aware "one period from the next tier" nudge. Thresholds mirror
