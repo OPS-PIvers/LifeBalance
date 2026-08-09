@@ -63,7 +63,7 @@ export interface HabitFireDelta {
   removedDate?: string;
   /** Signed points delta to apply to the points target (may be 0). */
   pointsChange: number;
-  /** The streak multiplier that produced pointsChange (1.0 / 1.5 / 2.0). */
+  /** The streak multiplier that produced pointsChange (1.0 / 2.0 / 3.0). */
   multiplier: number;
 }
 
@@ -125,7 +125,7 @@ export interface BackdatedHabitFireDelta {
   pointsEarned: number;
   /** `pointsEarned` split by bucket — see the DATE gating in the implementation. */
   pointsDelta: { daily: number; weekly: number; total: number };
-  /** The multiplier that produced `pointsEarned` (1.0 / 1.5 / 2.0). */
+  /** The multiplier that produced `pointsEarned` (1.0 / 2.0 / 3.0). */
   multiplier: number;
   /** Streak ending on `fireDate`, snapshotted onto the submission doc. */
   streakAtFireDate: number;

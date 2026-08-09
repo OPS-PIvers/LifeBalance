@@ -4,6 +4,7 @@ import { Habit, HabitMood, HabitSubmission } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { format, parseISO, startOfWeek, endOfWeek, subWeeks, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { getMultiplier } from '@/utils/habitLogic';
 import toast from 'react-hot-toast';
 import { Drawer } from '@/components/ui/Drawer';
 import { Badge } from '@/components/ui/Badge';
@@ -392,7 +393,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                     <span className="text-brand-400 dark:text-brand-450">Current bonus</span>
                   </span>
                 }
-                value={analytics.currentStreak >= 7 ? '2.0x' : analytics.currentStreak >= 3 ? '1.5x' : '1.0x'}
+                value={`${getMultiplier(analytics.currentStreak, habit.type === 'positive', habit.period).toFixed(1)}x`}
                 valueClassName="text-2xl text-habit-blue"
               />
             </StatGroup>

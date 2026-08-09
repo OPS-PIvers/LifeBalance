@@ -33,9 +33,9 @@ describe('HabitsModelPrimer', () => {
     // The copy names days 3 and 7 as the daily thresholds; assert those ARE
     // getMultiplier's real boundaries so the numbers can't silently drift.
     expect(getMultiplier(2, true, 'daily')).toBe(1.0);
-    expect(getMultiplier(3, true, 'daily')).toBe(1.5);
-    expect(getMultiplier(6, true, 'daily')).toBe(1.5);
-    expect(getMultiplier(7, true, 'daily')).toBe(2.0);
+    expect(getMultiplier(3, true, 'daily')).toBe(2.0);
+    expect(getMultiplier(6, true, 'daily')).toBe(2.0);
+    expect(getMultiplier(7, true, 'daily')).toBe(3.0);
 
     // And the rendered figures are derived from getMultiplier itself.
     expect(section.textContent).toContain(`${getMultiplier(3, true, 'daily')}× points from day 3`);
@@ -48,9 +48,9 @@ describe('HabitsModelPrimer', () => {
 
     // The copy names weeks 2 and 4 as the weekly thresholds.
     expect(getMultiplier(1, true, 'weekly')).toBe(1.0);
-    expect(getMultiplier(2, true, 'weekly')).toBe(1.5);
-    expect(getMultiplier(3, true, 'weekly')).toBe(1.5);
-    expect(getMultiplier(4, true, 'weekly')).toBe(2.0);
+    expect(getMultiplier(2, true, 'weekly')).toBe(2.0);
+    expect(getMultiplier(3, true, 'weekly')).toBe(2.0);
+    expect(getMultiplier(4, true, 'weekly')).toBe(3.0);
 
     expect(section.textContent).toContain(`${getMultiplier(2, true, 'weekly')}× from 2 weeks in a row`);
     expect(section.textContent).toContain(`${getMultiplier(4, true, 'weekly')}× from 4`);

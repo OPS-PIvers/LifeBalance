@@ -1886,7 +1886,7 @@ describe('transaction habit fires under freezeMode: per_member', () => {
   it('scores the multiplier off the ACTING member’s own frozen bridge', async () => {
     // Completed 7 and 6 days ago, MISSED 5 days ago (Alice's own token froze
     // it), firing 4 days ago. Habit-level the gap breaks the chain → streak 1,
-    // 10 pts. Bridged by Alice's token → streak 3 → 1.5x → 15 pts.
+    // 10 pts. Bridged by Alice's token → streak 3 → 2.0x → 20 pts.
     const habit: Habit = {
       ...threshHabit,
       completedDates: [dayBefore(7), dayBefore(6)],
@@ -1901,11 +1901,11 @@ describe('transaction habit fires under freezeMode: per_member', () => {
 
     const submission = capturedSets.find(s => s.ref.__path.startsWith(submissionsPath('h1')));
     expect(submission!.data).toMatchObject({
-      pointsEarned: 15,
-      multiplierApplied: 1.5,
+      pointsEarned: 20,
+      multiplierApplied: 2.0,
       streakDaysAtTime: 3,
     });
-    expect(householdWrites()[0]!.data!['points.total']).toEqual({ __increment: 15 });
+    expect(householdWrites()[0]!.data!['points.total']).toEqual({ __increment: 20 });
   });
 
   it('the SAME habit under the shared mode still scores the habit-level streak (the regression fence)', async () => {
@@ -2412,7 +2412,7 @@ describe('ATTR-1 — transaction-fired habits credit the card owner', () => {
 
     // The side-effect member's award is NOT assumed equal to the creditee's:
     // each is scored at their OWN streak multiplier. APPROVER carries a 7-day
-    // attributed chain (2.0x) into a period the CARDHOLDER enters cold (1.0x).
+    // attributed chain (3.0x) into a period the CARDHOLDER enters cold (1.0x).
     it('debits a side-effect member their OWN award, not the creditee’s', async () => {
       const priorDays = Object.fromEntries(
         [1, 2, 3, 4, 5, 6].map(n => [
@@ -2433,19 +2433,19 @@ describe('ATTR-1 — transaction-fired habits credit the card owner', () => {
       const fireApprover = pointsFor(memberPath(APPROVER));
       const fireCardholder = pointsFor(memberPath(CARDHOLDER));
       const firePool = pointsFor(householdPath);
-      // 7-day chain → 2.0x → 20, against the cardholder's first-ever 1.0x → 10.
-      expect(fireApprover.total).toBe(20);
+      // 7-day chain → 3.0x → 30, against the cardholder's first-ever 1.0x → 10.
+      expect(fireApprover.total).toBe(30);
       expect(fireCardholder.total).toBe(10);
-      expect(firePool.total).toBe(30);
+      expect(firePool.total).toBe(40);
 
       seedFiredSubmission();
       capturedUpdates = [];
       const { reverseTransactionApproval } = makeReverseTransactionApproval(undoDeps([afterFire]));
       await reverseTransactionApproval('tx-card', { category: 'Uncategorized' }, ['h1']);
 
-      expect(pointsFor(memberPath(APPROVER)).total).toBe(-20);
+      expect(pointsFor(memberPath(APPROVER)).total).toBe(-30);
       expect(pointsFor(memberPath(CARDHOLDER)).total).toBe(-10);
-      expect(pointsFor(householdPath).total).toBe(-30);
+      expect(pointsFor(householdPath).total).toBe(-40);
     });
 
     // 🛡️ A side-effect member who WAS current at fire time but has left the

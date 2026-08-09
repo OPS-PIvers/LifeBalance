@@ -45,13 +45,13 @@ describe('computeHabitTriggerFire', () => {
   });
 
   it('applies the streak multiplier on the prospective streak', () => {
-    // Completed the previous two days; firing today makes a 3-day streak → 1.5x.
+    // Completed the previous two days; firing today makes a 3-day streak → 2.0x.
     const d1 = getLocalDateString(new Date(Date.now() - 86400000));
     const d2 = getLocalDateString(new Date(Date.now() - 2 * 86400000));
     const habit = makeHabit({ completedDates: [d1, d2], streakDays: 2 });
     const delta = computeHabitTriggerFire(habit, 'up');
-    expect(delta!.multiplier).toBe(1.5);
-    expect(delta!.pointsChange).toBe(15);
+    expect(delta!.multiplier).toBe(2.0);
+    expect(delta!.pointsChange).toBe(20);
   });
 
   it('reverses a fired habit (down toggle) removing the date and points', () => {
@@ -169,7 +169,7 @@ describe('computeHabitTriggerReverse', () => {
 
   it('debits the HISTORICAL streak multiplier on a prior-day restore', () => {
     // A 3-day streak ended yesterday (threeDaysAgo, twoDaysAgo, yesterday) → the
-    // fire on yesterday earned 10 × 1.5 = 15; the reversal must debit exactly 15.
+    // fire on yesterday earned 10 × 2.0 = 20; the reversal must debit exactly 20.
     const habit = makeHabit({
       count: 0,
       totalCount: 3,
@@ -177,7 +177,7 @@ describe('computeHabitTriggerReverse', () => {
       streakDays: 0,
     });
     const delta = computeHabitTriggerReverse(habit, yesterday, today);
-    expect(delta!.pointsChange).toBe(-15);
+    expect(delta!.pointsChange).toBe(-20);
     expect(delta!.removedDate).toBe(yesterday);
     expect(delta!.count).toBe(0);
   });
@@ -236,14 +236,14 @@ describe('computeBackdatedHabitFire', () => {
 
   it('scores with the multiplier that applied ON the fire date, not the current one', () => {
     // Completed the two days before the fire date → firing it makes a 3-day
-    // streak ending THEN, so 1.5x. Later completions must not change this.
+    // streak ending THEN, so 2.0x. Later completions must not change this.
     const d1 = getLocalDateString(new Date(Date.now() - 5 * 86400000));
     const d2 = getLocalDateString(new Date(Date.now() - 6 * 86400000));
     const habit = makeHabit({ completedDates: [d1, d2] });
     const delta = computeBackdatedHabitFire(habit, fourDaysAgo, today)!;
-    expect(delta.multiplier).toBe(1.5);
+    expect(delta.multiplier).toBe(2.0);
     expect(delta.streakAtFireDate).toBe(3);
-    expect(delta.pointsEarned).toBe(15);
+    expect(delta.pointsEarned).toBe(20);
   });
 
   it('debits points for a NEGATIVE habit', () => {
@@ -378,11 +378,11 @@ describe('computeBackdatedHabitFire — per-member freeze mode', () => {
     expect(blind.multiplier).toBe(1.0);
     expect(blind.pointsEarned).toBe(10);
 
-    // Alice's own token bridges d5: d7 + d6 + (frozen d5) + the fire = 3 → 1.5x.
+    // Alice's own token bridges d5: d7 + d6 + (frozen d5) + the fire = 3 → 2.0x.
     const aware = computeBackdatedHabitFire(habit, fourDaysAgo, today, 0, perMember(ALICE))!;
     expect(aware.streakAtFireDate).toBe(3);
-    expect(aware.multiplier).toBe(1.5);
-    expect(aware.pointsEarned).toBe(15);
+    expect(aware.multiplier).toBe(2.0);
+    expect(aware.pointsEarned).toBe(20);
 
     // ...and NOT for Bob, who never spent a token on d5.
     const bob = computeBackdatedHabitFire(habit, fourDaysAgo, today, 0, perMember(BOB))!;

@@ -85,12 +85,12 @@ describe("computeBackdatedHabitFire", () => {
   });
 
   it("pays the multiplier the streak had ON the credited day, not today's", () => {
-    // Six days completed before the fire date ⇒ the fire is the 7th ⇒ 2.0×.
+    // Six days completed before the fire date ⇒ the fire is the 7th ⇒ 3.0×.
     const dates = runEndingBefore(YESTERDAY, 6);
     const fire = computeBackdatedHabitFire(habit({ completedDates: dates }), YESTERDAY, TODAY)!;
     expect(fire.streakAtFireDate).toBe(7);
-    expect(fire.multiplier).toBe(2);
-    expect(fire.pointsEarned).toBe(20);
+    expect(fire.multiplier).toBe(3);
+    expect(fire.pointsEarned).toBe(30);
   });
 
   it("awards nothing when the day was already complete", () => {
@@ -168,16 +168,16 @@ describe("computeBackdatedHabitFire", () => {
   });
 
   it("gives a weekly habit the week-based multiplier thresholds", () => {
-    // Two prior consecutive ISO weeks ⇒ this is the 3rd ⇒ 1.5× (weekly tiers are
-    // 2 weeks → 1.5×, 4 → 2.0×, unlike daily's 3 and 7).
+    // Two prior consecutive ISO weeks ⇒ this is the 3rd ⇒ 2.0× (weekly tiers are
+    // 2 weeks → 2.0×, 4 → 3.0×, unlike daily's 3 and 7).
     const fire = computeBackdatedHabitFire(
       habit({ period: "weekly", completedDates: ["2026-07-12", "2026-07-05"] }),
       "2026-07-19",
       "2026-07-20"
     )!;
     expect(fire.streakAtFireDate).toBe(3);
-    expect(fire.multiplier).toBe(1.5);
-    expect(fire.pointsEarned).toBe(15);
+    expect(fire.multiplier).toBe(2.0);
+    expect(fire.pointsEarned).toBe(20);
   });
 });
 
@@ -212,12 +212,12 @@ describe("parity with the client computeBackdatedHabitFire", () => {
     { name: "plain past-day threshold fire", habit: habit(), fireDate: YESTERDAY },
     { name: "same-day fire", habit: habit(), fireDate: TODAY },
     {
-      name: "with a 2-day run (1.5x tier)",
+      name: "with a 2-day run (2.0x tier)",
       habit: habit({ completedDates: runEndingBefore(YESTERDAY, 2) }),
       fireDate: YESTERDAY,
     },
     {
-      name: "with a 6-day run (2.0x tier)",
+      name: "with a 6-day run (3.0x tier)",
       habit: habit({ completedDates: runEndingBefore(YESTERDAY, 6) }),
       fireDate: YESTERDAY,
     },

@@ -28,7 +28,7 @@ const mult = (streak: number, period: 'daily' | 'weekly') =>
  * utils/habitLogic.ts, utils/freezeBank.ts, and the Habit Tracking section of
  * CLAUDE.md:
  *   - threshold scoring pays once at targetCount; incremental pays every action
- *   - multipliers: daily 3-6 days 1.5x, 7+ 2x; weekly 2-3 weeks 1.5x, 4+ 2x;
+ *   - multipliers: daily 3-6 days 2x, 7+ 3x; weekly 2-3 weeks 2x, 4+ 3x;
  *     the multiplier includes the current completion; positive habits only
  *   - weekly habits streak in consecutive ISO weeks, not days
  *   - freeze bank: auto-applied at midnight/login to a missed day on a daily

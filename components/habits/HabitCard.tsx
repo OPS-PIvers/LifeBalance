@@ -100,15 +100,15 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   const isWeekly = habit.period === 'weekly';
 
   // Period-aware "one period from the next tier" nudge. Thresholds mirror
-  // getMultiplier: daily 3→1.5x / 7→2x (nudge at 2 and 6), weekly 2→1.5x / 4→2x
+  // getMultiplier: daily 3→2x / 7→3x (nudge at 2 and 6), weekly 2→2x / 4→3x
   // (nudge at 1 and 3). Only shown for positive habits, like the streak badge.
-  const nextTierNudge = ((): { unit: 'day' | 'week'; tier: '1.5x' | '2x' } | null => {
+  const nextTierNudge = ((): { unit: 'day' | 'week'; tier: '2x' | '3x' } | null => {
     if (!isPositive) return null;
-    const oneFrom15 = isWeekly ? 1 : 2;
-    const oneFrom2 = isWeekly ? 3 : 6;
+    const oneFrom2x = isWeekly ? 1 : 2;
+    const oneFrom3x = isWeekly ? 3 : 6;
     const unit = isWeekly ? 'week' : 'day';
-    if (habit.streakDays === oneFrom15) return { unit, tier: '1.5x' };
-    if (habit.streakDays === oneFrom2) return { unit, tier: '2x' };
+    if (habit.streakDays === oneFrom2x) return { unit, tier: '2x' };
+    if (habit.streakDays === oneFrom3x) return { unit, tier: '3x' };
     return null;
   })();
 
@@ -803,8 +803,8 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
             )}
 
             {/* Multiplier nudge: one period short of the next tier. Period-aware
-                in both threshold and unit — daily fires at 2d (→1.5x) / 6d (→2x),
-                weekly at 1w (→1.5x) / 3w (→2x), matching getMultiplier's ladders. */}
+                in both threshold and unit — daily fires at 2d (→2x) / 6d (→3x),
+                weekly at 1w (→2x) / 3w (→3x), matching getMultiplier's ladders. */}
             {nextTierNudge && (
               <Badge variant="warning" size="sm">
                 1 {nextTierNudge.unit} from {nextTierNudge.tier}!

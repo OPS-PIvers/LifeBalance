@@ -100,7 +100,7 @@ describe("memberAttributedPointsOnDate", () => {
   });
 
   it("applies each member's OWN streak multiplier", () => {
-    // Jen has a 4-day chain into Thursday (1.5x from day 3); Paul only Thursday.
+    // Jen has a 4-day chain into Thursday (2.0x from day 3); Paul only Thursday.
     const h = habit({
       completedDates: [MON, TUE, WED, THU],
       completedBy: attribution({
@@ -110,7 +110,7 @@ describe("memberAttributedPointsOnDate", () => {
         [THU]: { u1: 1, u2: 1 },
       }),
     });
-    expect(memberAttributedPointsOnDate(h, "u1", THU, WEEK_END)).toBe(15);
+    expect(memberAttributedPointsOnDate(h, "u1", THU, WEEK_END)).toBe(20);
     expect(memberAttributedPointsOnDate(h, "u2", THU, WEEK_END)).toBe(10);
   });
 
@@ -159,7 +159,7 @@ describe("memberAttributedPointsOnDate", () => {
 
   it("bridges a per-member frozen day for that member only", () => {
     // Mon–Wed + Fri for both; Thursday frozen for Jen alone. Jen's Friday
-    // therefore continues a 5-long chain (2.0x is 7+, so 1.5x here) while
+    // therefore continues a 5-long chain (3.0x is 7+, so 2.0x here) while
     // Paul's chain restarts at Friday.
     const h = habit({
       completedDates: [MON, TUE, WED, FRI],
@@ -171,7 +171,7 @@ describe("memberAttributedPointsOnDate", () => {
       }),
       frozenDatesBy: { [THU]: ["u1"] },
     });
-    expect(memberAttributedPointsOnDate(h, "u1", FRI, WEEK_END)).toBe(15);
+    expect(memberAttributedPointsOnDate(h, "u1", FRI, WEEK_END)).toBe(20);
     expect(memberAttributedPointsOnDate(h, "u2", FRI, WEEK_END)).toBe(10);
   });
 });
@@ -179,9 +179,9 @@ describe("memberAttributedPointsOnDate", () => {
 describe("unattributedPointsOnDate — grandfathering", () => {
   it("scores a completion with NO attribution at the legacy habit rate", () => {
     const h = habit({ completedDates: [MON, TUE, WED] });
-    // Wednesday closes a 3-day habit-level streak → 1.5x.
+    // Wednesday closes a 3-day habit-level streak → 2.0x.
     expect(unattributedPointsOnDate(h, MON, WEEK_END)).toBe(10);
-    expect(unattributedPointsOnDate(h, WED, WEEK_END)).toBe(15);
+    expect(unattributedPointsOnDate(h, WED, WEEK_END)).toBe(20);
   });
 
   it("drops to zero for a threshold day once anyone is credited", () => {
@@ -282,8 +282,8 @@ describe("assigned chores vs the household aggregates", () => {
       weekEnd: WEEK_END,
     });
     const leo = memberFacts.find((f) => f.memberId === "kid_leo");
-    // 7 daily completions: 10 + 10 + 15 (3-day streak → 1.5x) ×4 + 20 (7th day → 2x).
-    expect(leo?.points).toBe(10 + 10 + 15 + 15 + 15 + 15 + 20);
+    // 7 daily completions: 10 + 10 + 20 (3-day streak → 2.0x) ×4 + 30 (7th day → 3x).
+    expect(leo?.points).toBe(10 + 10 + 20 + 20 + 20 + 20 + 30);
     expect(leo?.completions).toBe(7);
     expect(leo?.isManaged).toBe(true);
   });
@@ -342,10 +342,10 @@ describe("assembleCeremony", () => {
     const jen = memberFacts.find((f) => f.memberId === "u1");
     const paul = memberFacts.find((f) => f.memberId === "u2");
 
-    // Jen walked all 7 days: 10 + 10 + 15 + 15 + 15 + 15 + 20 = 100.
-    expect(jen?.points).toBe(100);
+    // Jen walked all 7 days: 10 + 10 + 20 + 20 + 20 + 20 + 30 = 130.
+    expect(jen?.points).toBe(130);
     expect(jen?.completions).toBe(7);
-    expect(jen?.bestDay).toEqual({ date: SUN, points: 20 });
+    expect(jen?.bestDay).toEqual({ date: SUN, points: 30 });
 
     // Paul: Mon/Tue walks at 1x, Saturday's walk restarts his chain (1 unit
     // counts once for a threshold habit) plus two incremental reads.

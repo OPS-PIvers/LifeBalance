@@ -974,7 +974,7 @@ export interface HabitSubmission {
   count: number; // Number of completions in this submission
   pointsEarned: number; // Points earned at time of submission
   streakDaysAtTime: number; // Snapshot of streak when submitted
-  multiplierApplied: number; // 1.0, 1.5, or 2.0
+  multiplierApplied: number; // 1.0, 2.0, or 3.0 (older submissions may carry the pre-integer-ladder 1.5)
   createdBy: string; // uid of member who submitted
   /**
    * Per-member habit points (stage 1): a SNAPSHOT of the uid this submission's

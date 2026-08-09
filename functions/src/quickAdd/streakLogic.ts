@@ -376,8 +376,13 @@ export function signedHabitPoints(
  * Get the point multiplier based on streak, habit type, and period.
  *
  * Thresholds per period (positive habits only):
- *   - daily:  3 consecutive days → 1.5×,  7 → 2.0×
- *   - weekly: 2 consecutive weeks → 1.5×,  4 → 2.0×
+ *   - daily:  3 consecutive days → 2.0×,  7 → 3.0×
+ *   - weekly: 2 consecutive weeks → 2.0×,  4 → 3.0×
+ *
+ * The ladder is integer-valued on purpose: with `Math.floor` rounding and the
+ * common 1-point base, a 1.5× first tier floored right back down to the
+ * unmultiplied 1 point (`floor(1 * 1.5) === 1`), so the first streak tier
+ * awarded nothing at all. Integer steps guarantee every tier is visible.
  *
  * Mirrors `getMultiplier(streak, isPositive, period)` in utils/habitLogic.ts.
  *
@@ -393,12 +398,12 @@ export function getMultiplier(
 ): number {
   if (!isPositive) return 1.0;
   if (period === "weekly") {
-    if (streak >= 4) return 2.0;
-    if (streak >= 2) return 1.5;
+    if (streak >= 4) return 3.0;
+    if (streak >= 2) return 2.0;
     return 1.0;
   }
   // daily (default)
-  if (streak >= 7) return 2.0;
-  if (streak >= 3) return 1.5;
+  if (streak >= 7) return 3.0;
+  if (streak >= 3) return 2.0;
   return 1.0;
 }

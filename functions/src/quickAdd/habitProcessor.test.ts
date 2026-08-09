@@ -82,24 +82,24 @@ describe("getMultiplier — daily", () => {
     expect(getMultiplier(1, true, "daily")).toBe(1.0);
   });
 
-  it("returns 1.0 for streak 2 (just below 1.5x threshold)", () => {
+  it("returns 1.0 for streak 2 (just below 2.0x threshold)", () => {
     expect(getMultiplier(2, true, "daily")).toBe(1.0);
   });
 
-  it("returns 1.5 for streak 3 (lower boundary of 1.5x)", () => {
-    expect(getMultiplier(3, true, "daily")).toBe(1.5);
+  it("returns 2.0 for streak 3 (lower boundary of 2.0x)", () => {
+    expect(getMultiplier(3, true, "daily")).toBe(2.0);
   });
 
-  it("returns 1.5 for streak 6 (upper boundary before 2.0x)", () => {
-    expect(getMultiplier(6, true, "daily")).toBe(1.5);
+  it("returns 2.0 for streak 6 (upper boundary before 3.0x)", () => {
+    expect(getMultiplier(6, true, "daily")).toBe(2.0);
   });
 
-  it("returns 2.0 for streak 7 (lower boundary of 2.0x)", () => {
-    expect(getMultiplier(7, true, "daily")).toBe(2.0);
+  it("returns 3.0 for streak 7 (lower boundary of 3.0x)", () => {
+    expect(getMultiplier(7, true, "daily")).toBe(3.0);
   });
 
-  it("returns 2.0 for streak 100 (well above threshold)", () => {
-    expect(getMultiplier(100, true, "daily")).toBe(2.0);
+  it("returns 3.0 for streak 100 (well above threshold)", () => {
+    expect(getMultiplier(100, true, "daily")).toBe(3.0);
   });
 
   it("returns 1.0 for a negative habit regardless of streak (no bonus)", () => {
@@ -116,20 +116,20 @@ describe("getMultiplier — weekly", () => {
     expect(getMultiplier(1, true, "weekly")).toBe(1.0);
   });
 
-  it("returns 1.5 for streak 2 (lower boundary of 1.5x)", () => {
-    expect(getMultiplier(2, true, "weekly")).toBe(1.5);
+  it("returns 2.0 for streak 2 (lower boundary of 2.0x)", () => {
+    expect(getMultiplier(2, true, "weekly")).toBe(2.0);
   });
 
-  it("returns 1.5 for streak 3 (upper boundary before 2.0x)", () => {
-    expect(getMultiplier(3, true, "weekly")).toBe(1.5);
+  it("returns 2.0 for streak 3 (upper boundary before 3.0x)", () => {
+    expect(getMultiplier(3, true, "weekly")).toBe(2.0);
   });
 
-  it("returns 2.0 for streak 4 (lower boundary of 2.0x)", () => {
-    expect(getMultiplier(4, true, "weekly")).toBe(2.0);
+  it("returns 3.0 for streak 4 (lower boundary of 3.0x)", () => {
+    expect(getMultiplier(4, true, "weekly")).toBe(3.0);
   });
 
-  it("returns 2.0 for streak 10 (well above threshold)", () => {
-    expect(getMultiplier(10, true, "weekly")).toBe(2.0);
+  it("returns 3.0 for streak 10 (well above threshold)", () => {
+    expect(getMultiplier(10, true, "weekly")).toBe(3.0);
   });
 
   it("returns 1.0 for a negative habit regardless of streak", () => {
@@ -315,9 +315,9 @@ describe("injectable today (timezone safety)", () => {
 // ---------------------------------------------------------------------------
 
 describe("processToggleHabit — daily multiplier at streak boundaries", () => {
-  it("applies 1.5x on day 3 (prospective streak = 3)", () => {
+  it("applies 2.0x on day 3 (prospective streak = 3)", () => {
     // History: 2 consecutive days ending yesterday.
-    // Toggling today makes the prospective streak = 3 → 1.5x.
+    // Toggling today makes the prospective streak = 3 → 2.0x.
     const habit: Habit = {
       ...baseHabit,
       completedDates: [
@@ -328,12 +328,12 @@ describe("processToggleHabit — daily multiplier at streak boundaries", () => {
     };
     const result = processToggleHabit(habit, "up");
     expect(result).not.toBeNull();
-    expect(result?.multiplier).toBe(1.5);
-    expect(result?.pointsChange).toBe(15); // 10 * 1.5
+    expect(result?.multiplier).toBe(2.0);
+    expect(result?.pointsChange).toBe(20); // 10 * 2.0
   });
 
-  it("applies 1.5x on day 6 (prospective streak = 6)", () => {
-    // History: 5 consecutive days ending yesterday → prospective = 6 → 1.5x.
+  it("applies 2.0x on day 6 (prospective streak = 6)", () => {
+    // History: 5 consecutive days ending yesterday → prospective = 6 → 2.0x.
     const habit: Habit = {
       ...baseHabit,
       completedDates: buildDailyDates(yesterday, 5),
@@ -341,12 +341,12 @@ describe("processToggleHabit — daily multiplier at streak boundaries", () => {
     };
     const result = processToggleHabit(habit, "up");
     expect(result).not.toBeNull();
-    expect(result?.multiplier).toBe(1.5);
-    expect(result?.pointsChange).toBe(15);
+    expect(result?.multiplier).toBe(2.0);
+    expect(result?.pointsChange).toBe(20);
   });
 
-  it("applies 2.0x on day 7 (prospective streak = 7)", () => {
-    // History: 6 consecutive days ending yesterday → prospective = 7 → 2.0x.
+  it("applies 3.0x on day 7 (prospective streak = 7)", () => {
+    // History: 6 consecutive days ending yesterday → prospective = 7 → 3.0x.
     const habit: Habit = {
       ...baseHabit,
       completedDates: buildDailyDates(yesterday, 6),
@@ -354,13 +354,13 @@ describe("processToggleHabit — daily multiplier at streak boundaries", () => {
     };
     const result = processToggleHabit(habit, "up");
     expect(result).not.toBeNull();
-    expect(result?.multiplier).toBe(2.0);
-    expect(result?.pointsChange).toBe(20); // 10 * 2.0
+    expect(result?.multiplier).toBe(3.0);
+    expect(result?.pointsChange).toBe(30); // 10 * 3.0
   });
 
   it("prospective multiplier — threshold habit earns bonus on the threshold day itself", () => {
     // Habit requires count=1; we are about to hit the target for the first time.
-    // History: 6 days ending yesterday → prospective streak including today = 7 → 2.0x.
+    // History: 6 days ending yesterday → prospective streak including today = 7 → 3.0x.
     const habit: Habit = {
       ...baseHabit,
       scoringType: "threshold",
@@ -372,8 +372,8 @@ describe("processToggleHabit — daily multiplier at streak boundaries", () => {
     };
     const result = processToggleHabit(habit, "up");
     expect(result).not.toBeNull();
-    expect(result?.multiplier).toBe(2.0);
-    expect(result?.pointsChange).toBe(200); // 100 * 2.0
+    expect(result?.multiplier).toBe(3.0);
+    expect(result?.pointsChange).toBe(300); // 100 * 3.0
   });
 });
 
@@ -395,36 +395,36 @@ describe("processToggleHabit — incremental (target>1) prospective streak gatin
     totalCount: 6,
   };
 
-  it("below-target action does NOT count today toward the streak (6-day history → 1.5x, not 2.0x)", () => {
+  it("below-target action does NOT count today toward the streak (6-day history → 2.0x, not 3.0x)", () => {
     // First action of the day: newCount=1 < target=3 → not completed yet, so the
-    // streak input stays at the 6 completed prior days → 1.5x → 15 pts. The buggy
-    // server force-added today (streak 7 → 2.0x → 20 pts), diverging from the
+    // streak input stays at the 6 completed prior days → 2.0x → 20 pts. The buggy
+    // server force-added today (streak 7 → 3.0x → 30 pts), diverging from the
     // client for the exact same action.
     const result = processToggleHabit(incremental, "up");
     expect(result).not.toBeNull();
-    expect(result!.multiplier).toBe(1.5);
-    expect(result!.pointsChange).toBe(15); // floor(10 * 1.5)
+    expect(result!.multiplier).toBe(2.0);
+    expect(result!.pointsChange).toBe(20); // floor(10 * 2.0)
     // Today isn't complete, so it must not enter completedDates either.
     expect(result!.updatedHabit.completedDates).not.toContain(today);
   });
 
-  it("the COMPLETING action includes today in the streak (streak 7 → 2.0x)", () => {
+  it("the COMPLETING action includes today in the streak (streak 7 → 3.0x)", () => {
     const nearlyDone: Habit = { ...incremental, count: 2, totalCount: 8 };
     const result = processToggleHabit(nearlyDone, "up");
     expect(result).not.toBeNull();
-    expect(result!.multiplier).toBe(2.0);
-    expect(result!.pointsChange).toBe(20); // floor(10 * 2.0)
+    expect(result!.multiplier).toBe(3.0);
+    expect(result!.pointsChange).toBe(30); // floor(10 * 3.0)
     expect(result!.updatedHabit.completedDates).toContain(today);
   });
 
   it("a down-toggle below target uses the un-augmented history (no forced today)", () => {
     // Undo a below-target action: today was never completed, so the streak input
-    // is the 6-day history → 1.5x → -15 pts (mirrors the +15 it undoes).
+    // is the 6-day history → 2.0x → -20 pts (mirrors the +20 it undoes).
     const oneLogged: Habit = { ...incremental, count: 1, totalCount: 7 };
     const result = processToggleHabit(oneLogged, "down");
     expect(result).not.toBeNull();
-    expect(result!.multiplier).toBe(1.5);
-    expect(result!.pointsChange).toBe(-15);
+    expect(result!.multiplier).toBe(2.0);
+    expect(result!.pointsChange).toBe(-20);
   });
 });
 
@@ -444,9 +444,9 @@ describe("processToggleHabit — weekly habit streak multipliers", () => {
     streakDays: 0,
   };
 
-  it("applies 1.5x when prospective weekly streak = 2", () => {
+  it("applies 2.0x when prospective weekly streak = 2", () => {
     // History: completion in the previous ISO week only.
-    // Toggling today adds this week → streak = 2 → 1.5x.
+    // Toggling today adds this week → streak = 2 → 2.0x.
     const habit: Habit = {
       ...weeklyHabit,
       completedDates: [isoWeekMonday(1)],
@@ -454,11 +454,11 @@ describe("processToggleHabit — weekly habit streak multipliers", () => {
     };
     const result = processToggleHabit(habit, "up");
     expect(result).not.toBeNull();
-    expect(result?.multiplier).toBe(1.5);
-    expect(result?.pointsChange).toBe(75); // 50 * 1.5
+    expect(result?.multiplier).toBe(2.0);
+    expect(result?.pointsChange).toBe(100); // 50 * 2.0
   });
 
-  it("applies 1.5x when prospective weekly streak = 3", () => {
+  it("applies 2.0x when prospective weekly streak = 3", () => {
     // History: completions in the previous two ISO weeks.
     const habit: Habit = {
       ...weeklyHabit,
@@ -467,11 +467,11 @@ describe("processToggleHabit — weekly habit streak multipliers", () => {
     };
     const result = processToggleHabit(habit, "up");
     expect(result).not.toBeNull();
-    expect(result?.multiplier).toBe(1.5);
-    expect(result?.pointsChange).toBe(75);
+    expect(result?.multiplier).toBe(2.0);
+    expect(result?.pointsChange).toBe(100);
   });
 
-  it("applies 2.0x when prospective weekly streak = 4", () => {
+  it("applies 3.0x when prospective weekly streak = 4", () => {
     // History: completions in the previous three ISO weeks.
     const habit: Habit = {
       ...weeklyHabit,
@@ -480,8 +480,8 @@ describe("processToggleHabit — weekly habit streak multipliers", () => {
     };
     const result = processToggleHabit(habit, "up");
     expect(result).not.toBeNull();
-    expect(result?.multiplier).toBe(2.0);
-    expect(result?.pointsChange).toBe(100); // 50 * 2.0
+    expect(result?.multiplier).toBe(3.0);
+    expect(result?.pointsChange).toBe(150); // 50 * 3.0
   });
 
   it("does NOT reset the streak for a ~7-day gap that still spans consecutive ISO weeks", () => {
@@ -500,8 +500,8 @@ describe("processToggleHabit — weekly habit streak multipliers", () => {
     };
     const result = processToggleHabit(habit, "up");
     expect(result).not.toBeNull();
-    // Prospective streak includes this week → 2 → 1.5x.
-    expect(result?.multiplier).toBe(1.5);
+    // Prospective streak includes this week → 2 → 2.0x.
+    expect(result?.multiplier).toBe(2.0);
   });
 });
 
@@ -573,7 +573,7 @@ describe("processToggleHabit — negative habit sign", () => {
   });
 
   it("(c) positive habit is byte-identical to pre-fix behaviour (sign=1 is a no-op)", () => {
-    // Positive habit with 6-day streak → prospective streak 7 → 2.0x multiplier.
+    // Positive habit with 6-day streak → prospective streak 7 → 3.0x multiplier.
     const positiveHabit: Habit = {
       ...baseHabit,
       type: "positive",
@@ -586,9 +586,9 @@ describe("processToggleHabit — negative habit sign", () => {
     };
     const result = processToggleHabit(positiveHabit, "up");
     expect(result).not.toBeNull();
-    expect(result!.multiplier).toBe(2.0);
-    // sign = 1 → pointsChange = 1 * floor(10 * 2.0) = 20
-    expect(result!.pointsChange).toBe(20);
+    expect(result!.multiplier).toBe(3.0);
+    // sign = 1 → pointsChange = 1 * floor(10 * 3.0) = 30
+    expect(result!.pointsChange).toBe(30);
   });
 });
 
@@ -1096,13 +1096,13 @@ describe("Plan 25 — frozen dates: shared client/functions parity table", () =>
   });
 
   describe("getMultiplier continuity across a frozen bridge", () => {
-    it("daily: the bridged 4-completion streak earns the 1.5x tier", () => {
+    it("daily: the bridged 4-completion streak earns the 2.0x tier", () => {
       const streak = calculateStreak(
         ["2026-07-05", "2026-07-06", "2026-07-07", "2026-07-09"],
         T,
         ["2026-07-08"]
       );
-      expect(getMultiplier(streak, true, "daily")).toBe(1.5);
+      expect(getMultiplier(streak, true, "daily")).toBe(2.0);
     });
   });
 });
@@ -1147,9 +1147,9 @@ describe("Plan 25 — processToggleHabit with frozenDates", () => {
 
     const result = processToggleHabit(habit, "up", T);
     expect(result).not.toBeNull();
-    // Prospective streak = 3 completions + today across the frozen bridge = 4 → 1.5x.
-    expect(result!.multiplier).toBe(1.5);
-    expect(result!.pointsChange).toBe(15);
+    // Prospective streak = 3 completions + today across the frozen bridge = 4 → 2.0x.
+    expect(result!.multiplier).toBe(2.0);
+    expect(result!.pointsChange).toBe(20);
     expect(result!.updatedHabit.streakDays).toBe(4);
     // The frozen day never enters completedDates.
     expect(result!.updatedHabit.completedDates).not.toContain("2026-07-08");
@@ -1305,7 +1305,7 @@ describe("F-HABITS-01 — pause bridging (server)", () => {
     const result = processToggleHabit(habit, "up", localToday);
     expect(result).not.toBeNull();
     expect(result!.updatedHabit.streakDays).toBe(4);
-    expect(result!.multiplier).toBe(1.5); // 4-day streak → 1.5x
+    expect(result!.multiplier).toBe(2.0); // 4-day streak → 2.0x
   });
 
   it("isHabitStale is false while paused, true once elapsed", () => {

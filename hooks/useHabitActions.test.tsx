@@ -227,8 +227,8 @@ describe('useHabitActions.addHabitSubmission', () => {
 
   it('uses the PROSPECTIVE streak (including the new day) for the multiplier', async () => {
     // Habit completed the previous two days. Adding today makes a 3-day streak,
-    // which yields the 1.5x daily multiplier. Pre-submission streak would be 2
-    // (1.0x) — the bug. So the SUBMISSION records floor(10 * 1.5) = 15.
+    // which yields the 2.0x daily multiplier. Pre-submission streak would be 2
+    // (1.0x) — the bug. So the SUBMISSION records floor(10 * 2.0) = 20.
     //
     // Stage 1.5: the pool now receives the logging MEMBER's award instead. The
     // habit's two prior days are grandfathered (no attribution), so the logger's
@@ -249,8 +249,8 @@ describe('useHabitActions.addHabitSubmission', () => {
 
     const submission = capturedSets[0]!.data as { streakDaysAtTime: number; multiplierApplied: number; pointsEarned: number };
     expect(submission.streakDaysAtTime).toBe(3);
-    expect(submission.multiplierApplied).toBe(1.5);
-    expect(submission.pointsEarned).toBe(15);
+    expect(submission.multiplierApplied).toBe(2.0);
+    expect(submission.pointsEarned).toBe(20);
 
     const hh = householdUpdate();
     expect(hh).toBeDefined();
@@ -260,7 +260,7 @@ describe('useHabitActions.addHabitSubmission', () => {
 
   it('credits the pool the LOGGER’s own award once their chain has built up', async () => {
     // Same two prior days, but this time they are attributed to the logger — so
-    // their personal streak reaches 3 and the pool gets the 1.5× award (15),
+    // their personal streak reaches 3 and the pool gets the 2.0× award (20),
     // matching what the submission itself records.
     const today = new Date();
     const y1 = format(subDays(today, 1), 'yyyy-MM-dd');
@@ -279,7 +279,7 @@ describe('useHabitActions.addHabitSubmission', () => {
       await result.current.addHabitSubmission('h1', 1);
     });
 
-    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: 15 });
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: 20 });
   });
 });
 
@@ -755,12 +755,12 @@ describe('useHabitActions.resetHabit (period-scoped date removal)', () => {
     );
 
     // Points reversal matches what the week credited: the completing toggle was
-    // awarded at the 2-consecutive-week streak (1.5x) → floor(10 * 1.5) = 15.
+    // awarded at the 2-consecutive-week streak (2.0x) → floor(10 * 2.0) = 20.
     const hh = householdUpdate();
     expect(hh).toBeDefined();
-    expect(hh!.data['points.total']).toEqual({ __increment: -15 });
-    expect(hh!.data['points.daily']).toEqual({ __increment: -15 });
-    expect(hh!.data['points.weekly']).toEqual({ __increment: -15 });
+    expect(hh!.data['points.total']).toEqual({ __increment: -20 });
+    expect(hh!.data['points.daily']).toEqual({ __increment: -20 });
+    expect(hh!.data['points.weekly']).toEqual({ __increment: -20 });
     expect(commitCount).toBe(1);
   });
 
@@ -1048,10 +1048,10 @@ describe('useHabitActions.toggleHabit (per-member attribution dual-write)', () =
   });
 
   it('credits the member — AND THE POOL — at THEIR streak multiplier, not the habit’s', async () => {
-    // 🏁 Stage 1.5, the visible consequence. The habit has a 6-day streak (2.0×
+    // 🏁 Stage 1.5, the visible consequence. The habit has a 6-day streak (3.0×
     // on the 7th day) but the acting member has never been credited, so their
     // own first completion earns 1.0× — and the pool now receives that SAME 10,
-    // not the habit-level 20 it used to. Long-streak habits temporarily pay 1×
+    // not the habit-level 30 it used to. Long-streak habits temporarily pay 1×
     // until each person's own chain rebuilds; that is the locked model.
     const dates = Array.from({ length: 6 }, (_, i) => format(subDays(new Date(), i + 1), 'yyyy-MM-dd'));
     const habit = baseHabit({ completedDates: dates, count: 0, totalCount: 6 });
