@@ -330,9 +330,9 @@ describe('HabitCard - period-aware multiplier display', () => {
   });
 
   // Per-member points (stage 2): the streak PILL is gone from the row — streak
-  // reads as flame-ring intensity on the credited member's avatar, and the
-  // exact number lives in the habit's log. The MULTIPLIER it earns must still
-  // be visible, which is what these assertions pin.
+  // now reads as its own small chip paired with the credited member's avatar,
+  // and the exact number also lives in the habit's log. The MULTIPLIER it
+  // earns must still be visible, which is what these assertions pin.
   it('no longer renders a streak pill, at any cadence', () => {
     const { rerender } = render(<HabitCard habit={{ ...baseWeekly, streakDays: 2 }} />);
     expect(screen.queryByText(/2 Weeks?/)).not.toBeInTheDocument();
@@ -571,7 +571,7 @@ describe('HabitCard - pie attribution counter', () => {
   });
 });
 
-describe('HabitCard - flame-ring avatars', () => {
+describe('HabitCard - per-member streak chips', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setupMatchMedia(true);
@@ -584,23 +584,23 @@ describe('HabitCard - flame-ring avatars', () => {
     expect(screen.getByText('Jen completed this')).toBeInTheDocument();
   });
 
-  // Ring tiers and their screen-reader text are covered in
+  // Tiers and their screen-reader text are covered in
   // HabitDoneByAvatars.test.tsx — this suite mocks date-fns (for the freeze
   // badge's "yesterday"), which would also blunt a DAILY streak walk here
   // (calculateStreak's `subDays` calls resolve to the frozen mock date). A
   // WEEKLY habit's streak walks `subWeeks` instead, which is untouched by the
   // mock (see the `date-fns` import above) — the tests below use that to get
-  // a real, ring-worthy streak inside this suite.
+  // a real, chip-worthy streak inside this suite.
 
   it('shows no avatars on an untouched row', () => {
     render(<HabitCard habit={mockHabit} attribution={ROSTER} />);
     expect(screen.queryByText(/completed this/)).not.toBeInTheDocument();
   });
 
-  // A flame ring is a celebration; a "streak" on a negative habit is a run of
+  // A streak chip is a celebration; a "streak" on a negative habit is a run of
   // the behaviour the household is trying to stop. The streak pill this
   // replaced was gated on `isPositive`, and that gate has to survive.
-  it('credits the member on a NEGATIVE habit but never rings them', () => {
+  it('credits the member on a NEGATIVE habit but never chips them', () => {
     const { container } = render(
       <HabitCard
         habit={attributedHabit({ [PAUL]: 1 }, { type: 'negative', basePoints: -10, streakDays: 30 })}
@@ -609,7 +609,7 @@ describe('HabitCard - flame-ring avatars', () => {
     );
 
     expect(screen.getByText('Paul completed this')).toBeInTheDocument();
-    expect(container.querySelectorAll('svg[viewBox="0 0 48 48"]')).toHaveLength(0);
+    expect(screen.queryAllByTestId('icon-flame')).toHaveLength(0);
     expect(screen.queryByText(/streak/)).not.toBeInTheDocument();
     // The pie still reads: who did it is the point, on a negative habit most of all.
     expect(pieSlices(container)).toHaveLength(1);
@@ -619,13 +619,13 @@ describe('HabitCard - flame-ring avatars', () => {
   // day of completion (streakDays:30 is inert for entry.streak, which is
   // derived from the member's ACTUAL completedBy history, not that field), so
   // that test's streak never crosses the ember threshold and would pass even
-  // without the showStreakRings gate. This one forces a REAL, ring-worthy
+  // without the showStreakChips gate. This one forces a REAL, chip-worthy
   // streak (three consecutive ISO weeks, via subWeeks — unaffected by this
   // suite's subDays mock) so the suppression is actually exercised.
-  it('suppresses the flame ring AND the streak text for a negative habit at a ring-worthy streak, but keeps the avatar (F1)', () => {
+  it('suppresses the streak chip AND the streak text for a negative habit at a chip-worthy streak, but keeps the avatar (F1)', () => {
     // Three consecutive completed ISO weeks — real weekly-streak math (see the
     // comment above), landing squarely in the "ember" tier a positive habit
-    // would ring.
+    // would chip.
     const weekStart = habitPeriodStart('weekly', TODAY);
     const oneWeekAgo = format(subWeeks(parseISO(weekStart), 1), 'yyyy-MM-dd');
     const twoWeeksAgo = format(subWeeks(parseISO(weekStart), 2), 'yyyy-MM-dd');
@@ -649,17 +649,17 @@ describe('HabitCard - flame-ring avatars', () => {
       lastUpdated: new Date().toISOString(),
     };
 
-    const { container } = render(<HabitCard habit={negativeHabit} attribution={ROSTER} />);
+    render(<HabitCard habit={negativeHabit} attribution={ROSTER} />);
 
     // The avatar still renders — who did it is the point on a negative habit
-    // most of all — but neither the ring NOR the streak text celebrates three
+    // most of all — but neither the chip NOR the streak text celebrates three
     // consecutive weeks of a habit the household is trying to discourage.
     expect(screen.getByText('Paul completed this')).toBeInTheDocument();
-    expect(screen.queryByText(/weeks streak/)).not.toBeInTheDocument();
-    expect(container.querySelectorAll('svg[viewBox="0 0 48 48"]')).toHaveLength(0);
+    expect(screen.queryByText(/week streak/)).not.toBeInTheDocument();
+    expect(screen.queryAllByTestId('icon-flame')).toHaveLength(0);
   });
 
-  it('still rings a POSITIVE habit at the same streak (regression guard for the negative-habit suppression above)', () => {
+  it('still chips a POSITIVE habit at the same streak (regression guard for the negative-habit suppression above)', () => {
     const weekStart = habitPeriodStart('weekly', TODAY);
     const oneWeekAgo = format(subWeeks(parseISO(weekStart), 1), 'yyyy-MM-dd');
     const twoWeeksAgo = format(subWeeks(parseISO(weekStart), 2), 'yyyy-MM-dd');
@@ -682,14 +682,17 @@ describe('HabitCard - flame-ring avatars', () => {
       lastUpdated: new Date().toISOString(),
     };
 
-    const { container } = render(<HabitCard habit={positiveHabit} attribution={ROSTER} />);
+    render(<HabitCard habit={positiveHabit} attribution={ROSTER} />);
 
-    expect(screen.getByText('Paul completed this, 3 weeks streak')).toBeInTheDocument();
-    expect(container.querySelectorAll('svg[viewBox="0 0 48 48"]')).toHaveLength(1);
+    // The avatar's own label and the chip's label are now separate
+    // announcements (they used to be one combined sentence on the ring).
+    expect(screen.getByText('Paul completed this')).toBeInTheDocument();
+    expect(screen.getByText('3 week streak')).toBeInTheDocument();
+    expect(screen.getAllByTestId('icon-flame')).toHaveLength(1);
   });
 });
 
-describe('HabitCard - React.memo comparator refreshes stale rings on out-of-period edits (F3)', () => {
+describe('HabitCard - React.memo comparator refreshes stale streak chips on out-of-period edits (F3)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setupMatchMedia(true);
@@ -725,7 +728,7 @@ describe('HabitCard - React.memo comparator refreshes stale rings on out-of-peri
 
     // Below the ember threshold (a lone week, streak 1): no streak text yet.
     expect(screen.getByText('Paul completed this')).toBeInTheDocument();
-    expect(screen.queryByText(/weeks streak/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/week streak/)).not.toBeInTheDocument();
 
     const after: Habit = {
       ...before,
@@ -742,7 +745,8 @@ describe('HabitCard - React.memo comparator refreshes stale rings on out-of-peri
 
     // Paul's own weekly streak is now 3 (ember tier) — the row must refresh to
     // show it, proving the comparator did not treat `before`/`after` as equal.
-    expect(screen.getByText('Paul completed this, 3 weeks streak')).toBeInTheDocument();
+    expect(screen.getByText('Paul completed this')).toBeInTheDocument();
+    expect(screen.getByText('3 week streak')).toBeInTheDocument();
   });
 });
 

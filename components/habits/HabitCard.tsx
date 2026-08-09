@@ -46,8 +46,8 @@ interface HabitCardProps {
   /**
    * Per-member attribution context (roster + colors), built once per roster
    * change by the Habits page. Absent = no attribution UI at all: the pie
-   * counter, the flame-ring avatars and the picker are HABITS-PAGE ONLY, and a
-   * card rendered anywhere else keeps its original look.
+   * counter, the done-by avatars with their streak chips, and the picker are
+   * HABITS-PAGE ONLY, and a card rendered anywhere else keeps its original look.
    */
   attribution?: HabitRowMemberContext;
 }
@@ -96,7 +96,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   const signedPointsDisplay = signedHabitPoints(habit, totalMultiplier);
 
   // Period-aware streak cadence — drives the multiplier nudge's unit word and
-  // the screen-reader text on the badge row's flame-ring avatars.
+  // the screen-reader text on the badge row's streak chips.
   const isWeekly = habit.period === 'weekly';
 
   // Period-aware "one period from the next tier" nudge. Thresholds mirror
@@ -766,19 +766,24 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
             </Badge>
 
             {/* Per-member points (stage 2): the streak PILL is gone from this
-                row. Streak now reads as flame-ring intensity around each
-                credited member's avatar — per-member, not per-habit — and the
-                exact number lives in the habit's log ("View Log" → Current
-                Streak). The multiplier it earns is still visible: it is baked
-                into the points badge above. */}
+                row. Streak now reads as its own small chip ("🔥 9") sitting
+                immediately before each credited member's avatar — per-member,
+                not per-habit, and paired 1:1 so two members on a streak in the
+                same row can't be misread as each other's numbers. (An earlier
+                iteration drew the streak as a flame ring around the avatar;
+                at 15px it was invisible, and a larger badge rivalled the
+                avatar in size and inverted the hierarchy, so it moved off the
+                avatar entirely.) The exact number also lives in the habit's
+                log ("View Log" → Current Streak). The multiplier it earns is
+                still visible: it is baked into the points badge above. */}
             {(segments.length > 0 || showHouseholdBadge) && (
               <HabitDoneByAvatars
                 entries={segments}
                 streakUnit={isWeekly ? 'week' : 'day'}
-                // Positive habits only — a ring around a run of the thing you
+                // Positive habits only — a chip around a run of the thing you
                 // are trying to STOP would be a celebration of it. The pill
                 // this replaced carried the same gate.
-                showStreakRings={isPositive}
+                showStreakChips={isPositive}
                 showHousehold={showHouseholdBadge}
               />
             )}
