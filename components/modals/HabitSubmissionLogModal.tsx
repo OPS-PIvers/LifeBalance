@@ -600,9 +600,6 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                           <div key={sub.id} className="p-3 flex items-center justify-between hover:bg-brand-50 dark:hover:bg-brand-700/50 transition-colors">
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-sm font-mono font-bold text-brand-800 dark:text-brand-100">
-                                  {format(parseISO(sub.timestamp), 'h:mm a')}
-                                </span>
                                 <Badge variant="neutral" size="md">
                                   ×{sub.count}
                                 </Badge>
