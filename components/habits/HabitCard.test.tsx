@@ -98,7 +98,23 @@ vi.mock('date-fns', async () => {
   const actual = await vi.importActual<typeof import('date-fns')>('date-fns');
   return {
     ...actual,
-    subDays: (_date: Date | number, _days: number) => mockedYesterday.current,
+    // 🛡️ Fake ONLY the card's own "what was yesterday?" reading.
+    //
+    // This used to ignore both arguments and return `mockedYesterday.current`
+    // unconditionally — which makes `subDays` a CONSTANT function. Every
+    // backward date walk in the app relies on it strictly decreasing, so
+    // `calculateStreak` (checkDate = subDays(checkDate, 1)) span forever the
+    // moment a fixture's frozen date equalled the mocked value: the suite hung
+    // for ~8 minutes and killed its worker rather than failing.
+    //
+    // The card derives yesterday from a LIVE clock reading; every streak walk
+    // passes a date parsed from a yyyy-MM-dd string, which is days or years
+    // from now. That gap is the discriminator.
+    subDays: (date: Date | number, days: number) => {
+      const ms = date instanceof Date ? date.getTime() : date;
+      const isLiveClockReading = Math.abs(Date.now() - ms) < 1000;
+      return isLiveClockReading ? mockedYesterday.current : actual.subDays(date, days);
+    },
   };
 });
 
@@ -461,6 +477,126 @@ const attributedHabit = (completedBy: Record<string, number>, overrides: Partial
 
 const pieSlices = (container: HTMLElement): SVGPathElement[] =>
   Array.from(container.querySelectorAll<SVGPathElement>('svg[viewBox="0 0 46 46"] path'));
+
+// 🛡️ The points badge is a PROMISE about what the viewer's next tap pays, and
+// under the competition model that is the VIEWER's own streak multiplier —
+// `habit.streakDays` is the habit's flame and belongs to nobody. Reading the
+// habit-level figure made the badge disagree with the award in both directions.
+// basePoints is 10 throughout, so the badge text encodes the multiplier
+// directly: "10 pts" = 1×, "20 pts" = 2×.
+describe('HabitCard - the points badge reads the VIEWER’s multiplier', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupMatchMedia(true);
+  });
+
+  // WEEKLY on purpose: this suite fakes `subDays` to a fixed date (see the
+  // date-fns mock above), which would corrupt any daily streak walk. Weekly
+  // streaks go through `subWeeks`, which passes through to the real
+  // implementation — the same reason the negative-habit test below is weekly.
+  const weekStart = habitPeriodStart('weekly', TODAY);
+  const wk = (back: number) =>
+    back === 0 ? TODAY : format(subWeeks(parseISO(weekStart), back), 'yyyy-MM-dd');
+
+  /** Paul on a 2-week chain; Jen has this week only. Same row, same habit. */
+  const sharedChain = (overrides: Partial<Habit> = {}): Habit => ({
+    ...mockHabit,
+    title: 'Weekly walk',
+    period: 'weekly',
+    scoringType: 'incremental',
+    basePoints: 10,
+    targetCount: 1,
+    count: 2,
+    totalCount: 3,
+    streakDays: 2,
+    completedDates: [wk(0), wk(1)],
+    completedBy: {
+      [wk(0)]: { [PAUL]: 1, [JEN]: 1 },
+      [wk(1)]: { [PAUL]: 1 },
+    },
+    lastUpdated: new Date().toISOString(),
+    ...overrides,
+  });
+
+  it('shows the viewer their OWN 2×, when their chain is the long one', () => {
+    render(<HabitCard habit={sharedChain()} attribution={ROSTER} />);
+    // Paul's own 2 consecutive weeks earn 2× — here the same as the habit's.
+    expect(screen.getByText('20 pts')).toBeInTheDocument();
+  });
+
+  it('does NOT promise a viewer the multiplier someone ELSE’s streak earned', () => {
+    // Jen holds this week only, so her next tap pays 1× — even though the
+    // habit's flame (and Paul's chain) sits at 2 weeks / 2×. Before the fix
+    // this row promised Jen 20 pts and paid her 10.
+    render(
+      <HabitCard habit={sharedChain()} attribution={buildHabitRowMemberContext(ROSTER_MEMBERS, JEN)} />
+    );
+    expect(screen.getByText('10 pts')).toBeInTheDocument();
+    expect(screen.queryByText('20 pts')).not.toBeInTheDocument();
+  });
+
+  it('nudges off the viewer’s own streak, not the habit’s', () => {
+    // Jen is one week short of the 2-week tier; Paul, on the same row with the
+    // same habit-level streakDays, is already past it.
+    const habit = sharedChain({ streakDays: 4 }); // flame deliberately elsewhere
+
+    const { unmount } = render(
+      <HabitCard habit={habit} attribution={buildHabitRowMemberContext(ROSTER_MEMBERS, JEN)} />
+    );
+    expect(screen.getByText('1 week from 2x!')).toBeInTheDocument();
+    unmount();
+
+    render(<HabitCard habit={habit} attribution={ROSTER} />);
+    expect(screen.queryByText(/from 2x/)).not.toBeInTheDocument();
+  });
+
+  it('does not nudge toward a tier the badge is already charging for', () => {
+    // The badge and the nudge read ONE streak. Jen's badge shows 1× and her
+    // nudge points at 2×; Paul's badge shows 2× and he gets no 2× nudge —
+    // never "1 week from 2x" sitting beside a badge that already says 20 pts.
+    render(<HabitCard habit={sharedChain()} attribution={ROSTER} />);
+    expect(screen.getByText('20 pts')).toBeInTheDocument();
+    expect(screen.queryByText(/from 2x/)).not.toBeInTheDocument();
+  });
+
+  it('does not price a STALE counter as if it had already completed today', () => {
+    // A targetCount:3 weekly habit finished LAST week whose reset hasn't landed
+    // yet: `count` is still 3. Reading it raw makes `count + 1 >= 3` true, so
+    // the period looks complete and the badge promises the 2-week tier — which
+    // the first tap of the new week cannot earn (it brings the count to 1 of 3).
+    const lastWeek = format(subWeeks(parseISO(weekStart), 1), 'yyyy-MM-dd');
+    const twoWeeksAgo = format(subWeeks(parseISO(weekStart), 2), 'yyyy-MM-dd');
+    const staleMultiTarget: Habit = {
+      ...mockHabit,
+      title: 'Weekly walk',
+      period: 'weekly',
+      scoringType: 'incremental',
+      basePoints: 10,
+      targetCount: 3,
+      count: 3, // last week's counter, reset pending
+      totalCount: 6,
+      streakDays: 2,
+      completedDates: [lastWeek, twoWeeksAgo],
+      completedBy: {
+        [lastWeek]: { [PAUL]: 3 },
+        [twoWeeksAgo]: { [PAUL]: 3 },
+      },
+      // Stale: belongs to a period whose auto-reset hasn't run.
+      lastUpdated: `${twoWeeksAgo}T12:00:00.000Z`,
+    };
+
+    render(<HabitCard habit={staleMultiTarget} attribution={ROSTER} />);
+    expect(screen.getByText('10 pts')).toBeInTheDocument();
+    expect(screen.queryByText('20 pts')).not.toBeInTheDocument();
+  });
+
+  it('keeps the HABIT-level multiplier where the habit level is what actually pays', () => {
+    // No attribution context at all (a card rendered off the Habits page) —
+    // there is no viewer to score, so the habit's own flame stands.
+    render(<HabitCard habit={sharedChain()} />);
+    expect(screen.getByText('20 pts')).toBeInTheDocument();
+  });
+});
 
 describe('HabitCard - per-member freeze protection (freezeMode: per_member, stage 6)', () => {
   const yesterdayStr = '2024-02-09';

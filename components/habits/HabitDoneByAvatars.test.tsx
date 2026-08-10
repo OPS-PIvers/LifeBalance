@@ -74,6 +74,28 @@ describe('HabitDoneByAvatars', () => {
     expect(screen.getByText('4 week streak')).toBeInTheDocument();
   });
 
+  // 🛡️ The tiers are read in the habit's OWN cadence. A 2-week streak already
+  // earns the 2× multiplier, but scored against the DAY thresholds it fell
+  // below ember and rendered no chip at all — so a weekly habit paying double
+  // showed nothing to explain why.
+  it('chips a WEEKLY streak at its own thresholds, not the daily ones', () => {
+    const { container } = render(
+      <HabitDoneByAvatars entries={[entry({ streak: 2 })]} streakUnit="week" showStreakChips />
+    );
+    expect(flameIcons(container)).toHaveLength(1);
+    expect(screen.getByText('2 week streak')).toBeInTheDocument();
+  });
+
+  it('still shows no weekly chip below its own ember threshold', () => {
+    // The positive control's negative twin: 1 week is genuinely un-chipworthy
+    // (it earns no multiplier), so the fix must not simply chip everything.
+    const { container } = render(
+      <HabitDoneByAvatars entries={[entry({ streak: 1 })]} streakUnit="week" showStreakChips />
+    );
+    expect(flameIcons(container)).toHaveLength(0);
+    expect(screen.queryByText(/streak/)).not.toBeInTheDocument();
+  });
+
   // A "streak" on a negative habit is a run of the thing you are trying to
   // stop; the pill this replaced was positive-only and the gate survives the
   // change of form. Who did it is still shown.

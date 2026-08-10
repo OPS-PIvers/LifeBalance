@@ -25,6 +25,7 @@ import {
   memberFrozenDates,
   memberMostRecentUnitDateInPeriod,
   memberUnitsForPeriod,
+  prospectiveStreakForMember,
 } from '@/utils/habitAttribution';
 import {
   LONG_PRESS_MS,
@@ -84,11 +85,43 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   // Completion Logic
   const isCompleted = count >= habit.targetCount;
   
-  // Multipliers — period-aware (daily uses a 3/7-day ladder, weekly a 2/4-week
-  // ladder). `habit.streakDays` holds the streak in the habit's own cadence, so
-  // we feed it straight into the shared getMultiplier with habit.period.
-  const streakMultiplier = getMultiplier(habit.streakDays, isPositive, habit.period);
-  const totalMultiplier = streakMultiplier;
+  // 🛡️ THE BADGE MUST READ THE VIEWER'S OWN MULTIPLIER, NOT THE HABIT'S.
+  //
+  // Under the competition model a completion is credited at the acting MEMBER's
+  // prospective streak (see prospectiveMultiplierForMember, and the same call in
+  // useHabitActions' toast) — `habit.streakDays` is the habit's flame and
+  // belongs to nobody. Reading it here made the badge disagree with the points
+  // actually awarded in BOTH directions: a member riding someone else's 6-day
+  // habit streak was promised 2 pts and paid 1, while a member with their own
+  // streak on a habit whose flame had lapsed was promised 3 and paid 6.
+  //
+  // The two cases that genuinely DO pay the habit-level flame keep it: an
+  // assigned chore credits its assignee through the legacy scorer, and a
+  // `creditMode: 'household'` completion pays the pool at the habit's own
+  // streak and moves no personal chain.
+  // The streak is the PROSPECTIVE one — what this tap will actually be scored
+  // at (see prospectiveStreakForMember). Both the badge and the nudge below
+  // derive from this single figure, so they can never contradict each other.
+  //
+  // Without an attribution context there is no viewer to score (a card rendered
+  // off the Habits page), so the habit's own flame stands exactly as before.
+  const today = getLocalDateString();
+  const viewerId = attribution?.currentUserId ?? '';
+  const usesViewerStreak =
+    viewerId !== '' && habitFeedsMemberAttribution(habit) && !isHouseholdCreditHabit(habit);
+  // 🛡️ De-stale the counter first, exactly as the toggle path does before it
+  // scores (`effectiveHabit` in useHabitActions) and as `rowCompletionSegments`
+  // does below. `prospectiveStreakForMember` reads `habit.count` to decide
+  // whether the pending unit COMPLETES the current period, and a stale count
+  // belongs to the period that hasn't been reset yet — so a `targetCount: 3`
+  // habit finished yesterday would read `3 + 1 >= 3` this morning and promise
+  // a tier the first tap of the new day cannot earn. That is the very
+  // badge-vs-award mismatch this block exists to remove.
+  const scoringHabit = isStale ? { ...habit, count: 0 } : habit;
+  const effectiveStreak = usesViewerStreak
+    ? prospectiveStreakForMember(scoringHabit, viewerId, today, today)
+    : habit.streakDays;
+  const totalMultiplier = getMultiplier(effectiveStreak, isPositive, habit.period);
 
   // Canonical sign handling (habit.type drives the sign, |basePoints| the
   // magnitude) — negating raw basePoints here double-negated wizard-created
@@ -107,8 +140,12 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     const oneFrom2x = isWeekly ? 1 : 2;
     const oneFrom3x = isWeekly ? 3 : 6;
     const unit = isWeekly ? 'week' : 'day';
-    if (habit.streakDays === oneFrom2x) return { unit, tier: '2x' };
-    if (habit.streakDays === oneFrom3x) return { unit, tier: '3x' };
+    // Counted off the SAME streak the badge above is priced from — a nudge
+    // read off the habit's flame promises a tier the viewer's own next
+    // completion will not earn, and one read off a different streak than the
+    // badge would say "1 day from 2x" beside a badge already showing 2x.
+    if (effectiveStreak === oneFrom2x) return { unit, tier: '2x' };
+    if (effectiveStreak === oneFrom3x) return { unit, tier: '3x' };
     return null;
   })();
 
@@ -138,7 +175,6 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   // Who is credited for THIS period's completions, in roster order. A stale row
   // renders as count 0 (its counter belongs to a period whose auto-reset hasn't
   // landed), so it shows no attribution either — the two must agree.
-  const today = getLocalDateString();
   const segments = attribution && !isStale ? rowCompletionSegments(habit, attribution, today) : [];
   const attributedUnits = segments.reduce((sum, s) => sum + s.units, 0);
   // Pie mode only once someone is actually credited: a pre-feature
