@@ -159,3 +159,53 @@ Firestore converters entirely, so the normalization does not apply there. Do not
   deliberately excluded from the drawer-footer convention.
 - **`components/meals/MealPlanTab.test.tsx`'s "extends the day strip window…" test** is a pre-existing,
   load-sensitive flake. Not a regression from any recent work; don't chase it as one.
+
+---
+
+## A streak period must be COMPLETED, not merely touched — and the badge shows YOUR multiplier
+
+**Decided 2026-08-09 (owner call, from a live report).** Three tests pin the first half, four the
+second; a fifth pins the harness fix below.
+
+Symptom: "Exercise for 30 minutes" (weekly, `targetCount: 3`, `basePoints: 3`) showed **3 pts** on
+the row and credited **+6** on the scoreboard, with no streak indicator anywhere to explain the gap.
+Nothing was corrupted — the stored household/member points matched the scorers exactly. Three
+independent defects stacked:
+
+1. **Per-member streaks counted partial periods.** `memberCompletionDates` returns every date the
+   member holds a unit on — the right scope for *scoring* an incremental habit, the wrong one for a
+   *streak*. Logging 1 of 3 weekly exercises for two weeks built a 2-week streak paying 2×, while the
+   habit's own `streakDays` correctly read 0 (the habit-level walk reads `completedDates`, which only
+   gains a date when the target is crossed). The two layers were answering different questions.
+   `memberStreakDates` now asks the habit-level question of the member's own units.
+   **Owner's rule, verbatim: "if it's a streak of 3x a week, I only exercised once this week"** — a
+   week you didn't finish is not a streak week. Do not relax this back to "any activity counts".
+   **Scope:** a member must meet the target *themselves*. Two members splitting a weekly target of 3
+   complete the habit and neither earns a streak week. That is deliberate, not an oversight.
+
+2. **The points badge read `habit.streakDays`.** Under the competition model a completion is credited
+   at the acting *member's* prospective streak, so the habit's flame belongs to nobody. The badge was
+   wrong in **both** directions — it promised a member riding someone else's 6-day chain 2 pts and
+   paid 1, and promised 3 on a habit whose flame had lapsed while paying 6. Badge and nudge now
+   derive from one figure (`prospectiveStreakForMember`), so they cannot contradict each other
+   ("1 day from 2x!" beside a badge already charging 2× was reachable while they differed).
+
+3. **Streak chip tiers used the DAILY thresholds for weekly habits.** A 2-week streak already earns
+   2× but scored below `ember` and rendered no chip — which is why nothing on the row explained the
+   doubled award. Same defect class as the Stats tile's inlined ladder (#1237); the ladder had been
+   fixed at one site and not carried to the other.
+
+**At `targetCount <= 1` the filter in (1) is a provable no-op**, and the fallback in (2) preserves the
+habit-level path exactly — so every other habit's stored totals are untouched. This household's
+weekly figure moves 93 → 90 on the next recompute, entirely from the one multi-target habit.
+
+**Unrelated but load-bearing: `HabitCard.test.tsx` mocked `subDays` to ignore its arguments**, making
+it a *constant function*. Every backward date walk in the app relies on it strictly decreasing, so
+`calculateStreak` span forever the moment a fixture's frozen date equalled the mocked value — the
+suite hung ~8 minutes and killed its worker instead of failing. It now fakes only the live-clock
+reading the card actually makes. If you add a caller that walks dates in that suite, this is why it
+works.
+
+**Separately: the "way higher than ever" weekly total was mostly intended.** Same week, same data:
+62 under the pre-#1237 ladder + legacy scorer, 76 with the competition model, 93 after #1237 made the
+ladder integer-valued. Only 3 of that came from defect (1). Don't go looking for a leak.

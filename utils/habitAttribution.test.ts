@@ -24,6 +24,7 @@ import {
   legacyPeriodPoints,
   memberCompletionCount,
   memberCompletionDates,
+  memberStreakDates,
   memberFrozenDates,
   memberIdsOnDate,
   memberMostRecentUnitDateInPeriod,
@@ -47,6 +48,7 @@ import {
   calculateResetPoints,
   calculateStreak,
   pointsForHabitOnDate,
+  streakForHabit,
 } from '@/utils/habitLogic';
 import { getLocalDateString } from '@/utils/dateHelpers';
 
@@ -454,6 +456,116 @@ describe('habitAttribution — per-member frozen dates', () => {
     // scores zero — the freeze buys continuity, never points.
     expect(memberCompletionCount(h, PAUL, d(1))).toBe(0);
     expect(memberPointsForHabitOnDate(h, PAUL, d(1), d(2))).toBe(0);
+  });
+});
+
+describe('habitAttribution — a streak period must MEET the target', () => {
+  // A weekly habit with a target of 3, logged once per week. Both weeks are
+  // "touched" and neither is completed.
+  const onceAWeek = (extra: Partial<Habit> = {}): Habit =>
+    habit({
+      period: 'weekly',
+      scoringType: 'incremental',
+      targetCount: 3,
+      basePoints: 3,
+      count: 1,
+      // Never reaches 3, so no week ever enters `completedDates` — which is
+      // why the habit's OWN streak reads 0 and always did.
+      completedDates: [],
+      completedBy: {
+        [d(-1)]: { [PAUL]: 1 }, // prior week (Sunday)
+        [d(6)]: { [PAUL]: 1 }, // this week (Sunday)
+      },
+      ...extra,
+    });
+
+  it('does NOT count a period the member only partly filled', () => {
+    const h = onceAWeek();
+    expect(memberStreakDates(h, PAUL)).toEqual([]);
+    expect(streakForMember(h, PAUL, d(6))).toBe(0);
+    // The regression: this used to read 2 weeks and pay the 2× multiplier on a
+    // habit that has never once been completed.
+    expect(prospectiveMultiplierForMember(h, PAUL, d(6), d(6))).toBe(1.0);
+    expect(memberPointsForHabitOnDate(h, PAUL, d(6), d(6))).toBe(3);
+  });
+
+  it('agrees with the habit-level streak, which never counted those weeks either', () => {
+    const h = onceAWeek();
+    expect(streakForHabit(h)).toBe(0);
+    expect(streakForMember(h, PAUL, d(6))).toBe(0);
+  });
+
+  it('counts a period the member DID fill, and pays the multiplier for it', () => {
+    // Three units in each of two consecutive weeks → a real 2-week streak → 2×.
+    const h = onceAWeek({
+      count: 3,
+      completedBy: {
+        [d(-3)]: { [PAUL]: 1 },
+        [d(-2)]: { [PAUL]: 1 },
+        [d(-1)]: { [PAUL]: 1 },
+        [d(4)]: { [PAUL]: 1 },
+        [d(5)]: { [PAUL]: 1 },
+        [d(6)]: { [PAUL]: 1 },
+      },
+    });
+    expect(streakForMember(h, PAUL, d(6))).toBe(2);
+    expect(memberPointsForHabitOnDate(h, PAUL, d(6), d(6))).toBe(6);
+  });
+
+  it('counts only the members who individually met it, not the habit as a whole', () => {
+    // Paul 2 + Jen 1 fills the habit's weekly target of 3, but neither person
+    // met it alone — so neither earns a streak from that week.
+    const h = onceAWeek({
+      count: 3,
+      completedBy: {
+        [d(4)]: { [PAUL]: 1 },
+        [d(5)]: { [PAUL]: 1 },
+        [d(6)]: { [JEN]: 1 },
+      },
+    });
+    expect(streakForMember(h, PAUL, d(6))).toBe(0);
+    expect(streakForMember(h, JEN, d(6))).toBe(0);
+  });
+
+  it('a PROSPECTIVE unit that reaches the target qualifies its period', () => {
+    // Two units banked this week; the third is the one being logged now.
+    const h = onceAWeek({
+      count: 2,
+      completedBy: {
+        [d(-3)]: { [PAUL]: 1 },
+        [d(-2)]: { [PAUL]: 1 },
+        [d(-1)]: { [PAUL]: 1 },
+        [d(4)]: { [PAUL]: 1 },
+        [d(5)]: { [PAUL]: 1 },
+      },
+    });
+    // Before: only the prior week qualifies, so the chain has lapsed → 1×.
+    expect(streakForMember(h, PAUL, d(6))).toBe(1);
+    // The pending third unit completes this week, making it 2 weeks → 2×.
+    expect(prospectiveMultiplierForMember(h, PAUL, d(6), d(6))).toBe(2.0);
+  });
+
+  it('is INERT at targetCount <= 1: identical to the raw completion dates', () => {
+    // The regression pin. Every habit but a multi-target one takes this path,
+    // so the filter must be a no-op there — including for `targetCount: 0`,
+    // which the scorers already clamp to 1.
+    for (const targetCount of [0, 1]) {
+      for (const period of ['daily', 'weekly'] as const) {
+        const h = habit({
+          period,
+          targetCount,
+          completedDates: [d(0), d(1), d(2)],
+          completedBy: {
+            [d(0)]: { [PAUL]: 2, [JEN]: 1 },
+            [d(1)]: { [PAUL]: 1 },
+            [d(2)]: { [PAUL]: 1, [JEN]: 3 },
+          },
+        });
+        for (const member of [PAUL, JEN]) {
+          expect(memberStreakDates(h, member)).toEqual(memberCompletionDates(h, member));
+        }
+      }
+    }
   });
 });
 

@@ -411,6 +411,44 @@ const bridgeFor = (
   );
 
 /**
+ * 🛡️ A STREAK PERIOD IS ONE THE MEMBER ACTUALLY COMPLETED — not merely one they
+ * touched.
+ *
+ * `memberCompletionDates` returns every date the member holds a unit on, which
+ * is the right scope for SCORING (an incremental habit pays per action) but the
+ * wrong one for a STREAK when `targetCount > 1`. "Exercise for 30 minutes",
+ * weekly, target 3: logging it once a week produced a 2-week "streak" and its
+ * 2× multiplier, while the habit's own `streakDays` correctly read 0 — the two
+ * layers disagreed because they answered different questions. The habit-level
+ * streak walks `completedDates`, which only gains a date once the period's
+ * target is met; this makes the per-member walk ask the same question of the
+ * member's own units.
+ *
+ * For `targetCount <= 1` — every habit but the rare multi-target one — a date
+ * with a unit IS a completed period, so this returns `memberCompletionDates`
+ * verbatim and every streak, multiplier and stored total is bit-for-bit
+ * unchanged.
+ */
+export const memberStreakDates = (habit: Habit, memberId: string): string[] => {
+  const dates = memberCompletionDates(habit, memberId);
+  const target = Math.max(habit.targetCount, 1);
+  if (target <= 1) return dates;
+
+  // Memoized per period: a weekly habit's period lookup costs 7 date-keyed
+  // reads, and a member's dates cluster into far fewer periods than dates.
+  const met = new Map<string, boolean>();
+  return dates.filter(date => {
+    const periodStart = habitPeriodStart(habit.period, date);
+    let qualifies = met.get(periodStart);
+    if (qualifies === undefined) {
+      qualifies = (memberUnitsForPeriod(habit, date)[memberId] ?? 0) >= target;
+      met.set(periodStart, qualifies);
+    }
+    return qualifies;
+  });
+};
+
+/**
  * Current streak for `memberId` on `habit`, in the habit's own cadence (days for
  * a daily habit, ISO weeks for a weekly one).
  *
@@ -423,7 +461,7 @@ export const streakForMember = (
 ): number =>
   streakForMemberDates(
     habit,
-    memberCompletionDates(habit, memberId),
+    memberStreakDates(habit, memberId),
     today,
     memberFrozenDates(habit, memberId),
   );
@@ -489,31 +527,66 @@ export const streakEndingOnForMember = (
 ): number =>
   streakEndingOnForMemberDates(
     habit,
-    memberCompletionDates(habit, memberId),
+    memberStreakDates(habit, memberId),
     date,
     today,
     memberFrozenDates(habit, memberId),
   );
 
 /**
+ * A member's PROSPECTIVE streak on `date` — the streak that exists once the
+ * completion being made is counted, matching how `processToggleHabit` computes
+ * the habit-level streak and what `streakEndingOnForMember` will read back when
+ * the award is scored.
+ *
+ * This is the figure any "what does tapping this pay?" surface must use. The
+ * CURRENT streak is one short on exactly the taps that cross a tier, which is
+ * how a row can promise 1× and pay 2×.
+ */
+export const prospectiveStreakForMember = (
+  habit: Habit,
+  memberId: string,
+  date: string,
+  today: string = getLocalDateString(),
+): number => {
+  const target = Math.max(habit.targetCount, 1);
+  const periodStart = habitPeriodStart(habit.period, date);
+  // What this member would hold in `date`'s period once the pending completion
+  // lands. The +1 is unconditional: a member already holding a unit today is
+  // still ADDING one, which matters the moment `targetCount > 1`.
+  const unitsAfter = (memberUnitsForPeriod(habit, date)[memberId] ?? 0) + 1;
+
+  // Rebuild `date`'s period from scratch — drop whatever the member holds in it
+  // and re-add it as one completed period only if the pending unit reaches the
+  // target. Every other period keeps the qualification it already had.
+  //
+  // At `targetCount <= 1` this is provably the old `[...dates, date]`: the
+  // period always qualifies, and the streak walks address periods through a
+  // Set, so dropping the period's other dates in favour of `date` alone leaves
+  // the same periods represented.
+  const prospective = memberStreakDates(habit, memberId).filter(
+    d => habitPeriodStart(habit.period, d) !== periodStart,
+  );
+  if (unitsAfter >= target) prospective.push(date);
+
+  return streakForMemberDates(habit, prospective, today, memberFrozenDates(habit, memberId));
+};
+
+/**
  * The multiplier a member's NEXT completion on `date` would earn — their own
- * PROSPECTIVE streak (the streak that exists once `date` is counted), matching
- * how `processToggleHabit` computes the habit-level multiplier.
+ * prospective streak, run through the habit's own period ladder.
  */
 export const prospectiveMultiplierForMember = (
   habit: Habit,
   memberId: string,
   date: string,
   today: string = getLocalDateString(),
-): number => {
-  const dates = memberCompletionDates(habit, memberId);
-  const prospective = dates.includes(date) ? dates : [...dates, date];
-  return getMultiplier(
-    streakForMemberDates(habit, prospective, today, memberFrozenDates(habit, memberId)),
+): number =>
+  getMultiplier(
+    prospectiveStreakForMember(habit, memberId, date, today),
     habit.type === 'positive',
     habit.period,
   );
-};
 
 // ---------------------------------------------------------------------------
 // Per-member scoring

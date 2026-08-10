@@ -46,8 +46,37 @@ type StreakTier = 'ember' | 'flame' | 'blaze';
  * Streak thresholds, in the habit's own cadence (days for a daily habit, ISO
  * weeks for a weekly one) — the same units `Habit.streakDays` uses.
  */
-const tierFor = (streak: number): StreakTier | null =>
-  streak >= 30 ? 'blaze' : streak >= 7 ? 'flame' : streak >= 3 ? 'ember' : null;
+/**
+ * Chip tier for a streak, in the habit's OWN cadence.
+ *
+ * 🛡️ Period-aware, because the numbers are not comparable across cadences: a
+ * 2-week streak already earns the 2× multiplier, but read against the daily
+ * thresholds it scored below `ember` and rendered NO chip at all — so a weekly
+ * habit paying double showed nothing to explain why. (A 4-week streak, the top
+ * of the weekly ladder, showed the LOWEST tier for the same reason.) Each
+ * cadence's first two rungs are its own multiplier tiers — daily 3/7, weekly
+ * 2/4 (see getMultiplier) — and `blaze` sits well beyond the ladder as a
+ * long-haul marker: ~a month of days, ~a quarter of weeks.
+ *
+ * This is the same defect class as the Stats tile's inlined ladder (#1237),
+ * which likewise applied the daily thresholds to weekly habits.
+ */
+const tierFor = (streak: number, unit: 'day' | 'week'): StreakTier | null =>
+  unit === 'week'
+    ? streak >= 12
+      ? 'blaze'
+      : streak >= 4
+        ? 'flame'
+        : streak >= 2
+          ? 'ember'
+          : null
+    : streak >= 30
+      ? 'blaze'
+      : streak >= 7
+        ? 'flame'
+        : streak >= 3
+          ? 'ember'
+          : null;
 
 /**
  * Chip tone per tier, built ONLY from the two existing `habit-*` design
@@ -169,7 +198,7 @@ const HabitDoneByAvatars: React.FC<HabitDoneByAvatarsProps> = ({
         </span>
       )}
       {entries.map(entry => {
-        const tier = showStreakChips ? tierFor(entry.streak) : null;
+        const tier = showStreakChips ? tierFor(entry.streak, streakUnit) : null;
         return (
           // One wrapper per member: chip (if any) tightly bound to ITS OWN
           // avatar — see the PAIRING note above. `gap-1` only applies BETWEEN
