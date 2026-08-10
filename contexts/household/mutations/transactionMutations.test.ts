@@ -2424,6 +2424,12 @@ describe('ATTR-1 — transaction-fired habits credit the card owner', () => {
         ...baseHabit,
         targetCount: 2,
         count: 1,
+        // A streak period is one that was COMPLETED, not merely touched (see
+        // `memberStreakDates`), so the six prior days have to be real
+        // completions for APPROVER to carry a chain into today — which is
+        // exactly what production writes once a day crosses its target.
+        // TODAY is deliberately absent: the fire is what completes it.
+        completedDates: [...baseHabit.completedDates, ...Object.keys(priorDays)],
         completedBy: { ...priorDays, [today]: { [APPROVER]: 1 } },
       };
       const { updateTransactionCategory } = makeUpdateTransactionCategory(deps([streakedHabit]));

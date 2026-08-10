@@ -411,7 +411,30 @@ const bridgeFor = (
   );
 
 /**
- * 🛡️ A STREAK PERIOD IS ONE THE MEMBER ACTUALLY COMPLETED — not merely one they
+ * Is the period containing `date` completed for this habit?
+ *
+ * Mirrors the household scorer's gating exactly: a PAST period's presence in
+ * `completedDates` already proves its target was met, while the CURRENT period
+ * additionally requires the live counter to still be at target (a toggle back
+ * below target strips only today from `completedDates`, not earlier week days).
+ *
+ * Shared by the per-member STREAK walk (`memberStreakDates`) and the per-member
+ * SCORER (`memberPointsForHabitOnDate`) on purpose — a period that pays a
+ * member an award and a period that counts toward their streak must be the same
+ * period.
+ */
+const periodCompleted = (habit: Habit, date: string, today: string): boolean => {
+  const periodStart = habitPeriodStart(habit.period, date);
+  const completed = habit.completedDates.some(
+    d => habitPeriodStart(habit.period, d) === periodStart,
+  );
+  if (!completed) return false;
+  if (periodStart !== habitPeriodStart(habit.period, today)) return true;
+  return habit.count >= Math.max(habit.targetCount, 1);
+};
+
+/**
+ * 🛡️ A STREAK PERIOD IS ONE THAT WAS COMPLETED — not merely one that was
  * touched.
  *
  * `memberCompletionDates` returns every date the member holds a unit on, which
@@ -419,30 +442,44 @@ const bridgeFor = (
  * wrong one for a STREAK when `targetCount > 1`. "Exercise for 30 minutes",
  * weekly, target 3: logging it once a week produced a 2-week "streak" and its
  * 2× multiplier, while the habit's own `streakDays` correctly read 0 — the two
- * layers disagreed because they answered different questions. The habit-level
- * streak walks `completedDates`, which only gains a date once the period's
- * target is met; this makes the per-member walk ask the same question of the
- * member's own units.
+ * layers disagreed because they were answering different questions. The
+ * habit-level walk reads `completedDates`, which only gains a date once the
+ * period's target is crossed; this makes the per-member walk ask that SAME
+ * question, so a member's streak periods are always a subset of the habit's.
  *
- * For `targetCount <= 1` — every habit but the rare multi-target one — a date
- * with a unit IS a completed period, so this returns `memberCompletionDates`
- * verbatim and every streak, multiplier and stored total is bit-for-bit
- * unchanged.
+ * 🛡️ The gate is `periodCompleted` — the period as a whole, NOT the member's
+ * own units against the target. Requiring a member to fill the target
+ * single-handedly is a THIRD question nothing else asks, and it breaks shared
+ * targets: on a `targetCount: 2` habit two members complete together every day,
+ * and scoring each of them at 1× forever contradicts the award they are
+ * actually being paid (which `memberPointsForHabitOnDate` gates on
+ * `periodCompleted` too). Contribute to a period that got finished and the
+ * period counts for you.
+ *
+ * For `targetCount <= 1` this returns `memberCompletionDates` verbatim, so
+ * every streak, multiplier and stored total on such a habit is bit-for-bit
+ * unchanged. That early exit is deliberate rather than incidental: at target 1
+ * a unit and a completion are the same event, so the filter could only ever
+ * differ on data where `completedBy` and `completedDates` disagree — and
+ * silently zeroing a streak over that is worse than leaving it alone.
  */
-export const memberStreakDates = (habit: Habit, memberId: string): string[] => {
+export const memberStreakDates = (
+  habit: Habit,
+  memberId: string,
+  today: string = getLocalDateString(),
+): string[] => {
   const dates = memberCompletionDates(habit, memberId);
-  const target = Math.max(habit.targetCount, 1);
-  if (target <= 1) return dates;
+  if (Math.max(habit.targetCount, 1) <= 1) return dates;
 
-  // Memoized per period: a weekly habit's period lookup costs 7 date-keyed
-  // reads, and a member's dates cluster into far fewer periods than dates.
-  const met = new Map<string, boolean>();
+  // Memoized per period: `periodCompleted` scans `completedDates`, and a
+  // member's dates cluster into far fewer periods than dates.
+  const done = new Map<string, boolean>();
   return dates.filter(date => {
     const periodStart = habitPeriodStart(habit.period, date);
-    let qualifies = met.get(periodStart);
+    let qualifies = done.get(periodStart);
     if (qualifies === undefined) {
-      qualifies = (memberUnitsForPeriod(habit, date)[memberId] ?? 0) >= target;
-      met.set(periodStart, qualifies);
+      qualifies = periodCompleted(habit, date, today);
+      done.set(periodStart, qualifies);
     }
     return qualifies;
   });
@@ -461,7 +498,7 @@ export const streakForMember = (
 ): number =>
   streakForMemberDates(
     habit,
-    memberStreakDates(habit, memberId),
+    memberStreakDates(habit, memberId, today),
     today,
     memberFrozenDates(habit, memberId),
   );
@@ -527,7 +564,7 @@ export const streakEndingOnForMember = (
 ): number =>
   streakEndingOnForMemberDates(
     habit,
-    memberStreakDates(habit, memberId),
+    memberStreakDates(habit, memberId, today),
     date,
     today,
     memberFrozenDates(habit, memberId),
@@ -551,23 +588,30 @@ export const prospectiveStreakForMember = (
 ): number => {
   const target = Math.max(habit.targetCount, 1);
   const periodStart = habitPeriodStart(habit.period, date);
-  // What this member would hold in `date`'s period once the pending completion
-  // lands. The +1 is unconditional: a member already holding a unit today is
-  // still ADDING one, which matters the moment `targetCount > 1`.
-  const unitsAfter = (memberUnitsForPeriod(habit, date)[memberId] ?? 0) + 1;
+
+  // Would `date`'s period be complete once the pending unit lands? The current
+  // period can be completed BY that unit — which is the whole point on a
+  // multi-target habit, where the tap that crosses the target is also the tap
+  // that earns the tier. A past period can't be, so its stored state answers.
+  const willBeComplete =
+    target <= 1 ||
+    (periodStart === habitPeriodStart(habit.period, today)
+      ? habit.count + 1 >= target ||
+        habit.completedDates.some(d => habitPeriodStart(habit.period, d) === periodStart)
+      : periodCompleted(habit, date, today));
 
   // Rebuild `date`'s period from scratch — drop whatever the member holds in it
-  // and re-add it as one completed period only if the pending unit reaches the
-  // target. Every other period keeps the qualification it already had.
+  // and re-add it as one completed period only if the above says so. Every
+  // other period keeps the qualification it already had.
   //
   // At `targetCount <= 1` this is provably the old `[...dates, date]`: the
   // period always qualifies, and the streak walks address periods through a
   // Set, so dropping the period's other dates in favour of `date` alone leaves
   // the same periods represented.
-  const prospective = memberStreakDates(habit, memberId).filter(
+  const prospective = memberStreakDates(habit, memberId, today).filter(
     d => habitPeriodStart(habit.period, d) !== periodStart,
   );
-  if (unitsAfter >= target) prospective.push(date);
+  if (willBeComplete) prospective.push(date);
 
   return streakForMemberDates(habit, prospective, today, memberFrozenDates(habit, memberId));
 };
@@ -591,24 +635,6 @@ export const prospectiveMultiplierForMember = (
 // ---------------------------------------------------------------------------
 // Per-member scoring
 // ---------------------------------------------------------------------------
-
-/**
- * Is the period containing `date` completed for this habit?
- *
- * Mirrors the household scorer's gating exactly: a PAST period's presence in
- * `completedDates` already proves its target was met, while the CURRENT period
- * additionally requires the live counter to still be at target (a toggle back
- * below target strips only today from `completedDates`, not earlier week days).
- */
-const periodCompleted = (habit: Habit, date: string, today: string): boolean => {
-  const periodStart = habitPeriodStart(habit.period, date);
-  const completed = habit.completedDates.some(
-    d => habitPeriodStart(habit.period, d) === periodStart,
-  );
-  if (!completed) return false;
-  if (periodStart !== habitPeriodStart(habit.period, today)) return true;
-  return habit.count >= Math.max(habit.targetCount, 1);
-};
 
 /**
  * Signed points ONE member earned from ONE habit on ONE date, derived purely

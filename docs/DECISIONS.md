@@ -177,11 +177,18 @@ independent defects stacked:
    *streak*. Logging 1 of 3 weekly exercises for two weeks built a 2-week streak paying 2×, while the
    habit's own `streakDays` correctly read 0 (the habit-level walk reads `completedDates`, which only
    gains a date when the target is crossed). The two layers were answering different questions.
-   `memberStreakDates` now asks the habit-level question of the member's own units.
+   `memberStreakDates` now asks the habit-level question, through the very same `periodCompleted`
+   gate `memberPointsForHabitOnDate` uses to decide whether to pay the member at all.
    **Owner's rule, verbatim: "if it's a streak of 3x a week, I only exercised once this week"** — a
    week you didn't finish is not a streak week. Do not relax this back to "any activity counts".
-   **Scope:** a member must meet the target *themselves*. Two members splitting a weekly target of 3
-   complete the habit and neither earns a streak week. That is deliberate, not an oversight.
+
+   **The gate is the PERIOD, not the member's own units against the target.** A first attempt
+   required each member to fill the target single-handedly; `transactionMutations.test.ts` caught it
+   (a `targetCount: 2` habit two members finish together dropped a 7-day 3× chain to 1×). Scoring a
+   period that PAID a member as one that doesn't count toward their streak is incoherent — and
+   "did I personally fill the whole target" is a third question nothing else in the system asks.
+   Contribute to a period that got finished and the period counts for you. Both framings give the
+   reported case the same answer, because that habit's periods were never completed by anyone.
 
 2. **The points badge read `habit.streakDays`.** Under the competition model a completion is credited
    at the acting *member's* prospective streak, so the habit's flame belongs to nobody. The badge was

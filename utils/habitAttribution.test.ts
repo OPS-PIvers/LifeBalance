@@ -495,10 +495,12 @@ describe('habitAttribution — a streak period must MEET the target', () => {
     expect(streakForMember(h, PAUL, d(6))).toBe(0);
   });
 
-  it('counts a period the member DID fill, and pays the multiplier for it', () => {
-    // Three units in each of two consecutive weeks → a real 2-week streak → 2×.
+  it('counts a period that WAS filled, and pays the multiplier for it', () => {
+    // Three units in each of two consecutive weeks. `completedDates` carries
+    // the day each week's target was crossed, which is what production writes.
     const h = onceAWeek({
       count: 3,
+      completedDates: [d(-1), d(6)],
       completedBy: {
         [d(-3)]: { [PAUL]: 1 },
         [d(-2)]: { [PAUL]: 1 },
@@ -512,25 +514,35 @@ describe('habitAttribution — a streak period must MEET the target', () => {
     expect(memberPointsForHabitOnDate(h, PAUL, d(6), d(6))).toBe(6);
   });
 
-  it('counts only the members who individually met it, not the habit as a whole', () => {
-    // Paul 2 + Jen 1 fills the habit's weekly target of 3, but neither person
-    // met it alone — so neither earns a streak from that week.
+  // 🛡️ The gate is the PERIOD, not the member's own units against the target.
+  // Requiring someone to fill a shared target single-handedly is a question
+  // nothing else in the system asks, and it would score both members at 1×
+  // forever on a habit they finish together every period — contradicting the
+  // award `memberPointsForHabitOnDate` actually pays them.
+  it('credits every contributor to a period that got FINISHED, not only a solo filler', () => {
+    // Paul 2 + Jen 1 crosses the weekly target of 3. Neither did it alone.
     const h = onceAWeek({
       count: 3,
+      completedDates: [d(-1), d(6)],
       completedBy: {
+        [d(-3)]: { [PAUL]: 1 },
+        [d(-2)]: { [PAUL]: 1 },
+        [d(-1)]: { [JEN]: 1 },
         [d(4)]: { [PAUL]: 1 },
         [d(5)]: { [PAUL]: 1 },
         [d(6)]: { [JEN]: 1 },
       },
     });
-    expect(streakForMember(h, PAUL, d(6))).toBe(0);
-    expect(streakForMember(h, JEN, d(6))).toBe(0);
+    expect(streakForMember(h, PAUL, d(6))).toBe(2);
+    expect(streakForMember(h, JEN, d(6))).toBe(2);
   });
 
-  it('a PROSPECTIVE unit that reaches the target qualifies its period', () => {
-    // Two units banked this week; the third is the one being logged now.
+  it('a PROSPECTIVE unit that completes the period qualifies it', () => {
+    // Two units banked this week; the third is the one being logged now, so
+    // this week is not yet in `completedDates`.
     const h = onceAWeek({
       count: 2,
+      completedDates: [d(-1)],
       completedBy: {
         [d(-3)]: { [PAUL]: 1 },
         [d(-2)]: { [PAUL]: 1 },
