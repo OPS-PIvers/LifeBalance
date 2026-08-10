@@ -109,8 +109,17 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   const viewerId = attribution?.currentUserId ?? '';
   const usesViewerStreak =
     viewerId !== '' && habitFeedsMemberAttribution(habit) && !isHouseholdCreditHabit(habit);
+  // 🛡️ De-stale the counter first, exactly as the toggle path does before it
+  // scores (`effectiveHabit` in useHabitActions) and as `rowCompletionSegments`
+  // does below. `prospectiveStreakForMember` reads `habit.count` to decide
+  // whether the pending unit COMPLETES the current period, and a stale count
+  // belongs to the period that hasn't been reset yet — so a `targetCount: 3`
+  // habit finished yesterday would read `3 + 1 >= 3` this morning and promise
+  // a tier the first tap of the new day cannot earn. That is the very
+  // badge-vs-award mismatch this block exists to remove.
+  const scoringHabit = isStale ? { ...habit, count: 0 } : habit;
   const effectiveStreak = usesViewerStreak
-    ? prospectiveStreakForMember(habit, viewerId, today, today)
+    ? prospectiveStreakForMember(scoringHabit, viewerId, today, today)
     : habit.streakDays;
   const totalMultiplier = getMultiplier(effectiveStreak, isPositive, habit.period);
 

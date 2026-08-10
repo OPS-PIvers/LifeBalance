@@ -559,6 +559,37 @@ describe('HabitCard - the points badge reads the VIEWER’s multiplier', () => {
     expect(screen.queryByText(/from 2x/)).not.toBeInTheDocument();
   });
 
+  it('does not price a STALE counter as if it had already completed today', () => {
+    // A targetCount:3 weekly habit finished LAST week whose reset hasn't landed
+    // yet: `count` is still 3. Reading it raw makes `count + 1 >= 3` true, so
+    // the period looks complete and the badge promises the 2-week tier — which
+    // the first tap of the new week cannot earn (it brings the count to 1 of 3).
+    const lastWeek = format(subWeeks(parseISO(weekStart), 1), 'yyyy-MM-dd');
+    const twoWeeksAgo = format(subWeeks(parseISO(weekStart), 2), 'yyyy-MM-dd');
+    const staleMultiTarget: Habit = {
+      ...mockHabit,
+      title: 'Weekly walk',
+      period: 'weekly',
+      scoringType: 'incremental',
+      basePoints: 10,
+      targetCount: 3,
+      count: 3, // last week's counter, reset pending
+      totalCount: 6,
+      streakDays: 2,
+      completedDates: [lastWeek, twoWeeksAgo],
+      completedBy: {
+        [lastWeek]: { [PAUL]: 3 },
+        [twoWeeksAgo]: { [PAUL]: 3 },
+      },
+      // Stale: belongs to a period whose auto-reset hasn't run.
+      lastUpdated: `${twoWeeksAgo}T12:00:00.000Z`,
+    };
+
+    render(<HabitCard habit={staleMultiTarget} attribution={ROSTER} />);
+    expect(screen.getByText('10 pts')).toBeInTheDocument();
+    expect(screen.queryByText('20 pts')).not.toBeInTheDocument();
+  });
+
   it('keeps the HABIT-level multiplier where the habit level is what actually pays', () => {
     // No attribution context at all (a card rendered off the Habits page) —
     // there is no viewer to score, so the habit's own flame stands.

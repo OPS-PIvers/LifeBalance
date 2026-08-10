@@ -557,6 +557,28 @@ describe('habitAttribution — a streak period must MEET the target', () => {
     expect(prospectiveMultiplierForMember(h, PAUL, d(6), d(6))).toBe(2.0);
   });
 
+  // 🛡️ The prospective figure must mirror the AWARD, and the award scores an
+  // incomplete period at the base rate: `streakEndingOn` returns 0 for a date
+  // that is not itself a qualifying date. Reporting the surviving chain instead
+  // would price the first tap of a new week at the previous weeks' multiplier.
+  it('prices an INCOMPLETE period at the base rate, not the surviving chain', () => {
+    const h = onceAWeek({
+      count: 1, // one of three this week — the pending unit makes two
+      completedDates: [d(-8), d(-1)], // the two prior weeks were both finished
+      completedBy: {
+        [d(-10)]: { [PAUL]: 1 }, [d(-9)]: { [PAUL]: 1 }, [d(-8)]: { [PAUL]: 1 },
+        [d(-3)]: { [PAUL]: 1 }, [d(-2)]: { [PAUL]: 1 }, [d(-1)]: { [PAUL]: 1 },
+        [d(4)]: { [PAUL]: 1 },
+      },
+    });
+    // The chain itself is real and alive — 2 completed weeks running.
+    expect(streakForMember(h, PAUL, d(6))).toBe(2);
+    // …but this week isn't finished, so the next unit earns the base rate, and
+    // so does the award it is promising (both 1×).
+    expect(prospectiveMultiplierForMember(h, PAUL, d(6), d(6))).toBe(1.0);
+    expect(memberPointsForHabitOnDate(h, PAUL, d(4), d(6))).toBe(3);
+  });
+
   it('is INERT at targetCount <= 1: identical to the raw completion dates', () => {
     // The regression pin. Every habit but a multi-target one takes this path,
     // so the filter must be a no-op there — including for `targetCount: 0`,

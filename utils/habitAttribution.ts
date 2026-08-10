@@ -600,9 +600,21 @@ export const prospectiveStreakForMember = (
         habit.completedDates.some(d => habitPeriodStart(habit.period, d) === periodStart)
       : periodCompleted(habit, date, today));
 
+  // 🛡️ An INCOMPLETE period earns nothing extra — the streak is 0, not the
+  // member's lapsed chain length. This mirrors the award exactly:
+  // `memberPointsForHabitOnDate` scores through `streakEndingOnForMember`, and
+  // `streakEndingOn` returns 0 for a date that isn't itself a qualifying date.
+  // Returning the surviving chain here would price the first tap of a
+  // `targetCount: 3` week at the previous weeks' 3×, while the tap actually
+  // pays the base rate until the period is finished. (Those earlier units are
+  // re-scored when the period does complete — every write path takes a
+  // before/after difference of `memberPeriodPoints` over the WHOLE period — so
+  // nothing is lost by pricing the immediate award honestly.)
+  if (!willBeComplete) return 0;
+
   // Rebuild `date`'s period from scratch — drop whatever the member holds in it
-  // and re-add it as one completed period only if the above says so. Every
-  // other period keeps the qualification it already had.
+  // and re-add it as the one completed period. Every other period keeps the
+  // qualification it already had.
   //
   // At `targetCount <= 1` this is provably the old `[...dates, date]`: the
   // period always qualifies, and the streak walks address periods through a
@@ -611,7 +623,7 @@ export const prospectiveStreakForMember = (
   const prospective = memberStreakDates(habit, memberId, today).filter(
     d => habitPeriodStart(habit.period, d) !== periodStart,
   );
-  if (willBeComplete) prospective.push(date);
+  prospective.push(date);
 
   return streakForMemberDates(habit, prospective, today, memberFrozenDates(habit, memberId));
 };
