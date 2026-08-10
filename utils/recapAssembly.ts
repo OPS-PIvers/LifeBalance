@@ -369,6 +369,37 @@ export function memberDatesFor(habit: RecapScoringHabit, memberId: string): stri
   return out.sort();
 }
 
+/**
+ * 🛡️ The date set a member's STREAK walks over — their attributed dates
+ * narrowed to periods that were actually COMPLETED.
+ *
+ * The port of `memberStreakDates` in `utils/habitAttribution.ts` (#1239). A
+ * date in `completedBy` records a UNIT, and on a `targetCount > 1` habit a unit
+ * is not a completed period: logging a weekly `targetCount: 3` habit once a
+ * week built a 2-week "streak" paying 2×, while the habit's own `streakDays`
+ * read 0. Without this, the live Habit card and the Monday ceremony price the
+ * same completion differently — and `parity.test.ts` cannot catch it, because
+ * it only asserts the two RECAP copies agree with each other.
+ *
+ * Simpler than the live twin on purpose: everything the recap scores sits in a
+ * CLOSED period, so presence in `completedDates` is proof the target was met
+ * and there is no live-counter branch to consult. An ASSIGNED chore already
+ * walks `completedDates` itself, so it is returned untouched.
+ *
+ * At `targetCount <= 1` this returns `memberDatesFor` verbatim — a unit and a
+ * completion are the same event there, so every existing recap figure is
+ * bit-for-bit unchanged.
+ */
+export function memberStreakDatesFor(habit: RecapScoringHabit, memberId: string): string[] {
+  const dates = memberDatesFor(habit, memberId);
+  if (habit.assignedTo || Math.max(habit.targetCount ?? 1, 1) <= 1) return dates;
+  const period = periodOf(habit);
+  const completedPeriods = new Set(
+    habit.completedDates.map(d => habitPeriodStart(period, d)),
+  );
+  return dates.filter(d => completedPeriods.has(habitPeriodStart(period, d)));
+}
+
 /** The dates a PER-MEMBER freeze token was spent on for `memberId`. */
 function memberFrozenDates(habit: RecapScoringHabit, memberId: string): string[] {
   const out: string[] = [];
@@ -468,11 +499,14 @@ export function memberAttributedPointsOnDate(
   if (units <= 0) return 0;
 
   const dates = memberDatesFor(habit, memberId);
+  // The MULTIPLIER walks completed periods only (see memberStreakDatesFor);
+  // `dates` below still scopes the threshold award to the member's own units.
+  const streakDates = memberStreakDatesFor(habit, memberId);
   const streak = streakEndingOnForPeriod(
-    dates,
+    streakDates,
     periodOf(habit),
     date,
-    bridgeFor(habit, dates, anchor, memberFrozenDates(habit, memberId)),
+    bridgeFor(habit, streakDates, anchor, memberFrozenDates(habit, memberId)),
   );
   const perUnit = perUnitAt(habit, streak);
 
@@ -704,7 +738,9 @@ function memberTopStreak(
 ): RecapMemberFacts['topStreak'] {
   let best: RecapMemberFacts['topStreak'] = null;
   for (const habit of habits) {
-    const dates = memberDatesFor(habit, memberId);
+    // Completed periods only — a "top streak" tile must never crown a habit the
+    // member has not once finished (see memberStreakDatesFor).
+    const dates = memberStreakDatesFor(habit, memberId);
     if (dates.length === 0) continue;
     const period = periodOf(habit);
     const days = streakForPeriod(

@@ -9,6 +9,7 @@ import {
   memberDatesFor,
   memberPointsOnDate,
   memberSharedPointsOnDate,
+  memberStreakDatesFor,
   memberUnitsOnDate,
   shiftDay,
   unattributedPointsOnDate,
@@ -22,6 +23,8 @@ import {
   type RecapScoringHabit,
   type RecapTransaction,
 } from '@/utils/recapAssembly';
+import { memberStreakDates } from '@/utils/habitAttribution';
+import type { Habit } from '@/types/schema';
 
 /**
  * 🛡️ FIXTURES ARE ANCHORED TO THEIR OWN WEEK, never to an offset from "today" —
@@ -156,6 +159,91 @@ describe('memberDatesFor', () => {
     const h = habit({ assignedTo: LEO.uid, completedDates: [MON, TUE] });
     expect(memberDatesFor(h, LEO.uid)).toEqual([MON, TUE]);
     expect(memberDatesFor(h, 'u1')).toEqual([]);
+  });
+});
+
+// 🛡️ THE RECAP MUST AGREE WITH THE LIVE SCORER, NOT MERELY WITH ITS OWN TWIN.
+//
+// `functions/src/recap/parity.test.ts` pins the two RECAP copies against each
+// other, so a rule that is wrong in both stays green there forever — which is
+// exactly how the #1239 defect survived in the ceremony after the Habits page
+// was fixed. These assertions pin the recap against
+// `utils/habitAttribution.ts`, the live scorer, which is the agreement that
+// actually matters to someone reading two screens.
+describe('memberStreakDatesFor ↔ the live scorer', () => {
+  const onceAWeek = habit({
+    period: 'weekly',
+    scoringType: 'incremental',
+    basePoints: 3,
+    targetCount: 3,
+    completedDates: [], // never finished: no week reached 3
+    completedBy: { [P_SUN]: { u1: 1 }, [SUN]: { u1: 1 } },
+  });
+
+  const asLiveHabit = (h: RecapScoringHabit): Habit =>
+    ({
+      id: 'h1',
+      category: 'Health',
+      count: 1,
+      totalCount: 2,
+      streakDays: 0,
+      lastUpdated: `${SUN}T12:00:00.000Z`,
+      ...h,
+    }) as Habit;
+
+  // The live scorer additionally consults the LIVE counter for whichever period
+  // contains its `today`; the recap never does, because everything it scores is
+  // already closed. So the two are only comparable from a vantage point where
+  // every fixture period IS closed — a week later. (Ordering differs by
+  // convention too: the live set is newest-first, the recap's ascending.)
+  const AFTER_THE_WEEK = shiftDay(SUN, 7);
+  const sorted = (dates: string[]): string[] => [...dates].sort();
+
+  it('narrows a merely-touched multi-target period exactly as memberStreakDates does', () => {
+    expect(sorted(memberStreakDatesFor(onceAWeek, 'u1'))).toEqual(
+      sorted(memberStreakDates(asLiveHabit(onceAWeek), 'u1', AFTER_THE_WEEK)),
+    );
+    // …and that agreed answer is "no completed period at all".
+    expect(memberStreakDatesFor(onceAWeek, 'u1')).toEqual([]);
+  });
+
+  it('prices those units at 1×, not the 2× a two-week "streak" would pay', () => {
+    // 3 base points × 1 unit. The pre-fix recap paid 6 here while the Habits
+    // page paid 3 — the same completion, two different numbers.
+    expect(memberAttributedPointsOnDate(onceAWeek, 'u1', SUN, SUN)).toBe(3);
+  });
+
+  it('still pays 2× once each week is actually finished', () => {
+    const finished = habit({
+      period: 'weekly',
+      scoringType: 'incremental',
+      basePoints: 3,
+      targetCount: 3,
+      completedDates: [P_SUN, SUN],
+      completedBy: {
+        [P_MON]: { u1: 1 },
+        [P_TUE]: { u1: 1 },
+        [P_SUN]: { u1: 1 },
+        [MON]: { u1: 1 },
+        [TUE]: { u1: 1 },
+        [SUN]: { u1: 1 },
+      },
+    });
+    expect(sorted(memberStreakDatesFor(finished, 'u1'))).toEqual(
+      sorted(memberStreakDates(asLiveHabit(finished), 'u1', AFTER_THE_WEEK)),
+    );
+    expect(memberStreakDatesFor(finished, 'u1')).toHaveLength(6);
+    expect(memberAttributedPointsOnDate(finished, 'u1', SUN, SUN)).toBe(6);
+  });
+
+  it('is a no-op at targetCount <= 1, matching memberDatesFor exactly', () => {
+    const single = habit({
+      period: 'weekly',
+      scoringType: 'incremental',
+      completedDates: [P_SUN, SUN],
+      completedBy: { [P_SUN]: { u1: 1 }, [SUN]: { u1: 1 } },
+    });
+    expect(memberStreakDatesFor(single, 'u1')).toEqual(memberDatesFor(single, 'u1'));
   });
 });
 

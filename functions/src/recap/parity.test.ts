@@ -204,6 +204,46 @@ const HABIT_CASES: HabitCase[] = [
       completedBy: { [TUE]: { u1: 1 } },
     }),
   },
+  // 🛡️ #1239: a UNIT is not a completed period on a `targetCount > 1` habit.
+  // Logged once a week for two weeks against a target of 3, this member has
+  // finished the habit ZERO times — `completedDates` carries no date in either
+  // week — so their streak must be 0 and their units priced at 1x, matching the
+  // live scorer (`memberStreakDates` in utils/habitAttribution.ts). Before that
+  // gate both recap copies agreed on a 2-week streak paying 2x, so parity was
+  // green while the ceremony contradicted the Habits page.
+  {
+    name: "weekly incremental targetCount 3 — touched two weeks running, finished neither",
+    habit: habit({
+      title: "Exercise for 30 minutes",
+      period: "weekly",
+      scoringType: "incremental",
+      basePoints: 3,
+      targetCount: 3,
+      completedDates: [],
+      completedBy: { [P_SUN]: { u1: 1 }, [SUN]: { u1: 1 } },
+    }),
+  },
+  // The positive twin: same shape, but each week's target WAS met, so the
+  // 2-week streak is real and pays 2x.
+  {
+    name: "weekly incremental targetCount 3 — both weeks actually finished",
+    habit: habit({
+      title: "Exercise for 30 minutes (completed)",
+      period: "weekly",
+      scoringType: "incremental",
+      basePoints: 3,
+      targetCount: 3,
+      completedDates: [P_SUN, SUN],
+      completedBy: {
+        [P_MON]: { u1: 1 },
+        [P_WED]: { u1: 1 },
+        [P_SUN]: { u1: 1 },
+        [WED]: { u1: 1 },
+        [SAT]: { u1: 1 },
+        [SUN]: { u1: 1 },
+      },
+    }),
+  },
   {
     name: "weekly, fully grandfathered, 4-week streak (3.0x)",
     habit: habit({

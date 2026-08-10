@@ -216,3 +216,16 @@ works.
 **Separately: the "way higher than ever" weekly total was mostly intended.** Same week, same data:
 62 under the pre-#1237 ladder + legacy scorer, 76 with the competition model, 93 after #1237 made the
 ladder integer-valued. Only 3 of that came from defect (1). Don't go looking for a leak.
+
+**The recap's copies were fixed in the same breath (#1240).** `utils/recapAssembly.ts` and
+`functions/src/recap/memberFacts.ts` document themselves as mirroring `habitAttribution.ts`, but
+both walked raw touched dates at their two streak sites — so the ceremony would have priced Paul's
+once-a-week exercise at 2x while the Habits page priced it at 1x. **`parity.test.ts` could not have
+caught this**: it pins the two RECAP copies against *each other*, so a rule wrong in both stays green
+forever. The guard that does catch it lives in `utils/recapAssembly.test.ts` and asserts
+`memberStreakDatesFor` against the live `memberStreakDates` directly. When you change a scoring rule,
+pin it against the LIVE scorer, not only across the twins.
+
+Comparing the two needs a vantage point where every fixture period is CLOSED (the test uses a week
+later): the live scorer additionally consults `Habit.count` for whichever period contains its
+`today`, and the recap never does. That is a real, intended difference, not drift.
