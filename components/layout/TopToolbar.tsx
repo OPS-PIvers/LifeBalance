@@ -149,20 +149,17 @@ const TopToolbar: React.FC = () => {
         <span className="sr-only" role="status">
           {liveMessage}
         </span>
-        <header className="relative z-sticky w-full px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 flex items-center text-white">
-          {/* iOS 26/27: the toolbar's own background/border used to live
-              directly on this <header>, which sits flush against the safe
-              area at the physical top of the screen. Starting with iOS 26's
-              Liquid Glass, WebKit reads a background-color/backdrop-filter
-              painted DIRECTLY on an element pinned at the viewport top and
-              materializes its own system blur material over it (the same
-              "scroll edge effect" sampling documented for Safari's in-browser
-              toolbar tinting) — the header no longer shows through as a flat
-              color, it gets an ugly progressive blur laid over it. Moving the
-              paint onto an absolutely-positioned decorative child keeps this
-              layer out of that sampling (a positioned descendant, not the
-              pinned element itself) while rendering pixel-identical to the
-              previous solid header on every iOS version, including pre-26. */}
+        <header className="relative z-sticky w-full px-4 pt-[calc(env(safe-area-inset-top)+var(--status-blur-clearance)+0.5rem)] pb-3 flex items-center text-white">
+          {/* The band's background/border live on this absolutely-positioned
+              child (not the <header> itself) so Safari 26's in-tab Liquid
+              Glass toolbar tinting doesn't sample it — Safari reads
+              background/backdrop-filter painted directly on elements pinned
+              at the viewport edge to tint its own chrome, but skips
+              positioned descendants. NOTE: this does NOT (and cannot)
+              suppress the STANDALONE web-app status-bar blur — that effect
+              is composited over the rendered pixels by the OS, which is why
+              the header's top padding adds --status-blur-clearance (see
+              index.css) to keep the figures below the blur's feather. */}
           <div
             className="absolute inset-0 -z-10 bg-brand-800 dark:bg-brand-900 border-b border-brand-700"
             aria-hidden="true"
