@@ -351,6 +351,31 @@ html.app-shell body {
   padding-bottom: 2.25rem;
 }
 
+/* iOS 26+ standalone (home-screen) web apps: the system composites a Liquid
+   Glass "scroll edge effect" — a progressive blur — over the status-bar /
+   Dynamic Island band and feathers it ~1.5rem past env(safe-area-inset-top).
+   It is applied to the RENDERED PIXELS after layout, so no DOM/paint
+   restructuring can opt out of it (commit c7ae5885 tried the
+   absolute-child trick documented for Safari's in-tab toolbar tinting;
+   pixel-identical, no effect). The only robust move is to keep legible
+   content out of the band: blurring a flat color is invisible, so
+   TopToolbar keeps its full-bleed dark band and adds this clearance to its
+   top padding so its figures start below the feather. Non-zero only where
+   the blur exists — iOS (`-webkit-touch-callout` is iOS-Safari-only) in
+   standalone display mode; browser tabs and every other OS keep 0px and
+   render exactly as before. Tune the 1.5rem here if a future iOS changes
+   the feather height. */
+:root {
+  --status-blur-clearance: 0px;
+}
+@supports (-webkit-touch-callout: none) {
+  @media (display-mode: standalone) {
+    :root {
+      --status-blur-clearance: 1.5rem;
+    }
+  }
+}
+
 @utility p-screen-safe {
   /* All-edge device safe-area padding for full-screen fixed overlays (e.g. the
      immersive Eisenhower grid). Landscape phones put the notch on the LEFT or
