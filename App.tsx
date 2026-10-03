@@ -31,6 +31,12 @@ const Habits = React.lazy(() => import('./pages/Habits'));
 const Settings = React.lazy(() => import('./pages/Settings'));
 const OnboardingWizard = React.lazy(() => import('./components/onboarding/OnboardingWizard'));
 const ListsPage = React.lazy(() => import('./pages/ListsPage'));
+// Wall display Phase 0 device spike (docs/plans/wall-display-kiosk.md §6).
+// Only the wall-lab preview-channel workflow sets VITE_WALL_LAB, so the route
+// doesn't exist in production builds.
+const WallLab = import.meta.env.VITE_WALL_LAB === 'true'
+  ? React.lazy(() => import('./components/wall/lab/WallLab'))
+  : null;
 
 const App: React.FC = () => {
   // Track notification permission state to react to changes
@@ -166,6 +172,19 @@ const App: React.FC = () => {
                     </ProtectedRoute>
                   }
                 />
+
+                {WallLab && (
+                  <Route
+                    path="/wall-lab"
+                    element={
+                      <ProtectedRoute>
+                        <ErrorBoundary>
+                          <WallLab />
+                        </ErrorBoundary>
+                      </ProtectedRoute>
+                    }
+                  />
+                )}
 
                 {/* Protected Routes */}
                 <Route

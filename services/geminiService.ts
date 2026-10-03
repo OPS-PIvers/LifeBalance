@@ -18,7 +18,13 @@ import { getLocalDateString } from "@/utils/dateHelpers";
 import { looksLikeTransactionList } from "@/utils/receiptLineItems";
 import { getLimits, LEGACY_AI_DAILY_QUOTA } from "@/utils/entitlements";
 import { getBillingEnabled } from "./appConfig";
-import type { ParsedTaskList, ParsedMealPlan, ReceiptLineItemsData } from './geminiService.types';
+import type {
+  ParsedTaskList,
+  ParsedMealPlan,
+  ReceiptLineItemsData,
+  WallVoiceCommand,
+  WallVoiceContext,
+} from './geminiService.types';
 import {
   GeminiValidationError,
   InvalidImageError,
@@ -40,6 +46,7 @@ import {
   validateRecipe,
   validateGeneratedWeeklyPlan,
   validateReceiptLineItems,
+  validateWallVoiceCommand,
 } from './geminiValidation';
 
 // Re-export image/validation error types and the image guard so callers/tests
@@ -61,6 +68,9 @@ export type {
   HabitPatternInsight,
   HabitReorganizationPlan,
   HabitPointAdjustmentSuggestion,
+  WallVoiceCommand,
+  WallVoiceContext,
+  WallVoiceIntent,
 } from './geminiService.types';
 
 /**
@@ -2230,4 +2240,126 @@ export const generateWeeklyPlan = async (
     if (error instanceof Error && error.message.includes("quota")) throw error;
     throw new Error("Failed to generate weekly plan.");
   }
+};
+
+// ---------------------------------------------------------------------------
+// Wall display voice commands (docs/plans/wall-display-kiosk.md §4.10)
+// ---------------------------------------------------------------------------
+
+/** Most catalog names a voice prompt carries. */
+const WALL_VOICE_MAX_CATALOG_NAMES = 200;
+
+/**
+ * Inline audio cap in base64 characters. Mirrors the server's
+ * MAX_INLINE_AUDIO_BASE64_CHARS (functions/src/geminiProxy.ts) so an oversized
+ * clip fails here with a clear message instead of costing a round trip.
+ */
+export const WALL_VOICE_MAX_AUDIO_BASE64_CHARS = 2 * 1024 * 1024;
+
+const WALL_VOICE_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    transcript: { type: Type.STRING },
+    intent: { type: Type.STRING, enum: ['add_shopping', 'add_todo', 'unknown'] },
+    items: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          name: { type: Type.STRING },
+          quantity: { type: Type.STRING },
+        },
+        required: ['name'],
+      },
+    },
+    todo: {
+      type: Type.OBJECT,
+      properties: {
+        text: { type: Type.STRING },
+        assigneeName: { type: Type.STRING },
+        due: { type: Type.STRING },
+      },
+      required: ['text'],
+    },
+  },
+  required: ['transcript', 'intent'],
+};
+
+const wallVoiceInstructions = (ctx: WallVoiceContext): string => `You turn a spoken household command into JSON for a family wall display.
+Today is ${sanitizeForPrompt(ctx.today)} (time zone ${sanitizeForPrompt(ctx.timeZone)}).
+Household members: ${sanitizeList(ctx.memberNames) || 'none listed'}.
+Known grocery items (prefer these exact spellings when they match): ${sanitizeList(ctx.catalogNames.slice(0, WALL_VOICE_MAX_CATALOG_NAMES)) || 'none listed'}.
+
+Intents:
+- "add_shopping": the speaker wants items on the shopping list ("add milk and two dozen eggs", "we need paper towels"). Put each item in "items" with an optional "quantity".
+- "add_todo": the speaker wants a to-do ("remind Sam to feed the cat tomorrow", "add a to-do to call the dentist"). Put it in "todo": "text" is the task in a short imperative form without the person or the date; "assigneeName" only when one of the household members above is named; "due" is "today", "tomorrow" or a yyyy-MM-dd date, only when a day is spoken.
+- "unknown": anything else, or speech you can't make out.
+Never invent items or people that weren't spoken.`;
+
+/**
+ * Engine A (on-device speech recognition): turns an already-transcribed wall
+ * command into an intent. The local keyword grammar runs before this, so only
+ * add-style commands reach the model.
+ */
+export const parseWallVoiceText = async (
+  householdId: string,
+  transcript: string,
+  ctx: WallVoiceContext,
+  _aiClient?: Pick<typeof ai, 'models'>
+): Promise<WallVoiceCommand> => {
+  return withErrorHandling('Wall Voice', "Couldn't understand that command.", async () => {
+    const prompt = `${wallVoiceInstructions(ctx)}
+
+The command was: ${sanitizeForPrompt(transcript)}
+Set "transcript" to the command exactly as given.`;
+    return generateJsonContent<WallVoiceCommand>(
+      householdId,
+      prompt,
+      WALL_VOICE_SCHEMA,
+      _aiClient,
+      GEMINI_MODEL,
+      raw => validateWallVoiceCommand(raw, transcript)
+    );
+  });
+};
+
+/**
+ * Engine B (recorded audio): transcribes and parses a wall command in ONE
+ * model call. `base64Audio` is raw base64 (no data: prefix); iPadOS
+ * MediaRecorder produces `audio/mp4`.
+ */
+export const parseWallVoiceAudio = async (
+  householdId: string,
+  base64Audio: string,
+  mimeType: string,
+  ctx: WallVoiceContext,
+  _aiClient?: Pick<typeof ai, 'models'>
+): Promise<WallVoiceCommand> => {
+  if (!mimeType.startsWith('audio/')) {
+    throw new Error('Voice recording has an unexpected format.');
+  }
+  if (!base64Audio) {
+    throw new Error('No audio was recorded.');
+  }
+  if (base64Audio.length > WALL_VOICE_MAX_AUDIO_BASE64_CHARS) {
+    throw new Error('The audio clip is too long. Keep voice commands under a minute.');
+  }
+  return withErrorHandling('Wall Voice', "Couldn't understand that command.", async () => {
+    const parts: Part[] = [
+      { inlineData: { mimeType, data: base64Audio } },
+      {
+        text: `${wallVoiceInstructions(ctx)}
+
+The command is the attached audio. Set "transcript" to what was said, word for word.`,
+      },
+    ];
+    return generateJsonContent<WallVoiceCommand>(
+      householdId,
+      parts,
+      WALL_VOICE_SCHEMA,
+      _aiClient,
+      GEMINI_MODEL,
+      raw => validateWallVoiceCommand(raw)
+    );
+  });
 };

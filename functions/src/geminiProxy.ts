@@ -101,6 +101,41 @@ export function resolveQuotaDay(today: unknown, nowMs: number = Date.now()): str
   return dayDiff <= 1 ? today : serverToday;
 }
 
+/**
+ * Cap on inline AUDIO carried in one request, measured in base64 characters
+ * (~1.5 MB of AAC, about 60 s of speech). The wall display's voice commands
+ * send their recording as an `inlineData` part (docs/plans/wall-display-kiosk.md
+ * §4.5); anything longer is a stuck recorder, not a command, and must not
+ * spend the household's quota. Images are not counted here: receipt scans
+ * have their own client-side guard and predate this limit.
+ */
+export const MAX_INLINE_AUDIO_BASE64_CHARS = 2 * 1024 * 1024;
+
+/**
+ * Total base64 length of every `inlineData` part whose mimeType is audio/*,
+ * wherever it sits in the SDK-shaped `contents` (a single `{ parts }` object
+ * or an array of them). Unknown shapes count as zero — the SDK rejects them.
+ */
+export function inlineAudioChars(contents: unknown): number {
+  const list = Array.isArray(contents) ? contents : [contents];
+  let total = 0;
+  for (const entry of list) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const parts = (entry as { parts?: unknown }).parts;
+    if (!Array.isArray(parts)) continue;
+    for (const part of parts) {
+      if (typeof part !== "object" || part === null) continue;
+      const inline = (part as { inlineData?: unknown }).inlineData;
+      if (typeof inline !== "object" || inline === null) continue;
+      const { mimeType, data } = inline as { mimeType?: unknown; data?: unknown };
+      if (typeof mimeType === "string" && mimeType.startsWith("audio/") && typeof data === "string") {
+        total += data.length;
+      }
+    }
+  }
+  return total;
+}
+
 /** Shape of the `aiUsage` counter stored on the household doc. */
 interface AiUsage {
   dailyCount: number;
@@ -248,6 +283,15 @@ export const geminiproxy = onCall(
       throw new HttpsError(
         "invalid-argument",
         "The function must be called with a non-empty 'householdId' string."
+      );
+    }
+
+    // Size guard BEFORE the quota spend: an oversized recording is rejected
+    // without costing the household a request.
+    if (inlineAudioChars(contents) > MAX_INLINE_AUDIO_BASE64_CHARS) {
+      throw new HttpsError(
+        "invalid-argument",
+        "The audio clip is too long. Keep voice commands under a minute."
       );
     }
 

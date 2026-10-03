@@ -21,6 +21,7 @@ import {
   validateRecipe,
   validateGeneratedWeeklyPlan,
   validateReceiptLineItems,
+  validateWallVoiceCommand,
 } from './geminiValidation';
 
 // A structurally-valid base64 image data URL (1x1 transparent PNG).
@@ -372,5 +373,41 @@ describe('geminiValidation - validateBase64Image', () => {
     const chars = Math.ceil((MAX_IMAGE_BYTES + 1024) / 3) * 4;
     const huge = 'A'.repeat(chars);
     expect(() => validateBase64Image(huge)).toThrow(/too large/);
+  });
+});
+
+describe('geminiValidation - validateWallVoiceCommand', () => {
+  it('normalizes a full add_todo command', () => {
+    expect(
+      validateWallVoiceCommand({
+        transcript: ' remind Sam ',
+        intent: 'add_todo',
+        todo: { text: ' Feed the cat ', assigneeName: null, due: 'tomorrow' },
+      })
+    ).toEqual({ transcript: 'remind Sam', intent: 'add_todo', todo: { text: 'Feed the cat', due: 'tomorrow' } });
+  });
+
+  it('degrades an unrecognised intent to unknown and uses the fallback transcript', () => {
+    expect(validateWallVoiceCommand({ intent: 'play_music' }, 'play music')).toEqual({
+      transcript: 'play music',
+      intent: 'unknown',
+    });
+  });
+
+  it('drops blank items and a blank todo, keeps quantities', () => {
+    expect(
+      validateWallVoiceCommand({
+        transcript: 'x',
+        intent: 'add_shopping',
+        items: [{ name: 'Eggs', quantity: '2 dozen' }, { name: '  ' }],
+        todo: { text: ' ' },
+      })
+    ).toEqual({ transcript: 'x', intent: 'add_shopping', items: [{ name: 'Eggs', quantity: '2 dozen' }] });
+  });
+
+  it('rejects wrong-typed fields', () => {
+    expect(() => validateWallVoiceCommand([])).toThrow(/wallVoice/);
+    expect(() => validateWallVoiceCommand({ intent: 'add_shopping', items: [{ name: 3 }] })).toThrow(/name/);
+    expect(() => validateWallVoiceCommand({ intent: 'add_todo', todo: { text: 5 } })).toThrow(/text/);
   });
 });

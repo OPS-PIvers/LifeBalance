@@ -31,6 +31,8 @@ import type {
   OptimizableItem,
   HabitPatternInsight,
   HabitReorganizationPlan,
+  WallVoiceCommand,
+  WallVoiceIntent,
 } from './geminiService.types';
 
 // ---------------------------------------------------------------------------
@@ -630,4 +632,57 @@ export function validateBase64Image(base64Image: string): number {
   }
 
   return decodedBytes;
+}
+
+// ---------------------------------------------------------------------------
+// Wall display voice commands
+// ---------------------------------------------------------------------------
+
+const WALL_VOICE_INTENTS: readonly WallVoiceIntent[] = ['add_shopping', 'add_todo', 'unknown'];
+
+/**
+ * Validates a wall voice command. An unrecognised intent degrades to
+ * 'unknown' (the wall then says it didn't understand) rather than throwing,
+ * and blank item names are dropped. `fallbackTranscript` fills `transcript`
+ * on the text path, where the model isn't asked to repeat it.
+ */
+export function validateWallVoiceCommand(raw: unknown, fallbackTranscript = ''): WallVoiceCommand {
+  const o = expectRecord(raw, 'wallVoice');
+  if (!isOptString(o['transcript'])) fail('wallVoice', 'transcript must be a string');
+  if (!isOptString(o['intent'])) fail('wallVoice', 'intent must be a string');
+  const transcript = ((o['transcript'] as string | null | undefined) ?? fallbackTranscript).trim();
+  const rawIntent = o['intent'] as string | null | undefined;
+  const intent: WallVoiceIntent = WALL_VOICE_INTENTS.find(i => i === rawIntent) ?? 'unknown';
+  const result: WallVoiceCommand = { transcript, intent };
+
+  if (o['items'] !== undefined && o['items'] !== null) {
+    const items = expectArray(o['items'], 'wallVoice.items').map((entry, i) => {
+      const item = expectRecord(entry, `wallVoice.items[${i}]`);
+      if (!isString(item['name'])) fail(`wallVoice.items[${i}]`, 'name must be a string');
+      if (!isOptString(item['quantity'])) fail(`wallVoice.items[${i}]`, 'quantity must be a string');
+      const name = (item['name'] as string).trim();
+      const quantity = (item['quantity'] as string | null | undefined)?.trim();
+      return quantity ? { name, quantity } : { name };
+    });
+    result.items = items.filter(item => item.name.length > 0);
+  }
+
+  if (o['todo'] !== undefined && o['todo'] !== null) {
+    const todo = expectRecord(o['todo'], 'wallVoice.todo');
+    if (!isString(todo['text'])) fail('wallVoice.todo', 'text must be a string');
+    if (!isOptString(todo['assigneeName'])) fail('wallVoice.todo', 'assigneeName must be a string');
+    if (!isOptString(todo['due'])) fail('wallVoice.todo', 'due must be a string');
+    const text = (todo['text'] as string).trim();
+    if (text) {
+      const assigneeName = (todo['assigneeName'] as string | null | undefined)?.trim();
+      const due = (todo['due'] as string | null | undefined)?.trim();
+      result.todo = {
+        text,
+        ...(assigneeName ? { assigneeName } : {}),
+        ...(due ? { due } : {}),
+      };
+    }
+  }
+
+  return result;
 }

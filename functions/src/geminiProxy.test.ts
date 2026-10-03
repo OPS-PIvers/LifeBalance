@@ -88,7 +88,12 @@ vi.mock("firebase-admin", () => ({
 }));
 
 // Import AFTER mocks are registered. Functions use relative imports.
-import { geminiproxy, resolveQuotaDay } from "./geminiProxy";
+import {
+  geminiproxy,
+  resolveQuotaDay,
+  inlineAudioChars,
+  MAX_INLINE_AUDIO_BASE64_CHARS,
+} from "./geminiProxy";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -477,5 +482,61 @@ describe("resolveQuotaDay", () => {
     expect(resolveQuotaDay("2026-07-07", NOW)).toBe("2026-07-09");
     expect(resolveQuotaDay("2026-07-11", NOW)).toBe("2026-07-09");
     expect(resolveQuotaDay("2099-12-31", NOW)).toBe("2026-07-09");
+  });
+});
+
+// ===========================================================================
+// Inline audio size guard (wall display voice, Phase 0)
+// ===========================================================================
+
+describe("inlineAudioChars", () => {
+  const audio = (n: number) => ({ inlineData: { mimeType: "audio/mp4", data: "a".repeat(n) } });
+
+  it("sums audio inlineData across a single { parts } object", () => {
+    expect(inlineAudioChars({ parts: [audio(10), { text: "hi" }, audio(5)] })).toBe(15);
+  });
+
+  it("sums across an array of contents", () => {
+    expect(inlineAudioChars([{ parts: [audio(3)] }, { parts: [audio(4)] }])).toBe(7);
+  });
+
+  it("ignores images and malformed parts", () => {
+    expect(
+      inlineAudioChars({
+        parts: [
+          { inlineData: { mimeType: "image/jpeg", data: "x".repeat(50) } },
+          { inlineData: { mimeType: "audio/mp4" } },
+          null,
+          "text",
+        ],
+      })
+    ).toBe(0);
+    expect(inlineAudioChars("just a string")).toBe(0);
+    expect(inlineAudioChars(null)).toBe(0);
+  });
+});
+
+describe("geminiproxy audio size guard", () => {
+  it("rejects oversized inline audio before spending quota", async () => {
+    const contents = {
+      parts: [
+        { inlineData: { mimeType: "audio/mp4", data: "a".repeat(MAX_INLINE_AUDIO_BASE64_CHARS + 1) } },
+        { text: "parse this" },
+      ],
+    };
+    await expect(
+      asCallable(geminiproxy)({ auth: AUTH, data: { ...VALID_DATA, contents } })
+    ).rejects.toMatchObject({ code: "invalid-argument" });
+    expect(adminMock.runTransaction).not.toHaveBeenCalled();
+    expect(generateContentMock).not.toHaveBeenCalled();
+  });
+
+  it("forwards audio at the limit", async () => {
+    const contents = {
+      parts: [{ inlineData: { mimeType: "audio/mp4", data: "a".repeat(MAX_INLINE_AUDIO_BASE64_CHARS) } }],
+    };
+    await expect(
+      asCallable(geminiproxy)({ auth: AUTH, data: { ...VALID_DATA, contents } })
+    ).resolves.toEqual({ text: '{"ok":true}' });
   });
 });

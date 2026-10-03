@@ -1,6 +1,7 @@
 # Wall Display (Kiosk Mode)
 
-> **Status:** planned, not started. Every product and UI decision below was made
+> **Status:** Phase 0 lab built; device run pending (see
+> [`wall-display-phase0-results.md`](wall-display-phase0-results.md)). Every product and UI decision below was made
 > with the owner in a structured interview (Oct 2026). The clickable UI spec is
 > [`wall-display-prototype.html`](wall-display-prototype.html) in this folder:
 > open it in a browser. Where this document and the prototype disagree, this
@@ -387,7 +388,7 @@ function isDisplayOf(hid) {
 ### 4.7 Hosting and PWA
 
 - **`firebase.json`:**
-  - Change `Permissions-Policy` from `microphone=()` to `microphone=(self)`.
+  - ~~Change `Permissions-Policy` from `microphone=()` to `microphone=(self)`.~~ Done in Phase 0 (the lab needs the mic).
   - Add `https://api.open-meteo.com` and `https://geocoding-api.open-meteo.com` to the (report-only) CSP `connect-src`.
   - Add `https://*.cloudfunctions.net` and `https://*.run.app` if they're missing, since callables use them.
 - **Service-worker update prompt** (`index.html:105–146`): the `confirm()` at L129 must not run on a wall.
@@ -395,10 +396,11 @@ function isDisplayOf(hid) {
   - `WallApp`'s maintenance timer posts `'skipWaiting'` (the plain string `public/sw.js:446` listens for) during the night window. The existing `controllerchange` listener then reloads.
 - **Manifest:** `orientation` stays `portrait` for phones. iPadOS 16 standalone apps don't enforce it, and the wall is physically mounted. No manifest change is needed.
 
-### 4.8 Wall runtime (`components/wall/runtime/`)
+### 4.8 Wall runtime (`utils/wall/`)
 
-Each piece below is a pure module with unit tests, wired in through one
-`useWallRuntime()` hook:
+Each piece below is a pure module with unit tests (in `utils/wall/`, so they
+run in the node test project), wired in through one `useWallRuntime()` hook.
+`wallIdle.ts` and `wallNight.ts` already exist from Phase 0:
 
 - **Idle and rotation** (`wallIdle.ts`):
   - Any `pointerdown`, `keydown` or voice start resets the 3-min timer and pauses rotation.
@@ -459,7 +461,7 @@ enters the phone boot bundle:
 ```
 tap mic ─► WallVoiceBanner(listening)
   Engine A (if Phase 0 passes): webkitSpeechRecognition, interimResults → live text, ends on silence
-  Engine B (default fallback):   getUserMedia({audio}) ─► MediaRecorder(audio/mp4)
+  Engine B (default fallback):   getUserMedia({audio}) ─► MediaRecorder(audio/mp4) ─► decode + 16 kHz WAV (utils/wall/wavEncode.ts)
                                  VAD: AudioContext analyser, stop after 1.5 s below threshold or 8 s max
 ─► transcript / audio
 ─► parseWallCommand():

@@ -171,3 +171,29 @@ export interface HabitPointAdjustmentSuggestion {
   suggestedPoints: number;
   reasoning: string;
 }
+
+// ---------------------------------------------------------------------------
+// Wall display voice commands (docs/plans/wall-display-kiosk.md §4.10)
+// ---------------------------------------------------------------------------
+
+export type WallVoiceIntent = 'add_shopping' | 'add_todo' | 'unknown';
+
+export interface WallVoiceCommand {
+  /** What the model heard. Always present on the audio path; echoes the input on the text path. */
+  transcript: string;
+  intent: WallVoiceIntent;
+  items?: { name: string; quantity?: string }[];
+  /** `due` is 'today' | 'tomorrow' | a yyyy-MM-dd date. */
+  todo?: { text: string; assigneeName?: string; due?: string };
+}
+
+/** Household context the voice prompt is grounded in. */
+export interface WallVoiceContext {
+  memberNames: string[];
+  /** Grocery catalog names, most-used first; the prompt sends at most 200. */
+  catalogNames: string[];
+  /** Caller-local yyyy-MM-dd. */
+  today: string;
+  /** IANA zone, e.g. America/Chicago. */
+  timeZone: string;
+}
