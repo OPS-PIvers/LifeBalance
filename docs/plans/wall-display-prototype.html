@@ -1,0 +1,912 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LifeBalance Wall Display</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Besley:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: page chrome (screen chips, prototype toggles, per-screen notes) around one fixed 1366x1024 iPad
+   artboard scaled to fit. Chrome follows the viewer theme; the artboard uses the wall's own theme (light default, dark toggle). */
+:root {
+  --page-bg: #f3f1ec; --page-fg: #161512; --page-muted: #655f55; --page-line: #e3e0d8; --page-chip: #fbfaf7; --page-accent: #285742; --page-on-accent: #ffffff;
+  --font-display: 'Besley', Georgia, 'Times New Roman', serif;
+  --font-sans: 'Schibsted Grotesk', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Spline Sans Mono', ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --page-bg: #0f0e0c; --page-fg: #f0eee9; --page-muted: #a8a399; --page-line: #2e2c28; --page-chip: #1a1917; --page-accent: #84ad97; --page-on-accent: #0f0e0c; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --page-bg: #0f0e0c; --page-fg: #f0eee9; --page-muted: #a8a399; --page-line: #2e2c28; --page-chip: #1a1917; --page-accent: #84ad97; --page-on-accent: #0f0e0c; color-scheme: dark; }
+body { background: var(--page-bg); color: var(--page-fg); font-family: var(--font-sans); }
+.page { padding-inline: 16px; padding-block: 20px 56px; max-width: 1440px; margin: 0 auto; display: grid; gap: 14px; }
+.head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 24px; }
+.head h1 { font-family: var(--font-display); font-weight: 600; font-size: 1.6rem; margin: 0; letter-spacing: -0.01em; }
+.head p { margin: 0; color: var(--page-muted); max-width: 72ch; line-height: 1.45; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button, .tg button { font: 500 0.88rem var(--font-sans); padding: 7px 12px; border-radius: 999px; border: 1px solid var(--page-line); background: var(--page-chip); color: var(--page-fg); cursor: pointer; }
+.chips button[aria-pressed="true"] { background: var(--page-accent); color: var(--page-on-accent); border-color: var(--page-accent); }
+.toggles { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; font-size: 0.85rem; color: var(--page-muted); }
+.tg { display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.tg > span { margin-right: 4px; }
+.tg button[aria-pressed="true"] { border-color: var(--page-fg); font-weight: 700; }
+.chips button:focus-visible, .tg button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2px; }
+.stage { position: relative; width: 100%; overflow: hidden; border-radius: 14px; border: 1px solid var(--page-line); }
+.notes { max-width: 82ch; display: grid; gap: 6px; }
+.notes h2 { margin: 0; font-family: var(--font-display); font-size: 1.15rem; font-weight: 600; }
+.notes ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; line-height: 1.5; }
+.notes li span { color: var(--page-muted); }
+
+/* ---------------- Wall ---------------- */
+.wall {
+  --s: 1; --ts: 1;
+  --bg: #f8f7f4; --surface: #f0eee9; --card: #ffffff; --line: #e8e5de; --line-strong: #d6d2c8;
+  --fg: #161512; --fg2: #3a3731; --muted: #655f55; --faint: #8a8478;
+  --accent: #285742; --on-accent: #ffffff; --warm: #97611f; --warm-fill: #b87a29; --rain: #386695;
+  --neg: #b93830; --neg-bg: #fbeeec; --warm-bg: #faf4ea; --scrim: rgba(22,21,18,0.28); --shadow: 0 18px 48px rgba(22,21,18,0.16);
+  --p-F: #6e685d; --p-P: #285742; --p-J: #b87a29; --p-L: #386695; --p-M: #95525d;
+  position: absolute; top: 0; left: 0; width: 1366px; height: 1024px; transform-origin: 0 0; overflow: hidden;
+  display: grid; grid-template-columns: 104px 1fr; background: var(--bg); color: var(--fg);
+  font-family: var(--font-sans); font-size: calc(var(--s) * 22px); line-height: 1.3; font-variant-numeric: tabular-nums;
+  -webkit-user-select: none; user-select: none;
+}
+.wall.dark {
+  --bg: #1b1a17; --surface: #24221f; --card: #2a2825; --line: #2a2825; --line-strong: #3a3732;
+  --fg: #ece9e2; --fg2: #cfcac0; --muted: #a29d92; --faint: #7d786e;
+  --accent: #8fbfa5; --on-accent: #12201a; --warm: #d9a75c; --warm-fill: #d9a75c; --rain: #8eaed6;
+  --neg: #e2857d; --neg-bg: #3a2522; --warm-bg: #33291b; --scrim: rgba(0,0,0,0.5); --shadow: 0 18px 48px rgba(0,0,0,0.5);
+  --p-F: #a8a399; --p-P: #86b89c; --p-J: #d6a55e; --p-L: #8eaed6; --p-M: #d29aa5;
+  color-scheme: dark;
+}
+.wall.large { --s: 1.15; }
+.wall[hidden] { display: none; }
+:where(.wall) button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+.wall button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.wall svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.nm { color: var(--muted); font-size: calc(var(--s) * 17px); margin-left: 8px; white-space: nowrap; }
+
+/* rail */
+.rail { border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 20px 0 16px; gap: 4px; }
+.rail .nav { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 0; color: var(--muted); font-size: 16px; font-weight: 500; text-align: center; }
+.rail .nav svg { font-size: 34px; }
+.rail .nav[aria-current="page"] { color: var(--fg); }
+.rail .nav[aria-current="page"]::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 4px; border-radius: 0 3px 3px 0; background: var(--accent); }
+.rail .badge { position: absolute; top: 8px; left: 58px; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: var(--warm-fill); color: #fff; font-size: 14px; font-weight: 700; display: grid; place-items: center; }
+.wall.dark .rail .badge { color: #1b1a17; }
+.rail .sp { flex: 1; }
+.rail .mic { margin: 0 auto; width: 76px; height: 76px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
+.rail .mic svg { font-size: 34px; }
+.rail .mic.live { background: var(--warm-fill); color: #fff; box-shadow: 0 0 0 8px color-mix(in srgb, var(--warm-fill) 22%, transparent); }
+.rail .gear { margin: 14px auto 0; width: 56px; height: 56px; display: grid; place-items: center; color: var(--faint); font-size: 26px; }
+
+.main { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+/* top bar: big clock + 3 time-of-day blocks */
+.top { position: relative; display: flex; align-items: center; gap: 22px; padding: 16px 32px 16px 40px; border-bottom: 1px solid var(--line); min-height: 128px; }
+.top .right .btn { padding: 0 16px; }
+.ostrip { display: flex; align-items: center; gap: 10px; padding: 9px 40px; background: var(--warm-bg); color: var(--warm); font-size: 17px; font-weight: 600; border-bottom: 1px solid var(--line); }
+.ostrip svg { font-size: 20px; }
+.rail .off { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--warm); font-size: 14px; font-weight: 600; margin-bottom: 18px; }
+.rail .off svg { font-size: 30px; }
+.hero { display: flex; align-items: center; gap: 14px; flex: none; }
+.hero .big { font-family: var(--font-display); font-size: 72px; font-weight: 500; line-height: 0.9; letter-spacing: -0.025em; }
+.hero .sub { display: grid; gap: 2px; font-size: 21px; line-height: 1.15; color: var(--fg2); white-space: nowrap; text-align: left; }
+.hero svg { font-size: 46px; color: var(--warm); }
+.top .vr { flex: none; width: 1px; align-self: stretch; background: var(--line); margin: 6px 0; }
+.wxb { display: flex; align-items: center; gap: 22px; border-radius: 12px; padding: 6px 10px; margin-left: -10px; flex: none; }
+.blocks { display: flex; gap: 16px; }
+.blocks span.b { display: grid; justify-items: center; gap: 3px; font-size: 17px; color: var(--muted); }
+.blocks span.b b { font-family: var(--font-display); font-size: 30px; font-weight: 500; line-height: 1; color: var(--fg); }
+.blocks svg { font-size: 28px; color: var(--warm); }
+.blocks svg.r { color: var(--rain); }
+.rainnote { display: block; font-size: 18px; font-weight: 600; color: var(--rain); margin-top: 6px; text-align: center; white-space: nowrap; }
+.top .right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; border: 1px solid var(--line-strong); }
+.seg button { font-size: 18px; font-weight: 600; padding: 0 18px; height: 50px; border-radius: 7px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--fg); box-shadow: 0 0 0 1px var(--line-strong); }
+.btn { height: 58px; padding: 0 22px; border-radius: 10px; font-size: 19px; font-weight: 600; display: inline-flex; align-items: center; gap: 10px; border: 1px solid var(--line-strong) !important; color: var(--fg2); white-space: nowrap; }
+.btn.pri { background: var(--accent) !important; color: var(--on-accent) !important; border-color: transparent !important; }
+.btn[disabled] { opacity: 0.45; }
+.btn svg { font-size: 22px; }
+.pill { display: inline-flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; padding: 9px 14px; border-radius: 999px; white-space: nowrap; }
+.pill.off { color: var(--warm); background: var(--warm-bg); }
+.pill.err { color: var(--neg); background: var(--neg-bg); }
+
+/* week: today + panel */
+.wk { flex: 1; display: grid; grid-template-columns: 0.92fr 1fr; min-height: 0; position: relative; }
+.wk.solo { grid-template-columns: 1fr; }
+.today { --k: calc(var(--s) * var(--ts)); padding: 24px 40px 22px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: calc(var(--k) * 16px); min-height: 0; overflow: hidden; }
+.wk.solo .today { --ts: 1.25; border-right: 0; padding: 28px 80px; }
+.today .th { display: flex; align-items: baseline; gap: 14px; }
+.today .th b { font-family: var(--font-display); font-size: calc(var(--k) * 40px); font-weight: 600; color: var(--accent); }
+.today .th span { font-size: calc(var(--k) * 20px); color: var(--muted); }
+.tev { display: grid; grid-template-columns: calc(var(--k) * 78px) 1fr; gap: calc(var(--k) * 14px) 16px; align-items: baseline; }
+.tev .tm { font-size: calc(var(--k) * 23px); color: var(--muted); text-align: right; white-space: nowrap; }
+.tev .tt { font-size: calc(var(--k) * 29px); line-height: 1.18; }
+.tev .tt small { display: flex; align-items: center; gap: 7px; font-size: calc(var(--k) * 18px); color: var(--muted); margin-top: 2px; }
+.tev .past, .tev .past small { color: var(--faint); }
+.nowmark { grid-column: 1 / 3; display: flex; align-items: center; gap: 10px; color: var(--warm); font-size: calc(var(--k) * 16px); font-weight: 700; margin: -4px 0; }
+.nowmark::after { content: ""; flex: 1; border-top: 2px solid var(--warm); }
+.due { border-top: 1px solid var(--line); padding-top: 10px; }
+.due .lab { font-size: calc(var(--k) * 18px); color: var(--muted); margin-bottom: 2px; }
+.ck { display: flex; align-items: center; gap: 14px; min-height: calc(var(--k) * 50px); width: 100%; font-size: calc(var(--k) * 23px); }
+.bx { width: calc(var(--k, 1) * 30px); height: calc(var(--k, 1) * 30px); border-radius: 50%; border: 2.5px solid var(--faint); flex: none; display: grid; place-items: center; }
+.bx svg { font-size: 70%; stroke-width: 3; }
+.done .bx { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.done .tx { color: var(--faint); text-decoration: line-through; text-decoration-thickness: 1px; }
+.late { color: var(--warm); font-weight: 600; font-size: calc(var(--s) * 16px); margin-left: 8px; white-space: nowrap; }
+.today .foot { margin-top: auto; font-size: calc(var(--k) * 18px); color: var(--muted); }
+.today .foot b { display: block; font-family: var(--font-display); font-size: calc(var(--k) * 26px); font-weight: 500; color: var(--fg); }
+
+.panel { display: grid; min-height: 0; }
+.panel.n1 { grid-template-rows: minmax(0, 1fr); }
+.panel.n2.even { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+.panel.n2.fit { grid-template-rows: minmax(0, auto) minmax(0, 1fr); }
+.panel.n2.fit .mod:first-child { max-height: 470px; }
+.mod { display: flex; flex-direction: column; min-height: 0; position: relative; }
+.mod + .mod { border-top: 1px solid var(--line-strong); }
+.mh { display: flex; align-items: center; gap: 12px; padding: 14px 26px 4px 32px; }
+.mh b { font-family: var(--font-display); font-size: calc(var(--s) * 25px); font-weight: 600; }
+.mh .sw { display: inline-flex; align-items: center; gap: 6px; font-size: 16px; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 9px; padding: 0 12px; height: 42px; }
+.mh .x { margin-left: auto; width: 48px; height: 48px; display: grid; place-items: center; color: var(--muted); font-size: 24px; }
+.mb { flex: 1; overflow-y: auto; padding: 0 30px 14px 32px; min-height: 0; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; scrollbar-width: thin; }
+.addmod { margin: 4px 32px 18px; height: 56px; border: 1px dashed var(--line-strong) !important; border-radius: 10px; color: var(--muted); font-size: 18px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.grp .gh { position: sticky; top: 0; background: var(--bg); padding: 10px 0 6px; display: flex; gap: 8px; align-items: baseline; border-bottom: 1px solid var(--line); z-index: 1; }
+.grp .gh .wd { font-size: calc(var(--s) * 18px); color: var(--muted); font-weight: 500; }
+.grp .gh .dn { font-family: var(--font-display); font-size: calc(var(--s) * 25px); font-weight: 500; }
+.grp .gh .rel { font-size: calc(var(--s) * 15px); color: var(--muted); margin-left: 4px; }
+.grp ul { list-style: none; margin: 0; padding: 8px 0 14px; display: grid; gap: 7px; }
+.grp li { display: grid; grid-template-columns: calc(var(--s) * 66px) 1fr; gap: 12px; align-items: baseline; font-size: calc(var(--s) * 22px); }
+.grp li .tm { font-size: calc(var(--s) * 18px); color: var(--muted); text-align: right; white-space: nowrap; }
+.grp li .dot { width: 10px; height: 10px; margin-right: 8px; transform: translateY(-2px); }
+.grp li.muted { font-size: calc(var(--s) * 18px); color: var(--muted); }
+.grp li.muted svg { margin-right: 8px; transform: translateY(2px); }
+.more-link { display: block; padding: 10px 0 4px; color: var(--accent); font-weight: 600; font-size: 18px; }
+.cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+.row { position: relative; min-height: calc(var(--s) * 56px); border-bottom: 1px solid var(--line); width: 100%; overflow: hidden; touch-action: pan-y; display: flex; }
+.row .in { display: flex; align-items: center; gap: 14px; width: 100%; min-height: inherit; background: var(--bg); position: relative; z-index: 1; transition: transform 160ms ease; }
+.row.swiped .in { transform: translateX(-130px); }
+.row .del { position: absolute; right: 0; top: 0; bottom: 0; width: 120px; background: var(--neg); color: #fff; font-weight: 700; font-size: 18px; display: grid; place-items: center; text-align: center; }
+.row .tx { font-size: calc(var(--s) * 23px); flex: 1; min-width: 0; }
+.row .q { font-size: calc(var(--s) * 17px); color: var(--muted); }
+.mrow { display: grid; grid-template-columns: 76px 1fr; gap: 14px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--line); width: 100%; }
+.mrow .d { font-size: calc(var(--s) * 17px); color: var(--muted); }
+.mrow .d.on { color: var(--accent); font-weight: 700; }
+.mrow .n { font-family: var(--font-display); font-size: calc(var(--s) * 23px); font-weight: 500; }
+
+/* menus */
+.scrim { position: absolute; inset: 0; background: var(--scrim); z-index: 20; }
+.menu { position: absolute; z-index: 21; width: 500px; background: var(--card); border: 1px solid var(--line-strong); border-radius: 16px; box-shadow: var(--shadow); padding: 8px 0; }
+.menu .hd { padding: 10px 24px 6px; font-size: 14px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.menu .mi { display: flex; align-items: center; gap: 18px; padding: 0 24px; height: 78px; width: 100%; font-size: 24px; border-top: 1px solid var(--line); }
+.menu .mi svg { font-size: 28px; color: var(--muted); }
+.menu .mi.on { color: var(--accent); font-weight: 600; }
+.menu .mi.on svg { color: var(--accent); }
+.menu .mi small { margin-left: auto; font-size: 16px; color: var(--muted); font-weight: 400; }
+.menu .mi[disabled] { opacity: 0.4; cursor: default; }
+
+/* month */
+.mo { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); grid-template-rows: auto repeat(5, minmax(0, 1fr)); padding: 0 36px 18px 40px; min-height: 0; }
+.mo .mh2 { padding: 12px 10px 8px; font-size: 16px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line-strong); }
+.mo .cell { padding: 8px 10px; border-bottom: 1px solid var(--line); border-left: 1px solid var(--line) !important; display: flex; flex-direction: column; gap: 3px; min-width: 0; overflow: hidden; }
+.mo .cell:nth-child(7n+8) { border-left: 0 !important; }
+.mo .cell .n { font-family: var(--font-display); font-size: calc(var(--s) * 23px); font-weight: 500; line-height: 1.1; }
+.mo .cell.out .n { color: var(--faint); }
+.mo .cell.now .n { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-weight: 600; }
+.mo .ml { font-size: calc(var(--s) * 15px); display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--fg2); }
+.mo .ml .dot { width: 8px; height: 8px; }
+.mo .ml .t { color: var(--muted); font-size: calc(var(--s) * 13px); }
+.mo .ml.mut { color: var(--muted); }
+.mo .more { font-size: calc(var(--s) * 14px); color: var(--accent); font-weight: 600; }
+
+/* day */
+.dv { flex: 1; display: flex; flex-direction: column; min-height: 0; padding-right: 36px; }
+.daynav { display: flex; align-items: center; gap: 8px; padding: 12px 0 10px 40px; border-bottom: 1px solid var(--line); }
+.daynav b { font-family: var(--font-display); font-size: 26px; font-weight: 600; margin-left: 10px; }
+.daynav .btn { width: 54px; height: 50px; padding: 0; justify-content: center; }
+.dva { display: grid; grid-template-columns: 90px 1fr; border-bottom: 1px solid var(--line); }
+.dva > div:first-child { font-size: 13px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); text-align: right; padding: 14px 12px 0 0; }
+.dva .items { display: flex; flex-wrap: wrap; gap: 8px 26px; align-items: center; padding: 10px 14px; font-size: calc(var(--s) * 17px); color: var(--muted); min-height: 48px; border-left: 1px solid var(--line); }
+.dva .items svg { margin-right: 6px; transform: translateY(2px); }
+.dvg { flex: 1; display: grid; grid-template-columns: 90px 1fr; position: relative; min-height: 0; }
+.dvg .hrs { position: relative; }
+.dvg .hrs span { position: absolute; right: 12px; transform: translateY(-50%); font-size: 15px; color: var(--faint); }
+.dvg .lane { position: relative; border-left: 1px solid var(--line); }
+.dvg .hl { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); }
+.blk { position: absolute; display: flex; gap: 12px; align-items: flex-start; border-left: 4px solid; padding: 4px 10px; overflow: hidden; background: var(--bg); }
+.blk .av { width: 32px; height: 32px; border-radius: 50%; color: #fff; font-size: 15px; font-weight: 700; display: grid; place-items: center; flex: none; }
+.wall.dark .blk .av { color: #1b1a17; }
+.blk .tm { font-size: calc(var(--s) * 15px); color: var(--muted); display: block; }
+.blk .tt { font-size: calc(var(--s) * 20px); line-height: 1.2; display: block; }
+.nowl { position: absolute; left: 90px; right: 0; border-top: 2px solid var(--warm); z-index: 3; pointer-events: none; }
+.nowl::before { content: ""; position: absolute; left: -6px; top: -7px; width: 12px; height: 12px; border-radius: 50%; background: var(--warm); }
+
+/* lists */
+.lists { flex: 1; overflow-y: auto; padding: 4px 40px 24px; min-height: 0; }
+.flow2 { column-count: 2; column-gap: 56px; }
+.sec { break-inside: avoid; padding-top: 14px; }
+.sec h3 { margin: 0 0 2px; display: flex; justify-content: space-between; align-items: baseline; font-family: var(--font-display); font-size: calc(var(--s) * 26px); font-weight: 600; }
+.sec h3 span { font-family: var(--font-sans); font-size: 17px; color: var(--muted); font-weight: 500; }
+.sec .row .tx { font-size: calc(var(--s) * 25px); }
+.sec .row .bx { --k: 1.12; }
+.cart .lab { font-size: 16px; color: var(--muted); padding: 10px 0 2px; }
+.cart .row { min-height: calc(var(--s) * 48px); }
+.cart .row .tx { font-size: calc(var(--s) * 20px); }
+.cart .row .bx { --k: 0.9; }
+.pchips { display: flex; gap: 8px; padding: 14px 40px 0; flex-wrap: wrap; }
+.pchip { height: 50px; padding: 0 18px; border-radius: 999px; border: 1px solid var(--line-strong) !important; color: var(--fg2); display: inline-flex; gap: 9px; align-items: center; font-size: 18px; font-weight: 600; }
+.pchip[aria-pressed="true"] { background: var(--fg) !important; color: var(--bg) !important; border-color: var(--fg) !important; }
+.empty { padding: 60px 0; text-align: center; color: var(--muted); font-size: calc(var(--s) * 22px); }
+
+/* meals */
+.ml2 { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.mrows { padding: 4px 40px 20px; max-width: 760px; display: grid; }
+.mr { display: grid; grid-template-columns: 96px 1fr; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); align-items: baseline; width: 100%; }
+.mr .d { font-size: 18px; color: var(--muted); }
+.mr .d b { display: block; font-family: var(--font-display); font-size: 30px; font-weight: 500; color: var(--fg); }
+.mr.on .d { color: var(--accent); font-weight: 700; }
+.mr .n { font-family: var(--font-display); font-size: calc(var(--s) * 30px); font-weight: 500; }
+.mr .o { font-size: 17px; color: var(--muted); margin-top: 4px; }
+.mr.sel { box-shadow: inset 4px 0 0 var(--accent); padding-left: 14px; }
+.recipe { position: absolute; top: 0; right: 0; bottom: 0; width: 520px; background: var(--bg); border-left: 1px solid var(--line-strong); padding: 26px 32px; display: flex; flex-direction: column; gap: 12px; box-shadow: -18px 0 40px rgba(22,21,18,0.08); z-index: 5; overflow-y: auto; }
+.recipe h3 { margin: 0; font-family: var(--font-display); font-size: 40px; font-weight: 600; line-height: 1.05; }
+.recipe .close { position: absolute; top: 18px; right: 18px; width: 56px; height: 56px; display: grid; place-items: center; font-size: 26px; color: var(--muted); }
+.recipe .ing { display: flex; justify-content: space-between; align-items: center; min-height: 48px; border-bottom: 1px solid var(--line); font-size: 22px; }
+.recipe .ing span:last-child { font-size: 16px; color: var(--accent); }
+.recipe ol { margin: 0; padding-left: 1.2em; font-size: 19px; color: var(--fg2); line-height: 1.5; }
+
+/* add sheet */
+.sheet { position: absolute; left: 140px; right: 140px; top: 24px; z-index: 21; background: var(--card); border-radius: 16px; padding: 24px 28px; display: grid; gap: 16px; box-shadow: var(--shadow); }
+.sheet .top2 { display: flex; justify-content: space-between; align-items: center; }
+.sheet .top2 b { font-family: var(--font-display); font-size: 30px; font-weight: 600; }
+.sheet .inp { height: 76px; border: 2px solid var(--accent); border-radius: 12px; display: flex; align-items: center; padding: 0 12px 0 20px; font-size: 30px; gap: 12px; background: var(--bg); }
+.sheet .cur { width: 2px; height: 36px; background: var(--accent); margin-left: -8px; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.sheet .micb { margin-left: auto; width: 56px; height: 56px; border-radius: 50%; background: var(--surface); color: var(--accent); display: grid; place-items: center; font-size: 26px; }
+.sugs { display: flex; flex-wrap: wrap; gap: 10px; }
+.sug { font-size: 21px; padding: 12px 18px; border-radius: 12px; border: 1px solid var(--line-strong) !important; display: inline-flex; gap: 10px; align-items: baseline; }
+.sug small { font-size: 16px; color: var(--muted); }
+.sheet .opts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.sheet .opts .lab { font-size: 17px; color: var(--muted); margin-right: 4px; }
+.kbd { position: absolute; left: 0; right: 0; bottom: 0; height: 410px; z-index: 22; background: #d1d3d9; color: #6b6e76; display: grid; place-items: center; font-size: 22px; letter-spacing: 0.05em; }
+.wall.dark .kbd { background: #2c2c2e; color: #8e8e93; }
+
+/* voice + toast */
+.vb { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); width: 860px; z-index: 30; background: var(--card); border: 1px solid var(--line-strong); border-radius: 16px; padding: 18px 22px; display: grid; grid-template-columns: 64px 1fr auto; gap: 20px; align-items: center; box-shadow: var(--shadow); }
+.vb .orb { position: relative; width: 60px; height: 60px; border-radius: 50%; display: grid; place-items: center; font-size: 28px; color: #fff; background: var(--warm-fill); }
+.vb .orb.listen::after { content: ""; position: absolute; inset: -9px; border-radius: 50%; border: 3px solid var(--warm-fill); animation: pulse 1.4s ease-out infinite; }
+@keyframes pulse { from { transform: scale(0.9); opacity: 0.9; } to { transform: scale(1.35); opacity: 0; } }
+.vb .orb.ok { background: var(--accent); color: var(--on-accent); }
+.vb .orb.err, .vb .orb.work { background: var(--surface); color: var(--fg2); }
+.vb .spin { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--line-strong); border-top-color: var(--fg); animation: sp 0.9s linear infinite; }
+@keyframes sp { to { transform: rotate(360deg); } }
+.vb .k { font-size: 14px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.vb .h { font-size: 24px; line-height: 1.25; }
+.vb .h q { color: var(--fg2); }
+.vb .a { display: flex; gap: 10px; }
+.vb .lv { display: flex; gap: 5px; align-items: center; height: 28px; margin-top: 4px; }
+.vb .lv i { width: 6px; border-radius: 3px; background: var(--warm-fill); animation: lv 0.9s ease-in-out infinite alternate; }
+@keyframes lv { from { height: 6px; } to { height: 28px; } }
+.toast { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 30; display: inline-flex; align-items: center; gap: 18px; background: var(--fg); color: var(--bg); border-radius: 12px; padding: 0 8px 0 22px; height: 64px; font-size: 21px; white-space: nowrap; }
+.toast button { font-weight: 700; padding: 0 18px !important; height: 50px; border-radius: 8px; }
+
+/* weather sheet */
+.fc { position: absolute; left: 200px; right: 200px; top: 150px; z-index: 21; background: var(--card); border-radius: 16px; box-shadow: var(--shadow); padding: 26px 32px; }
+.fc h3 { margin: 0 0 14px; font-family: var(--font-display); font-size: 30px; font-weight: 600; }
+.fc .days { display: grid; grid-template-columns: repeat(5, 1fr); }
+.fc .days > div { display: grid; justify-items: center; gap: 8px; padding: 14px 0; border-left: 1px solid var(--line); }
+.fc .days > div:first-child { border-left: 0; }
+.fc .days .w { font-size: 18px; color: var(--muted); font-weight: 600; }
+.fc .days svg { font-size: 44px; color: var(--warm); }
+.fc .days svg.r { color: var(--rain); }
+.fc .days b { font-family: var(--font-display); font-size: 30px; font-weight: 500; }
+.fc .days small { font-size: 17px; color: var(--muted); }
+.fc p { margin: 16px 0 0; color: var(--muted); font-size: 17px; }
+
+/* night / pairing / pin */
+.night { position: absolute; inset: 0; z-index: 40; background: #000; display: grid; place-items: center; text-align: center; cursor: pointer; }
+.night .c { font-family: var(--font-display); font-size: 220px; color: #4f4b44; line-height: 1; }
+.night .d { color: #36332e; font-size: 30px; margin-top: 16px; }
+.night .n { color: #36332e; font-size: 24px; margin-top: 26px; }
+.full { position: absolute; inset: 0; z-index: 35; background: var(--bg); display: grid; grid-template-columns: 1fr 1fr; align-items: center; }
+.full.center { grid-template-columns: 1fr; place-items: center; background: color-mix(in srgb, var(--bg) 92%, transparent); }
+.ptext { padding: 0 60px 0 100px; display: grid; gap: 18px; }
+.ptext h2 { margin: 0; font-family: var(--font-display); font-size: 54px; font-weight: 600; line-height: 1.05; letter-spacing: -0.02em; }
+.ptext p { margin: 0; font-size: 22px; color: var(--fg2); line-height: 1.45; }
+.ptext ol { margin: 0; padding-left: 1.2em; font-size: 19px; color: var(--muted); line-height: 1.45; display: grid; gap: 6px; }
+.code { display: flex; gap: 12px; }
+.code span { width: 72px; height: 90px; border: 2px solid var(--line-strong); border-radius: 12px; display: grid; place-items: center; font-family: var(--font-mono); font-size: 44px; }
+.code span.f { border-color: var(--accent); }
+.code i { width: 14px; }
+.pad { display: grid; grid-template-columns: repeat(3, 112px); gap: 14px; justify-content: center; }
+.pad button { height: 94px; border-radius: 14px; border: 1px solid var(--line-strong) !important; background: var(--card); font-family: var(--font-display); font-size: 40px; text-align: center; }
+.pad button.k2 { font-family: var(--font-sans); font-size: 18px; font-weight: 600; background: none; color: var(--muted); }
+.pin { display: grid; gap: 24px; justify-items: center; }
+.pin h2 { margin: 0; font-family: var(--font-display); font-size: 40px; font-weight: 600; }
+.dots4 { display: flex; gap: 20px; }
+.dots4 i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--fg2); }
+.dots4 i.f { background: var(--fg); border-color: var(--fg); }
+.gmenu { width: 540px; border-top: 1px solid var(--line-strong); }
+.gmenu button { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 80px; border-bottom: 1px solid var(--line) !important; font-size: 24px; }
+.gmenu button span:last-child { font-size: 17px; color: var(--muted); }
+.gmenu button.danger { color: var(--neg); }
+
+/* phone settings */
+.phonewrap { display: flex; justify-content: center; padding: 28px 16px; }
+.phone { width: 390px; max-width: 100%; border-radius: 30px; overflow: hidden; border: 1px solid var(--page-line); background: #f8f7f4; color: #161512; font-family: var(--font-sans); font-size: 15px; }
+.phone .ph { padding: 18px 18px 10px; border-bottom: 1px solid #e3e0d8; }
+.phone .ph small { color: #655f55; }
+.phone .ph div { font-family: var(--font-display); font-weight: 600; font-size: 22px; }
+.phone section { padding: 14px 18px; border-bottom: 1px solid #e3e0d8; display: grid; gap: 8px; }
+.phone h4 { margin: 0; font-family: var(--font-display); font-size: 15px; font-weight: 600; color: #3a3731; }
+.phone .lbl { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #655f55; }
+.phone .li { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 44px; border-bottom: 1px solid #f0eee9; }
+.phone .li:last-child { border-bottom: 0; }
+.phone .li small { display: block; color: #767165; font-size: 12px; }
+.phone .chip { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid #cbc7bb; white-space: nowrap; }
+.phone .sw { width: 42px; height: 26px; border-radius: 999px; background: #285742; position: relative; flex: none; }
+.phone .sw::after { content: ""; position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; }
+.phone .sw.off { background: #cbc7bb; }
+.phone .sw.off::after { right: auto; left: 3px; }
+.phone .seg2 { display: flex; border: 1px solid #cbc7bb; border-radius: 8px; overflow: hidden; }
+.phone .seg2 span { flex: 1; text-align: center; padding: 8px 0; font-size: 13px; font-weight: 600; color: #655f55; }
+.phone .seg2 span.on { background: #285742; color: #fff; }
+.phone .codebig { font-family: var(--font-mono); font-size: 30px; letter-spacing: 0.1em; text-align: center; padding: 10px; background: #eef3ef; border-radius: 8px; color: #285742; }
+.phone .pbtn { height: 44px; border-radius: 8px; background: #285742; color: #fff; font-weight: 600; display: grid; place-items: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .vb .orb.listen::after, .vb .lv i, .vb .spin, .sheet .cur { animation: none; }
+  .row .in { transition: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="head">
+    <h1>LifeBalance Wall Display</h1>
+    <p>Final UI prototype for the iPad Pro 12.9" kiosk at real size (1366 × 1024). Everything inside the frame is tappable. It's 3:15 pm on Saturday, October 3. All people, events and places are made-up examples.</p>
+  </div>
+  <div class="chips" id="chips" role="toolbar" aria-label="Screens"></div>
+  <div class="toggles">
+    <div class="tg" role="group" aria-label="Theme"><span>Theme</span><button type="button" data-t="theme" data-v="light">Light</button><button type="button" data-t="theme" data-v="dark">Dark</button></div>
+    <div class="tg" role="group" aria-label="Text size"><span>Text</span><button type="button" data-t="text" data-v="normal">Normal</button><button type="button" data-t="text" data-v="large">Large</button></div>
+    <div class="tg" role="group" aria-label="Two-module split"><span>Two-module split</span><button type="button" data-t="split" data-v="even">Even halves</button><button type="button" data-t="split" data-v="fit">Fit to content</button></div>
+    <div class="tg" role="group" aria-label="States"><span>States</span><button type="button" data-t="offline" data-v="1">Offline</button><button type="button" data-t="stale" data-v="1">Offline 15+ min</button><button type="button" data-t="empty" data-v="1">Empty data</button></div>
+  </div>
+  <div class="stage" id="stage"><div class="wall" id="wall"></div><div id="phonehost" hidden></div></div>
+  <div class="notes" id="notes"></div>
+</div>
+
+<script>
+(function () {
+  var I = {
+    cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+    cart: '<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>',
+    list: '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8M13 12h8M13 18h8"/>',
+    food: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
+    mic: '<rect x="9" y="2" width="6" height="13" rx="3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/>',
+    gear: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+    receipt: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6M16 12h-6M13 16h-3"/>',
+    flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/>',
+    sun: '<path d="M12 2v2M4.93 4.93l1.41 1.41M20 12h2M19.07 4.93l-1.41 1.41M15.95 12.65a4 4 0 0 0-5.93-4.61"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"/>',
+    clear: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+    cloud: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
+    rain: '<path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="M16 14v6M8 14v6M12 16v6"/>',
+    left: '<path d="m15 18-6-6 6-6"/>', right: '<path d="m9 18 6-6-6-6"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>', plus: '<path d="M5 12h14M12 5v14"/>', x: '<path d="M18 6 6 18M6 6l12 12"/>',
+    updown: '<path d="m7 15 5 5 5-5M7 9l5-5 5 5"/>',
+    wifi: '<path d="M12 20h.01M8.5 16.43a5 5 0 0 1 7 0M5 12.86a10 10 0 0 1 5.17-2.69M19 12.86a10 10 0 0 0-2-1.54M2 8.82a15 15 0 0 1 4.18-2.65M22 8.82a15 15 0 0 0-11.29-3.76M2 2l20 20"/>'
+  };
+  function ic(n, cls) { return '<svg class="i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" aria-hidden="true">' + I[n] + '</svg>'; }
+  function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+
+  var N = { F: 'Family', P: 'Paul', J: 'Jess', L: 'Leo', M: 'Mia' };
+  function dot(k) { return '<span class="dot" style="background:var(--p-' + k + ')"></span>'; }
+
+  // ---------- Example data. Day index 0 = Sat Oct 3 2026. ----------
+  var WD = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  var WDF = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+  function dayInfo(i) { return { wd: WD[i % 7], wdf: WDF[i % 7], d: 3 + i, mon: 'Oct' }; }
+  var EV = [
+    [0, '9:00', '10:30', 'Soccer game vs. Wayzata', 'L'], [0, '11:30', '13:30', "Ava's birthday party", 'M'], [0, '14:00', '15:00', 'Haircut', 'J'],
+    [0, '17:00', '20:00', "Dinner at Grandma's", 'F'], [0, '20:15', '22:00', 'Movie at home', 'F'],
+    [1, '10:00', '11:30', 'Farmers market', 'F'], [1, '14:00', '15:00', 'Run club', 'J'],
+    [2, '15:30', '17:00', 'Soccer practice', 'L'], [2, '18:30', '20:00', 'PTO meeting', 'P'],
+    [3, '8:00', '9:00', 'Dentist', 'M'], [3, '16:00', '16:45', 'Piano', 'L'],
+    [4, '12:45', '13:15', 'Early release pickup', 'M'], [4, '15:30', '17:00', 'Soccer practice', 'L'], [4, '16:00', '17:00', 'Orthodontist', 'J'], [4, '17:30', '18:15', 'Swim lessons', 'M'], [4, '19:00', '21:00', 'Book club', 'J'],
+    [5, '16:00', '16:45', 'Piano', 'L'], [5, '17:30', '18:15', 'Swim lessons', 'M'],
+    [6, '18:00', '21:00', 'Movie night', 'F'],
+    [7, '10:00', '11:30', 'Soccer game', 'L'], [7, '13:00', '16:00', 'Apple orchard', 'F'],
+    [8, '16:00', '18:00', "Grandpa's birthday", 'F'],
+    [9, '15:30', '17:00', 'Soccer practice', 'L'],
+    [10, '16:00', '16:45', 'Piano', 'L'], [10, '18:00', '19:00', 'Parent conferences', 'P'],
+    [11, '15:30', '17:00', 'Soccer practice', 'L'], [11, '18:00', '19:00', 'Choir', 'M'],
+    [12, '17:30', '18:15', 'Swim lessons', 'M'],
+    [13, '9:00', '12:00', 'Drive up to the cabin', 'F'],
+    [14, '9:00', '12:00', 'Half marathon', 'J']
+  ];
+  var ALL = [[2, 'bill', 'Water bill'], [4, 'bill', 'Phone bill'], [6, 'off', 'No school'], [9, 'off', 'Indigenous Peoples’ Day'], [12, 'off', 'No school: MEA break'], [12, 'bill', 'Mortgage'], [13, 'off', 'No school: MEA break']];
+  var DINNER = ["Dinner at Grandma's", 'Roast chicken', 'Tacos', 'Pasta primavera', 'Leftovers', 'Sheet-pan salmon', 'Pizza night'];
+  var MEALX = [['Pancakes', ''], ['Bagels', ''], ['', ''], ['', 'Leftover pasta'], ['', ''], ['', ''], ['', '']];
+  var RECIPES = {
+    'Tacos': { time: '30 min', ing: [['Tortillas', 1], ['Ground beef', 0], ['Shredded cheese', 1], ['Lettuce', 0], ['Salsa', 0], ['Limes', 0]], steps: ['Brown the beef with taco seasoning.', 'Warm tortillas in a dry pan.', 'Shred lettuce and cut limes.'] },
+    'Roast chicken': { time: '1 hr 30', ing: [['Whole chicken', 0], ['Lemons', 0], ['Carrots', 0], ['Potatoes', 0]], steps: ['Heat oven to 425°F.', 'Stuff the chicken with lemon and season well.', 'Roast on carrots and potatoes for 75 minutes.'] },
+    'Sheet-pan salmon': { time: '40 min', ing: [['Salmon fillets', 0], ['Broccoli', 0], ['Olive oil', 1]], steps: ['Heat oven to 400°F.', 'Toss broccoli in oil and roast 10 minutes.', 'Add salmon and roast 12 more minutes.'] }
+  };
+
+  var state = {
+    screen: 'week', theme: 'light', text: 'normal', split: 'even', offline: false, stale: false, empty: false,
+    modules: ['coming'], menu: null, voice: null, toast: null, sheet: null, weather: false, meal: null,
+    dayIdx: 4, pin: 0, filter: 'all', last: null,
+    shop: [
+      ['Cub Foods', 'Milk', '2 gal', 0], ['Cub Foods', 'Eggs', '1 dz', 1], ['Cub Foods', 'Bananas', '', 0], ['Cub Foods', 'Avocados', '×2', 0], ['Cub Foods', 'Shredded cheese', '', 0], ['Cub Foods', 'Tortillas', '', 0], ['Cub Foods', 'Bread', '', 1],
+      ['Target', 'Paper towels', '', 0], ['Target', 'Kids’ toothpaste', '', 0], ['Target', 'Birthday card', '', 0], ['Target', 'AA batteries', '', 0],
+      ['Costco', 'Coffee beans', '', 0], ['Costco', 'Olive oil', '', 0], ['Costco', 'Frozen berries', '', 0]
+    ],
+    todos: [
+      ['Return library books', 'F', 'over', 'Thu', 0], ['Pack soccer bag', 'L', 'today', '', 1], ['Call about furnace filter', 'P', 'today', '', 0],
+      ['Pick up dry cleaning', 'J', 'today', '', 0], ['Feed the fish', 'M', 'today', '', 0], ['Take out recycling', 'F', 'week', 'Mon', 0],
+      ['Schedule vet visit', 'J', 'week', 'Tue', 0], ['Pick out library book', 'M', 'week', 'Tue', 0], ['Sign field trip form', 'P', 'week', 'Thu', 0]
+    ]
+  };
+  var toastTimer = null, voiceTimer = null;
+
+  function hm(t) { var a = t.split(':'); return +a[0] + (+a[1]) / 60; }
+  function tf(t) { var a = t.split(':'), h = +a[0]; var s = ((h % 12) || 12) + ':' + a[1]; if (h < 7) s += ' am'; else if (h >= 21) s += ' pm'; return s; }
+  var NOW = 15.25;
+
+  // ---------- top bar ----------
+  function topBar(right) {
+    var strip = state.stale ? '<div class="ostrip">' + ic('wifi') + 'Offline since 2:58. Showing what was last loaded; changes will sync when the connection returns.</div>' : '';
+    return '<div class="top"><div class="hero"><span class="big">3:15</span><span class="sub"><span>Saturday</span><span>October 3</span></span></div><div class="vr"></div>' +
+      '<button class="wxb" data-a="weather" aria-label="Weather forecast"><span class="hero">' + ic('sun') + '<span class="big">54\u00b0</span><span class="sub"><span>H 61\u00b0</span><span>L 43\u00b0</span></span></span><span class="vr" style="margin:0"></span>' +
+      '<span><span class="blocks"><span class="b">Afternoon' + ic('sun') + '<b>56°</b></span><span class="b">Evening' + ic('rain', 'r') + '<b>49°</b></span><span class="b">Overnight' + ic('cloud') + '<b>43°</b></span></span><span class="rainnote">Rain likely 6–8 pm</span></span></button>' +
+      '<div class="right">' + (right || '') + '</div></div>' + strip;
+  }
+  function calSeg(on) {
+    return '<div class="seg" role="group" aria-label="Calendar range">' + [['day', 'Day'], ['week', 'Week'], ['month', 'Month']].map(function (x) {
+      return '<button data-go="' + x[0] + '" aria-pressed="' + (x[0] === on) + '">' + x[1] + '</button>';
+    }).join('') + '</div>';
+  }
+
+  // ---------- rail ----------
+  function openDueCount() { return state.todos.filter(function (t) { return !t[4] && (t[2] === 'over' || t[2] === 'today'); }).length; }
+  function rail(active) {
+    var cal = { week: 1, month: 1, day: 1 };
+    var items = [['week', 'cal', 'Calendar'], ['shopping', 'cart', 'Shopping'], ['todos', 'list', 'To-dos'], ['meals', 'food', 'Meals']];
+    var h = '<nav class="rail" aria-label="Views">';
+    items.forEach(function (it) {
+      var cur = it[0] === active || (it[0] === 'week' && cal[active]);
+      var n = openDueCount();
+      var badge = it[0] === 'todos' && !state.empty && n ? '<span class="badge">' + n + '</span>' : '';
+      h += '<button class="nav" data-go="' + it[0] + '"' + (cur ? ' aria-current="page"' : '') + '>' + ic(it[1]) + '<span>' + it[2] + '</span>' + badge + '</button>';
+    });
+    h += '<div class="sp"></div>' + (state.offline && !state.stale ? '<button class="off" data-a="offinfo" aria-label="Offline details">' + ic('wifi') + 'Offline</button>' : '') + '<button class="mic' + (state.voice === 'listen' ? ' live' : '') + '" data-a="mic" aria-label="Voice command">' + ic('mic') + '</button>';
+    return h + '<button class="gear" data-a="gear" aria-label="Display menu">' + ic('gear') + '</button></nav>';
+  }
+
+  // ---------- week ----------
+  function check(id, label, done, meta) {
+    return '<button class="ck' + (done ? ' done' : '') + '" data-tog="' + id + '"><span class="bx">' + (done ? ic('check') : '') + '</span><span class="tx">' + esc(label) + '</span>' + (meta || '') + '</button>';
+  }
+  function todayPanel(solo) {
+    var showDue = state.modules.indexOf('todos') < 0, showDin = state.modules.indexOf('meals') < 0;
+    var h = '<section class="today" aria-label="Today"><div class="th"><b>Today</b><span>Saturday</span></div>';
+    var evs = state.empty ? [] : EV.filter(function (e) { return e[0] === 0; });
+    if (!evs.length) h += '<div style="font-size:calc(var(--k) * 24px);color:var(--muted)">No events today</div>';
+    else {
+      h += '<div class="tev">';
+      var placed = false;
+      evs.forEach(function (e) {
+        var past = hm(e[2]) <= NOW;
+        if (!placed && hm(e[1]) > NOW) { h += '<div class="nowmark">3:15</div>'; placed = true; }
+        h += '<span class="tm' + (past ? ' past' : '') + '">' + tf(e[1]) + '</span><span class="tt' + (past ? ' past' : '') + '">' + esc(e[3]) + '<small>' + dot(e[4]) + N[e[4]] + '</small></span>';
+      });
+      h += '</div>';
+    }
+    if (showDue && !state.empty) {
+      var due = state.todos.map(function (t, i) { return [t, i]; }).filter(function (x) { return x[0][2] === 'over' || x[0][2] === 'today'; });
+      if (due.length) {
+        h += '<div class="due"><div class="lab">Due today</div>';
+        due.forEach(function (x) { var t = x[0]; h += check('t' + x[1], t[0], t[4], '<span class="nm">' + N[t[1]] + '</span>' + (t[2] === 'over' ? '<span class="late">Overdue</span>' : '')); });
+        h += '</div>';
+      }
+    }
+    if (showDin) h += '<div class="foot">Dinner<b>' + DINNER[0] + '</b></div>';
+    if (solo) h += '<button class="addmod" style="position:absolute;right:30px;bottom:22px;width:230px;margin:0" data-a="addmod">' + ic('plus') + 'Add module</button>';
+    return h + '</section>';
+  }
+  var MODS = { coming: ['Coming up', 'cal'], shopping: ['Shopping', 'cart'], todos: ['To-dos', 'list'], meals: ['Meals this week', 'food'] };
+  function modBody(key) {
+    if (key === 'coming') {
+      var h = '';
+      for (var i = 1; i <= 14; i++) {
+        var info = dayInfo(i);
+        var alls = state.empty ? [] : ALL.filter(function (a) { return a[0] === i; });
+        var evs = state.empty ? [] : EV.filter(function (e) { return e[0] === i; });
+        if (!alls.length && !evs.length) continue;
+        h += '<div class="grp"><div class="gh"><span class="wd">' + info.wd + '</span><span class="dn">' + info.d + '</span>' + (i === 1 ? '<span class="rel">Tomorrow</span>' : (i === 7 ? '<span class="rel">Next week</span>' : '')) + '</div><ul>';
+        alls.forEach(function (a) { h += '<li class="muted"><span></span><span>' + ic(a[1] === 'bill' ? 'receipt' : 'flag') + esc(a[2]) + '</span></li>'; });
+        evs.forEach(function (e) { h += '<li><span class="tm">' + tf(e[1]) + '</span><span>' + dot(e[4]) + esc(e[3]) + '<span class="nm">' + N[e[4]] + '</span></span></li>'; });
+        h += '</ul></div>';
+      }
+      if (!h) return '<div class="empty">No events in the next 14 days</div>';
+      return h + '<button class="more-link" data-go="month">See the month →</button>';
+    }
+    if (key === 'shopping') {
+      var open = state.shop.map(function (s, i) { return [s, i]; }).filter(function (x) { return !x[0][3]; });
+      if (state.empty || !open.length) return '<div class="empty">List is empty</div>';
+      return '<div class="cols2">' + open.map(function (x) { return listRow('s' + x[1], x[0][1], 0, x[0][2] ? '<span class="q">' + x[0][2] + '</span>' : ''); }).join('') + '</div>';
+    }
+    if (key === 'todos') {
+      if (state.empty) return '<div class="empty">No to-dos</div>';
+      return state.todos.map(function (t, i) { return listRow('t' + i, t[0], t[4], '<span class="nm">' + N[t[1]] + (t[2] === 'week' ? ' · ' + t[3] : '') + '</span>' + (t[2] === 'over' ? '<span class="late">Overdue</span>' : '')); }).join('');
+    }
+    if (key === 'meals') {
+      return DINNER.map(function (d, i) { return '<button class="mrow" data-meal="' + i + '"><span class="d' + (i === 0 ? ' on' : '') + '">' + (i === 0 ? 'Today' : dayInfo(i).wd) + '</span><span class="n">' + esc(d) + '</span></button>'; }).join('');
+    }
+    return '';
+  }
+  function panel() {
+    var n = state.modules.length;
+    var h = '<div class="panel n' + n + ' ' + state.split + '">';
+    state.modules.forEach(function (k, idx) {
+      h += '<section class="mod" aria-label="' + MODS[k][0] + '"><div class="mh"><b>' + MODS[k][0] + '</b><button class="sw" data-a="switch" data-slot="' + idx + '">Switch ' + ic('updown') + '</button><button class="x" data-a="remove" data-slot="' + idx + '" aria-label="Remove ' + MODS[k][0] + '">' + ic('x') + '</button></div>';
+      h += '<div class="mb" data-scroll="' + k + '">' + modBody(k) + '</div>';
+      if (n === 1) h += '<button class="addmod" data-a="addmod">' + ic('plus') + 'Add module</button>';
+      h += '</section>';
+    });
+    return h + '</div>';
+  }
+  function week() {
+    var solo = !state.modules.length;
+    return topBar(calSeg('week')) + '<div class="wk' + (solo ? ' solo' : '') + '">' + todayPanel(solo) + (solo ? '' : panel()) + '</div>';
+  }
+
+  // ---------- month ----------
+  function month() {
+    var h = topBar(calSeg('month')) + '<div class="mo">';
+    ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(function (w) { h += '<div class="mh2">' + w + '</div>'; });
+    var extra = { 1: [['P', '19:00', 'Board meeting']], 2: [['M', '9:30', 'Field trip']], 19: [['L', '15:30', 'Soccer practice']], 20: [['L', '16:00', 'Piano']], 21: [['L', '15:30', 'Soccer practice']], 22: [['L', '16:00', 'Piano'], ['M', '17:30', 'Swim lessons']], 24: [['L', '10:00', 'Soccer game'], ['F', '14:00', 'Pumpkin patch']], 26: [['L', '15:30', 'Soccer practice']], 27: [['L', '16:00', 'Piano']], 28: [['bill', '', 'Electric bill', 'bill'], ['L', '15:30', 'Soccer practice']], 29: [['L', '16:00', 'Piano'], ['M', '17:30', 'Swim lessons']], 31: [['M', '13:00', 'School parade'], ['F', '17:30', 'Trick-or-treat']] };
+    for (var i = 0; i <= 14; i++) {
+      var list = [];
+      ALL.filter(function (a) { return a[0] === i; }).forEach(function (a) { list.push(['bill', '', a[2], a[1]]); });
+      EV.filter(function (e) { return e[0] === i; }).forEach(function (e) { list.push([e[4], e[1], e[3]]); });
+      extra[3 + i] = list;
+    }
+    for (var c = 0; c < 35; c++) {
+      var out = c < 4, day = out ? 27 + c : c - 3;
+      var items = (out || state.empty) ? [] : (extra[day] || []);
+      var idx = day - 3, can = !out && idx >= 0 && idx <= 14;
+      h += '<button class="cell' + (out ? ' out' : '') + (!out && day === 3 ? ' now' : '') + '" data-a="openday" data-day="' + (can ? idx : -1) + '"><span class="n">' + day + '</span>';
+      items.slice(0, 3).forEach(function (x) {
+        if (x[0] === 'bill') h += '<span class="ml mut">' + ic(x[3] === 'off' ? 'flag' : 'receipt') + esc(x[2]) + '</span>';
+        else h += '<span class="ml">' + dot(x[0]) + '<span class="t">' + tf(x[1]) + '</span>' + esc(x[2]) + '</span>';
+      });
+      if (items.length > 3) h += '<span class="more">+' + (items.length - 3) + ' more</span>';
+      h += '</button>';
+    }
+    return h + '</div>';
+  }
+
+  // ---------- day ----------
+  function day() {
+    var i = state.dayIdx, info = dayInfo(i);
+    var h = topBar(calSeg('day')) + '<div class="dv"><div class="daynav"><button class="btn" data-a="dprev" aria-label="Previous day">' + ic('left') + '</button><button class="btn" data-a="dnext" aria-label="Next day">' + ic('right') + '</button><b>' + (i === 0 ? 'Today' : info.wdf + ', October ' + info.d) + '</b></div>';
+    var alls = state.empty ? [] : ALL.filter(function (a) { return a[0] === i; });
+    var items = alls.map(function (a) { return '<span>' + ic(a[1] === 'bill' ? 'receipt' : 'flag') + esc(a[2]) + '</span>'; });
+    if (i === 0 && !state.empty) state.todos.forEach(function (t) { if (t[2] === 'today' && !t[4]) items.push('<span>○ ' + esc(t[0]) + ' · ' + N[t[1]] + '</span>'); });
+    if (i < 7) items.push('<span style="font-family:var(--font-display);color:var(--fg2)">Dinner · ' + esc(DINNER[i]) + '</span>');
+    h += '<div class="dva"><div>ALL DAY</div><div class="items">' + items.join('') + '</div></div>';
+    var H0 = 7, H1 = 22, PX = 39, TP = 12;
+    h += '<div class="dvg"><div class="hrs">';
+    for (var hr = H0; hr <= H1; hr++) h += '<span style="top:' + ((hr - H0) * PX + TP) + 'px">' + ((hr % 12) || 12) + (hr < 12 ? 'a' : 'p') + '</span>';
+    h += '</div><div class="lane">';
+    for (var r = H0; r <= H1; r++) h += '<div class="hl" style="top:' + ((r - H0) * PX + TP) + 'px"></div>';
+    var evs = state.empty ? [] : EV.filter(function (e) { return e[0] === i; });
+    evs.forEach(function (e, k) {
+      var s = hm(e[1]), en = hm(e[2]);
+      var clash = evs.filter(function (o) { return o !== e && hm(o[1]) < en && hm(o[2]) > s; });
+      var pos = 'left:14px;right:38%';
+      if (clash.length) pos = evs.indexOf(clash[0]) > k ? 'left:14px;right:calc(50% + 6px)' : 'left:calc(50% + 6px);right:14px';
+      h += '<div class="blk" style="' + pos + ';top:' + ((s - H0) * PX + TP) + 'px;height:' + Math.max((en - s) * PX - 4, 40) + 'px;border-color:var(--p-' + e[4] + ')"><span class="av" style="background:var(--p-' + e[4] + ')">' + e[4] + '</span><span><span class="tm">' + tf(e[1]) + '–' + tf(e[2]) + '</span><span class="tt">' + esc(e[3]) + '</span></span></div>';
+    });
+    if (!evs.length) h += '<div class="empty" style="position:absolute;left:0;right:0;top:200px">No events</div>';
+    h += '</div>' + (i === 0 ? '<div class="nowl" style="top:' + ((NOW - H0) * PX + TP) + 'px"></div>' : '') + '</div></div>';
+    return h;
+  }
+
+  // ---------- lists ----------
+  function listRow(id, label, done, meta) {
+    return '<div class="row' + (done ? ' done' : '') + '"><button class="del" data-a="del" data-id="' + id + '">Delete</button><button class="in" data-tog="' + id + '"><span class="bx">' + (done ? ic('check') : '') + '</span><span class="tx">' + esc(label) + '</span>' + (meta || '') + '</button></div>';
+  }
+  function shopping() {
+    var got = state.shop.filter(function (s) { return s[3]; }).length;
+    var h = topBar('<button class="btn pri" data-a="add" data-kind="shop">' + ic('plus') + 'Add</button><button class="btn" data-a="clear"' + (got ? '' : ' disabled') + '>Clear (' + got + ')</button>');
+    if (state.empty || !state.shop.length) return h + '<div class="lists"><div class="empty">List is empty</div></div>';
+    h += '<div class="lists"><div class="flow2">';
+    ['Cub Foods', 'Target', 'Costco'].forEach(function (store) {
+      var items = state.shop.map(function (s, i) { return [s, i]; }).filter(function (x) { return x[0][0] === store; });
+      if (!items.length) return;
+      var o = items.filter(function (x) { return !x[0][3]; }), g = items.filter(function (x) { return x[0][3]; });
+      h += '<div class="sec"><h3>' + store + '<span>' + o.length + ' left</span></h3>';
+      o.forEach(function (x) { h += listRow('s' + x[1], x[0][1], 0, x[0][2] ? '<span class="q">' + x[0][2] + '</span>' : ''); });
+      if (g.length) { h += '<div class="cart"><div class="lab">In the cart</div>'; g.forEach(function (x) { h += listRow('s' + x[1], x[0][1], 1, x[0][2] ? '<span class="q">' + x[0][2] + '</span>' : ''); }); h += '</div>'; }
+      h += '</div>';
+    });
+    return h + '</div></div>';
+  }
+  function todos() {
+    var h = topBar('<button class="btn pri" data-a="add" data-kind="todo">' + ic('plus') + 'Add</button>');
+    h += '<div class="pchips" role="group" aria-label="Filter by person"><button class="pchip" data-f="all" aria-pressed="' + (state.filter === 'all') + '">Everyone</button>' + ['F', 'P', 'J', 'L', 'M'].map(function (k) { return '<button class="pchip" data-f="' + k + '" aria-pressed="' + (state.filter === k) + '">' + dot(k) + N[k] + '</button>'; }).join('') + '</div>';
+    if (state.empty) return h + '<div class="lists"><div class="empty">No to-dos</div></div>';
+    h += '<div class="lists"><div class="flow2">';
+    var any = false;
+    [['Overdue', 'over'], ['Today', 'today'], ['This week', 'week']].forEach(function (g) {
+      var items = state.todos.map(function (t, i) { return [t, i]; }).filter(function (x) { return x[0][2] === g[1] && (state.filter === 'all' || x[0][1] === state.filter); });
+      if (!items.length) return;
+      any = true;
+      h += '<div class="sec"><h3>' + g[0] + '<span>' + items.filter(function (x) { return !x[0][4]; }).length + ' open</span></h3>';
+      items.forEach(function (x) { var t = x[0]; h += listRow('t' + x[1], t[0], t[4], '<span class="nm">' + dot(t[1]) + ' ' + N[t[1]] + (g[1] !== 'today' ? ' · ' + t[3] : '') + '</span>'); });
+      h += '</div>';
+    });
+    if (!any) h += '<div class="empty">No to-dos</div>';
+    return h + '</div></div>';
+  }
+  function meals() {
+    var h = topBar('') + '<div class="ml2"><div class="mrows">';
+    DINNER.forEach(function (d, i) {
+      var info = dayInfo(i), x = MEALX[i];
+      var other = [x[0] ? 'Breakfast: ' + x[0] : '', x[1] ? 'Lunch: ' + x[1] : ''].filter(Boolean).join(' · ');
+      h += '<button class="mr' + (i === 0 ? ' on' : '') + (state.meal === i ? ' sel' : '') + '" data-meal="' + i + '"><span class="d">' + (i === 0 ? 'Today' : info.wd) + '<b>' + info.d + '</b></span><span><span class="n">' + esc(d) + '</span>' + (other ? '<span class="o" style="display:block">' + other + '</span>' : '') + '</span></button>';
+    });
+    h += '</div>';
+    if (state.meal !== null) h += recipe(state.meal);
+    return h + '</div>';
+  }
+  function recipe(i) {
+    var name = DINNER[i], r = RECIPES[name], info = dayInfo(i);
+    var h = '<div class="recipe"><button class="close" data-a="closemeal" aria-label="Close">' + ic('x') + '</button><div style="font-size:17px;color:var(--muted)">' + (i === 0 ? 'Tonight' : info.wdf + ' dinner') + (r ? ' · ' + r.time : '') + '</div><h3>' + esc(name) + '</h3>';
+    if (!r) return h + '<div style="font-size:20px;color:var(--muted)">No recipe saved for this meal</div></div>';
+    var missing = r.ing.filter(function (g) { return !g[1]; }).length;
+    r.ing.forEach(function (g) { h += '<div class="ing"><span>' + g[0] + '</span><span>' + (g[1] ? 'On the list' : '') + '</span></div>'; });
+    if (missing) h += '<button class="btn pri" data-a="addings" data-n="' + missing + '" style="justify-content:center">' + ic('plus') + 'Add ' + missing + ' missing to Shopping</button>';
+    return h + '<ol>' + r.steps.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ol></div>';
+  }
+
+  // ---------- overlays ----------
+  function switchMenu() {
+    var m = state.menu; if (!m) return '';
+    var used = state.modules;
+    var top = m.kind === 'add' ? 420 : (used.length === 2 && m.slot === 1 ? 430 : 200);
+    var title = m.kind === 'add' ? 'Add a module' : (used.length === 2 ? (m.slot === 0 ? 'Top half shows' : 'Bottom half shows') : 'Panel shows');
+    var h = '<div class="scrim" data-a="closemenu"></div><div class="menu" style="right:36px;top:' + top + 'px"><div class="hd">' + title + '</div>';
+    Object.keys(MODS).forEach(function (k) {
+      var on = m.kind === 'switch' && used[m.slot] === k;
+      var other = used.indexOf(k) >= 0 && !on;
+      h += '<button class="mi' + (on ? ' on' : '') + '" data-a="pick" data-k="' + k + '"' + (other ? ' disabled' : '') + '>' + ic(MODS[k][1]) + MODS[k][0] + (on ? '<small>Showing</small>' : (other ? '<small>Already showing</small>' : '')) + '</button>';
+    });
+    return h + '</div>';
+  }
+  function addSheet() {
+    var k = state.sheet; if (!k) return '';
+    var shop = k === 'shop';
+    var h = '<div class="scrim" data-a="closesheet"></div><div class="sheet"><div class="top2"><b>' + (shop ? 'Add to Shopping' : 'Add a to-do') + '</b><button class="btn" data-a="closesheet">Done</button></div>';
+    h += '<div class="inp">' + (shop ? 'avo' : 'Return') + '<span class="cur"></span><button class="micb" data-a="mic" aria-label="Speak instead">' + ic('mic') + '</button></div>';
+    if (shop) {
+      h += '<div class="sugs"><button class="sug" data-a="addsug" data-v="Avocados">Avocados <small>Cub Foods · usually 2</small></button><button class="sug" data-a="addsug" data-v="Avocado oil">Avocado oil <small>Costco</small></button><button class="sug" data-a="addsug" data-v="Guacamole">Guacamole <small>Cub Foods</small></button></div>';
+      h += '<div class="opts"><span class="lab">Store</span><span class="pchip" aria-pressed="true">Cub Foods</span><span class="pchip">Target</span><span class="pchip">Costco</span><span class="pchip">No store</span><button class="btn pri" style="margin-left:auto" data-a="addsug" data-v="Avocados">Add</button></div>';
+    } else {
+      h += '<div class="sugs"><button class="sug" data-a="addsug" data-v="Return library books">Return library books <small>done last month</small></button><button class="sug" data-a="addsug" data-v="Return permission slip">Return permission slip</button></div>';
+      h += '<div class="opts"><span class="lab">For</span><span class="pchip" aria-pressed="true">Family</span><span class="pchip">' + dot('P') + 'Paul</span><span class="pchip">' + dot('J') + 'Jess</span><span class="pchip">' + dot('L') + 'Leo</span><span class="pchip">' + dot('M') + 'Mia</span></div>';
+      h += '<div class="opts"><span class="lab">Due</span><span class="pchip" aria-pressed="true">Today</span><span class="pchip">Tomorrow</span><span class="pchip">This week</span><span class="pchip">Pick a date</span><button class="btn pri" style="margin-left:auto" data-a="addsug" data-v="Return permission slip">Add</button></div>';
+    }
+    return h + '</div><div class="kbd">iPad keyboard</div>';
+  }
+  function voice() {
+    var v = state.voice; if (!v) return '';
+    if (v === 'listen') return '<div class="vb" role="status"><div class="orb listen">' + ic('mic') + '</div><div><div class="k">Listening</div><div class="h">Say a command, like “add milk to the list”</div><div class="lv">' + [0.1, 0.3, 0.5, 0.2, 0.6, 0.35, 0.15, 0.45, 0.25].map(function (d) { return '<i style="animation-delay:' + d + 's"></i>'; }).join('') + '</div></div><div class="a"><button class="btn" data-a="vdone">Done</button><button class="btn" data-a="vcancel">Cancel</button></div></div>';
+    if (v === 'work') return '<div class="vb" role="status"><div class="orb work"><span class="spin"></span></div><div><div class="k">Heard</div><div class="h"><q>Add milk, eggs and two avocados to the grocery list</q></div></div><div class="a"></div></div>';
+    if (v === 'done') return '<div class="vb" role="status"><div class="orb ok">' + ic('check') + '</div><div><div class="k">Added to Shopping</div><div class="h">Milk, Eggs, Avocados ×2</div></div><div class="a"><button class="btn" data-a="vundo">Undo</button><button class="btn" data-go="shopping">Show list</button></div></div>';
+    if (v === 'err') return '<div class="vb" role="status"><div class="orb err">' + ic('mic') + '</div><div><div class="k">Didn’t catch that</div><div class="h">Try again a little closer to the iPad.</div></div><div class="a"><button class="btn pri" data-a="mic">Try again</button><button class="btn" data-a="vcancel">Close</button></div></div>';
+    return '';
+  }
+  function toast() { return state.toast ? '<div class="toast" role="status"><span>' + esc(state.toast) + '</span>' + (state.last ? '<button data-a="undo">Undo</button>' : '') + '</div>' : ''; }
+  function forecast() {
+    if (!state.weather) return '';
+    var days = [['Today', 'sun', 61, 43, ''], ['Sun', 'rain', 58, 40, '70% rain'], ['Mon', 'cloud', 52, 36, ''], ['Tue', 'clear', 55, 38, ''], ['Wed', 'clear', 60, 44, '']];
+    return '<div class="scrim" data-a="closeweather"></div><div class="fc" data-a="closeweather"><h3>Next 5 days</h3><div class="days">' + days.map(function (d) {
+      return '<div><span class="w">' + d[0] + '</span>' + ic(d[1], d[1] === 'rain' ? 'r' : '') + '<b>' + d[2] + '°</b><small>' + d[3] + '°' + (d[4] ? ' · ' + d[4] : '') + '</small></div>';
+    }).join('') + '</div><p>Tap anywhere to close.</p></div>';
+  }
+  function night() { return '<div class="night" data-a="wake"><div><div class="c">10:42</div><div class="d">Saturday, October 3</div><div class="n">Tomorrow 10:00 · Farmers market</div></div></div>'; }
+  function pairing() {
+    var code = ['4', '8', '2', '9', '', ''];
+    return '<div class="full"><div class="ptext"><h2>Pair this iPad with your household</h2><p>On your phone, open LifeBalance and go to Settings → Wall display → Add a wall display. Enter the 6-digit code it shows.</p><ol><li>Open this from the Home Screen icon, not Safari. They keep separate sign-ins.</li><li>The code works once and expires after 10 minutes.</li></ol></div>' +
+      '<div style="display:grid;gap:26px;justify-items:center"><div class="code">' + code.map(function (c, i) { return (i === 3 ? '<i></i>' : '') + '<span class="' + (c ? 'f' : '') + '">' + c + '</span>'; }).join('') + '</div><div class="pad">' + '123456789'.split('').map(function (n) { return '<button>' + n + '</button>'; }).join('') + '<button class="k2">Clear</button><button>0</button><button class="k2">Delete</button></div></div></div>';
+  }
+  function pinOverlay() {
+    var h = '<div class="full center"><div class="pin">';
+    if (state.pin < 4) {
+      h += '<h2>Enter family PIN</h2><div class="dots4">' + [0, 1, 2, 3].map(function (i) { return '<i class="' + (i < state.pin ? 'f' : '') + '"></i>'; }).join('') + '</div><div class="pad">' + '123456789'.split('').map(function (n) { return '<button data-a="pin">' + n + '</button>'; }).join('') + '<button class="k2" data-a="pinclose">Cancel</button><button data-a="pin">0</button><button class="k2" data-a="pindel">Delete</button></div>';
+    } else {
+      h += '<h2>Kitchen iPad</h2><div class="gmenu"><button data-a="pinclose"><span>Sync calendars now</span><span>Last sync 4 min ago</span></button><button data-a="pinclose"><span>Reload display</span><span>Fixes a stuck screen</span></button><button data-a="pinclose"><span>Start rotating the panel</span><span>Every 60 s</span></button><button class="danger" data-a="pinclose"><span>Unpair this iPad</span><span>Signs the display out</span></button><button data-a="pinclose"><span>Close</span><span></span></button></div>';
+    }
+    return h + '</div></div>';
+  }
+  function phone() {
+    return '<div class="phonewrap"><div class="phone"><div class="ph"><small>Settings</small><div>Wall display</div></div>' +
+      '<section><h4>Displays</h4><div class="li"><span>Kitchen iPad<small>Last seen 2 min ago · paired Oct 1</small></span><span class="chip">Revoke</span></div><div class="lbl">Add a wall display</div><div class="codebig">482 913</div><small style="color:#767165">Enter this on the iPad within 10 minutes.</small></section>' +
+      '<section><h4>Calendars</h4><div class="li"><span>Family (Google)<small>Synced 4 min ago</small></span><span class="chip">Family</span></div><div class="li"><span>Paul – work<small>Google secret iCal link</small></span><span class="chip" style="border-color:#285742;color:#285742">Paul</span></div><div class="li"><span>Jess (iCloud)<small>Public share link</small></span><span class="chip" style="border-color:#97611f;color:#97611f">Jess</span></div><div class="li"><span>U11 Soccer schedule<small style="color:#b93830">Hasn’t updated since Thu · re-paste the link</small></span><span class="chip" style="border-color:#386695;color:#386695">Leo</span></div><div class="li"><span>US holidays<small>Built in</small></span><span class="sw"></span></div><div class="li"><span>Bills on calendar<small>Names only, no amounts</small></span><span class="sw"></span></div><div class="pbtn">Add a calendar link</div></section>' +
+      '<section><h4>Week layout</h4><div class="lbl">Right side starts with</div><div class="li"><span>Top</span><span class="chip">Coming up</span></div><div class="li"><span>Bottom</span><span class="chip">None</span></div><div class="li"><span>Rotate the bottom module<small>Pauses when someone touches the wall</small></span><span class="sw off"></span></div><div class="lbl">Each module stays for</div><div class="seg2"><span>30 s</span><span class="on">60 s</span><span>2 min</span><span>5 min</span></div><div class="li"><span>Back to calendar after<small>When nobody touches it</small></span><span class="chip">3 min</span></div></section>' +
+      '<section><h4>Night &amp; look</h4><div class="li"><span>Night screen<small>Dim clock, nothing rotates</small></span><span class="chip">10:00 PM–6:00 AM</span></div><div class="lbl">Theme</div><div class="seg2"><span class="on">Light</span><span>Dark</span></div><div class="lbl">Text size</div><div class="seg2"><span class="on">Normal</span><span>Large</span></div><div class="li"><span>Weather location</span><span class="chip">Minneapolis, MN</span></div></section></div></div>';
+  }
+
+  var SCREENS = [['week', 'Week'], ['day', 'Day'], ['month', 'Month'], ['shopping', 'Shopping'], ['todos', 'To-dos'], ['meals', 'Meals'], ['add', 'Add sheet'], ['voice', 'Voice'], ['night', 'Night'], ['pairing', 'Pairing'], ['gear', 'Gear + PIN'], ['phone', 'Phone settings']];
+  var NOTES = {
+    week: ['Week (the resting screen)', [
+      ['Top bar:', 'time and current temperature at the same 72px size, each with two short lines beside it (day and date, high and low). Then three time-of-day blocks and a rain note when rain is likely. Tap the weather for 5 days. Offline shows as a small mark in the rail (tap for details). After 15 minutes it becomes a plain strip under the top bar. A stale calendar feed is reported only on the phone.'],
+      ['Today:', 'past events fade, an amber line marks now, then “Due today” and dinner.'],
+      ['Panel:', 'Switch changes a module, + Add module adds a second, × removes one. Remove both for the larger Today-only screen.'],
+      ['Duplicates:', 'put To-dos or Meals in the panel and Today drops its own checklist or dinner line.'],
+      ['Try:', 'scroll Coming up (day headers pin), compare the two split options above, and switch on Offline or Stale feed.']
+    ]],
+    month: ['Month', [['Up to 3 lines a day,', 'then “+N more”. Tap any day from Oct 3 to 17 to open it in Day view.']]],
+    day: ['Day', [['One mixed timeline.', 'Each block carries a filled initial avatar in the person’s color. Clashes sit side by side (Wednesday at 4:00). The arrows step through days.']]],
+    shopping: ['Shopping', [['Tap to check off.', 'The item moves to “In the cart” under its store, and an Undo toast appears.'], ['Swipe a row left', 'to reveal Delete.'], ['+ Add', 'opens the entry sheet.']]],
+    todos: ['To-dos', [['Grouped Overdue, Today, This week.', 'Person chips filter the list. The rail badge counts open overdue and today items.'], ['Tap to complete,', 'swipe left to delete. Kids’ points are credited exactly as on the phone.']]],
+    meals: ['Meals', [['Dinner rows.', 'Breakfast and lunch appear as a small line only when planned. Tap a dinner for the recipe panel and “Add missing to Shopping”. Tacos, Roast chicken and Sheet-pan salmon have recipes here.']]],
+    add: ['Add sheet', [['Sits at the top', 'because the iPad keyboard covers the bottom 40% in landscape. Suggestions come from the grocery catalog. It stays open for the next item until Done.']]],
+    voice: ['Voice', [['Tap the mic', 'to step through Listening, Heard, Result with Undo, and Didn’t catch that. The result clears itself after 10 seconds.']]],
+    night: ['Night', [['10 pm to 6 am:', 'dim clock on black plus tomorrow’s first event. A tap wakes the wall for 60 seconds. The backlight is lowered by a Shortcuts automation on the iPad.']]],
+    pairing: ['Pairing', [['First launch only.', 'The code comes from the phone (see Phone settings), works once, and expires after 10 minutes.']]],
+    gear: ['Gear + PIN', [['The gear', 'asks for the family PIN (enter any 4 digits here), then offers sync, reload, rotation and unpair. Everything else is set on the phone.']]],
+    phone: ['Phone settings', [['Settings → Wall display:', 'paired displays, calendar links with owners, the starting panel modules, rotation, idle return, night hours, theme, text size and weather location.']]]
+  };
+
+  var wall = document.getElementById('wall'), stage = document.getElementById('stage'), phoneHost = document.getElementById('phonehost');
+
+  function render() {
+    var s = state.screen;
+    document.querySelectorAll('#chips button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.s === s)); });
+    document.querySelectorAll('.tg button').forEach(function (b) {
+      var t = b.dataset.t, on = (t === 'theme' || t === 'text' || t === 'split') ? state[t] === b.dataset.v : !!state[t];
+      b.setAttribute('aria-pressed', String(on));
+    });
+    var n = NOTES[s];
+    document.getElementById('notes').innerHTML = '<h2>' + n[0] + '</h2><ul>' + n[1].map(function (x) { return '<li><strong>' + x[0] + '</strong> <span>' + x[1] + '</span></li>'; }).join('') + '</ul>';
+    if (s === 'phone') { wall.hidden = true; phoneHost.hidden = false; phoneHost.innerHTML = phone(); stage.style.height = 'auto'; return; }
+    wall.hidden = false; phoneHost.hidden = true;
+    wall.className = 'wall' + (state.theme === 'dark' ? ' dark' : '') + (state.text === 'large' ? ' large' : '');
+    var keep = {};
+    wall.querySelectorAll('[data-scroll]').forEach(function (el) { keep[el.dataset.scroll] = el.scrollTop; });
+    var lists = wall.querySelector('.lists'); var keepList = lists ? lists.scrollTop : 0;
+    var view = { add: 'shopping', voice: 'week', night: 'week', pairing: 'week', gear: 'week' }[s] || s;
+    var base = { week: week, month: month, day: day, shopping: shopping, todos: todos, meals: meals }[view];
+    var html = rail(view) + '<div class="main">' + base() + switchMenu() + forecast() + addSheet() + voice() + toast() + '</div>';
+    if (s === 'night') html += night();
+    if (s === 'pairing') html += pairing();
+    if (s === 'gear') html += pinOverlay();
+    wall.innerHTML = html;
+    wall.querySelectorAll('[data-scroll]').forEach(function (el) { if (keep[el.dataset.scroll]) el.scrollTop = keep[el.dataset.scroll]; });
+    var l2 = wall.querySelector('.lists'); if (l2 && keepList) l2.scrollTop = keepList;
+    fit();
+  }
+  function fit() { if (wall.hidden) return; var sc = Math.min(1, stage.clientWidth / 1366); wall.style.transform = 'scale(' + sc + ')'; stage.style.height = Math.round(1024 * sc) + 'px'; }
+
+  function showToast(msg, undo) {
+    state.toast = msg; state.last = undo || null; state.voice = null;
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { state.toast = null; state.last = null; render(); }, 10000);
+    render();
+  }
+  function toggle(id) {
+    var isShop = id[0] === 's', arr = isShop ? state.shop : state.todos, col = isShop ? 3 : 4, item = arr[+id.slice(1)];
+    if (!item) return;
+    item[col] = item[col] ? 0 : 1;
+    var name = isShop ? item[1] : item[0];
+    showToast((item[col] ? (isShop ? 'Checked off ' : 'Completed ') : 'Unchecked ') + name, function () { item[col] = item[col] ? 0 : 1; });
+  }
+
+  var chips = document.getElementById('chips');
+  chips.innerHTML = SCREENS.map(function (x) { return '<button type="button" data-s="' + x[0] + '">' + x[1] + '</button>'; }).join('');
+  chips.addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    state.screen = b.dataset.s; state.menu = null; state.voice = null; state.toast = null; state.last = null; state.sheet = null; state.weather = false; state.meal = null; state.pin = 0;
+    if (state.screen === 'add') state.sheet = 'shop';
+    if (state.screen === 'voice') state.voice = 'listen';
+    if (state.screen === 'meals') state.meal = 2;
+    render();
+  });
+  document.querySelector('.toggles').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    var t = b.dataset.t;
+    if (t === 'theme' || t === 'text' || t === 'split') state[t] = b.dataset.v; else state[t] = !state[t];
+    if (t === 'stale' && state.stale) state.offline = true;
+    if (t === 'offline' && !state.offline) state.stale = false;
+    if (t === 'split') { state.screen = 'week'; if (state.modules.length < 2) state.modules = ['coming', 'shopping']; }
+    render();
+  });
+
+  // Swipe-to-delete on list rows
+  var drag = null, suppressClick = false;
+  wall.addEventListener('pointerdown', function (e) { var row = e.target.closest('.row'); drag = row ? { row: row, x: e.clientX, moved: false } : null; });
+  wall.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    var dx = e.clientX - drag.x;
+    if (dx < -30 && !drag.moved) { drag.moved = true; wall.querySelectorAll('.row.swiped').forEach(function (r) { r.classList.remove('swiped'); }); drag.row.classList.add('swiped'); }
+    if (dx > 30 && !drag.moved) { drag.moved = true; drag.row.classList.remove('swiped'); }
+  });
+  wall.addEventListener('pointerup', function () { if (drag && drag.moved) { suppressClick = true; setTimeout(function () { suppressClick = false; }, 60); } drag = null; });
+
+  wall.addEventListener('click', function (e) {
+    if (suppressClick) return;
+    var t = e.target.closest('[data-go],[data-a],[data-tog],[data-meal],[data-f]'); if (!t) return;
+    var row = t.closest('.row');
+    if (row && row.classList.contains('swiped') && t.dataset.tog) { row.classList.remove('swiped'); return; }
+    if (t.dataset.go) { state.screen = t.dataset.go; state.voice = null; state.menu = null; state.meal = null; state.toast = null; state.sheet = null; render(); return; }
+    if (t.dataset.tog) { toggle(t.dataset.tog); return; }
+    if (t.dataset.f) { state.filter = t.dataset.f; render(); return; }
+    if (t.dataset.meal !== undefined) { state.screen = 'meals'; state.meal = +t.dataset.meal; render(); return; }
+    var a = t.dataset.a;
+    if (a === 'mic') {
+      state.sheet = null; clearTimeout(voiceTimer);
+      var order = { 'null': 'listen', listen: 'work', work: 'done', done: 'err', err: 'listen' };
+      state.voice = order[String(state.voice)]; state.toast = null;
+      if (state.voice === 'work') voiceTimer = setTimeout(function () { if (state.voice === 'work') { state.voice = 'done'; render(); } }, 1500);
+      render();
+    } else if (a === 'vdone') { state.voice = 'work'; render(); voiceTimer = setTimeout(function () { if (state.voice === 'work') { state.voice = 'done'; render(); } }, 1500); }
+    else if (a === 'vcancel') { state.voice = null; render(); }
+    else if (a === 'vundo') { state.voice = null; showToast('Removed Milk, Eggs, Avocados'); }
+    else if (a === 'undo') { if (state.last) state.last(); state.toast = null; state.last = null; clearTimeout(toastTimer); render(); }
+    else if (a === 'switch') { state.menu = { kind: 'switch', slot: +t.dataset.slot }; render(); }
+    else if (a === 'addmod') { state.menu = { kind: 'add' }; render(); }
+    else if (a === 'closemenu') { state.menu = null; render(); }
+    else if (a === 'pick') {
+      var k = t.dataset.k;
+      if (state.menu.kind === 'add') { if (state.modules.indexOf(k) < 0 && state.modules.length < 2) state.modules.push(k); }
+      else state.modules[state.menu.slot] = k;
+      state.menu = null; render();
+    }
+    else if (a === 'remove') { state.modules.splice(+t.dataset.slot, 1); render(); }
+    else if (a === 'weather') { state.weather = true; render(); }
+    else if (a === 'closeweather') { state.weather = false; render(); }
+    else if (a === 'add') { state.sheet = t.dataset.kind; state.voice = null; render(); }
+    else if (a === 'closesheet') { state.sheet = null; if (state.screen === 'add') state.screen = 'shopping'; render(); }
+    else if (a === 'addsug') {
+      var v = t.dataset.v;
+      if (state.sheet === 'shop') { var item = ['Cub Foods', v, '', 0]; state.shop.push(item); showToast('Added ' + v, function () { var i = state.shop.indexOf(item); if (i >= 0) state.shop.splice(i, 1); }); }
+      else { var td = [v, 'F', 'today', '', 0]; state.todos.push(td); showToast('Added ' + v, function () { var i = state.todos.indexOf(td); if (i >= 0) state.todos.splice(i, 1); }); }
+    }
+    else if (a === 'clear') {
+      var removed = state.shop.filter(function (s) { return s[3]; }); if (!removed.length) return;
+      state.shop = state.shop.filter(function (s) { return !s[3]; });
+      showToast('Cleared ' + removed.length + ' checked items', function () { state.shop = state.shop.concat(removed); });
+    }
+    else if (a === 'del') {
+      var id = t.dataset.id, isShop = id[0] === 's', idx = +id.slice(1), list = isShop ? state.shop : state.todos, gone = list[idx];
+      list.splice(idx, 1);
+      showToast('Deleted “' + (isShop ? gone[1] : gone[0]) + '”', function () { (isShop ? state.shop : state.todos).splice(idx, 0, gone); });
+    }
+    else if (a === 'closemeal') { state.meal = null; render(); }
+    else if (a === 'addings') { var n = t.dataset.n; state.meal = null; showToast('Added ' + n + ' items to Shopping'); }
+    else if (a === 'openday') { var d = +t.dataset.day; if (d >= 0) { state.dayIdx = d; state.screen = 'day'; render(); } }
+    else if (a === 'dprev') { state.dayIdx = Math.max(0, state.dayIdx - 1); render(); }
+    else if (a === 'dnext') { state.dayIdx = Math.min(14, state.dayIdx + 1); render(); }
+    else if (a === 'offinfo') { showToast('Offline since 3:02 \u00b7 showing what was last loaded \u00b7 changes will sync'); }
+    else if (a === 'gear') { state.screen = 'gear'; state.pin = 0; render(); }
+    else if (a === 'pin') { state.pin = Math.min(4, state.pin + 1); render(); }
+    else if (a === 'pindel') { state.pin = Math.max(0, state.pin - 1); render(); }
+    else if (a === 'pinclose' || a === 'wake') { state.screen = 'week'; state.pin = 0; render(); }
+  });
+
+  window.addEventListener('resize', fit);
+  render();
+})();
+</script>
+
+</body>
+</html>
