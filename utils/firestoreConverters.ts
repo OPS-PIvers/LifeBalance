@@ -64,7 +64,11 @@ import type {
   SavingsGoal,
   ActivityLogEntry,
   NotificationLogEntry,
+  WallDisplay,
+  WallEvent,
+  WallSettings,
 } from '@/types/schema';
+import { normalizeLayout, resolveWallSettings } from '@/utils/wall/wallSettings';
 
 // ---------------------------------------------------------------------------
 // Internal helper — strips one key from a typed object without the `as` cast.
@@ -614,5 +618,58 @@ export const todoConverter: FirestoreDataConverter<ToDo> = {
       category: d['category'] === null ? undefined : d['category'],
       linkedHabitId: d['linkedHabitId'] === null ? undefined : d['linkedHabitId'],
     } as ToDo;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Wall display (docs/plans/wall-display-kiosk.md §4.4). Server-written
+// timestamps arrive as Firestore Timestamps and are normalised to ISO; the
+// layout is normalised so a bad write can't break the wall.
+// ---------------------------------------------------------------------------
+const isoOrUndefined = (v: unknown): string | undefined =>
+  v instanceof Timestamp ? v.toDate().toISOString() : typeof v === 'string' ? v : undefined;
+
+export const wallDisplayConverter: FirestoreDataConverter<WallDisplay> = {
+  toFirestore(display: WallDisplay): DocumentData {
+    return omitKey(display, 'id');
+  },
+  fromFirestore(snapshot: QueryDocumentSnapshot): WallDisplay {
+    const d = snapshot.data();
+    const status = d['status'];
+    const display: WallDisplay = {
+      id: snapshot.id,
+      name: typeof d['name'] === 'string' ? d['name'] : 'Wall display',
+      status: status === 'active' || status === 'revoked' ? status : 'pending',
+      createdBy: typeof d['createdBy'] === 'string' ? d['createdBy'] : '',
+      createdAt: isoOrUndefined(d['createdAt']) ?? '',
+    };
+    const pairedAt = isoOrUndefined(d['pairedAt']);
+    const lastSeenAt = isoOrUndefined(d['lastSeenAt']);
+    const layout = normalizeLayout(d['layout']);
+    if (pairedAt) display.pairedAt = pairedAt;
+    if (lastSeenAt) display.lastSeenAt = lastSeenAt;
+    if (typeof d['appVersion'] === 'string') display.appVersion = d['appVersion'];
+    if (layout) display.layout = layout;
+    return display;
+  },
+};
+
+/** Single-doc settings: every field is defaulted by resolveWallSettings. */
+export const wallSettingsConverter: FirestoreDataConverter<WallSettings> = {
+  toFirestore(settings: WallSettings): DocumentData {
+    return { ...settings };
+  },
+  fromFirestore(snapshot: QueryDocumentSnapshot): WallSettings {
+    const d = snapshot.data();
+    return resolveWallSettings({ ...d, lastManualSyncAt: isoOrUndefined(d['lastManualSyncAt']) });
+  },
+};
+
+export const wallEventConverter: FirestoreDataConverter<WallEvent> = {
+  toFirestore(event: WallEvent): DocumentData {
+    return omitKey(event, 'id');
+  },
+  fromFirestore(snapshot: QueryDocumentSnapshot): WallEvent {
+    return { ...snapshot.data(), id: snapshot.id } as WallEvent;
   },
 };

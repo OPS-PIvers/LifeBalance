@@ -42,6 +42,8 @@ describe('HouseholdSetup — consent gate (Plan 011)', () => {
       setHouseholdId: vi.fn(),
       accessDeniedEmail: null,
       clearAccessError: vi.fn(),
+      isDisplay: false,
+      displayId: null,
     } as unknown as ReturnType<typeof useAuth>);
   });
 

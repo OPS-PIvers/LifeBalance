@@ -46,8 +46,8 @@
    `Permissions-Policy` change are deployed.
 3. GitHub → Actions → **Wall lab preview (Phase 0)** → Run workflow (on
    `main`). The run summary prints the lab URL.
-4. Firebase console → Authentication → Settings → **Authorized domains** →
-   add the preview domain from the summary (`lifebalance-26080--wall-lab-….web.app`).
+4. (Nothing to do for sign-in: the preview deploy adds its own domain to
+   Firebase Auth's authorized domains and removes it when the channel expires.)
 5. On the iPad, open the URL in Safari, sign in, then Share → **Add to Home
    Screen**. Open it from the Home Screen icon and sign in again (standalone
    apps have their own storage).

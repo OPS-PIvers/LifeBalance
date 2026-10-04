@@ -6,9 +6,8 @@ name: Wall lab preview (Phase 0)
 # in production, since preview channels share the project; the geminiproxy
 # audio-size guard ships with the normal deploy when this PR merges.
 #
-# One-time human step after the first run: add the printed
-# lifebalance-26080--wall-lab-*.web.app domain to Firebase Auth → Settings →
-# Authorized domains, or Google sign-in fails on the preview URL.
+# Sign-in works on the preview URL without setup: `hosting:channel:deploy`
+# adds the channel's domain to Firebase Auth's authorized domains itself.
 #
 # Delete this workflow with the lab route (Phase 6).
 
@@ -67,4 +66,3 @@ jobs:
           URL=$(node -e "const r=require('./channel.json').result; const site=Object.values(r)[0]; console.log(site.url)")
           echo "Lab URL: ${URL}/#/wall-lab"
           echo "### Wall lab: ${URL}/#/wall-lab" >> "$GITHUB_STEP_SUMMARY"
-          echo "Add \`${URL#https://}\` to Firebase Auth authorized domains if sign-in fails." >> "$GITHUB_STEP_SUMMARY"

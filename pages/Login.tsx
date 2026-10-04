@@ -184,6 +184,14 @@ const Login: React.FC = () => {
           <p className="text-sm text-brand-600 dark:text-brand-300">
             Track finances • Build habits • Earn rewards
           </p>
+          {/* Wall display setup (docs/plans/wall-display-kiosk.md §4.2): the
+              iPad's Home Screen app opens here first, before it's paired. */}
+          <a
+            href="#/wall/pair"
+            className="mt-4 inline-block text-sm text-brand-500 dark:text-brand-400 underline hover:text-accent-600 dark:hover:text-accent-300"
+          >
+            Set up a wall display
+          </a>
         </div>
       </div>
     </div>

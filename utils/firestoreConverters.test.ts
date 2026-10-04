@@ -38,6 +38,9 @@ import {
   transactionCommentConverter,
   todoConverter,
   savingsGoalConverter,
+  wallDisplayConverter,
+  wallSettingsConverter,
+  wallEventConverter,
 } from './firestoreConverters';
 
 /** Minimal fake QueryDocumentSnapshot for converter tests. */
@@ -1500,5 +1503,60 @@ describe('savingsGoalConverter', () => {
     expect(result.id).toBe('goal-4');
     expect(result.ownerId).toBeUndefined();
     expect(result.completedAt).toBeUndefined();
+  });
+});
+
+describe('wallDisplayConverter', () => {
+  it('normalises Timestamps, status and layout', () => {
+    const result = wallDisplayConverter.fromFirestore(
+      fakeSnap('d1', {
+        name: 'Kitchen iPad',
+        status: 'active',
+        createdBy: 'u1',
+        createdAt: Timestamp.fromDate(new Date('2026-10-03T20:00:00Z')),
+        lastSeenAt: '2026-10-03T21:00:00.000Z',
+        layout: { modules: ['shopping', 'nope'] },
+      })
+    );
+    expect(result).toEqual({
+      id: 'd1',
+      name: 'Kitchen iPad',
+      status: 'active',
+      createdBy: 'u1',
+      createdAt: '2026-10-03T20:00:00.000Z',
+      lastSeenAt: '2026-10-03T21:00:00.000Z',
+      layout: { modules: ['shopping'] },
+    });
+  });
+
+  it('defaults a partial doc to pending', () => {
+    const result = wallDisplayConverter.fromFirestore(fakeSnap('d2', { status: 'weird' }));
+    expect(result.status).toBe('pending');
+    expect(result.name).toBe('Wall display');
+    expect(result.layout).toBeUndefined();
+  });
+
+  it('toFirestore strips the id', () => {
+    const out = callToFirestore(wallDisplayConverter, { id: 'd1', name: 'x', status: 'active', createdBy: 'u', createdAt: '' });
+    expect(out).not.toHaveProperty('id');
+  });
+});
+
+describe('wallSettingsConverter', () => {
+  it('fills defaults and normalises lastManualSyncAt', () => {
+    const result = wallSettingsConverter.fromFirestore(
+      fakeSnap('config', { theme: 'dark', lastManualSyncAt: Timestamp.fromDate(new Date('2026-10-03T20:00:00Z')) })
+    );
+    expect(result.theme).toBe('dark');
+    expect(result.defaultModules).toEqual(['coming']);
+    expect(result.lastManualSyncAt).toBe('2026-10-03T20:00:00.000Z');
+  });
+});
+
+describe('wallEventConverter', () => {
+  it('injects id and strips it on write', () => {
+    const data = { source: 'feed', ownerKey: 'family', title: 'Soccer', allDay: false, date: '2026-10-03' };
+    expect(wallEventConverter.fromFirestore(fakeSnap('e1', data)).id).toBe('e1');
+    expect(callToFirestore(wallEventConverter, { id: 'e1', ...data })).not.toHaveProperty('id');
   });
 });

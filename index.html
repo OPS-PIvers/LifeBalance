@@ -126,6 +126,15 @@
                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                   // New content available, show refresh prompt
                   console.log('[App] New version available!');
+                  // A wall display (docs/plans/wall-display-kiosk.md §4.7) is
+                  // unattended: a confirm() would freeze it until someone taps.
+                  // It updates silently instead. Key matches utils/wall/wallDevice.ts.
+                  var isWall = false;
+                  try { isWall = localStorage.getItem('LB_WALL_DEVICE') === '1'; } catch (e) {}
+                  if (isWall) {
+                    newWorker.postMessage('skipWaiting');
+                    return;
+                  }
                   if (confirm('A new version is available! Reload to update?')) {
                     newWorker.postMessage('skipWaiting');
                     window.location.reload();
