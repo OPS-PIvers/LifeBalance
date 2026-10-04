@@ -75,7 +75,14 @@ async function testFeed(url: string, householdId: string): Promise<IcsFetchResul
     if (error instanceof FeedFetchError || error instanceof IcsParseError) {
       throw new HttpsError("failed-precondition", error.message);
     }
-    throw error;
+    // Anything else is our bug, not the link's: log it (never the URL, it's a
+    // credential) and answer with something the admin can act on instead of
+    // the callable's bare "internal".
+    logger.error("wall calendar: test fetch failed unexpectedly", { householdId, error: String(error) });
+    throw new HttpsError(
+      "failed-precondition",
+      "LifeBalance couldn't read that calendar. Check the link, and if it still fails, tell us which calendar app it's from."
+    );
   }
 }
 

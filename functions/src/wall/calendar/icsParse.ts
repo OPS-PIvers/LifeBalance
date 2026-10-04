@@ -52,6 +52,11 @@ export interface ExpandResult {
   rows: WallEventRow[];
   /** True when the row cap cut the feed short. */
   truncated: boolean;
+  /**
+   * Events or occurrences left out because ical.js couldn't read them (a
+   * malformed date, a broken override). One bad event never sinks the feed.
+   */
+  skipped: number;
 }
 
 export const MAX_ROWS_PER_FEED = 2000;
@@ -265,18 +270,26 @@ export function expandIcs(text: string, opts: ExpandOptions): ExpandResult {
   }
 
   // Group by UID: the master (no RECURRENCE-ID) plus its overrides.
+  // ical.js parses property values lazily, so a malformed date throws from a
+  // getter long after ICAL.parse succeeded. Every per-event step is guarded:
+  // a bad event is counted in `skipped` and the rest of the feed still syncs.
+  let skipped = 0;
   const masters = new Map<string, IcalEvent>();
   const overrides = new Map<string, IcalEvent[]>();
   for (const vevent of root.getAllSubcomponents("vevent")) {
     let event: IcalEvent;
+    let uid: string;
+    let isException: boolean;
     try {
       event = new ICAL.Event(vevent);
+      if (!event.startDate) continue;
+      uid = event.uid || eventRowId("nouid", vevent.toString());
+      isException = event.isRecurrenceException();
     } catch {
+      skipped++;
       continue;
     }
-    if (!event.startDate) continue;
-    const uid = event.uid || eventRowId("nouid", vevent.toString());
-    if (event.isRecurrenceException()) {
+    if (isException) {
       const list = overrides.get(uid) ?? [];
       list.push(event);
       overrides.set(uid, list);
@@ -315,16 +328,23 @@ export function expandIcs(text: string, opts: ExpandOptions): ExpandResult {
     }
     overrides.delete(uid);
 
-    if (!master.isRecurring()) {
-      const occ = { item: master, start: master.startDate, end: master.endDate ?? master.startDate, recurrenceKey: "" };
-      if (!push(rowsFor(occ, uid, opts, ctx))) break;
+    let iterator: ReturnType<IcalEvent["iterator"]> | null = null;
+    try {
+      if (master.isRecurring()) iterator = master.iterator();
+    } catch {
+      skipped++;
       continue;
     }
-
-    let iterator: ReturnType<IcalEvent["iterator"]>;
-    try {
-      iterator = master.iterator();
-    } catch {
+    if (!iterator) {
+      let single: WallEventRow[];
+      try {
+        const occ = { item: master, start: master.startDate, end: master.endDate ?? master.startDate, recurrenceKey: "" };
+        single = rowsFor(occ, uid, opts, ctx);
+      } catch {
+        skipped++;
+        continue;
+      }
+      if (!push(single)) break;
       continue;
     }
     for (let step = 0; step < MAX_SERIES_STEPS; step++) {
@@ -338,14 +358,21 @@ export function expandIcs(text: string, opts: ExpandOptions): ExpandResult {
       const key = dateOnly(next);
       if (key > limit) break;
       if (key < floor) continue;
-      const details = master.getOccurrenceDetails(next);
-      const occ: Occurrence = {
-        item: details.item,
-        start: details.startDate,
-        end: details.endDate ?? details.startDate,
-        recurrenceKey: details.recurrenceId.toString(),
-      };
-      if (!push(rowsFor(occ, uid, opts, ctx))) break outer;
+      let occRows: WallEventRow[];
+      try {
+        const details = master.getOccurrenceDetails(next);
+        const occ: Occurrence = {
+          item: details.item,
+          start: details.startDate,
+          end: details.endDate ?? details.startDate,
+          recurrenceKey: details.recurrenceId.toString(),
+        };
+        occRows = rowsFor(occ, uid, opts, ctx);
+      } catch {
+        skipped++;
+        continue;
+      }
+      if (!push(occRows)) break outer;
     }
   }
 
@@ -354,17 +381,24 @@ export function expandIcs(text: string, opts: ExpandOptions): ExpandResult {
   if (!truncated) {
     for (const [uid, list] of overrides) {
       for (const ex of list) {
-        const occ: Occurrence = {
-          item: ex,
-          start: ex.startDate,
-          end: ex.endDate ?? ex.startDate,
-          recurrenceKey: ex.recurrenceId?.toString() ?? "",
-        };
-        if (!push(rowsFor(occ, uid, opts, ctx))) break;
+        let exRows: WallEventRow[];
+        try {
+          const occ: Occurrence = {
+            item: ex,
+            start: ex.startDate,
+            end: ex.endDate ?? ex.startDate,
+            recurrenceKey: ex.recurrenceId?.toString() ?? "",
+          };
+          exRows = rowsFor(occ, uid, opts, ctx);
+        } catch {
+          skipped++;
+          continue;
+        }
+        if (!push(exRows)) break;
       }
     }
   }
 
   rows.sort((a, b) => (a.date === b.date ? (a.start ?? "").localeCompare(b.start ?? "") : a.date.localeCompare(b.date)));
-  return { rows, truncated };
+  return { rows, truncated, skipped };
 }
