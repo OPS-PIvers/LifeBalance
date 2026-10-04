@@ -23,6 +23,8 @@ export function wallTestFixtures(today = new Date()): {
   const events: WallEvent[] = [
     { id: 'fx1', source: 'feed', ownerKey: 'family', title: 'Farmers market', allDay: false, date: day(0), start: at(0, '09:00'), end: at(0, '10:00') },
     { id: 'fx2', source: 'feed', ownerKey: 'test-user-id', title: 'Haircut', allDay: false, date: day(0), start: at(0, '14:00'), end: at(0, '14:45') },
+    // Clashes with the haircut, so Day view shows side-by-side blocks.
+    { id: 'fx7', source: 'feed', ownerKey: 'family', title: 'Soccer practice', allDay: false, date: day(0), start: at(0, '13:30'), end: at(0, '15:00') },
     { id: 'fx3', source: 'feed', ownerKey: 'family', title: 'Dinner at Grandma’s', allDay: false, date: day(0), start: at(0, '17:00'), end: at(0, '19:00') },
     { id: 'fx4', source: 'bill', ownerKey: 'family', title: 'Water bill', allDay: true, date: day(1) },
     { id: 'fx5', source: 'feed', ownerKey: 'test-user-id', title: 'Dentist', allDay: false, date: day(1), start: at(1, '08:00'), end: at(1, '09:00') },
