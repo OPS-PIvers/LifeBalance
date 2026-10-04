@@ -188,6 +188,9 @@ async function syncFeed(
         const index = await writeRows(ctx, previous, expanded.rows);
         eventCount = expanded.rows.length;
         truncated = expanded.truncated;
+        if (expanded.skipped > 0) {
+          logger.warn("wall calendar: skipped unreadable events", { hid: ctx.hid, feedId, skipped: expanded.skipped });
+        }
         await secretRef.set(
           {
             eventIndex: JSON.stringify(index),

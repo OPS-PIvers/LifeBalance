@@ -220,6 +220,33 @@ describe("expandIcs", () => {
   });
 });
 
+describe("expandIcs with unreadable events", () => {
+  const good = ["BEGIN:VEVENT", "UID:ok", "DTSTART;VALUE=DATE:20261005", "SUMMARY:Dentist", "END:VEVENT"];
+
+  it("skips an event whose date can't be read and keeps the rest of the feed", () => {
+    const text = cal(
+      "BEGIN:VEVENT",
+      "UID:bad-date",
+      "DTSTART;VALUE=DATE:2026AB01",
+      "SUMMARY:Broken",
+      "END:VEVENT",
+      "BEGIN:VEVENT",
+      "UID:empty-date",
+      "DTSTART:",
+      "SUMMARY:Also broken",
+      "END:VEVENT",
+      ...good
+    );
+    const result = expandIcs(text, opts());
+    expect(result.rows.map((r) => r.title)).toEqual(["Dentist"]);
+    expect(result.skipped).toBe(2);
+  });
+
+  it("reports nothing skipped for a clean feed", () => {
+    expect(expandIcs(cal(...good), opts()).skipped).toBe(0);
+  });
+});
+
 describe("normalizeTzid", () => {
   it("handles IANA, vendor-prefixed, Windows and unknown names", () => {
     expect(normalizeTzid("America/Chicago")).toBe("America/Chicago");
