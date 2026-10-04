@@ -258,11 +258,13 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .dpw b { font-family: var(--font-display); font-size: 36px; font-weight: 500; color: var(--fg); }
 .wall .dps { display: flex; flex-direction: column; min-height: 0; padding: 0 28px; }
 .wall .dps.grow { flex: 0 1 auto; }
+/* The to-do list is the part that gives way: it shrinks and scrolls, and Dinner keeps its size below it. */
+.wall .dps:not(.grow) { flex: none; }
 .wall .dps + .dps { border-top: 1px solid var(--line); }
 .wall .dph { display: flex; align-items: center; justify-content: space-between; padding: 16px 0 6px; }
 .wall .dph b { font-family: var(--font-display); font-size: calc(var(--s) * 25px); font-weight: 600; }
 .wall .dpadd { display: inline-flex; align-items: center; gap: 6px; height: 46px; padding: 0 14px; border-radius: 9px; border: 1px solid var(--line-strong); font-size: 17px; font-weight: 600; color: var(--fg2); }
-.wall .dpl { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-bottom: 8px; }
+.wall .dpl { flex: 0 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-bottom: 8px; }
 .wall .dpl .ck { align-items: flex-start; padding: 8px 0; text-align: left; }
 .wall .dpl .ck .tx { flex: 1; min-width: 0; line-height: 1.25; }
 .wall .dpl .ck small { display: flex; align-items: center; font-size: calc(var(--s) * 16px); color: var(--muted); margin-top: 2px; }
