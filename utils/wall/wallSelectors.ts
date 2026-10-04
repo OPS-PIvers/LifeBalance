@@ -18,7 +18,8 @@ export function eventsOn(events: readonly WallEvent[], date: string): WallEvent[
     .filter(e => e.date === date)
     .sort((a, b) => {
       if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
-      return (a.start ?? '').localeCompare(b.start ?? '') || a.title.localeCompare(b.title);
+      // Instants, not strings: two feeds may write different UTC offsets.
+      return Date.parse(a.start ?? '') - Date.parse(b.start ?? '') || a.title.localeCompare(b.title);
     });
 }
 

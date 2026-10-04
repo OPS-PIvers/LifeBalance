@@ -454,6 +454,12 @@ enters the phone boot bundle:
 - **Voice:** `WallVoiceBanner`, `useWallVoice`.
 - **Weather:** `WallForecastSheet`.
 
+**As built (Phase 4):** the calendar screens live in `components/wall/calendar/` (`WallWeek`, `WallToday`, `WallModuleMenu`, `WallDay`, `WallMonth`, and `modules/{ComingUp,Shopping,Todos,Meals}Module`). The selectors are in `utils/wall/wallCalendar.ts` (`todayTimeline`, `dueTodayChecklist`, `groupComingUp`, `layoutDayBlocks`, `monthCells`), `utils/wall/wallModules.ts` (`switchModule`/`addModule`/`removeModule`, `suppressDuplicates`, `nextRotation`), `utils/wall/wallLists.ts` and `utils/wall/wallPeople.ts`. Notes:
+- Rotation never writes: a rotation step is local state keyed to the saved layout, so a phone change or a manual Switch replaces it. The gear's "Start/Stop rotating" overrides `settings.rotation.enabled` for this wall until reload.
+- The two-module split is a flex column: the top module takes its content height up to 60%, the bottom takes the rest.
+- Toasts go through one slot (`components/wall/wallToast.ts`): `run(write, text, undo)` shows the toast immediately (a queued offline write resolves late) and swaps in an error if the write fails.
+- Month shows the current month only (no paging); Day pages with arrows.
+
 **Pure selectors** go in `utils/wall/` and are unit-tested in the node project:
 - `groupComingUp(events, today, days=14)`
 - `todayTimeline(events, now)`: the past flag and where the now-line goes
@@ -499,7 +505,7 @@ prompt per launch is accepted.
 
 ## 5. Phone Settings: Settings → Wall display
 
-New `components/settings/WallDisplaySettings.tsx`, matching the prototype's "Phone settings" screen. **As built (Phases 1–3):** Displays; Calendars (Phase 3, `WallCalendarSettings.tsx`: feeds with owner chip and health line, add/edit/remove for admins, the holidays and bills toggles, and Sync now for everyone); Night & look (night hours, theme, text size, weather location) and "Back to calendar after". The week-layout modules/rotation and the voice line ship with the phases whose screens use them, so Settings never offers a control that does nothing yet:
+New `components/settings/WallDisplaySettings.tsx`, matching the prototype's "Phone settings" screen. **As built (Phases 1–3):** Displays; Calendars (Phase 3, `WallCalendarSettings.tsx`: feeds with owner chip and health line, add/edit/remove for admins, the holidays and bills toggles, and Sync now for everyone); Night & look (night hours, theme, text size, weather location) and "Back to calendar after". Week layout (starting modules, rotation and its interval, back to calendar after) shipped with Phase 4. The voice line ships with Phase 6, so Settings never offers a control that does nothing yet:
 
 1. **Displays** (admin):
    - A list with name, status, last seen (red after 30 min) and **Revoke**.

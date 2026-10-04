@@ -10,6 +10,10 @@ interface WallGearMenuProps {
   onReload: () => void;
   onUnpair: () => void;
   onSyncCalendars: () => Promise<{ failed: number }>;
+  /** The Week panel's auto-rotate, started or stopped for this wall. */
+  rotating: boolean;
+  rotationIntervalSec: number;
+  onToggleRotation: () => void;
 }
 
 const MAX_TRIES = 5;
@@ -19,7 +23,20 @@ const LOCKOUT_MS = 60_000;
  * The wall's only settings surface (plan §3): behind the family (Kid Mode)
  * PIN when one is set. Everything else is configured on the phone.
  */
-const WallGearMenu: React.FC<WallGearMenuProps> = ({ title, pinHash, isDisplay, onClose, onReload, onUnpair, onSyncCalendars }) => {
+const intervalText = (sec: number) => (sec < 60 ? `Every ${sec} s` : `Every ${sec / 60} min`);
+
+const WallGearMenu: React.FC<WallGearMenuProps> = ({
+  title,
+  pinHash,
+  isDisplay,
+  onClose,
+  onReload,
+  onUnpair,
+  onSyncCalendars,
+  rotating,
+  rotationIntervalSec,
+  onToggleRotation,
+}) => {
   const [unlocked, setUnlocked] = useState(!pinHash);
   const [digits, setDigits] = useState('');
   const [error, setError] = useState('');
@@ -109,6 +126,10 @@ const WallGearMenu: React.FC<WallGearMenuProps> = ({ title, pinHash, isDisplay, 
           <button type="button" disabled={syncing} onClick={() => void syncCalendars()}>
             <span>Sync calendars now</span>
             <span role="status">{syncNote}</span>
+          </button>
+          <button type="button" onClick={onToggleRotation}>
+            <span>{rotating ? 'Stop rotating the panel' : 'Start rotating the panel'}</span>
+            <span>{rotating ? 'Keeps the panel as it is' : intervalText(rotationIntervalSec)}</span>
           </button>
           <button type="button" className="danger" onClick={onUnpair}>
             <span>{isDisplay ? 'Unpair this iPad' : 'Leave the wall'}</span>

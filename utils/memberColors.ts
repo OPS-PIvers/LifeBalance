@@ -98,5 +98,27 @@ export const buildMemberColorMap = (members: readonly ColorableMember[]): Member
  * their attribution lives on) still gets a stable hashed color rather than a
  * blank, so a historical slice never disappears.
  */
-export const memberColorFor = (colors: MemberColorMap, uid: string): string =>
-  colors[uid] ?? pickAvatarColor(uid);
+export const memberColorFor = (
+  colors: MemberColorMap,
+  uid: string,
+  options: { scheme?: 'light' | 'dark' } = {}
+): string => {
+  const color = colors[uid] ?? pickAvatarColor(uid);
+  return options.scheme === 'dark' ? (DARK_MEMBER_COLORS[color.toLowerCase()] ?? color) : color;
+};
+
+/**
+ * Lighter twins of the sequence colors for dark surfaces (the wall's dark
+ * theme). Any other color (a stored or hashed pick) is used as is.
+ */
+const DARK_MEMBER_COLORS: Readonly<Record<string, string>> = {
+  '#285742': '#86b89c',
+  '#b87a29': '#d6a55e',
+  '#386695': '#8eaed6',
+  '#95525d': '#d29aa5',
+  '#197478': '#7cbfc1',
+  '#535695': '#a6a9dc',
+};
+
+/** "Family" (no single owner) in the wall's calendar and lists: a neutral, not a member color. */
+export const FAMILY_COLOR = { light: '#6e685d', dark: '#a8a399' } as const;

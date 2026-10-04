@@ -88,6 +88,16 @@ describe('memberColors — unknown uids', () => {
   });
 });
 
+describe('memberColors — dark scheme', () => {
+  it('lightens sequence colors for dark surfaces and passes others through', () => {
+    const colors = buildMemberColorMap([PAUL]);
+    expect(memberColorFor(colors, PAUL.uid)).toBe('#285742');
+    expect(memberColorFor(colors, PAUL.uid, { scheme: 'dark' })).toBe('#86b89c');
+    const odd = { x: '#123456' };
+    expect(memberColorFor(odd, 'x', { scheme: 'dark' })).toBe('#123456');
+  });
+});
+
 describe('memberColors — avatar-initial contrast (WCAG AA, both themes)', () => {
   // Every color either palette can ever hand to `MemberAvatar` — the adult
   // sequence (buildMemberColorMap step 2) and the hashed/legacy-mapped

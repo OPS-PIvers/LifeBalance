@@ -9,7 +9,15 @@ import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { requestDeleteConfirmation } from '@/components/ui/confirmDialogStore';
 import { wallDisplayConverter, wallSettingsConverter } from '@/utils/firestoreConverters';
-import { DEFAULT_WALL_SETTINGS, WALL_IDLE_RETURN_OPTIONS } from '@/utils/wall/wallSettings';
+import Select from '@/components/ui/Select';
+import { MODULE_TITLES } from '@/utils/wall/wallModules';
+import {
+  DEFAULT_WALL_SETTINGS,
+  WALL_IDLE_RETURN_OPTIONS,
+  WALL_MODULE_KEYS,
+  WALL_ROTATION_INTERVALS,
+  normalizeModules,
+} from '@/utils/wall/wallSettings';
 import {
   countdownText,
   formatPairingCode,
@@ -42,13 +50,15 @@ async function callable<Req, Res>(name: string, data: Req): Promise<Res> {
   return result;
 }
 
+/** Settings' two pickers → the stored list ('none' drops a slot). */
+const startingModules = (top: string, bottom: string) => normalizeModules(top === 'none' ? [] : [top, bottom]);
+
 const errorText = (e: unknown) => (e instanceof Error && e.message ? e.message : 'Something went wrong. Try again.');
 
 /**
  * Settings → Wall display (docs/plans/wall-display-kiosk.md §5): pair and
  * revoke displays (admins), calendar feeds, and the household's wall settings
- * (any member). The week-layout and voice settings arrive with the screens
- * they control.
+ * (any member). The voice setting arrives with voice commands.
  */
 const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, isAdmin, members }) => {
   const [displays, setDisplays] = useState<WallDisplay[]>([]);
@@ -138,6 +148,9 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
     }
   };
 
+  const topModule = settings.defaultModules[0] ?? 'none';
+  const bottomModule = settings.defaultModules[1] ?? 'none';
+
   const pendingLeft = pending ? countdownText(pending.expiresAt, now) : null;
   const pendingStillWaiting = pending && displays.some(d => d.id === pending.did && d.status === 'pending');
 
@@ -214,6 +227,86 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
 
       <WallCalendarSettings householdId={householdId} isAdmin={isAdmin} members={members} settings={settings} onSave={save} />
 
+      <Section title="Week layout">
+        <SurfaceList>
+          <Row className="flex-wrap">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Right side starts with</p>
+              <p className="text-xs text-brand-500 dark:text-brand-400">Each wall remembers its own changes</p>
+            </div>
+            <div className="flex gap-2">
+              <Select
+                aria-label="Top module"
+                value={topModule}
+                onChange={e => void save({ defaultModules: startingModules(e.target.value, bottomModule) })}
+              >
+                <option value="none">Nothing (Today only)</option>
+                {WALL_MODULE_KEYS.map(key => (
+                  <option key={key} value={key}>
+                    {MODULE_TITLES[key]}
+                  </option>
+                ))}
+              </Select>
+              {topModule !== 'none' && (
+                <Select
+                  aria-label="Bottom module"
+                  value={bottomModule}
+                  onChange={e => void save({ defaultModules: startingModules(topModule, e.target.value) })}
+                >
+                  <option value="none">Nothing below</option>
+                  {WALL_MODULE_KEYS.filter(key => key !== topModule).map(key => (
+                    <option key={key} value={key}>
+                      {MODULE_TITLES[key]}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </div>
+          </Row>
+          <Row className="flex-wrap">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Rotate the bottom module</p>
+              <p className="text-xs text-brand-500 dark:text-brand-400">Pauses when someone touches the wall</p>
+            </div>
+            <SegmentedControl
+              name="Rotate the bottom module"
+              size="sm"
+              options={[
+                { value: 'on', label: 'On' },
+                { value: 'off', label: 'Off' },
+              ]}
+              value={settings.rotation.enabled ? 'on' : 'off'}
+              onChange={v => void save({ rotation: { ...settings.rotation, enabled: v === 'on' } })}
+            />
+          </Row>
+          {settings.rotation.enabled && (
+            <Row className="flex-wrap">
+              <p className="flex-1 min-w-0 text-sm font-semibold text-brand-900 dark:text-brand-100">Each module stays for</p>
+              <SegmentedControl
+                name="Each module stays for"
+                size="sm"
+                options={WALL_ROTATION_INTERVALS.map(sec => ({ value: String(sec), label: sec < 60 ? `${sec} s` : `${sec / 60} min` }))}
+                value={String(settings.rotation.intervalSec)}
+                onChange={v => void save({ rotation: { ...settings.rotation, intervalSec: Number(v) } })}
+              />
+            </Row>
+          )}
+          <Row className="flex-wrap">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Back to calendar after</p>
+              <p className="text-xs text-brand-500 dark:text-brand-400">When nobody touches it</p>
+            </div>
+            <SegmentedControl
+              name="Back to calendar after"
+              size="sm"
+              options={WALL_IDLE_RETURN_OPTIONS.map(sec => ({ value: String(sec), label: `${sec / 60} min` }))}
+              value={String(settings.idleReturnSec)}
+              onChange={v => void save({ idleReturnSec: Number(v) })}
+            />
+          </Row>
+        </SurfaceList>
+      </Section>
+
       <Section title="Night & look">
         <SurfaceList>
           <Row className="flex-wrap">
@@ -260,19 +353,6 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
               ]}
               value={settings.textSize}
               onChange={textSize => void save({ textSize })}
-            />
-          </Row>
-          <Row className="flex-wrap">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Back to calendar after</p>
-              <p className="text-xs text-brand-500 dark:text-brand-400">When nobody touches it</p>
-            </div>
-            <SegmentedControl
-              name="Back to calendar after"
-              size="sm"
-              options={WALL_IDLE_RETURN_OPTIONS.map(sec => ({ value: String(sec), label: `${sec / 60} min` }))}
-              value={String(settings.idleReturnSec)}
-              onChange={v => void save({ idleReturnSec: Number(v) })}
             />
           </Row>
           <Row className="flex-col items-stretch gap-2">
