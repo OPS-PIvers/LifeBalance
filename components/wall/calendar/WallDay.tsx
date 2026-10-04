@@ -26,6 +26,8 @@ interface WallDayProps {
 const SPAN = DAY_END_HOUR - DAY_START_HOUR;
 const pct = (hours: number) => `${(hours / SPAN) * 100}%`;
 const hourLabel = (h: number) => `${h % 12 === 0 ? 12 : h % 12}${h < 12 ? 'a' : 'p'}`;
+/** Below this many hours a block is too short for two lines, so time and title share one. */
+const ONE_LINE_HOURS = 1.5;
 
 /** One mixed timeline, 7 am–10 pm, with an all-day strip (plan §3 "Day"). */
 const WallDay: React.FC<WallDayProps> = ({ date, today, now, timeZone, people, onDate }) => {
@@ -100,8 +102,8 @@ const WallDay: React.FC<WallDayProps> = ({ date, today, now, timeZone, people, o
             return (
               <div
                 key={b.event.id}
-                className={b.height < 1 ? 'blk short' : 'blk'}
-                style={{ top: pct(b.top), height: `calc(${pct(b.height)} - 4px)`, left, width, borderColor: color }}
+                className={b.height < ONE_LINE_HOURS ? 'blk short' : 'blk'}
+                style={{ top: pct(b.top), height: `calc(${pct(b.height)} - 4px)`, left, width, '--c': color } as React.CSSProperties}
               >
                 <span className="av" style={{ background: color }} aria-hidden="true">
                   {people.initial(b.event.ownerKey)}
