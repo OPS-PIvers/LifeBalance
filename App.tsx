@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, Suspense } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster, toast } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import { FirebaseHouseholdProvider } from './contexts/FirebaseHouseholdContext';
@@ -42,6 +42,43 @@ const WallPairing = React.lazy(() => import('./components/wall/WallPairing'));
 const WallLab = import.meta.env.VITE_WALL_LAB === 'true'
   ? React.lazy(() => import('./components/wall/lab/WallLab'))
   : null;
+
+/**
+ * The phone app's toasts and offline banner. The wall (#/wall) has its own
+ * toast slot and offline mark, and the shared mutation factories toast on the
+ * phone's behalf, so neither renders there.
+ */
+const PhoneChrome: React.FC = () => {
+  const { pathname } = useLocation();
+  if (pathname === '/wall' || pathname.startsWith('/wall/')) return null;
+  return (
+    <>
+      {/* react-hot-toast announces each toast via its own per-toast aria-live
+          region (default role="status", aria-live="polite"), so no outer
+          wrapper is needed — an extra region with aria-atomic would re-announce
+          every active toast on each new one. */}
+      <Toaster
+        position="top-center"
+        containerClassName="z-toast"
+        containerStyle={{
+          top: 'calc(env(safe-area-inset-top) + 1rem)',
+        }}
+        toastOptions={{
+          className: 'bg-brand-800 text-white font-medium rounded-btn shadow-raised',
+          success: {
+            iconTheme: {
+              // Evergreen accent-600, the app's primary action color.
+              primary: '#285742',
+              secondary: 'white',
+            },
+          },
+        }}
+      />
+      <ToastLimiter />
+      <OfflineBanner />
+    </>
+  );
+};
 
 const App: React.FC = () => {
   // Track notification permission state to react to changes
@@ -297,30 +334,8 @@ const App: React.FC = () => {
               </Routes>
             </Suspense>
 
-            {/* react-hot-toast announces each toast via its own per-toast aria-live
-                region (default role="status", aria-live="polite"), so no outer
-                wrapper is needed — an extra region with aria-atomic would re-announce
-                every active toast on each new one. */}
-            <Toaster
-              position="top-center"
-              containerClassName="z-toast"
-              containerStyle={{
-                top: 'calc(env(safe-area-inset-top) + 1rem)',
-              }}
-              toastOptions={{
-                className: 'bg-brand-800 text-white font-medium rounded-btn shadow-raised',
-                success: {
-                  iconTheme: {
-                    // Evergreen accent-600, the app's primary action color.
-                    primary: '#285742',
-                    secondary: 'white',
-                  },
-                },
-              }}
-            />
-            <ToastLimiter />
+            <PhoneChrome />
             <ConfirmDialogHost />
-            <OfflineBanner />
           </div>
         </HouseholdOrWallProvider>
       </AuthProviderComponent>

@@ -16,6 +16,7 @@ import {
   makeCompleteToDo,
   makeTodoCrudMutations,
   makeUncompleteToDo,
+  type MutationActor,
 } from '@/contexts/household/mutations/todoMutations';
 import {
   householdMemberConverter,
@@ -30,6 +31,7 @@ import type {
   Meal,
   MealPlanItem,
   ShoppingItem,
+  Store,
   ToDo,
   WallDisplay,
   WallEvent,
@@ -59,6 +61,7 @@ const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked
   const { householdId, displayId, user } = useAuth();
   const [householdName, setHouseholdName] = useState('');
   const [kidModePinHash, setKidModePinHash] = useState<string | undefined>(undefined);
+  const [stores, setStores] = useState<Store[]>([]);
   const [members, setMembers] = useState<HouseholdMember[]>([]);
   const [display, setDisplay] = useState<WallDisplay | null>(null);
   const [settings, setSettings] = useState<WallSettings>(DEFAULT_WALL_SETTINGS);
@@ -100,6 +103,7 @@ const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked
           const data = snap.data() ?? {};
           setHouseholdName(typeof data['name'] === 'string' ? data['name'] : '');
           setKidModePinHash(typeof data['kidModePinHash'] === 'string' ? data['kidModePinHash'] : undefined);
+          setStores(Array.isArray(data['stores']) ? (data['stores'] as Store[]) : []);
           mark('household');
         },
         logError('household')
@@ -191,20 +195,26 @@ const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked
     [shoppingList]
   );
 
+  // Writes are attributed to the display by name ("Kitchen iPad completed …").
+  const actor = useMemo<MutationActor | null>(
+    () => (user ? { uid: user.uid, displayName: display?.name ?? 'Wall display' } : null),
+    [user, display?.name]
+  );
+
   // The factories read members (kid points credit) through a ref-shaped box;
   // the callbacks rebuild it from current state when members change.
   const completeToDo = useCallback(async (id: string) => {
-    await makeCompleteToDo({ db, householdId, membersRef: { current: members }, user }).completeToDo(id);
-  }, [householdId, user, members]);
+    await makeCompleteToDo({ db, householdId, membersRef: { current: members }, user: actor }).completeToDo(id);
+  }, [householdId, actor, members]);
   const uncompleteToDo = useCallback(async (id: string) => {
-    await makeUncompleteToDo({ db, householdId, membersRef: { current: members }, user }).uncompleteToDo(id);
-  }, [householdId, user, members]);
+    await makeUncompleteToDo({ db, householdId, membersRef: { current: members }, user: actor }).uncompleteToDo(id);
+  }, [householdId, actor, members]);
 
   const actions = useMemo<WallDataActions>(() => {
     const shopping = makeShoppingListMutations({ db, householdId });
     const { toggleShoppingItemPurchased } = makeToggleShoppingItemPurchased({ db, householdId, shoppingList, groceryCatalog });
     const { clearPurchasedShoppingItems } = makeClearPurchasedShoppingItems({ db, householdId, shoppingList });
-    const { addToDo } = makeAddToDo({ db, householdId, user });
+    const { addToDo } = makeAddToDo({ db, householdId, user: actor });
     const { deleteToDo } = makeTodoCrudMutations({ db, householdId });
     return {
       addShoppingItem: item => shopping.addShoppingItem(item),
@@ -221,7 +231,7 @@ const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked
       },
       syncCalendarsNow: () => syncWallCalendarsNow(householdId ?? ''),
     };
-  }, [householdId, displayId, user, shoppingList, groceryCatalog, completeToDo, uncompleteToDo]);
+  }, [householdId, displayId, actor, shoppingList, groceryCatalog, completeToDo, uncompleteToDo]);
 
   const value = useMemo<WallData | null>(() => {
     if (!householdId) return null;
@@ -233,6 +243,7 @@ const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked
       displayId,
       display,
       members,
+      stores,
       wallEvents,
       todos,
       shoppingList: visibleShopping,
@@ -244,7 +255,7 @@ const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked
       ready: LISTENERS.every(key => delivered.has(key)),
       actions,
     };
-  }, [householdId, householdName, kidModePinHash, displayId, display, members, wallEvents, todos, visibleShopping, groceryCatalog, meals, mealPlan, settings, delivered, actions]);
+  }, [householdId, householdName, kidModePinHash, displayId, display, members, stores, wallEvents, todos, visibleShopping, groceryCatalog, meals, mealPlan, settings, delivered, actions]);
 
   if (!value) return null;
   return <WallDataContext.Provider value={value}>{children}</WallDataContext.Provider>;

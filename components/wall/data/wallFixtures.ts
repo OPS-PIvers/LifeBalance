@@ -1,5 +1,5 @@
 import { addDays, format } from 'date-fns';
-import type { WallEvent, WallSettings } from '@/types/schema';
+import type { Meal, MealPlanItem, WallEvent, WallSettings } from '@/types/schema';
 import { DEFAULT_WALL_SETTINGS } from '@/utils/wall/wallSettings';
 
 /**
@@ -7,7 +7,12 @@ import { DEFAULT_WALL_SETTINGS } from '@/utils/wall/wallSettings';
  * loaded behind `import.meta.env.DEV` + the Test Mode session flag, so
  * production builds tree-shake this module away.
  */
-export function wallTestFixtures(today = new Date()): { events: WallEvent[]; settings: WallSettings } {
+export function wallTestFixtures(today = new Date()): {
+  events: WallEvent[];
+  settings: WallSettings;
+  meals: Meal[];
+  mealPlan: MealPlanItem[];
+} {
   const day = (offset: number) => format(addDays(today, offset), 'yyyy-MM-dd');
   const at = (offset: number, hhmm: string) => {
     const [h, m] = hhmm.split(':').map(Number);
@@ -23,5 +28,20 @@ export function wallTestFixtures(today = new Date()): { events: WallEvent[]; set
     { id: 'fx5', source: 'feed', ownerKey: 'test-user-id', title: 'Dentist', allDay: false, date: day(1), start: at(1, '08:00'), end: at(1, '09:00') },
     { id: 'fx6', source: 'holiday', ownerKey: 'family', title: 'Columbus Day', allDay: true, date: day(2) },
   ];
-  return { events, settings: { ...DEFAULT_WALL_SETTINGS, weather: { lat: 44.97, lon: -93.59, label: 'Test City' } } };
+  // Test Mode's household seeds no meals, so the wall brings its own week.
+  const meals: Meal[] = [
+    {
+      id: 'fxm1',
+      name: 'Tacos',
+      tags: [],
+      ingredients: [{ name: 'Tortillas' }, { name: 'Ground beef', quantity: '1 lb' }, { name: 'Salsa' }],
+      instructions: ['Brown the beef with taco seasoning.', 'Warm the tortillas.'],
+    },
+  ];
+  const mealPlan: MealPlanItem[] = [
+    { id: 'fxp1', date: day(0), type: 'dinner', mealId: 'fxm1', mealName: 'Tacos', isCooked: false },
+    { id: 'fxp2', date: day(0), type: 'breakfast', mealName: 'Pancakes', isCooked: false },
+    { id: 'fxp3', date: day(1), type: 'dinner', mealName: 'Roast chicken', isCooked: false },
+  ];
+  return { events, meals, mealPlan, settings: { ...DEFAULT_WALL_SETTINGS, weather: { lat: 44.97, lon: -93.59, label: 'Test City' } } };
 }

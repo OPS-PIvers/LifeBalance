@@ -5,6 +5,7 @@ import type {
   Meal,
   MealPlanItem,
   ShoppingItem,
+  Store,
   ToDo,
   WallDisplay,
   WallEvent,
@@ -46,6 +47,8 @@ export interface WallData {
   /** This display's own doc (null in member preview). */
   display: WallDisplay | null;
   members: HouseholdMember[];
+  /** The household's stores, in their visit order (shopping groups). */
+  stores: Store[];
   wallEvents: WallEvent[];
   todos: ToDo[];
   shoppingList: ShoppingItem[];

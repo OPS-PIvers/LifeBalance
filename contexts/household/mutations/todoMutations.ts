@@ -42,6 +42,13 @@ import { mergeById, mapTodoDoc } from '@/contexts/household/selectors';
 import type { User } from 'firebase/auth';
 
 /**
+ * Who a to-do write is attributed to. Only the uid and name are read, so a
+ * wall display (custom-token identity, no Firebase profile name) can pass
+ * `{ uid, displayName: display.name }`.
+ */
+export type MutationActor = Pick<User, 'uid' | 'displayName'>;
+
+/**
  * A by-id subtask flip, applied to each mutation's OWN freshest read of the
  * subtasks array at commit time. Replaces the old "pass the whole computed
  * array" contract, which let a stale caller-supplied snapshot silently revert a
@@ -134,7 +141,7 @@ async function fireLinkedHabitInBatch(params: {
   householdId: string;
   todo: ToDo;
   direction: 'up' | 'down';
-  actor: User | null;
+  actor: MutationActor | null;
 }): Promise<string | null> {
   const { db, batch, householdId, todo, direction, actor } = params;
   const habitId = todo.linkedHabitId;
@@ -223,7 +230,7 @@ async function fireLinkedHabitInBatch(params: {
 export function makeAddToDo(deps: {
   db: Firestore;
   householdId: string | null;
-  user: User | null;
+  user: MutationActor | null;
 }) {
   const { db, householdId, user } = deps;
 
@@ -433,7 +440,7 @@ export function makeCompleteToDo(deps: {
   db: Firestore;
   householdId: string | null;
   membersRef: { current: HouseholdMember[] };
-  user?: User | null;
+  user?: MutationActor | null;
 }) {
   const { db, householdId, membersRef, user = null } = deps;
 
@@ -645,7 +652,7 @@ export function makeUncompleteToDo(deps: {
   db: Firestore;
   householdId: string | null;
   membersRef: { current: HouseholdMember[] };
-  user?: User | null;
+  user?: MutationActor | null;
 }) {
   const { db, householdId, membersRef, user = null } = deps;
 
@@ -804,7 +811,7 @@ export function makeToggleTodoSubtask(deps: {
   db: Firestore;
   householdId: string | null;
   membersRef: { current: HouseholdMember[] };
-  user?: User | null;
+  user?: MutationActor | null;
 }) {
   const { db, householdId, membersRef, user = null } = deps;
   const { completeToDo } = makeCompleteToDo({ db, householdId, membersRef, user });

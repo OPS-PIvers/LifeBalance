@@ -460,6 +460,13 @@ enters the phone boot bundle:
 - Toasts go through one slot (`components/wall/wallToast.ts`): `run(write, text, undo)` shows the toast immediately (a queued offline write resolves late) and swaps in an error if the write fails.
 - Month shows the current month only (no paging); Day pages with arrows.
 
+**As built (Phase 5):** the list screens live in `components/wall/lists/` (`WallShopping`, `WallTodos`, `WallMeals` + `WallRecipePanel`, `WallAddSheet`, `WallSwipeRow`). Every list write goes through `useWallListActions`, which calls `WallData.actions` (the app's mutation factories) and attaches an Undo. Notes:
+- **Undo:** check-off and complete are undone by the inverse action. A delete, or "Clear (n)", is undone by re-adding the same fields (as a new doc). An add is undone by deleting the items that appeared since, with the added names. A new doc's id isn't known until the server acknowledges it, but the local listener shows the pending write at once, offline included.
+- **Attribution:** the to-do factories take a `MutationActor` (`Pick<User, 'uid' | 'displayName'>`, a type-only narrowing). A display passes `{ uid, displayName: display.name }`, so its writes read "Kitchen iPad completed …".
+- **Phone chrome:** `App.tsx` no longer mounts the phone `Toaster`/`OfflineBanner` on `#/wall`. The shared factories toast on the phone's behalf, and the wall has its own toast slot and offline mark. Because of that, the factories that swallow their own errors (shopping add/delete) can't show the wall's error toast.
+- **Data:** `WallData` gained `stores`, which comes from the household doc and sets the store order. Test Mode seeds a meal week through `wallFixtures`, and the mock household's shopping check-off/clear now work in memory.
+- **Add sheet:** the mic button inside the field arrives with voice (Phase 6).
+
 **Pure selectors** go in `utils/wall/` and are unit-tested in the node project:
 - `groupComingUp(events, today, days=14)`
 - `todayTimeline(events, now)`: the past flag and where the now-line goes

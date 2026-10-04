@@ -21,6 +21,7 @@ export function makeWallData(spy: Spy, overrides: Partial<WallData> = {}): WallD
       { uid: 'p', displayName: 'Paul', role: 'admin' },
       { uid: 'l', displayName: 'Leo', role: 'member', isManaged: true },
     ] as HouseholdMember[],
+    stores: [],
     wallEvents: [],
     todos: [],
     shoppingList: [],

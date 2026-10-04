@@ -3524,6 +3524,16 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Shopping item deleted');
   }, [pushToTrash]);
 
+  // In-memory twins of the real check-off and clear-checked writes, so the
+  // shopping list (and the wall) can be walked in Test Mode.
+  const toggleShoppingItemPurchased = useCallback(async (id: string) => {
+    setShoppingList(prev => prev.map(s => (s.id === id ? { ...s, isPurchased: !s.isPurchased } : s)));
+  }, []);
+
+  const clearPurchasedShoppingItems = useCallback(async () => {
+    setShoppingList(prev => prev.filter(s => !s.isPurchased || s.savedForLater === true));
+  }, []);
+
   // F-CAPTURE-01 (Layer 3a): approve a held-for-review shopping capture —
   // apply any edited overrides AND clear needsReview in one in-memory update.
   const approveShoppingItem = useCallback(async (
@@ -4480,8 +4490,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     deleteShoppingItem,
     approveShoppingItem,
     setShoppingItemSavedForLater,
-    toggleShoppingItemPurchased: noOp,
-    clearPurchasedShoppingItems: noOp,
+    toggleShoppingItemPurchased,
+    clearPurchasedShoppingItems,
     addMealPlanItem: addMealPlan,
     updateMealPlanItem: updateMealPlan,
     deleteMealPlanItem: deleteMealPlan,
