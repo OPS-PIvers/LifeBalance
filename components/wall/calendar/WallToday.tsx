@@ -4,7 +4,7 @@ import { dueTodayChecklist, isMutedLine, todayTimeline } from '@/utils/wall/wall
 import { wallTimeText, zonedParts } from '@/utils/wall/wallTime';
 import type { WallPeople } from '@/utils/wall/wallPeople';
 import { useWallData } from '@/components/wall/data/wallData';
-import { useWallToaster } from '@/components/wall/wallToast';
+import { useWallListActions } from '@/components/wall/lists/useWallListActions';
 
 interface WallTodayProps {
   today: string;
@@ -20,18 +20,13 @@ interface WallTodayProps {
 
 /** The Week screen's left panel (plan §3 "Week"): events, Due today, dinner. */
 const WallToday: React.FC<WallTodayProps> = ({ today, now, timeZone, people, showDueToday, showDinner, solo, onAddModule }) => {
-  const { wallEvents, todos, mealPlan, actions } = useWallData();
-  const toaster = useWallToaster();
+  const { wallEvents, todos, mealPlan } = useWallData();
+  const act = useWallListActions();
   const timeline = useMemo(() => todayTimeline(wallEvents, today, now, timeZone), [wallEvents, today, now, timeZone]);
   const due = useMemo(() => (showDueToday ? dueTodayChecklist(todos, today, timeZone) : []), [showDueToday, todos, today, timeZone]);
   const dinner = showDinner ? mealPlan.find(m => m.date === today && m.type === 'dinner') : undefined;
   const p = zonedParts(now, timeZone);
   const empty = timeline.rows.length === 0 && timeline.allDay.length === 0;
-
-  const toggle = (id: string, done: boolean, text: string) => {
-    if (done) toaster.run(actions.uncompleteToDo(id), `Unchecked ${text}`, () => actions.completeToDo(id));
-    else toaster.run(actions.completeToDo(id), `Completed ${text}`, () => actions.uncompleteToDo(id));
-  };
 
   return (
     <section className="today" aria-label="Today">
@@ -82,7 +77,7 @@ const WallToday: React.FC<WallTodayProps> = ({ today, now, timeZone, people, sho
               type="button"
               className={t.isCompleted ? 'ck done' : 'ck'}
               aria-pressed={t.isCompleted}
-              onClick={() => toggle(t.id, t.isCompleted, t.text)}
+              onClick={() => act.toggleTodo(t)}
             >
               <span className="bx">{t.isCompleted && <Check className="wi" size="1em" aria-hidden="true" />}</span>
               <span className="tx">{t.text}</span>

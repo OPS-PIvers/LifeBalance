@@ -105,6 +105,43 @@ test.describe('Wall display shell (Test Mode)', () => {
     await expect(page.getByRole('group', { name: 'Calendar view' }).getByRole('button', { name: 'Day' })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  test('adds, checks off and undoes on the shopping list', async ({ page }) => {
+    await openWall(page, '15:15:00');
+    await page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: /Shopping/ }).click();
+    await expect(page.getByText('List is empty')).toBeVisible();
+    await page.getByRole('button', { name: 'Add', exact: true }).click();
+    const sheet = page.getByRole('dialog', { name: 'Add to Shopping' });
+    await sheet.getByLabel('Item').fill('Paper towels');
+    await sheet.getByLabel('Item').press('Enter');
+    await expect(sheet.getByLabel('Item')).toHaveValue('');
+    await sheet.getByRole('button', { name: 'Done' }).click();
+
+    const item = page.getByRole('button', { name: /Paper towels/ });
+    await expect(item).toBeVisible();
+    await item.click();
+    await expect(page.getByText('In the cart')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Clear (1)' })).toBeEnabled();
+    await page.getByRole('status').getByRole('button', { name: 'Undo' }).click();
+    await expect(page.getByText('In the cart')).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Clear (0)' })).toBeDisabled();
+  });
+
+  test('completes a kid’s to-do and opens a recipe', async ({ page }) => {
+    await openWall(page, '15:15:00');
+    const rail = page.getByRole('navigation', { name: 'Views' });
+    await rail.getByRole('button', { name: /To-dos/ }).click();
+    await page.getByRole('button', { name: /Make your bed/ }).click();
+    await expect(page.getByRole('status')).toContainText('Completed Make your bed');
+    await expect(page.getByRole('button', { name: /Make your bed/ })).toHaveAttribute('aria-pressed', 'true');
+
+    await rail.getByRole('button', { name: /Meals/ }).click();
+    await page.getByRole('button', { name: /Tacos/ }).click();
+    const recipe = page.getByRole('complementary', { name: 'Tacos recipe' });
+    await recipe.getByRole('button', { name: 'Add 3 missing to Shopping' }).click();
+    await expect(page.getByRole('status')).toContainText('Added 3 items to Shopping');
+    await expect(recipe.getByText('On the list')).toHaveCount(3);
+  });
+
   test('the gear menu leads back to the app', async ({ page }) => {
     await openWall(page, '15:15:00');
     await page.getByRole('button', { name: 'Display menu' }).click();

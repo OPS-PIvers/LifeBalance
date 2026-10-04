@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Plus } from 'lucide-react';
 import type { WallLayout, WallModuleKey } from '@/types/schema';
 import { firstEventOn, dueTodayTodos } from '@/utils/wall/wallSelectors';
 import { nextRotation } from '@/utils/wall/wallModules';
@@ -10,6 +11,11 @@ import { WallToastContext, useWallToastController } from './wallToast';
 import WallDay from './calendar/WallDay';
 import WallMonth from './calendar/WallMonth';
 import WallWeek from './calendar/WallWeek';
+import WallAddSheet, { type AddKind } from './lists/WallAddSheet';
+import WallMeals from './lists/WallMeals';
+import WallShopping from './lists/WallShopping';
+import WallTodos from './lists/WallTodos';
+import { useWallListActions } from './lists/useWallListActions';
 import WallForecastSheet from './WallForecastSheet';
 import WallGearMenu from './WallGearMenu';
 import WallNight from './WallNight';
@@ -25,12 +31,6 @@ const NOTES = {
   offline: "The wall can't reach the internet. It keeps showing what it last saw, and anything you change is saved and syncs when the connection is back.",
   voice: 'Voice commands are coming in a later update.',
 } as const;
-
-const SOON: Record<Exclude<WallView, 'calendar'>, { title: string; body: string }> = {
-  shopping: { title: 'Shopping', body: 'The shopping list arrives in the next update.' },
-  todos: { title: 'To-dos', body: 'To-dos arrive in the next update.' },
-  meals: { title: 'Meals', body: 'Meals arrive in the next update.' },
-};
 
 const CAL_VIEWS: { key: CalendarView; label: string }[] = [
   { key: 'day', label: 'Day' },
@@ -51,6 +51,8 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   const [calView, setCalView] = useState<CalendarView>('week');
   const [dayDate, setDayDate] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<Overlay>('none');
+  const [sheet, setSheet] = useState<AddKind | null>(null);
+  const [mealDate, setMealDate] = useState<string | null>(null);
   // Rotation: the gear can start/stop it on this wall; otherwise Settings decides.
   const [rotateOverride, setRotateOverride] = useState<boolean | null>(null);
   const [rotationPaused, setRotationPaused] = useState(false);
@@ -62,9 +64,12 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     setCalView('week');
     setDayDate(null);
     setOverlay('none');
+    setSheet(null);
+    setMealDate(null);
     setRotationPaused(false);
     dismiss();
   }, [dismiss]);
+  const listActions = useWallListActions(toaster);
   const runtime = useWallRuntime({
     settings: data.settings,
     householdId: data.householdId,
@@ -116,6 +121,34 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     setDayDate(date);
   };
 
+  const cartCount = data.shoppingList.filter(i => i.isPurchased).length;
+  let topRight: React.ReactNode = null;
+  if (view === 'calendar') {
+    topRight = (
+      <div className="seg" role="group" aria-label="Calendar view">
+        {CAL_VIEWS.map(v => (
+          <button key={v.key} type="button" aria-pressed={calView === v.key} onClick={() => goCalendar(v.key)}>
+            {v.label}
+          </button>
+        ))}
+      </div>
+    );
+  } else if (view === 'shopping' || view === 'todos') {
+    topRight = (
+      <>
+        <button type="button" className="btn pri" onClick={() => setSheet(view === 'shopping' ? 'shopping' : 'todo')}>
+          <Plus className="wi" size="1em" aria-hidden="true" />
+          Add
+        </button>
+        {view === 'shopping' && (
+          <button type="button" className="btn" disabled={cartCount === 0} onClick={listActions.clearCart}>
+            Clear ({cartCount})
+          </button>
+        )}
+      </>
+    );
+  }
+
   const className = ['wall', dark ? 'dark' : '', data.settings.textSize === 'large' ? 'large' : ''].filter(Boolean).join(' ');
 
   let body: React.ReactNode;
@@ -125,16 +158,12 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
         <p>Loading…</p>
       </section>
     );
-  } else if (view !== 'calendar') {
-    const soon = SOON[view];
-    body = (
-      <section className="soon" aria-label={soon.title}>
-        <div>
-          <h2>{soon.title}</h2>
-          <p>{soon.body}</p>
-        </div>
-      </section>
-    );
+  } else if (view === 'shopping') {
+    body = <WallShopping key={runtime.idleEpoch} />;
+  } else if (view === 'todos') {
+    body = <WallTodos key={runtime.idleEpoch} today={today} timeZone={runtime.timeZone} people={people} />;
+  } else if (view === 'meals') {
+    body = <WallMeals today={today} openDate={mealDate} onOpen={setMealDate} />;
   } else if (calView === 'day') {
     body = (
       <WallDay
@@ -160,6 +189,10 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
         layout={shownLayout}
         onLayout={changeLayout}
         onSeeMonth={() => goCalendar('month')}
+        onOpenMeal={date => {
+          setView('meals');
+          setMealDate(date);
+        }}
       />
     );
   }
@@ -173,6 +206,8 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
             if (v === 'calendar') goCalendar('week');
             else setView(v);
             setOverlay('none');
+            setSheet(null);
+            setMealDate(null);
           }}
           todoBadge={badge}
           offline={runtime.offline}
@@ -187,19 +222,10 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
             weather={runtime.weather}
             offline={runtime.offline}
             onWeather={() => setOverlay('weather')}
-            right={
-              view === 'calendar' ? (
-                <div className="seg" role="group" aria-label="Calendar view">
-                  {CAL_VIEWS.map(v => (
-                    <button key={v.key} type="button" aria-pressed={calView === v.key} onClick={() => goCalendar(v.key)}>
-                      {v.label}
-                    </button>
-                  ))}
-                </div>
-              ) : undefined
-            }
+            right={topRight}
           />
           {body}
+          {sheet && <WallAddSheet kind={sheet} today={today} people={people} onDone={() => setSheet(null)} />}
           {overlay === 'weather' && runtime.weather && (
             <WallForecastSheet weather={runtime.weather} place={data.settings.weather?.label} onClose={() => setOverlay('none')} />
           )}

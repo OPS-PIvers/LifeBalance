@@ -78,6 +78,11 @@ The wall still switches to its dim night clock on its own.
 - **On the wall:** each module's **Switch** and **×** change this wall's
   layout (it remembers it); remove both for a bigger Today-only screen.
   Rotation pauses when someone touches the wall and resumes once it's idle.
+- **Lists on the wall:** tap to check off or complete, swipe a row left for
+  Delete, **+ Add** for the entry sheet, **Clear (n)** for what's in the cart.
+  Every change shows an **Undo** for 10 seconds. A kid's to-do credits their
+  points exactly as on the phone, and Undo takes them back. Meals are
+  read-only: tap a dinner for its recipe and "Add N missing to Shopping".
 - **Gear button** (bottom of the wall's left rail): sync calendars now, start or stop rotating, reload, or unpair. It
   asks for the **family PIN** when one is set (Settings → Household → Wall
   display → Family PIN; it's the same PIN as Kid Mode's). Without a PIN,

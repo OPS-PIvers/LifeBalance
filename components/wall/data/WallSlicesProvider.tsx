@@ -4,7 +4,7 @@ import { db } from '@/firebase.config';
 import { useHouseholdCore, useMealPlan, useShopping, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { wallEventConverter, wallSettingsConverter } from '@/utils/firestoreConverters';
 import { DEFAULT_WALL_SETTINGS, effectiveLayout, normalizeLayout } from '@/utils/wall/wallSettings';
-import type { WallEvent, WallLayout, WallSettings } from '@/types/schema';
+import type { Meal, MealPlanItem, WallEvent, WallLayout, WallSettings } from '@/types/schema';
 import { syncWallCalendarsNow } from '@/components/wall/wallCalendarService';
 import { WallDataContext, type WallData, type WallDataActions } from './wallData';
 import { wallEventWindow } from './wallWindows';
@@ -35,6 +35,7 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [settings, setSettings] = useState<WallSettings>(DEFAULT_WALL_SETTINGS);
   const [wallEvents, setWallEvents] = useState<WallEvent[]>([]);
   const [extrasReady, setExtrasReady] = useState(false);
+  const [fixtureMeals, setFixtureMeals] = useState<{ meals: Meal[]; mealPlan: MealPlanItem[] } | null>(null);
   const [localLayout, setLocalLayout] = useState<WallLayout | undefined>(readLocalLayout);
 
   useEffect(() => {
@@ -52,6 +53,7 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const fx = wallTestFixtures();
         setWallEvents(fx.events);
         setSettings(fx.settings);
+        setFixtureMeals({ meals: fx.meals, mealPlan: fx.mealPlan });
         setExtrasReady(true);
       });
       return () => {
@@ -130,18 +132,19 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       displayId: null,
       display: null,
       members: core.members,
+      stores: core.household?.stores ?? [],
       wallEvents,
       todos: todoSlice.todos,
       shoppingList: shopping.shoppingList,
       groceryCatalog: shopping.groceryCatalog,
-      meals: mealSlice.meals,
-      mealPlan: mealSlice.mealPlan,
+      meals: fixtureMeals?.meals ?? mealSlice.meals,
+      mealPlan: fixtureMeals?.mealPlan ?? mealSlice.mealPlan,
       settings,
       layout: effectiveLayout(localLayout, settings),
       ready: !core.isLoading && extrasReady,
       actions,
     };
-  }, [householdId, core.household, core.members, core.isLoading, wallEvents, todoSlice.todos, shopping.shoppingList, shopping.groceryCatalog, mealSlice.meals, mealSlice.mealPlan, settings, localLayout, extrasReady, actions]);
+  }, [householdId, core.household, core.members, core.isLoading, wallEvents, todoSlice.todos, shopping.shoppingList, shopping.groceryCatalog, mealSlice.meals, mealSlice.mealPlan, fixtureMeals, settings, localLayout, extrasReady, actions]);
 
   if (!value) return null;
   return <WallDataContext.Provider value={value}>{children}</WallDataContext.Provider>;
