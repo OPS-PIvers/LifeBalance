@@ -138,35 +138,107 @@ describe('WallWeek', () => {
 });
 
 describe('WallDay', () => {
-  it('lays out the day with an all-day strip, side-by-side clashes and the now line', () => {
-    const day = [
-      ev('Practice', '2026-10-07', at('2026-10-07', '15:30'), at('2026-10-07', '17:00'), { ownerKey: 'l' }),
-      ev('Orthodontist', '2026-10-07', at('2026-10-07', '16:00'), at('2026-10-07', '17:00')),
-      ev('Phone bill', '2026-10-07', undefined, undefined, { source: 'bill', ownerKey: 'family' }),
-    ];
-    const value = makeWallData(vi.fn, { wallEvents: day });
-    const onDate = vi.fn();
-    const { container, rerender } = render(
+  const W = '2026-10-07';
+  const weather = {
+    fetchedAt: 0,
+    current: { temp: 54, icon: 'sun' as const },
+    high: 61,
+    low: 43,
+    blocks: [],
+    rainNote: null,
+    days: [{ date: W, high: 58, low: 40, icon: 'rain' as const, precipMax: 80 }],
+  };
+
+  function renderDay(date: string, data: Partial<WallData>) {
+    const value = makeWallData(vi.fn, data);
+    const props = { onDate: vi.fn(), onAddTodo: vi.fn(), onOpenMeal: vi.fn() };
+    const view = (d: string) => (
       <WallDataContext.Provider value={value}>
-        <WallDay date="2026-10-07" today={D} now={NOW} timeZone={TZ} people={makeWallPeople(value.members, false)} onDate={onDate} />
+        <ToastHost>
+          <WallDay date={d} today={D} now={NOW} timeZone={TZ} people={makeWallPeople(value.members, false)} weather={weather} {...props} />
+        </ToastHost>
       </WallDataContext.Provider>
     );
+    const utils = render(view(date));
+    return { ...utils, value, props, show: (d: string) => utils.rerender(view(d)) };
+  }
+
+  it('lays out the day with an all-day strip, side-by-side clashes and the now line', () => {
+    const day = [
+      ev('Practice', W, at(W, '15:30'), at(W, '17:00'), { ownerKey: 'l' }),
+      ev('Orthodontist', W, at(W, '16:00'), at(W, '17:00')),
+      ev('Phone bill', W, undefined, undefined, { source: 'bill', ownerKey: 'family' }),
+    ];
+    const { container, props, show } = renderDay(W, { wallEvents: day });
     expect(screen.getByText('Wednesday, October 7')).toBeInTheDocument();
     expect(screen.getByText('Phone bill')).toBeInTheDocument();
     expect(screen.getByText('3:30–5:00')).toBeInTheDocument();
     expect(container.querySelectorAll('.blk')).toHaveLength(2);
     expect(container.querySelector('.nowl')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Next day' }));
-    expect(onDate).toHaveBeenCalledWith('2026-10-08');
+    expect(props.onDate).toHaveBeenCalledWith('2026-10-08');
+    fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+    expect(props.onDate).toHaveBeenCalledWith(D);
 
-    rerender(
-      <WallDataContext.Provider value={value}>
-        <WallDay date={D} today={D} now={NOW} timeZone={TZ} people={makeWallPeople(value.members, false)} onDate={onDate} />
-      </WallDataContext.Provider>
-    );
-    expect(screen.getByText('Today')).toBeInTheDocument();
+    show(D);
+    expect(screen.getByText('Today', { selector: 'b' })).toBeInTheDocument();
+    // Already on today: no jump-back button.
+    expect(screen.queryByRole('button', { name: 'Today' })).toBeNull();
     expect(screen.getByText('No events')).toBeInTheDocument();
     expect(container.querySelector('.nowl')).not.toBeNull();
+    // Nothing all-day, so no strip.
+    expect(screen.queryByText('ALL DAY')).toBeNull();
+  });
+
+  it('folds a fourth clash into "+N more", and a tap lists everything at that time in full', () => {
+    const clash = ['Swim', 'Piano', 'Tutor', 'Dentist'].map((t, i) => ev(t, W, at(W, '16:00'), at(W, `17:${i}0`)));
+    const { container } = renderDay(W, { wallEvents: clash });
+    expect(container.querySelectorAll('.blk:not(.more)')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: '+2 more' }));
+    const sheet = screen.getByRole('dialog', { name: 'Events at the same time' });
+    expect(within(sheet).getByText('4:00–5:30 · 4 events')).toBeInTheDocument();
+    expect(within(sheet).getAllByRole('listitem').map(li => li.textContent)).toEqual([
+      expect.stringContaining('Dentist'),
+      expect.stringContaining('Tutor'),
+      expect.stringContaining('Piano'),
+      expect.stringContaining('Swim'),
+    ]);
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Dentist, Paul/ }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('shows the day panel: a later day’s forecast, its to-dos and its dinner', () => {
+    const dayTodos = [
+      { id: 'a', text: 'Pack lunches', completeByDate: W, isCompleted: false, assignedTo: 'l' },
+      { id: 'b', text: 'Not this day', completeByDate: D, isCompleted: false },
+    ] as ToDo[];
+    const plan = [{ id: 'm', date: W, type: 'dinner', mealName: 'Chili', isCooked: false }] as MealPlanItem[];
+    const { value, props } = renderDay(W, { todos: dayTodos, mealPlan: plan });
+    const panel = screen.getByRole('complementary', { name: 'This day' });
+    expect(within(panel).getByText('58°')).toBeInTheDocument();
+    expect(within(panel).getByText('L 40° · 80% rain')).toBeInTheDocument();
+    expect(within(panel).queryByText('Not this day')).toBeNull();
+    fireEvent.click(within(panel).getByRole('button', { name: /Pack lunches/ }));
+    expect(value.actions.completeToDo).toHaveBeenCalledWith('a');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Add' }));
+    expect(props.onAddTodo).toHaveBeenCalledWith(W);
+    fireEvent.click(within(panel).getByRole('button', { name: /Chili/ }));
+    expect(props.onOpenMeal).toHaveBeenCalledWith(W);
+  });
+
+  it('today’s panel lists overdue and due-today to-dos, skips the forecast, and a past day has no Add', () => {
+    const { show } = renderDay(D, { todos, mealPlan });
+    const panel = screen.getByRole('complementary', { name: 'This day' });
+    expect(within(panel).getByText('Due today')).toBeInTheDocument();
+    expect(within(panel).getByText('Return library books')).toBeInTheDocument();
+    expect(within(panel).getByText('Overdue')).toBeInTheDocument();
+    expect(within(panel).getByText('Tacos')).toBeInTheDocument();
+    expect(within(panel).queryByLabelText('Forecast')).toBeNull();
+    show('2026-10-01');
+    expect(within(screen.getByRole('complementary')).queryByRole('button', { name: 'Add' })).toBeNull();
+    expect(within(screen.getByRole('complementary')).getByText('Nothing planned')).toBeInTheDocument();
   });
 });
 

@@ -194,13 +194,19 @@ export interface DayBlock {
   /** Side-by-side placement within its overlap cluster. */
   col: number;
   cols: number;
+  /** Columns it covers: it widens into free columns to its right. */
+  span: number;
+  /** Index of its overlap cluster, so a tap can list everything happening alongside it. */
+  cluster: number;
 }
 
 /**
  * Timed events of one day placed on the 7 am–10 pm timeline. Overlapping
- * events form a cluster and sit side by side in the fewest columns. An event
- * partly outside the window is clipped at the edge (its label keeps the real
- * times); one entirely outside it is left to `outsideDayHours`.
+ * events form a cluster and sit side by side in the fewest columns; each then
+ * widens into any columns to its right that nothing else uses while it runs
+ * (so one long event beside two short ones isn't stuck at a third of the
+ * width). An event partly outside the window is clipped at the edge (its label
+ * keeps the real times); one entirely outside it is left to `outsideDayHours`.
  */
 export function layoutDayBlocks(events: readonly WallEvent[], date: string, timeZone?: string): DayBlock[] {
   const span = DAY_END_HOUR - DAY_START_HOUR;
@@ -220,6 +226,7 @@ export function layoutDayBlocks(events: readonly WallEvent[], date: string, time
   const blocks: DayBlock[] = [];
   let cluster: typeof timed = [];
   let clusterEnd = 0;
+  let clusterIndex = 0;
   const flush = () => {
     const colEnds: number[] = [];
     const placed = cluster.map(item => {
@@ -231,9 +238,13 @@ export function layoutDayBlocks(events: readonly WallEvent[], date: string, time
       colEnds[col] = item.top + item.height;
       return { item, col };
     });
+    const overlaps = (a: (typeof timed)[number], b: (typeof timed)[number]) => a.top < b.top + b.height && b.top < a.top + a.height;
     for (const { item, col } of placed) {
-      blocks.push({ event: item.event, top: item.top, height: item.height, col, cols: colEnds.length });
+      let width = 1;
+      while (col + width < colEnds.length && !placed.some(o => o.col === col + width && overlaps(o.item, item))) width++;
+      blocks.push({ event: item.event, top: item.top, height: item.height, col, cols: colEnds.length, span: width, cluster: clusterIndex });
     }
+    clusterIndex++;
     cluster = [];
   };
   for (const item of timed) {
@@ -243,6 +254,55 @@ export function layoutDayBlocks(events: readonly WallEvent[], date: string, time
   }
   if (cluster.length > 0) flush();
   return blocks;
+}
+
+/** Day view's stand-in for events that don't fit: "+N more" in the last column. */
+export interface DayOverflow {
+  top: number;
+  height: number;
+  col: number;
+  cols: number;
+  cluster: number;
+  events: WallEvent[];
+}
+
+/** Most events Day view draws side by side; past that, a column is narrower than a title. */
+export const DAY_MAX_COLS = 3;
+
+/**
+ * Caps a cluster at `max` columns. Every event that would land in the last
+ * column or beyond folds into "+N more" chips there, one per run of
+ * overlapping hidden events; the rest draw as usual, widening into the last
+ * column only while no chip sits there.
+ */
+export function capDayColumns(blocks: readonly DayBlock[], max = DAY_MAX_COLS): { blocks: DayBlock[]; more: DayOverflow[] } {
+  const kept: DayBlock[] = [];
+  const hidden = new Map<number, DayBlock[]>();
+  for (const b of blocks) {
+    if (b.cols <= max || b.col < max - 1) kept.push(b);
+    else hidden.set(b.cluster, [...(hidden.get(b.cluster) ?? []), b]);
+  }
+  const more: DayOverflow[] = [];
+  for (const [cluster, list] of hidden) {
+    const sorted = [...list].sort((a, b) => a.top - b.top);
+    let run: DayOverflow | null = null;
+    for (const b of sorted) {
+      if (run && b.top < run.top + run.height) {
+        run.height = Math.max(run.height, b.top + b.height - run.top);
+        run.events.push(b.event);
+      } else {
+        run = { top: b.top, height: b.height, col: max - 1, cols: max, cluster, events: [b.event] };
+        more.push(run);
+      }
+    }
+  }
+  const shown = kept.map(b => {
+    if (b.cols <= max) return b;
+    const chipAlongside = more.some(m => m.cluster === b.cluster && m.top < b.top + b.height && b.top < m.top + m.height);
+    const span = Math.min(b.span, (chipAlongside ? max - 1 : max) - b.col);
+    return { ...b, cols: max, span };
+  });
+  return { blocks: shown, more };
 }
 
 // ---------------------------------------------------------------------------

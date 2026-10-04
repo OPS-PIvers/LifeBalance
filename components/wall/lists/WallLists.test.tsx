@@ -194,6 +194,17 @@ describe('WallAddSheet', () => {
       text: 'Practice piano', completeByDate: '2026-10-04', isCompleted: false, source: 'manual', assignedTo: 'l',
     });
   });
+
+  it('starts on the day Day view was showing', () => {
+    const { unmount } = setup(<WallAddSheet kind="todo" today={D} people={people} dueDate="2026-10-04" onDone={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Tomorrow' })).toHaveAttribute('aria-pressed', 'true');
+    unmount();
+    const { value } = setup(<WallAddSheet kind="todo" today={D} people={people} dueDate="2026-10-09" onDone={vi.fn()} />);
+    expect(screen.getByText('Friday, October 9')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('To-do'), { target: { value: 'Pack for the trip' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(value.actions.addToDo).toHaveBeenCalledWith({ text: 'Pack for the trip', completeByDate: '2026-10-09', isCompleted: false, source: 'manual' });
+  });
 });
 
 describe('WallMeals', () => {
