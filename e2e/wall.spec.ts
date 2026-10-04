@@ -52,8 +52,8 @@ test.describe('Wall display shell (Test Mode)', () => {
   test('boots with the clock, weather and rail', async ({ page }) => {
     await openWall(page, '15:15:00');
     await expect(page.getByRole('banner').getByText('3:15')).toBeVisible();
-    await expect(page.getByText('Saturday')).toBeVisible();
-    await expect(page.getByText('October 3')).toBeVisible();
+    await expect(page.getByRole('banner').getByText('Saturday')).toBeVisible();
+    await expect(page.getByRole('banner').getByText('October 3')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Five-day forecast' })).toContainText('54°');
     await expect(page.getByText('Rain likely 6–8 pm')).toBeVisible();
     const rail = page.getByRole('navigation', { name: 'Views' });
@@ -81,6 +81,28 @@ test.describe('Wall display shell (Test Mode)', () => {
     await expect(night).toBeHidden();
     await page.clock.runFor(61 * 1000);
     await expect(page.getByRole('button', { name: 'Wake the display' })).toBeVisible();
+  });
+
+  test('shows the week, switches a module, and opens a day from the month', async ({ page }) => {
+    await openWall(page, '15:15:00');
+    const today = page.getByRole('region', { name: 'Today' });
+    await expect(today.getByText('Haircut')).toBeVisible();
+    await expect(today.getByText('Dinner at Grandma’s')).toBeVisible();
+    const coming = page.getByRole('region', { name: 'Coming up' });
+    await expect(coming.getByText('Dentist')).toBeVisible();
+    await expect(coming.getByText('Water bill')).toBeVisible();
+
+    await page.getByRole('button', { name: /Switch/ }).click();
+    await page.getByRole('dialog', { name: 'Panel shows' }).getByRole('button', { name: /To-dos/ }).click();
+    await expect(page.getByRole('region', { name: 'To-dos' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Coming up' })).toBeHidden();
+
+    await page.getByRole('group', { name: 'Calendar view' }).getByRole('button', { name: 'Month' }).click();
+    await page.getByRole('button', { name: 'Sunday, October 4' }).click();
+    await expect(page.getByText('Sunday, October 4')).toBeVisible();
+    await expect(page.getByText('Dentist')).toBeVisible();
+    await expect(page.getByText('Water bill')).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Calendar view' }).getByRole('button', { name: 'Day' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('the gear menu leads back to the app', async ({ page }) => {

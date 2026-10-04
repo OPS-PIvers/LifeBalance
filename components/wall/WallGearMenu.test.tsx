@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { hashKidPin } from '@/utils/kidPin';
 import WallGearMenu from './WallGearMenu';
 
-const props = { title: 'Kitchen iPad', isDisplay: true, onClose: vi.fn(), onReload: vi.fn(), onUnpair: vi.fn(), onSyncCalendars: vi.fn(async () => ({ failed: 0 })) };
+const props = { title: 'Kitchen iPad', isDisplay: true, onClose: vi.fn(), onReload: vi.fn(), onUnpair: vi.fn(), onSyncCalendars: vi.fn(async () => ({ failed: 0 })), rotating: false, rotationIntervalSec: 60, onToggleRotation: vi.fn() };
 
 function typePin(pin: string) {
   for (const d of pin) fireEvent.click(screen.getByRole('button', { name: d }));
@@ -46,5 +46,13 @@ describe('WallGearMenu', () => {
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent("1 calendar couldn't be read"));
     fireEvent.click(screen.getByRole('button', { name: /Sync calendars now/ }));
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('synced a moment ago'));
+  });
+
+  it('starts and stops the panel rotation', () => {
+    const { rerender } = render(<WallGearMenu {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: /Start rotating the panel.*Every 1 min/ }));
+    expect(props.onToggleRotation).toHaveBeenCalled();
+    rerender(<WallGearMenu {...props} rotating />);
+    expect(screen.getByRole('button', { name: /Stop rotating the panel/ })).toBeInTheDocument();
   });
 });

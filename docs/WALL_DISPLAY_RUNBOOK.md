@@ -72,9 +72,13 @@ The wall still switches to its dim night clock on its own.
 
 ## 6. Day to day
 
-- **Settings → Wall display** on any phone: night hours, light/dark, text
-  size, weather location, and "back to calendar after".
-- **Gear button** (bottom of the wall's left rail): sync calendars now, reload, or unpair. It
+- **Settings → Wall display** on any phone: which modules the week's right
+  side starts with, auto-rotate and its interval, "back to calendar after",
+  night hours, light/dark, text size and weather location.
+- **On the wall:** each module's **Switch** and **×** change this wall's
+  layout (it remembers it); remove both for a bigger Today-only screen.
+  Rotation pauses when someone touches the wall and resumes once it's idle.
+- **Gear button** (bottom of the wall's left rail): sync calendars now, start or stop rotating, reload, or unpair. It
   asks for the **family PIN** when one is set (Settings → Household → Wall
   display → Family PIN; it's the same PIN as Kid Mode's). Without a PIN,
   anyone at the wall can open it.
