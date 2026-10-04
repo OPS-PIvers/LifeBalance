@@ -15,6 +15,8 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_VAPID_KEY: string
   readonly VITE_ENABLE_TEST_MODE?: string
   readonly VITE_ADMIN_UID?: string
+  /** Wall display Phase 0 lab route; set only by .github/workflows/wall-lab-preview.yml. */
+  readonly VITE_WALL_LAB?: string
 }
 
 interface ImportMeta {
