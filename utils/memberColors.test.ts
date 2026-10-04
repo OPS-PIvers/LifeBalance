@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { AVATAR_COLORS } from '@/utils/avatarColor';
 import { AA_NORMAL_TEXT_CONTRAST, avatarTextColor, contrastRatio } from '@/utils/contrastColor';
 import {
+  DARK_MEMBER_COLORS,
   MEMBER_COLOR_SEQUENCE,
   buildMemberColorMap,
   isAdultMember,
@@ -95,6 +96,12 @@ describe('memberColors — dark scheme', () => {
     expect(memberColorFor(colors, PAUL.uid, { scheme: 'dark' })).toBe('#86b89c');
     const odd = { x: '#123456' };
     expect(memberColorFor(odd, 'x', { scheme: 'dark' })).toBe('#123456');
+  });
+
+  it('has a dark twin for every color a member can resolve to', () => {
+    for (const color of [...MEMBER_COLOR_SEQUENCE, ...AVATAR_COLORS]) {
+      expect(DARK_MEMBER_COLORS[color], color).toMatch(/^#[0-9a-f]{6}$/);
+    }
   });
 });
 

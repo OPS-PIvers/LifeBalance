@@ -165,6 +165,27 @@ export function groupComingUp(events: readonly WallEvent[], today: string, days 
 export const DAY_START_HOUR = 7;
 export const DAY_END_HOUR = 22;
 
+function eventHours(event: WallEvent, date: string, timeZone?: string): { startH: number; endH: number } {
+  const startH = zonedHours(event.start ?? '', timeZone);
+  let endH = event.end ? zonedHours(event.end, timeZone) : startH + 1;
+  if (event.end && zonedDateString(new Date(event.end), timeZone) !== date) endH = 24;
+  return { startH, endH };
+}
+
+function isOutsideDayHours(event: WallEvent, date: string, timeZone?: string): boolean {
+  const { startH, endH } = eventHours(event, date, timeZone);
+  return startH >= DAY_END_HOUR || endH <= DAY_START_HOUR;
+}
+
+/**
+ * Timed events that start and end outside 7 am–10 pm (an early flight, a late
+ * show): Day view lists them, with their times, in the all-day strip rather
+ * than drawing them at a slot that doesn't match.
+ */
+export function outsideDayHours(events: readonly WallEvent[], date: string, timeZone?: string): WallEvent[] {
+  return eventsOn(events, date).filter(e => !e.allDay && e.start && isOutsideDayHours(e, date, timeZone));
+}
+
 export interface DayBlock {
   event: WallEvent;
   /** Hours from DAY_START_HOUR, clamped to the visible range. */
@@ -177,18 +198,19 @@ export interface DayBlock {
 
 /**
  * Timed events of one day placed on the 7 am–10 pm timeline. Overlapping
- * events form a cluster and sit side by side in the fewest columns.
+ * events form a cluster and sit side by side in the fewest columns. An event
+ * partly outside the window is clipped at the edge (its label keeps the real
+ * times); one entirely outside it is left to `outsideDayHours`.
  */
 export function layoutDayBlocks(events: readonly WallEvent[], date: string, timeZone?: string): DayBlock[] {
   const span = DAY_END_HOUR - DAY_START_HOUR;
   const timed = eventsOn(events, date)
-    .filter(e => !e.allDay && e.start)
+    .filter(e => !e.allDay && e.start && !isOutsideDayHours(e, date, timeZone))
     .map(event => {
-      const startH = zonedHours(event.start ?? '', timeZone);
-      let endH = event.end ? zonedHours(event.end, timeZone) : startH + 1;
-      // Runs past midnight (or a zero/negative span): end of the visible day.
-      if (event.end && zonedDateString(new Date(event.end), timeZone) !== date) endH = 24;
-      if (endH <= startH) endH = startH + 0.5;
+      const hours = eventHours(event, date, timeZone);
+      const startH = hours.startH;
+      // A zero/negative span still gets a visible half hour.
+      const endH = hours.endH <= startH ? startH + 0.5 : hours.endH;
       const top = Math.min(Math.max(startH - DAY_START_HOUR, 0), span - 0.5);
       const bottom = Math.min(Math.max(endH - DAY_START_HOUR, top + 0.5), span);
       return { event, top, height: bottom - top };

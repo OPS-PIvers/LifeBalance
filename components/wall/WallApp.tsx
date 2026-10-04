@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { WallLayout } from '@/types/schema';
+import type { WallLayout, WallModuleKey } from '@/types/schema';
 import { firstEventOn, dueTodayTodos } from '@/utils/wall/wallSelectors';
 import { nextRotation } from '@/utils/wall/wallModules';
 import { makeWallPeople } from '@/utils/wall/wallPeople';
@@ -89,14 +89,18 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   useEffect(() => {
     shownRef.current = shownLayout;
   }, [shownLayout]);
-  const { defaultModules, rotation } = data.settings;
+  // Keyed by content: every settings snapshot rebuilds the array, and an
+  // unrelated settings change must not restart the rotation's timer.
+  const defaultsKey = data.settings.defaultModules.join(',');
+  const intervalSec = data.settings.rotation.intervalSec;
   useEffect(() => {
     if (!rotationLive) return undefined;
+    const defaults = defaultsKey ? (defaultsKey.split(',') as WallModuleKey[]) : [];
     const id = window.setInterval(() => {
-      setRotated({ from: savedKey, shown: nextRotation(shownRef.current, defaultModules) });
-    }, rotation.intervalSec * 1000);
+      setRotated({ from: savedKey, shown: nextRotation(shownRef.current, defaults) });
+    }, intervalSec * 1000);
     return () => window.clearInterval(id);
-  }, [rotationLive, savedKey, defaultModules, rotation.intervalSec]);
+  }, [rotationLive, savedKey, defaultsKey, intervalSec]);
 
   const changeLayout = (layout: WallLayout) => {
     setRotated(null);

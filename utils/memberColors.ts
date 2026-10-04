@@ -108,12 +108,16 @@ export const memberColorFor = (
 };
 
 /**
- * Lighter twins of the sequence colors for dark surfaces (the wall's dark
- * theme). Any other color (a stored or hashed pick) is used as is.
+ * Lighter twins for dark surfaces (the wall's dark theme), covering every
+ * color a member can resolve to: the adult sequence and the hashed avatar
+ * palette (utils/avatarColor.ts). A test pins that coverage.
  */
-const DARK_MEMBER_COLORS: Readonly<Record<string, string>> = {
+export const DARK_MEMBER_COLORS: Readonly<Record<string, string>> = {
   '#285742': '#86b89c',
   '#b87a29': '#d6a55e',
+  '#97611f': '#d9a75c',
+  '#33724c': '#8cc4a2',
+  '#9f5618': '#dd9a62',
   '#386695': '#8eaed6',
   '#95525d': '#d29aa5',
   '#197478': '#7cbfc1',

@@ -7,6 +7,7 @@ import {
   eventTimeText,
   layoutDayBlocks,
   longDateText,
+  outsideDayHours,
   zonedHours,
 } from '@/utils/wall/wallCalendar';
 import { dueTodayTodos, eventsOn } from '@/utils/wall/wallSelectors';
@@ -31,6 +32,7 @@ const WallDay: React.FC<WallDayProps> = ({ date, today, now, timeZone, people, o
   const { wallEvents, todos, mealPlan } = useWallData();
   const blocks = useMemo(() => layoutDayBlocks(wallEvents, date, timeZone), [wallEvents, date, timeZone]);
   const allDay = useMemo(() => eventsOn(wallEvents, date).filter(e => e.allDay), [wallEvents, date]);
+  const outside = useMemo(() => outsideDayHours(wallEvents, date, timeZone), [wallEvents, date, timeZone]);
   const due = useMemo(
     () => (date === today ? dueTodayTodos(todos, today) : todos.filter(t => !t.isCompleted && t.completeByDate === date)),
     [todos, date, today]
@@ -63,6 +65,12 @@ const WallDay: React.FC<WallDayProps> = ({ date, today, now, timeZone, people, o
                 <span className="dot" style={{ background: people.color(e.ownerKey) }} />
               )}
               {e.title}
+            </span>
+          ))}
+          {outside.map(e => (
+            <span key={e.id}>
+              <span className="dot" style={{ background: people.color(e.ownerKey) }} />
+              {eventTimeText(e.start, timeZone)} {e.title}
             </span>
           ))}
           {due.map(t => (

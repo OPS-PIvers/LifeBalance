@@ -8,6 +8,7 @@ import {
   layoutDayBlocks,
   longDateText,
   monthCells,
+  outsideDayHours,
   todayTimeline,
 } from './wallCalendar';
 
@@ -148,17 +149,18 @@ describe('layoutDayBlocks', () => {
     expect(byId['swim']).toMatchObject({ col: 0, cols: 1 });
   });
 
-  it('clamps early, late and overnight events into the visible range', () => {
-    const blocks = layoutDayBlocks(
-      [
-        ev('early', D, at(D, '05:00'), at(D, '08:00')),
-        ev('late', D, at(D, '21:30'), at('2026-10-08', '01:00')),
-      ],
-      D,
-      TZ
-    );
+  it('clips events that cross the edges and leaves fully-outside ones to the strip', () => {
+    const events = [
+      ev('early', D, at(D, '05:00'), at(D, '08:00')),
+      ev('late', D, at(D, '21:30'), at('2026-10-08', '01:00')),
+      ev('red-eye', D, at(D, '23:00'), at('2026-10-08', '02:00')),
+      ev('dawn run', D, at(D, '05:30'), at(D, '06:30')),
+    ];
+    const blocks = layoutDayBlocks(events, D, TZ);
+    expect(blocks.map(b => b.event.id)).toEqual(['early', 'late']);
     expect(blocks[0]).toMatchObject({ top: 0, height: 1 });
     expect(blocks[1]).toMatchObject({ top: 14.5, height: 0.5 });
+    expect(outsideDayHours(events, D, TZ).map(e => e.id)).toEqual(['dawn run', 'red-eye']);
   });
 });
 
