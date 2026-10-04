@@ -69,6 +69,8 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   const [dayDate, setDayDate] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<Overlay>('none');
   const [sheet, setSheet] = useState<AddKind | null>(null);
+  // Day view adds a to-do for the day it shows.
+  const [sheetDate, setSheetDate] = useState<string | undefined>(undefined);
   const [mealDate, setMealDate] = useState<string | null>(null);
   // Rotation: the gear can start/stop it on this wall; otherwise Settings decides.
   const [rotateOverride, setRotateOverride] = useState<boolean | null>(null);
@@ -174,6 +176,11 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     setDayDate(date);
   };
 
+  const openMeal = (date: string) => {
+    setView('meals');
+    setMealDate(date);
+  };
+
   const cartCount = data.shoppingList.filter(i => i.isPurchased).length;
   let topRight: React.ReactNode = null;
   if (view === 'calendar') {
@@ -189,7 +196,14 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   } else if (view === 'shopping' || view === 'todos') {
     topRight = (
       <>
-        <button type="button" className="btn pri" onClick={() => setSheet(view === 'shopping' ? 'shopping' : 'todo')}>
+        <button
+          type="button"
+          className="btn pri"
+          onClick={() => {
+            setSheetDate(undefined);
+            setSheet(view === 'shopping' ? 'shopping' : 'todo');
+          }}
+        >
           <Plus className="wi" size="1em" aria-hidden="true" />
           Add
         </button>
@@ -225,7 +239,13 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
         now={runtime.now}
         timeZone={runtime.timeZone}
         people={people}
+        weather={runtime.weather}
         onDate={setDayDate}
+        onAddTodo={date => {
+          setSheetDate(date);
+          setSheet('todo');
+        }}
+        onOpenMeal={openMeal}
       />
     );
   } else if (calView === 'month') {
@@ -242,10 +262,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
         layout={shownLayout}
         onLayout={changeLayout}
         onSeeMonth={() => goCalendar('month')}
-        onOpenMeal={date => {
-          setView('meals');
-          setMealDate(date);
-        }}
+        onOpenMeal={openMeal}
       />
     );
   }
@@ -284,7 +301,11 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
               kind={sheet}
               today={today}
               people={people}
-              onDone={() => setSheet(null)}
+              {...(sheetDate ? { dueDate: sheetDate } : {})}
+              onDone={() => {
+                setSheet(null);
+                setSheetDate(undefined);
+              }}
               {...(voice.available ? { onVoice: startVoice } : {})}
             />
           )}

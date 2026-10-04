@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ToDo, WallEvent } from '@/types/schema';
 import {
   addDaysTo,
+  capDayColumns,
   dueTodayChecklist,
   eventTimeText,
   groupComingUp,
@@ -161,6 +162,61 @@ describe('layoutDayBlocks', () => {
     expect(blocks[0]).toMatchObject({ top: 0, height: 1 });
     expect(blocks[1]).toMatchObject({ top: 14.5, height: 0.5 });
     expect(outsideDayHours(events, D, TZ).map(e => e.id)).toEqual(['dawn run', 'red-eye']);
+  });
+
+  it('widens a block into columns that are free while it runs', () => {
+    const blocks = layoutDayBlocks(
+      [
+        ev('long', D, at(D, '09:00'), at(D, '12:00')),
+        ev('hour', D, at(D, '09:00'), at(D, '10:00')),
+        ev('half', D, at(D, '09:00'), at(D, '09:30')),
+        ev('after', D, at(D, '10:00'), at(D, '11:00')),
+        ev('later', D, at(D, '15:00'), at(D, '16:00')),
+      ],
+      D,
+      TZ
+    );
+    const byId = Object.fromEntries(blocks.map(b => [b.event.id, b]));
+    expect(byId['long']).toMatchObject({ col: 0, cols: 3, span: 1, cluster: 0 });
+    expect(byId['hour']).toMatchObject({ col: 1, span: 1 });
+    expect(byId['half']).toMatchObject({ col: 2, span: 1 });
+    // "half" is over by 10:00, so "after" takes the rest of the row.
+    expect(byId['after']).toMatchObject({ col: 1, cols: 3, span: 2 });
+    expect(byId['later']).toMatchObject({ col: 0, cols: 1, span: 1, cluster: 1 });
+  });
+});
+
+describe('capDayColumns', () => {
+  const D = '2026-10-07';
+
+  it('leaves clusters of up to three columns alone', () => {
+    const blocks = layoutDayBlocks([ev('a', D, at(D, '09:00'), at(D, '10:00')), ev('b', D, at(D, '09:00'), at(D, '10:00'))], D, TZ);
+    expect(capDayColumns(blocks)).toEqual({ blocks, more: [] });
+  });
+
+  it('folds the fourth column and beyond into "+N more"', () => {
+    const five = ['a', 'b', 'c', 'd', 'e'].map(id => ev(id, D, at(D, '09:00'), at(D, '10:00')));
+    const { blocks, more } = capDayColumns(layoutDayBlocks(five, D, TZ));
+    expect(blocks.map(b => [b.event.id, b.col, b.cols, b.span])).toEqual([
+      ['a', 0, 3, 1],
+      ['b', 1, 3, 1],
+    ]);
+    expect(more).toHaveLength(1);
+    expect(more[0]).toMatchObject({ top: 2, height: 1, col: 2, cols: 3 });
+    expect(more[0]?.events.map(e => e.id)).toEqual(['c', 'd', 'e']);
+  });
+
+  it('lets a block use the last column where no chip sits', () => {
+    const events = [
+      ev('long', D, at(D, '09:00'), at(D, '13:00')),
+      ...['x', 'y', 'z'].map(id => ev(id, D, at(D, '09:00'), at(D, '10:00'))),
+      ev('late', D, at(D, '11:00'), at(D, '12:00')),
+    ];
+    const { blocks, more } = capDayColumns(layoutDayBlocks(events, D, TZ));
+    const byId = Object.fromEntries(blocks.map(b => [b.event.id, b]));
+    expect(byId['x']).toMatchObject({ col: 1, span: 1 });
+    expect(byId['late']).toMatchObject({ col: 1, cols: 3, span: 2 });
+    expect(more.map(m => m.events.map(e => e.id))).toEqual([['y', 'z']]);
   });
 });
 

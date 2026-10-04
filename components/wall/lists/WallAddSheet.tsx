@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Mic, Plus } from 'lucide-react';
 import { NO_STORE, catalogSuggestions, dueDateFor, newShoppingItem, type DueChoice } from '@/utils/wall/wallLists';
+import { addDaysTo, longDateText } from '@/utils/wall/wallCalendar';
 import type { WallPeople } from '@/utils/wall/wallPeople';
 import { useWallData } from '@/components/wall/data/wallData';
 import { useWallListActions } from './useWallListActions';
@@ -12,6 +13,8 @@ interface WallAddSheetProps {
   today: string;
   people: WallPeople;
   onDone: () => void;
+  /** A to-do's starting due date (Day view adds for the day it shows). Defaults to today. */
+  dueDate?: string;
   /** "Speak instead": closes the sheet and starts listening. Absent when voice is off. */
   onVoice?: () => void;
 }
@@ -28,15 +31,17 @@ const DUE: { key: DueChoice; label: string }[] = [
  * until Done. Shopping offers grocery-catalog suggestions and store chips;
  * to-dos offer For and Due chips.
  */
-const WallAddSheet: React.FC<WallAddSheetProps> = ({ kind, today, people, onDone, onVoice }) => {
+const WallAddSheet: React.FC<WallAddSheetProps> = ({ kind, today, people, onDone, dueDate, onVoice }) => {
   const { groceryCatalog, stores } = useWallData();
   const act = useWallListActions();
   const [text, setText] = useState('');
   // null = the catalog's usual store (or none).
   const [store, setStore] = useState<string | null>(null);
   const [assignee, setAssignee] = useState('family');
-  const [due, setDue] = useState<DueChoice | 'date'>('today');
-  const [date, setDate] = useState(today);
+  const [due, setDue] = useState<DueChoice | 'date'>(() =>
+    !dueDate || dueDate === today ? 'today' : dueDate === addDaysTo(today, 1) ? 'tomorrow' : 'date'
+  );
+  const [date, setDate] = useState(dueDate ?? today);
   const suggestions = useMemo(
     () => (kind === 'shopping' ? catalogSuggestions(groceryCatalog, text) : []),
     [kind, groceryCatalog, text]
@@ -140,7 +145,7 @@ const WallAddSheet: React.FC<WallAddSheetProps> = ({ kind, today, people, onDone
                 </button>
               ))}
               <label className={due === 'date' ? 'pchip on' : 'pchip'}>
-                <span>Pick a date</span>
+                <span>{due === 'date' ? longDateText(date) : 'Pick a date'}</span>
                 <input
                   type="date"
                   aria-label="Due date"

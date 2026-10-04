@@ -103,11 +103,13 @@ merging each wall PR.
     - Sticky day headers, scrolling, a "See the month →" link at the end.
     - Scroll snaps back to the top after 3 min idle.
   - Bills and days off show as **muted lines with a receipt or flag icon**.
-- **Day:** **one mixed timeline**, 7 am–10 pm.
-  - Each block has a colored left edge and a filled initial avatar.
-  - Overlaps sit side by side.
-  - An all-day strip holds bills, days off, to-dos due and dinner.
-  - There is no lanes toggle.
+- **Day:** **one mixed timeline**, 7 am–10 pm, beside a **panel for that day** (not the Week modules).
+  - Each block is a card tinted in its owner's color, with a colored left edge and a filled initial avatar. Title comes first; under 1.5 h, title and time share one line.
+  - Overlaps sit side by side and widen into columns that are free while they run. Past three columns, the rest fold into a "+N more" chip.
+  - Tapping any block or chip lists everything in that overlap, in full (time, title, person).
+  - The all-day strip holds only all-day events, bills, days off and events outside 7 am–10 pm, and hides when empty.
+  - The panel: the forecast for a later day (today's is in the top bar), that day's to-dos as checkboxes with **+ Add** for that date (not on past days), and its dinner (tap opens it in Meals).
+  - There is no lanes toggle and no module menu.
 - **Month:** up to 3 lines a day, then "+N more". Tapping a day opens Day view.
 
 ### Lists and meals
