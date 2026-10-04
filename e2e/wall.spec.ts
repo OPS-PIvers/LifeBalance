@@ -6,7 +6,9 @@ import { test, expect, type Page } from '@playwright/test';
  * wall on WallSlicesProvider + Test Mode fixtures, so no Firebase is needed.
  * Open-Meteo is stubbed; the browser clock is pinned to 3:15 pm.
  */
-test.use({ viewport: { width: 1366, height: 1024 }, isMobile: false, hasTouch: true });
+// serviceWorkers: 'block' — once the app's SW registers (it does in CI), its
+// fetches bypass page.route and the Open-Meteo stub below would be skipped.
+test.use({ viewport: { width: 1366, height: 1024 }, isMobile: false, hasTouch: true, serviceWorkers: 'block' });
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const DAY = '2026-10-03';
