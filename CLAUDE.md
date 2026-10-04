@@ -322,11 +322,12 @@ See [LINT_SUPPRESSIONS.md](LINT_SUPPRESSIONS.md) for:
 
 ## Wall Display
 
-A wall-mounted iPad runs the app at `#/wall` (plan: [docs/plans/wall-display-kiosk.md](docs/plans/wall-display-kiosk.md); setup: [docs/WALL_DISPLAY_RUNBOOK.md](docs/WALL_DISPLAY_RUNBOOK.md)). Three things to know before touching auth, rules or providers:
+A wall-mounted iPad runs the app at `#/wall` (plan: [docs/plans/wall-display-kiosk.md](docs/plans/wall-display-kiosk.md); setup: [docs/WALL_DISPLAY_RUNBOOK.md](docs/WALL_DISPLAY_RUNBOOK.md)). Four things to know before touching auth, rules, providers or the calendar sync:
 
 - **A paired display is NOT a member.** It signs in with a custom token as uid `display_{did}`, claims `{display, hid, did}` (`functions/src/wall/pairing.ts`). It has no `members/{uid}` doc and never an `admin` claim. `AuthContext` exposes `isDisplay`/`displayId` and skips the household lookup and the Private Alpha guard for it.
 - **`firestore.rules` grants it a narrow allowlist** through `isDisplayOf(hid)` / `isMemberOrDisplayOf(hid)`, which also requires `displays/{did}.status == 'active'` (so revoking is immediate). Never add `isDisplayOf` to the catch-all subcollection rule, and add any new wall collection to the catch-all write-exclusion list. The allow/deny matrix is in `tests/rules/firestore.rules.test.ts` ("wall display identity").
 - **`FirebaseHouseholdProvider` must never mount for a display**: it attaches finance listeners the display can't read. `HouseholdOrWallProvider` swaps in `WallFirestoreProvider` instead. Wall components read only `useWallData()` (`components/wall/data/wallData.ts`), which a member's `#/wall` preview and Test Mode serve through `WallSlicesProvider`. Pure wall logic (time, weather, night, idle, settings) lives in `utils/wall/`.
+- **Wall calendars are server-projected.** `functions/src/wall/calendar/` syncs ICS feeds (ical.js), unpaid bills (title + date only, never amounts) and US holidays into `wallEvents`, which clients only read. A feed's URL is a credential: it lives in `calendarFeedSecrets` (no client access), is never returned or logged, and is changed only through the `*wallcalendarfeed` callables. Each row set keeps an `id → hash` index on its secret doc, so an unchanged feed costs no `wallEvents` reads; keep writes going through `writeRows` in `sync.ts`.
 
 ## Test Mode for AI Coding Agents
 

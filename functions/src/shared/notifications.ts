@@ -193,7 +193,8 @@ export interface NotificationLogContext {
     | "budget_alert"
     | "weekly_recap"
     | "monthly_money_recap"
-    | "todo_reminder";
+    | "todo_reminder"
+    | "calendar_feed_stale";
 }
 
 /**

@@ -1967,7 +1967,8 @@ export type NotificationLogType =
   | 'budget_alert'
   | 'weekly_recap'
   | 'monthly_money_recap'
-  | 'todo_reminder';
+  | 'todo_reminder'
+  | 'calendar_feed_stale';
 
 /**
  * In-app notification inbox entry (F-NOTIF-02) — one doc per push sent, at
@@ -2129,6 +2130,31 @@ export interface WallSettings {
   /** IANA zone the wall's clock, night window and calendar use. */
   timeZone?: string;
   lastManualSyncAt?: string; // ISO
+}
+
+/**
+ * `households/{hid}/calendarFeeds/{id}`: a calendar the wall shows. Written by
+ * Cloud Functions only. The link itself is a credential and lives in the
+ * server-only `calendarFeedSecrets/{id}`, never here.
+ */
+export interface WallCalendarFeed {
+  id: string;
+  label: string;
+  /** A member uid or 'family'. */
+  ownerKey: string;
+  /** 'holidays' is the built-in US holidays feed, managed by `holidaysEnabled`. */
+  kind: 'ics' | 'holidays';
+  createdBy: string;
+  createdAt?: string; // ISO
+  lastSyncAt?: string; // ISO
+  lastSuccessAt?: string; // ISO
+  /** Why the last sync failed, worded for the admin. */
+  lastError?: string;
+  eventCount: number;
+  /** No successful sync for a day; admins were told once. */
+  stale: boolean;
+  /** More occurrences than the per-feed cap; the furthest ones were dropped. */
+  truncated?: boolean;
 }
 
 /** `households/{hid}/wallEvents/{id}`: server-written calendar lines (Phase 3). */

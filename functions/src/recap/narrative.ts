@@ -12,7 +12,7 @@ import { RecapMemberFacts, WeeklyRecap } from "./types";
  * there is nothing to import; the recap engine picks its own model since it
  * calls Gemini directly rather than through the client-forwarding proxy.
  */
-export const RECAP_GEMINI_MODEL = "gemini-3.1-flash-lite";
+export const RECAP_GEMINI_MODEL = "gemini-3.5-flash-lite";
 
 const NARRATIVE_TIMEOUT_MS = 30_000;
 

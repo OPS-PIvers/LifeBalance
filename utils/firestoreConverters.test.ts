@@ -41,6 +41,7 @@ import {
   wallDisplayConverter,
   wallSettingsConverter,
   wallEventConverter,
+  wallCalendarFeedConverter,
 } from './firestoreConverters';
 
 /** Minimal fake QueryDocumentSnapshot for converter tests. */
@@ -1558,5 +1559,29 @@ describe('wallEventConverter', () => {
     const data = { source: 'feed', ownerKey: 'family', title: 'Soccer', allDay: false, date: '2026-10-03' };
     expect(wallEventConverter.fromFirestore(fakeSnap('e1', data)).id).toBe('e1');
     expect(callToFirestore(wallEventConverter, { id: 'e1', ...data })).not.toHaveProperty('id');
+  });
+});
+
+describe('wallCalendarFeedConverter', () => {
+  it('normalises timestamps and defaults a partial doc', () => {
+    const feed = wallCalendarFeedConverter.fromFirestore(
+      fakeSnap('f1', {
+        label: 'School',
+        ownerKey: 'u1',
+        kind: 'ics',
+        lastSuccessAt: Timestamp.fromDate(new Date('2026-10-03T20:00:00Z')),
+        lastError: 'Gone',
+        stale: true,
+      })
+    );
+    expect(feed).toMatchObject({ id: 'f1', label: 'School', ownerKey: 'u1', kind: 'ics', eventCount: 0, stale: true, lastError: 'Gone' });
+    expect(feed.lastSuccessAt).toBe('2026-10-03T20:00:00.000Z');
+    expect(wallCalendarFeedConverter.fromFirestore(fakeSnap('holidays', { kind: 'holidays' }))).toMatchObject({
+      label: 'Calendar',
+      ownerKey: 'family',
+      kind: 'holidays',
+      stale: false,
+    });
+    expect(callToFirestore(wallCalendarFeedConverter, feed)).not.toHaveProperty('id');
   });
 });

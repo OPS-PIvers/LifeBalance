@@ -8,7 +8,7 @@ import { DailyBriefingSummary } from "./dataAssembly";
  * changing the model happens in a single place. functions/ has no Vite env, so
  * this is a plain constant.
  */
-export const DAILY_BRIEFING_GEMINI_MODEL = "gemini-3.1-flash-lite";
+export const DAILY_BRIEFING_GEMINI_MODEL = "gemini-3.5-flash-lite";
 
 const NARRATIVE_TIMEOUT_MS = 20_000;
 

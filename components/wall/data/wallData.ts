@@ -32,6 +32,8 @@ export interface WallDataActions {
   deleteToDo: (id: string) => Promise<void>;
   /** Saves this wall's panel layout (per display; per device for a member preview). */
   setLayout: (layout: WallLayout) => Promise<void>;
+  /** Re-syncs the household's calendar feeds and bills now (server-throttled to once per 2 min). */
+  syncCalendarsNow: () => Promise<{ failed: number }>;
 }
 
 export interface WallData {

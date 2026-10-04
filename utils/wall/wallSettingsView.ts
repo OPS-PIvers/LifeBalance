@@ -55,3 +55,32 @@ export function parseGeocode(raw: unknown): GeocodeResult[] {
     return [{ label: parts.filter(Boolean).join(', '), lat: latitude, lon: longitude }];
   });
 }
+
+function agoText(iso: string, now: number): string {
+  const min = Math.max(0, Math.round((now - new Date(iso).getTime()) / 60_000));
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  const hours = Math.round(min / 60);
+  return hours < 48 ? `${hours} h ago` : `${Math.round(hours / 24)} days ago`;
+}
+
+export interface FeedStatus {
+  text: string;
+  tone: 'ok' | 'error' | 'stale';
+}
+
+/** The status line under a calendar in Settings → Wall display → Calendars. */
+export function feedStatus(
+  feed: { lastSyncAt?: string; lastSuccessAt?: string; createdAt?: string; lastError?: string; eventCount: number; stale: boolean; truncated?: boolean },
+  now: number
+): FeedStatus {
+  if (feed.stale) {
+    const since = feed.lastSuccessAt ?? feed.createdAt;
+    const when = since ? new Date(since).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'it was added';
+    return { text: `Hasn't updated since ${when} · re-paste the link`, tone: 'stale' };
+  }
+  if (feed.lastError) return { text: feed.lastError, tone: 'error' };
+  if (!feed.lastSyncAt) return { text: 'Waiting for its first sync', tone: 'ok' };
+  const count = `${feed.eventCount} ${feed.eventCount === 1 ? 'event' : 'events'}${feed.truncated ? ' (showing the nearest)' : ''}`;
+  return { text: `${count} · synced ${agoText(feed.lastSuccessAt ?? feed.lastSyncAt, now)}`, tone: 'ok' };
+}

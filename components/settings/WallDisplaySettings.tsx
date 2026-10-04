@@ -18,11 +18,13 @@ import {
   parseGeocode,
   type GeocodeResult,
 } from '@/utils/wall/wallSettingsView';
-import type { WallDisplay, WallSettings } from '@/types/schema';
+import type { HouseholdMember, WallDisplay, WallSettings } from '@/types/schema';
+import WallCalendarSettings from './WallCalendarSettings';
 
 interface WallDisplaySettingsProps {
   householdId: string;
   isAdmin: boolean;
+  members: HouseholdMember[];
 }
 
 interface PendingCode {
@@ -44,11 +46,11 @@ const errorText = (e: unknown) => (e instanceof Error && e.message ? e.message :
 
 /**
  * Settings → Wall display (docs/plans/wall-display-kiosk.md §5): pair and
- * revoke displays (admins), and the household's wall settings (any member).
- * Calendar feeds arrive with the calendar sync; the week-layout and voice
- * settings arrive with the screens they control.
+ * revoke displays (admins), calendar feeds, and the household's wall settings
+ * (any member). The week-layout and voice settings arrive with the screens
+ * they control.
  */
-const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, isAdmin }) => {
+const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, isAdmin, members }) => {
   const [displays, setDisplays] = useState<WallDisplay[]>([]);
   const [settings, setSettings] = useState<WallSettings>(DEFAULT_WALL_SETTINGS);
   const [now, setNow] = useState(() => Date.now());
@@ -209,6 +211,8 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
           </div>
         )}
       </Section>
+
+      <WallCalendarSettings householdId={householdId} isAdmin={isAdmin} members={members} settings={settings} onSave={save} />
 
       <Section title="Night & look">
         <SurfaceList>

@@ -1513,7 +1513,7 @@ const Settings: React.FC = () => {
     shortcuts: shortcutsBody,
     wall: (
       <Suspense fallback={null}>
-        <WallDisplaySettings householdId={householdId || ''} isAdmin={currentUser?.role === 'admin'} />
+        <WallDisplaySettings householdId={householdId || ''} isAdmin={currentUser?.role === 'admin'} members={members} />
       </Suspense>
     ),
     data: dataBody,

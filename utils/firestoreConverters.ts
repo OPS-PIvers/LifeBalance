@@ -64,6 +64,7 @@ import type {
   SavingsGoal,
   ActivityLogEntry,
   NotificationLogEntry,
+  WallCalendarFeed,
   WallDisplay,
   WallEvent,
   WallSettings,
@@ -662,6 +663,33 @@ export const wallSettingsConverter: FirestoreDataConverter<WallSettings> = {
   fromFirestore(snapshot: QueryDocumentSnapshot): WallSettings {
     const d = snapshot.data();
     return resolveWallSettings({ ...d, lastManualSyncAt: isoOrUndefined(d['lastManualSyncAt']) });
+  },
+};
+
+export const wallCalendarFeedConverter: FirestoreDataConverter<WallCalendarFeed> = {
+  toFirestore(feed: WallCalendarFeed): DocumentData {
+    return omitKey(feed, 'id');
+  },
+  fromFirestore(snapshot: QueryDocumentSnapshot): WallCalendarFeed {
+    const d = snapshot.data();
+    const feed: WallCalendarFeed = {
+      id: snapshot.id,
+      label: typeof d['label'] === 'string' ? d['label'] : 'Calendar',
+      ownerKey: typeof d['ownerKey'] === 'string' ? d['ownerKey'] : 'family',
+      kind: d['kind'] === 'holidays' ? 'holidays' : 'ics',
+      createdBy: typeof d['createdBy'] === 'string' ? d['createdBy'] : '',
+      eventCount: typeof d['eventCount'] === 'number' ? d['eventCount'] : 0,
+      stale: d['stale'] === true,
+    };
+    const createdAt = isoOrUndefined(d['createdAt']);
+    const lastSyncAt = isoOrUndefined(d['lastSyncAt']);
+    const lastSuccessAt = isoOrUndefined(d['lastSuccessAt']);
+    if (createdAt) feed.createdAt = createdAt;
+    if (lastSyncAt) feed.lastSyncAt = lastSyncAt;
+    if (lastSuccessAt) feed.lastSuccessAt = lastSuccessAt;
+    if (typeof d['lastError'] === 'string') feed.lastError = d['lastError'];
+    if (d['truncated'] === true) feed.truncated = true;
+    return feed;
   },
 };
 

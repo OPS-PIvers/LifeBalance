@@ -117,6 +117,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
           onClose={() => setOverlay('none')}
           onReload={() => window.location.reload()}
           onUnpair={onLeave}
+          onSyncCalendars={data.actions.syncCalendarsNow}
         />
       )}
       {runtime.nightShowing && overlay !== 'gear' && (

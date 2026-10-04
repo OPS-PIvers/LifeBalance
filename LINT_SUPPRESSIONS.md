@@ -105,3 +105,7 @@ The following rules have been globally adjusted in `eslint.config.js` to align w
     skipped-memoization consequence does not apply here.
     **Remove when:** TanStack/virtual#1119 is resolved upstream. **Revisit if:** React Compiler is
     adopted — the warning becomes real then and needs a `'use no memo'` fix, not a disable.
+5.  **`skipLibCheck: true` in `functions/tsconfig.json`**: matches the root `tsconfig.json`. Added for
+    `ical.js@2.2.1`, whose shipped declarations fail to compile on their own (`vcard_time.d.ts` overrides
+    the `Time.icaltype` accessor with a property, TS2610). It skips checking `.d.ts` files only; our own
+    sources are still checked in full.
