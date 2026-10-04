@@ -72,9 +72,10 @@ export function keywordMatchesText(keyword: string, text: string): boolean {
   // letter/number immediately before the match start, and none immediately
   // after the match end. This preserves the existing ASCII semantics
   // ("target" still doesn't match "targeted") while also handling
-  // accented/non-Latin keywords.
+  // accented/non-Latin keywords. The "before" side consumes the preceding
+  // character instead of using a lookbehind, which Safari < 16.4 rejects.
   const escaped = escapeRegExp(trimmed);
-  const wordBoundary = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu');
+  const wordBoundary = new RegExp(`(?:^|[^\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu');
   return wordBoundary.test(text);
 }
 
