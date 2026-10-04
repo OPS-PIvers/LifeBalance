@@ -2684,6 +2684,8 @@ describe('wall display identity', () => {
       await assertSucceeds(getDocs(collection(db, 'households', H1, 'wallEvents')));
       await assertSucceeds(getDocs(collection(db, 'households', H1, 'calendarFeeds')));
       await assertSucceeds(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { theme: 'dark', textSize: 'large' }));
+      await assertSucceeds(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { voice: 'audio' }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { voice: 'x'.repeat(11) }));
       await assertSucceeds(getDocs(collection(db, 'households', H1, 'mealPlan')));
       await assertSucceeds(setDoc(doc(db, 'households', H1, 'mealPlan', 'p3'), { date: '2026-10-05', mealId: 'm1' }));
     });

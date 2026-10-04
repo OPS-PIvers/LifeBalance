@@ -18,11 +18,14 @@ interface WallRailProps {
   todoBadge: number;
   offline: OfflineLevel;
   onOfflineInfo: () => void;
-  onMic: () => void;
+  /** Absent when voice is off in Settings or this browser can't listen. */
+  onMic?: () => void;
+  /** The mic is listening. */
+  micLive: boolean;
   onGear: () => void;
 }
 
-const WallRail: React.FC<WallRailProps> = ({ view, onView, todoBadge, offline, onOfflineInfo, onMic, onGear }) => (
+const WallRail: React.FC<WallRailProps> = ({ view, onView, todoBadge, offline, onOfflineInfo, onMic, micLive, onGear }) => (
   <nav className="rail" aria-label="Views">
     {ITEMS.map(({ view: v, label, Icon }) => (
       <button key={v} type="button" className="nav" aria-current={v === view ? 'page' : undefined} onClick={() => onView(v)}>
@@ -38,10 +41,11 @@ const WallRail: React.FC<WallRailProps> = ({ view, onView, todoBadge, offline, o
         Offline
       </button>
     )}
-    {/* Voice ships in Phase 6; until then the button explains itself. */}
-    <button type="button" className="mic" aria-disabled="true" aria-label="Voice commands (coming soon)" onClick={onMic}>
-      <Mic className="wi" size="1em" strokeWidth={1.75} aria-hidden="true" />
-    </button>
+    {onMic && (
+      <button type="button" className={micLive ? 'mic live' : 'mic'} aria-label="Voice command" aria-pressed={micLive} onClick={onMic}>
+        <Mic className="wi" size="1em" strokeWidth={1.75} aria-hidden="true" />
+      </button>
+    )}
     <button type="button" className="gear" aria-label="Display menu" onClick={onGear}>
       <SlidersHorizontal className="wi" size="1em" strokeWidth={1.75} aria-hidden="true" />
     </button>

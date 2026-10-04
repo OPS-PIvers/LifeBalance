@@ -74,13 +74,14 @@ const adminMock = vi.hoisted(() => {
   );
   const householdRef = { get: householdGet };
   const configRef = { get: configGet };
+  const displayRef = { kind: "display" };
   const db = {
     doc: vi.fn((path: string) =>
-      path === "app_config/global" ? configRef : householdRef
+      path === "app_config/global" ? configRef : path.includes("/displays/") ? displayRef : householdRef
     ),
     runTransaction,
   };
-  return { db, householdGet, configGet, txnGet, txnUpdate, runTransaction };
+  return { db, householdGet, configGet, txnGet, txnUpdate, runTransaction, displayRef };
 });
 
 vi.mock("firebase-admin", () => ({
@@ -121,10 +122,14 @@ function snap(data: Record<string, unknown> | undefined) {
   return { exists: data !== undefined, data: () => data };
 }
 
+let displayDoc: Record<string, unknown> | undefined;
+
 /** Configure the mock household doc for both the direct read and the txn read. */
 function setHousehold(data: Record<string, unknown> | undefined) {
   adminMock.householdGet.mockResolvedValue(snap(data));
-  adminMock.txnGet.mockResolvedValue(snap(data));
+  adminMock.txnGet.mockImplementation(async (ref: unknown) =>
+    snap(ref === adminMock.displayRef ? displayDoc : data)
+  );
 }
 
 beforeEach(() => {
@@ -132,6 +137,7 @@ beforeEach(() => {
   generateContentMock.mockResolvedValue({ text: '{"ok":true}' });
   // Defaults: caller is a member, no usage yet, config doc absent
   // (kill-switch fail-open, billing fail-closed → legacy 100/day cap).
+  displayDoc = undefined;
   setHousehold({ memberUids: ["user1"] });
   adminMock.configGet.mockResolvedValue(snap(undefined));
 });
@@ -456,6 +462,56 @@ describe("geminiproxy", () => {
 // ===========================================================================
 // resolveQuotaDay
 // ===========================================================================
+
+describe("geminiproxy wall display caller", () => {
+  const DISPLAY_AUTH = { uid: "display_d1", token: { display: true, hid: "hh1", did: "d1" } };
+
+  it("lets an active display of the household spend its quota", async () => {
+    displayDoc = { status: "active" };
+    setHousehold({ memberUids: ["user1"], aiUsage: { dailyCount: 2, lastResetDate: SERVER_TODAY } });
+
+    const result = await asCallable(geminiproxy)({ auth: DISPLAY_AUTH, data: VALID_DATA });
+
+    expect(result).toEqual({ text: '{"ok":true}' });
+    expect(adminMock.db.doc).toHaveBeenCalledWith("households/hh1/displays/d1");
+    expect(adminMock.txnUpdate).toHaveBeenCalledWith(expect.anything(), {
+      aiUsage: { dailyCount: 3, lastResetDate: SERVER_TODAY },
+    });
+  });
+
+  it("rejects a revoked or unknown display before spending quota", async () => {
+    for (const doc of [{ status: "revoked" }, undefined]) {
+      displayDoc = doc;
+      await expect(
+        asCallable(geminiproxy)({ auth: DISPLAY_AUTH, data: VALID_DATA })
+      ).rejects.toMatchObject({ code: "permission-denied" });
+    }
+    expect(generateContentMock).not.toHaveBeenCalled();
+    expect(adminMock.txnUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a display spending another household's quota", async () => {
+    displayDoc = { status: "active" };
+    await expect(
+      asCallable(geminiproxy)({ auth: DISPLAY_AUTH, data: { ...VALID_DATA, householdId: "hh2" } })
+    ).rejects.toMatchObject({ code: "permission-denied" });
+    await expect(
+      asCallable(geminiproxy)({
+        auth: { uid: "display_x", token: { display: true, hid: "hh1", did: "../x" } },
+        data: VALID_DATA,
+      })
+    ).rejects.toMatchObject({ code: "permission-denied" });
+    expect(generateContentMock).not.toHaveBeenCalled();
+  });
+
+  it("still respects the daily cap for a display", async () => {
+    displayDoc = { status: "active" };
+    setHousehold({ memberUids: [], aiUsage: { dailyCount: 100, lastResetDate: SERVER_TODAY } });
+    await expect(
+      asCallable(geminiproxy)({ auth: DISPLAY_AUTH, data: VALID_DATA })
+    ).rejects.toMatchObject({ code: "resource-exhausted" });
+  });
+});
 
 describe("resolveQuotaDay", () => {
   // Fixed reference instant: 2026-07-09T12:00:00Z.

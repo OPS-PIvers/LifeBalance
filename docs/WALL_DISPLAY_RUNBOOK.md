@@ -91,6 +91,31 @@ The wall still switches to its dim night clock on its own.
   30 minutes (it checks in every 5).
 - The wall reloads itself once a night at 3 am and picks up app updates silently.
 
+### Voice
+
+Tap the **mic** at the bottom of the rail, or the mic in the Add sheet, and speak:
+
+| Say | What happens | Uses AI? |
+|---|---|---|
+| "Add milk, eggs and two avocados" | Adds to Shopping (catalog store and category) | Yes |
+| "Remind Sam to feed the cat tomorrow" | To-do for Sam, due tomorrow (no name = Family, no day = today) | Yes |
+| "Show the calendar / month / today / shopping / to-dos / meals" | Switches the screen | No |
+| "Stop rotating" / "Start rotating" | Same as the gear menu | No |
+| "Undo" | Removes what voice just added | No |
+
+- The banner shows **Undo** and **Show list** for 10 seconds after an add.
+- Voice adds use the household's **daily AI allowance**, the same one the
+  phone uses. Settings → Wall display → Voice shows how much is left.
+- iPadOS asks for the microphone the first time voice is used after each
+  launch. Allow it. If you tapped Don't Allow, go to iPad Settings → Safari →
+  Microphone and choose Ask or Allow.
+- **How it listens** (Settings → Wall display → Voice):
+  - **Auto** uses the iPad's own speech recognition, and switches to recording
+    if that's refused.
+  - **iPad** and **Recording** force one method.
+  - Pick whichever passed the Phase 0 test (`plans/wall-display-phase0-results.md`).
+  - **Off** hides the mic.
+
 ## 7. Calendars
 
 An admin adds calendars on a phone: **Settings → Wall display → Calendars →

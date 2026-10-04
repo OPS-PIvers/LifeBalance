@@ -1,4 +1,4 @@
-import type { WallLayout, WallModuleKey, WallSettings } from '@/types/schema';
+import type { WallLayout, WallModuleKey, WallSettings, WallVoiceEngine } from '@/types/schema';
 
 /**
  * Defaults and normalization for `wallSettings/config`
@@ -11,6 +11,7 @@ import type { WallLayout, WallModuleKey, WallSettings } from '@/types/schema';
 export const WALL_MODULE_KEYS: readonly WallModuleKey[] = ['coming', 'shopping', 'todos', 'meals'];
 export const WALL_ROTATION_INTERVALS: readonly number[] = [30, 60, 120, 300];
 export const WALL_IDLE_RETURN_OPTIONS: readonly number[] = [60, 180, 300, 600];
+export const WALL_VOICE_ENGINES: readonly WallVoiceEngine[] = ['auto', 'speech', 'audio', 'off'];
 
 export const DEFAULT_WALL_SETTINGS: WallSettings = {
   defaultModules: ['coming'],
@@ -21,6 +22,7 @@ export const DEFAULT_WALL_SETTINGS: WallSettings = {
   textSize: 'normal',
   showBills: true,
   holidaysEnabled: true,
+  voice: 'auto',
 };
 
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -80,6 +82,7 @@ export function resolveWallSettings(raw: unknown): WallSettings {
     textSize: d['textSize'] === 'large' ? 'large' : 'normal',
     showBills: typeof d['showBills'] === 'boolean' ? d['showBills'] : def.showBills,
     holidaysEnabled: typeof d['holidaysEnabled'] === 'boolean' ? d['holidaysEnabled'] : def.holidaysEnabled,
+    voice: WALL_VOICE_ENGINES.find(v => v === d['voice']) ?? def.voice,
   };
   if (
     weather &&

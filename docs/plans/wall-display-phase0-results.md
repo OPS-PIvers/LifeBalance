@@ -3,7 +3,9 @@
 > **Status:** lab built, device run **not started**. This file records the
 > device spike from [`wall-display-kiosk.md`](wall-display-kiosk.md) §6. Fill
 > in each section on the real iPad, then apply the decision rule at the
-> bottom. Phase 1 starts once an engine is chosen.
+> bottom. Phases 1–6 shipped without waiting for this: both engines are
+> in the wall, and **Settings → Wall display → Voice → How it listens**
+> applies the verdict (Auto / iPad = engine A / Recording = engine B / Off).
 
 ## What was built
 

@@ -2117,6 +2117,12 @@ export interface WallDisplay {
 }
 
 /** `households/{hid}/wallSettings/config`: one doc, any member may edit. */
+/**
+ * How the wall listens: `auto` tries on-device speech recognition and falls
+ * back to recorded audio sent to Gemini; `off` hides the mic.
+ */
+export type WallVoiceEngine = 'auto' | 'speech' | 'audio' | 'off';
+
 export interface WallSettings {
   defaultModules: WallModuleKey[];
   rotation: { enabled: boolean; intervalSec: number };
@@ -2126,6 +2132,7 @@ export interface WallSettings {
   textSize: 'normal' | 'large';
   showBills: boolean;
   holidaysEnabled: boolean;
+  voice: WallVoiceEngine;
   weather?: { lat: number; lon: number; label: string };
   /** IANA zone the wall's clock, night window and calendar use. */
   timeZone?: string;

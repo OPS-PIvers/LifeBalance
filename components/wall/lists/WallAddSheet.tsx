@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Mic, Plus } from 'lucide-react';
 import { NO_STORE, catalogSuggestions, dueDateFor, newShoppingItem, type DueChoice } from '@/utils/wall/wallLists';
 import type { WallPeople } from '@/utils/wall/wallPeople';
 import { useWallData } from '@/components/wall/data/wallData';
@@ -12,6 +12,8 @@ interface WallAddSheetProps {
   today: string;
   people: WallPeople;
   onDone: () => void;
+  /** "Speak instead": closes the sheet and starts listening. Absent when voice is off. */
+  onVoice?: () => void;
 }
 
 const DUE: { key: DueChoice; label: string }[] = [
@@ -26,7 +28,7 @@ const DUE: { key: DueChoice; label: string }[] = [
  * until Done. Shopping offers grocery-catalog suggestions and store chips;
  * to-dos offer For and Due chips.
  */
-const WallAddSheet: React.FC<WallAddSheetProps> = ({ kind, today, people, onDone }) => {
+const WallAddSheet: React.FC<WallAddSheetProps> = ({ kind, today, people, onDone, onVoice }) => {
   const { groceryCatalog, stores } = useWallData();
   const act = useWallListActions();
   const [text, setText] = useState('');
@@ -92,6 +94,11 @@ const WallAddSheet: React.FC<WallAddSheetProps> = ({ kind, today, people, onDone
             <Plus className="wi" size="1em" aria-hidden="true" />
             Add
           </button>
+          {onVoice && (
+            <button type="button" className="micb" aria-label="Speak instead" onClick={onVoice}>
+              <Mic className="wi" size="1em" aria-hidden="true" />
+            </button>
+          )}
         </form>
         {suggestions.length > 0 && (
           <div className="sugs" role="group" aria-label="Suggestions">

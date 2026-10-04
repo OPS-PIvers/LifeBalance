@@ -48,6 +48,42 @@ async function openWall(page: Page, time: string) {
   await page.goto('/#/wall');
 }
 
+/**
+ * A scripted stand-in for Safari's webkitSpeechRecognition: each start()
+ * "hears" the next phrase from window.__wallPhrases.
+ */
+async function fakeSpeech(page: Page, phrases: string[]) {
+  await page.addInitScript(list => {
+    const w = window as unknown as { __wallPhrases: string[]; webkitSpeechRecognition: unknown; SpeechRecognition: unknown };
+    w.__wallPhrases = list;
+    class FakeRecognition {
+      lang = '';
+      interimResults = false;
+      continuous = false;
+      maxAlternatives = 1;
+      onstart: (() => void) | null = null;
+      onspeechstart: (() => void) | null = null;
+      onspeechend: (() => void) | null = null;
+      onresult: ((e: unknown) => void) | null = null;
+      onerror: ((e: unknown) => void) | null = null;
+      onend: (() => void) | null = null;
+      start() {
+        const text = w.__wallPhrases.shift() ?? '';
+        setTimeout(() => {
+          this.onresult?.({ results: [Object.assign([{ transcript: text }], { isFinal: true })] });
+          this.onend?.();
+        }, 50);
+      }
+      stop() {}
+      abort() {
+        this.onend?.();
+      }
+    }
+    w.webkitSpeechRecognition = FakeRecognition;
+    w.SpeechRecognition = FakeRecognition;
+  }, phrases);
+}
+
 test.describe('Wall display shell (Test Mode)', () => {
   test('boots with the clock, weather and rail', async ({ page }) => {
     await openWall(page, '15:15:00');
@@ -147,5 +183,17 @@ test.describe('Wall display shell (Test Mode)', () => {
     await page.getByRole('button', { name: 'Display menu' }).click();
     await page.getByRole('button', { name: /Leave the wall/ }).click();
     await expect(page).not.toHaveURL(/#\/wall/);
+  });
+
+  test('voice navigation runs on the local grammar', async ({ page }) => {
+    await fakeSpeech(page, ['Show the meals', 'open the shopping list', 'show month']);
+    await openWall(page, '15:15:00');
+    const mic = page.getByRole('button', { name: 'Voice command' });
+    await mic.click();
+    await expect(page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: /Meals/ })).toHaveAttribute('aria-current', 'page');
+    await mic.click();
+    await expect(page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: /Shopping/ })).toHaveAttribute('aria-current', 'page');
+    await mic.click();
+    await expect(page.getByRole('group', { name: 'Calendar view' }).getByRole('button', { name: 'Month', exact: true })).toHaveAttribute('aria-pressed', 'true');
   });
 });

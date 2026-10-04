@@ -21,6 +21,7 @@ vi.mock('firebase/firestore', () => ({
 }));
 vi.mock('./WallCalendarSettings', () => ({ default: () => null }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('@/hooks/useAiUsageToday', () => ({ useAiUsageToday: () => ({ used: 4, cap: 100 }) }));
 
 import WallDisplaySettings from './WallDisplaySettings';
 
@@ -50,5 +51,22 @@ describe('WallDisplaySettings → Week layout', () => {
     expect(saved()).toMatchObject({ rotation: { enabled: true, intervalSec: 120 } });
     fireEvent.click(screen.getAllByRole('radio', { name: 'Off' })[0]!);
     expect(saved()).toMatchObject({ rotation: { enabled: false, intervalSec: 60 } });
+  });
+});
+
+describe('WallDisplaySettings → Voice', () => {
+  it('shows the allowance left and switches the engine', () => {
+    renderIt();
+    expect(screen.getByText(/96 left today/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: 'Recording' }));
+    expect(saved()).toMatchObject({ voice: 'audio' });
+  });
+
+  it('turning voice off hides the listening choice', () => {
+    mocks.settings = { ...DEFAULT_WALL_SETTINGS, voice: 'off' };
+    renderIt();
+    expect(screen.queryByRole('radio', { name: 'Recording' })).toBeNull();
+    fireEvent.click(screen.getAllByRole('radio', { name: 'On' }).at(-1)!);
+    expect(saved()).toMatchObject({ voice: 'auto' });
   });
 });

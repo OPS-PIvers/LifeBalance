@@ -28,6 +28,7 @@ import {
 } from '@/utils/wall/wallSettingsView';
 import type { HouseholdMember, WallDisplay, WallSettings } from '@/types/schema';
 import WallCalendarSettings from './WallCalendarSettings';
+import { useAiUsageToday } from '@/hooks/useAiUsageToday';
 
 interface WallDisplaySettingsProps {
   householdId: string;
@@ -58,7 +59,7 @@ const errorText = (e: unknown) => (e instanceof Error && e.message ? e.message :
 /**
  * Settings → Wall display (docs/plans/wall-display-kiosk.md §5): pair and
  * revoke displays (admins), calendar feeds, and the household's wall settings
- * (any member). The voice setting arrives with voice commands.
+ * (any member).
  */
 const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, isAdmin, members }) => {
   const [displays, setDisplays] = useState<WallDisplay[]>([]);
@@ -69,6 +70,7 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
   const [busy, setBusy] = useState(false);
   const [place, setPlace] = useState('');
   const [places, setPlaces] = useState<GeocodeResult[]>([]);
+  const aiUsage = useAiUsageToday();
 
   useEffect(() => {
     const unsubDisplays = onSnapshot(
@@ -392,6 +394,50 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
               </ul>
             )}
           </Row>
+        </SurfaceList>
+      </Section>
+
+      <Section title="Voice">
+        <SurfaceList>
+          <Row className="flex-wrap">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Tap-to-talk on the wall</p>
+              <p className="text-xs text-brand-500 dark:text-brand-400">
+                {aiUsage
+                  ? `Voice uses your daily AI allowance (${Math.max(0, aiUsage.cap - aiUsage.used)} left today)`
+                  : 'Voice uses your daily AI allowance. “Show”, “undo” and “stop rotating” don’t.'}
+              </p>
+            </div>
+            <SegmentedControl
+              name="Tap-to-talk on the wall"
+              size="sm"
+              options={[
+                { value: 'on', label: 'On' },
+                { value: 'off', label: 'Off' },
+              ]}
+              value={settings.voice === 'off' ? 'off' : 'on'}
+              onChange={v => void save({ voice: v === 'off' ? 'off' : 'auto' })}
+            />
+          </Row>
+          {settings.voice !== 'off' && (
+            <Row className="flex-wrap">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">How it listens</p>
+                <p className="text-xs text-brand-500 dark:text-brand-400">Auto tries the iPad’s own speech recognition first</p>
+              </div>
+              <SegmentedControl
+                name="How the wall listens"
+                size="sm"
+                options={[
+                  { value: 'auto', label: 'Auto' },
+                  { value: 'speech', label: 'iPad' },
+                  { value: 'audio', label: 'Recording' },
+                ]}
+                value={settings.voice}
+                onChange={voice => void save({ voice })}
+              />
+            </Row>
+          )}
         </SurfaceList>
       </Section>
     </>

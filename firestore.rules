@@ -1337,7 +1337,7 @@ service cloud.firestore {
                                  docId == 'config' &&
                                  request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys().hasOnly([
                                    'defaultModules', 'rotation', 'idleReturnSec', 'night', 'theme', 'textSize',
-                                   'showBills', 'holidaysEnabled', 'weather', 'timeZone'
+                                   'showBills', 'holidaysEnabled', 'weather', 'timeZone', 'voice'
                                  ]) &&
                                  (request.resource.data.get('defaultModules', null) == null ||
                                    (request.resource.data.defaultModules is list && request.resource.data.defaultModules.size() <= 2)) &&
@@ -1348,6 +1348,7 @@ service cloud.firestore {
                                  isValidOptionalString(request.resource.data.get('theme', null), 10) &&
                                  isValidOptionalString(request.resource.data.get('textSize', null), 10) &&
                                  isValidOptionalString(request.resource.data.get('timeZone', null), 64) &&
+                                 isValidOptionalString(request.resource.data.get('voice', null), 10) &&
                                  (request.resource.data.get('showBills', null) == null || request.resource.data.showBills is bool) &&
                                  (request.resource.data.get('holidaysEnabled', null) == null || request.resource.data.holidaysEnabled is bool);
         allow delete: if false;

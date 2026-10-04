@@ -80,7 +80,7 @@
 .wall .rail .off svg { font-size: 30px; }
 .wall .rail .mic { margin: 0 auto; width: 76px; height: 76px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
 .wall .rail .mic svg { font-size: 34px; }
-.wall .rail .mic[aria-disabled='true'] { opacity: 0.35; }
+.wall .rail .mic.live { background: var(--warm-fill); color: #fff; box-shadow: 0 0 0 8px color-mix(in srgb, var(--warm-fill) 22%, transparent); }
 .wall .rail .gear { margin: 14px auto 0; width: 56px; height: 56px; display: grid; place-items: center; color: var(--faint); font-size: 26px; }
 
 .wall .main { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -283,6 +283,7 @@
 .wall .sheet .inp input { flex: 1; min-width: 0; height: 76px; border: 2px solid var(--accent); border-radius: 12px; padding: 0 20px; font: inherit; font-size: 30px; color: var(--fg); background: var(--bg); -webkit-user-select: text; user-select: text; }
 .wall .sheet .inp input:focus { outline: none; }
 .wall .sheet .inp .btn { height: 76px; }
+.wall .sheet .micb { width: 56px; height: 56px; border-radius: 50%; background: var(--surface); color: var(--accent); display: grid; place-items: center; font-size: 26px; flex: none; }
 .wall .sugs { display: flex; flex-wrap: wrap; gap: 10px; }
 .wall .sug { font-size: 21px; padding: 12px 18px; border-radius: 12px; border: 1px solid var(--line-strong); display: inline-flex; gap: 10px; align-items: baseline; }
 .wall .sug small { font-size: 16px; color: var(--muted); }
@@ -337,6 +338,24 @@
 .wall .pad button:disabled { opacity: 0.4; }
 .wall .perr { min-height: 30px; font-size: 20px; color: var(--neg); text-align: center; max-width: 520px; }
 .wall .pin { display: grid; gap: 24px; justify-items: center; }
+
+/* Voice banner (same slot as the toast) */
+.wall .vb { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); width: 860px; max-width: calc(100% - 48px); z-index: 30; background: var(--card); border: 1px solid var(--line-strong); border-radius: 16px; padding: 18px 22px; display: grid; grid-template-columns: 64px 1fr auto; gap: 20px; align-items: center; box-shadow: var(--shadow); }
+.wall .vb .mid { min-width: 0; }
+.wall .vb .orb { position: relative; width: 60px; height: 60px; border-radius: 50%; display: grid; place-items: center; font-size: 28px; color: #fff; background: var(--warm-fill); }
+.wall .vb .orb.listen::after { content: ""; position: absolute; inset: -9px; border-radius: 50%; border: 3px solid var(--warm-fill); animation: wall-pulse 1.4s ease-out infinite; }
+.wall .vb .orb.ok { background: var(--accent); color: var(--on-accent); }
+.wall .vb .orb.err, .wall .vb .orb.work { background: var(--surface); color: var(--fg2); }
+.wall .vb .spin { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--line-strong); border-top-color: var(--fg); animation: wall-spin 0.9s linear infinite; }
+.wall .vb .k { font-size: 14px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.wall .vb .h { font-size: calc(var(--s) * 24px); line-height: 1.25; overflow-wrap: anywhere; }
+.wall .vb .h q { color: var(--fg2); }
+.wall .vb .a { display: flex; gap: 10px; }
+.wall .vb .lv { display: flex; gap: 5px; align-items: center; height: 28px; margin-top: 4px; }
+.wall .vb .lv i { width: 6px; border-radius: 3px; background: var(--warm-fill); animation: wall-level 0.9s ease-in-out infinite alternate; }
+@keyframes wall-pulse { from { transform: scale(0.9); opacity: 0.9; } to { transform: scale(1.35); opacity: 0; } }
+@keyframes wall-spin { to { transform: rotate(360deg); } }
+@keyframes wall-level { from { height: 6px; } to { height: 28px; } }
 .wall .pin h2 { margin: 0; font-family: var(--font-display); font-size: 40px; font-weight: 600; }
 .wall .dots4 { display: flex; gap: 20px; }
 .wall .dots4 i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--fg2); }

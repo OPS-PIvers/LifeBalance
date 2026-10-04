@@ -467,6 +467,14 @@ enters the phone boot bundle:
 - **Data:** `WallData` gained `stores`, which comes from the household doc and sets the store order. Test Mode seeds a meal week through `wallFixtures`, and the mock household's shopping check-off/clear now work in memory.
 - **Add sheet:** the mic button inside the field arrives with voice (Phase 6).
 
+**As built (Phase 6):** voice lives in `components/wall/voice/` (`voiceEngines.ts`, `useWallVoice.ts`, `WallVoiceBanner.tsx`), with the pure parts in `utils/wall/wallVoice.ts`. Notes:
+- **Engine:** Phase 0 hasn't been run on the device yet, so both engines ship. `wallSettings.voice` picks one: `auto` (the default) uses on-device speech recognition and switches to recorded audio for the rest of the launch the first time speech is refused; `speech` and `audio` force one; `off` hides the mic. Settings → Wall display → Voice offers On/Off and "How it listens" (Auto / iPad / Recording). Apply the Phase 0 verdict there, with no code change.
+- **Grammar first:** `parseLocalCommand` handles show/open (week, day, month, shopping, lists, to-dos, meals), start/stop rotating, undo and cancel with no AI call. On the audio engine the transcript only comes back from Gemini, and the grammar still runs on it, so "show meals" is never treated as an add.
+- **Writes:** a parsed add goes through `useWallListActions` with a toaster that feeds the voice banner instead of the toast, so voice adds use the same factories and Undo as taps. Items are tagged `source: 'voice'`. A spoken name matches a member's full name, or a first name only when it's unique; otherwise the to-do goes to Family. "Undo" by voice reverses the last voice add.
+- **Banner:** it shares the toast's slot, and either one replaces the other. Results and errors clear after 10 s. Idle return cancels listening. Errors have their own wording for no speech, a blocked mic, offline, a used-up AI allowance and an unknown command.
+- **geminiproxy:** it now accepts a display token for its own household while `displays/{did}.status` is `active` (read inside the quota transaction), and spends the household's normal daily quota.
+- **The Phase 0 lab stays** until the device results are recorded, because it's the tool that produces them. It now imports the speech types from `voiceEngines.ts`. Delete `#/wall-lab` when `wall-display-phase0-results.md` is filled in.
+
 **Pure selectors** go in `utils/wall/` and are unit-tested in the node project:
 - `groupComingUp(events, today, days=14)`
 - `todayTimeline(events, now)`: the past flag and where the now-line goes
@@ -512,7 +520,7 @@ prompt per launch is accepted.
 
 ## 5. Phone Settings: Settings → Wall display
 
-New `components/settings/WallDisplaySettings.tsx`, matching the prototype's "Phone settings" screen. **As built (Phases 1–3):** Displays; Calendars (Phase 3, `WallCalendarSettings.tsx`: feeds with owner chip and health line, add/edit/remove for admins, the holidays and bills toggles, and Sync now for everyone); Night & look (night hours, theme, text size, weather location) and "Back to calendar after". Week layout (starting modules, rotation and its interval, back to calendar after) shipped with Phase 4. The voice line ships with Phase 6, so Settings never offers a control that does nothing yet:
+New `components/settings/WallDisplaySettings.tsx`, matching the prototype's "Phone settings" screen. **As built (Phases 1–3):** Displays; Calendars (Phase 3, `WallCalendarSettings.tsx`: feeds with owner chip and health line, add/edit/remove for admins, the holidays and bills toggles, and Sync now for everyone); Night & look (night hours, theme, text size, weather location) and "Back to calendar after". Week layout (starting modules, rotation and its interval, back to calendar after) shipped with Phase 4. Voice shipped with Phase 6 (On/Off, "How it listens", and the allowance line):
 
 1. **Displays** (admin):
    - A list with name, status, last seen (red after 30 min) and **Revoke**.
@@ -575,6 +583,8 @@ Record the results in `docs/plans/wall-display-phase0-results.md`. Delete the la
 | **5 Lists + meals UI** | Shopping, To-dos, Meals + recipe panel, add sheet, swipe delete, list modules | Every action writes via existing factories; undo restores exactly; kid points credited and reversed |
 | **6 Voice** | Chosen engine, grammar + Gemini intents, banner, undo, geminiproxy display auth | 20 scripted commands pass on device; quota decrement visible |
 | **7 Hardening** | Device QA checklist (§9) on the real iPad, 72 h soak, docs: DESIGN.md wall section, CLAUDE.md entry, DECISIONS.md (why display ≠ member, why ICS only), `WALL_DISPLAY_RUNBOOK.md` | Checklist all green |
+
+**As built (Phase 7):** the code-side hardening is done: the docs are written (DESIGN.md §12, the CLAUDE.md Wall section, DECISIONS.md "Wall display", and the runbook's voice section). Phase 7 is complete only when the §9 checklist and the 72-hour soak have passed on the real iPad. Only the owner can run those.
 
 ## 8. Testing
 
