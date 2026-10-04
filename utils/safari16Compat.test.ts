@@ -10,7 +10,8 @@ import { describe, expect, it } from 'vitest';
  * code.
  */
 const ROOT = join(__dirname, '..');
-const SCAN = ['App.tsx', 'index.tsx', 'components', 'contexts', 'hooks', 'pages', 'services', 'utils', 'types'];
+// Everything the app bundle can import (not functions/, e2e/, tests/ or build config).
+const SCAN = ['App.tsx', 'index.tsx', 'firebase.config.ts', 'components', 'contexts', 'data', 'hooks', 'pages', 'services', 'src', 'types', 'utils'];
 // Regex text shown to the user for their own iOS Shortcut, never run here.
 const ALLOWED = new Set(['components/settings/ShortcutSetupGuide.tsx']);
 
