@@ -37,6 +37,7 @@ import {
   LayoutGrid,
   Smartphone,
   Database,
+  MonitorSmartphone,
 } from 'lucide-react';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
@@ -99,6 +100,9 @@ const ConnectBankCard = lazy(() => import('@/components/settings/ConnectBankCard
 const CsvImportDrawer = lazy(() => import('@/components/settings/CsvImportDrawer'));
 // Lazy so the Recently Deleted list UI stays out of the Settings chunk until opened.
 const RecentlyDeletedDrawer = lazy(() => import('@/components/settings/RecentlyDeletedDrawer'));
+// Wall display settings (docs/plans/wall-display-kiosk.md §5): lazy so the
+// pairing/geocoding code only loads when the section opens.
+const WallDisplaySettings = lazy(() => import('@/components/settings/WallDisplaySettings'));
 
 // F-MEALS-03 — lazy so the meals-only DietaryProfileModal stays out of the
 // Settings page's boot chunk until first opened.
@@ -157,6 +161,7 @@ const SETTINGS_SECTIONS = [
   'money',
   'modules',
   'shortcuts',
+  'wall',
   'data',
 ] as const;
 
@@ -175,6 +180,7 @@ const SECTION_TITLES: Record<SettingsSection, string> = {
   money: 'Money',
   modules: 'Modules & Dashboard',
   shortcuts: 'iOS Shortcuts',
+  wall: 'Wall display',
   data: 'Data & Account',
 };
 
@@ -1050,6 +1056,34 @@ const Settings: React.FC = () => {
         </Section>
       )}
 
+      {/* Wall display (docs/plans/wall-display-kiosk.md §5). Reached from here
+          rather than the index (which stays at 7 rows); `?section=wall` is its
+          own sub-screen. The family PIN is the Kid Mode PIN: it also locks the
+          wall's gear menu, so it's offered here even while Kid Mode is off. */}
+      <Section title="Wall display">
+        <SurfaceList>
+          <DisclosureRow
+            icon={<MonitorSmartphone className="w-5 h-5" />}
+            title="Wall display"
+            subtitle="A family screen on a spare iPad"
+            onClick={() => openSection('wall')}
+          />
+          {!kidModeEnabled && (
+            <DisclosureRow
+              icon={<Baby className="w-5 h-5" />}
+              title="Family PIN"
+              subtitle="Locks the wall's menu"
+              value={
+                <Badge variant={hasKidPin ? 'success' : 'neutral'} size="sm">
+                  {hasKidPin ? 'PIN set' : 'No PIN'}
+                </Badge>
+              }
+              onClick={() => setIsKidModeOpen(true)}
+            />
+          )}
+        </SurfaceList>
+      </Section>
+
       {/* Per-member habit points (stage 6) — the two household-wide habit
           settings (freeze mode, weekly wrap-up tone). Admin-editable, read-only
           for everyone else; both are inert until an admin picks a mode. */}
@@ -1477,6 +1511,11 @@ const Settings: React.FC = () => {
     money: moneyBody,
     modules: modulesBody,
     shortcuts: shortcutsBody,
+    wall: (
+      <Suspense fallback={null}>
+        <WallDisplaySettings householdId={householdId || ''} isAdmin={currentUser?.role === 'admin'} />
+      </Suspense>
+    ),
     data: dataBody,
   };
 
@@ -1548,6 +1587,7 @@ const Settings: React.FC = () => {
                   subtitle="Capture from your iPhone"
                   onClick={() => openSection('shortcuts')}
                 />
+
                 <DisclosureRow
                   id={sectionRowId('data')}
                   icon={<Database className="w-5 h-5" />}
@@ -1670,7 +1710,7 @@ const Settings: React.FC = () => {
         <div className="space-y-4">
           <p className="text-sm text-brand-500 dark:text-brand-400">
             Require a PIN to leave a kid&apos;s view and return to the parent view. Leave unset to
-            allow exiting freely.
+            allow exiting freely. The same PIN locks a wall display&apos;s menu.
           </p>
 
           <div>

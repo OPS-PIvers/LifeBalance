@@ -320,6 +320,14 @@ See [LINT_SUPPRESSIONS.md](LINT_SUPPRESSIONS.md) for:
 - Existing suppressions should be removed as files are touched
 - Goal: Zero suppressions except for legitimate exceptions
 
+## Wall Display
+
+A wall-mounted iPad runs the app at `#/wall` (plan: [docs/plans/wall-display-kiosk.md](docs/plans/wall-display-kiosk.md); setup: [docs/WALL_DISPLAY_RUNBOOK.md](docs/WALL_DISPLAY_RUNBOOK.md)). Three things to know before touching auth, rules or providers:
+
+- **A paired display is NOT a member.** It signs in with a custom token as uid `display_{did}`, claims `{display, hid, did}` (`functions/src/wall/pairing.ts`). It has no `members/{uid}` doc and never an `admin` claim. `AuthContext` exposes `isDisplay`/`displayId` and skips the household lookup and the Private Alpha guard for it.
+- **`firestore.rules` grants it a narrow allowlist** through `isDisplayOf(hid)` / `isMemberOrDisplayOf(hid)`, which also requires `displays/{did}.status == 'active'` (so revoking is immediate). Never add `isDisplayOf` to the catch-all subcollection rule, and add any new wall collection to the catch-all write-exclusion list. The allow/deny matrix is in `tests/rules/firestore.rules.test.ts` ("wall display identity").
+- **`FirebaseHouseholdProvider` must never mount for a display**: it attaches finance listeners the display can't read. `HouseholdOrWallProvider` swaps in `WallFirestoreProvider` instead. Wall components read only `useWallData()` (`components/wall/data/wallData.ts`), which a member's `#/wall` preview and Test Mode serve through `WallSlicesProvider`. Pure wall logic (time, weather, night, idle, settings) lives in `utils/wall/`.
+
 ## Test Mode for AI Coding Agents
 
 A Firebase-free, mock-data sandbox for driving the app in a browser without credentials or a backend. Activation, the seeded fixtures, and the production-safety verification live in the `test-mode` skill (`.claude/skills/test-mode/SKILL.md`) so they load only when you actually need them.

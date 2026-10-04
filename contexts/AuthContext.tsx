@@ -6,6 +6,7 @@ import { getUserHousehold } from '@/services/householdService';
 import { signOut as authServiceSignOut, completeRedirectSignIn } from '@/services/authService';
 import { getOpenSignup } from '@/services/appConfig';
 import toast from 'react-hot-toast';
+import { DISPLAY_UID_PREFIX, parseDisplayClaims } from '@/utils/wall/wallDevice';
 
 interface AuthContextType {
   user: User | null;
@@ -19,6 +20,13 @@ interface AuthContextType {
   // so the login screen can prompt the user to try a different account.
   accessDeniedEmail: string | null;
   clearAccessError: () => void;
+  /**
+   * True when signed in as a paired wall display (custom token, claims
+   * {display, hid, did}). A display is not a household member: the app
+   * renders only the wall for it (docs/plans/wall-display-kiosk.md §4.2).
+   */
+  isDisplay: boolean;
+  displayId: string | null;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -29,6 +37,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [householdId, setHouseholdIdState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [accessDeniedEmail, setAccessDeniedEmail] = useState<string | null>(null);
+  const [displayId, setDisplayId] = useState<string | null>(null);
 
   useEffect(() => {
     // Complete a pending redirect sign-in (PWA / popup-blocked flow). The user
@@ -41,6 +50,35 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
+      setDisplayId(null);
+
+      // Wall display: its household comes from its token claims, and it has
+      // no email, so it must skip both the household lookup (it has no member
+      // doc) and the Private Alpha guard (which would sign it out). The uid
+      // prefix only decides whether to look; the claims are the authority.
+      if (firebaseUser?.uid.startsWith(DISPLAY_UID_PREFIX)) {
+        try {
+          const { claims } = await firebaseUser.getIdTokenResult();
+          if (auth.currentUser?.uid !== firebaseUser.uid) return;
+          const display = parseDisplayClaims(claims);
+          if (display) {
+            setDisplayId(display.did);
+            setHouseholdIdState(display.hid);
+            setAccessDeniedEmail(null);
+            setLoading(false);
+            return;
+          }
+        } catch (error) {
+          console.error('Reading display claims failed:', error);
+        }
+        // A display-shaped uid without valid claims (revoked and deleted, or
+        // tampered): sign it out rather than treat it as a person.
+        await authServiceSignOut();
+        setUser(null);
+        setHouseholdIdState(null);
+        setLoading(false);
+        return;
+      }
 
       if (firebaseUser) {
         // Resolve the user's household first. Membership is also used as an
@@ -168,7 +206,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       logout: signOut, // Provide alias
       setHouseholdId,
       accessDeniedEmail,
-      clearAccessError
+      clearAccessError,
+      isDisplay: displayId !== null,
+      displayId,
     }}>
       {children}
     </AuthContext.Provider>

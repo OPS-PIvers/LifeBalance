@@ -31,6 +31,27 @@ service cloud.firestore {
               request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2");
     }
 
+    // Wall display identity (docs/plans/wall-display-kiosk.md §4.6). A paired
+    // iPad signs in as uid `display_{did}` with custom claims
+    // {display: true, hid, did}. It is NOT a member: isMemberOf() is false for
+    // it (no members/{uid} doc), and it never carries an `admin` claim. It is
+    // granted ONLY the paths that call isDisplayOf()/isMemberOrDisplayOf()
+    // below; every finance path stays member-only. The status read makes a
+    // revoke effective on the next request rather than at token expiry.
+    // NEVER add isDisplayOf to the catch-all subcollection rule.
+    function isDisplayOf(householdId) {
+      return isAuthenticated() &&
+             request.auth.token.get('display', false) == true &&
+             request.auth.token.get('hid', '') == householdId &&
+             request.auth.token.get('did', null) is string &&
+             exists(/databases/$(database)/documents/households/$(householdId)/displays/$(request.auth.token.did)) &&
+             get(/databases/$(database)/documents/households/$(householdId)/displays/$(request.auth.token.did)).data.get('status', '') == 'active';
+    }
+
+    function isMemberOrDisplayOf(householdId) {
+      return isMemberOf(householdId) || isDisplayOf(householdId);
+    }
+
     // 🛡️ SENTINEL SECURITY HELPERS: Data Validation
     function isValidString(text, max) {
       return text is string && text.size() > 0 && text.size() <= max;
@@ -60,7 +81,10 @@ service cloud.firestore {
       // Only members can read the household document.
       // OPTIMIZATION: Check memberUids array on the document itself to avoid an extra read cost (exists() call).
       // This aligns with the list rule below.
-      allow get: if (isAuthenticated() && request.auth.uid in resource.data.memberUids) || isSuperAdmin();
+      allow get: if (isAuthenticated() && request.auth.uid in resource.data.memberUids) || isSuperAdmin() ||
+                    // Wall display: read-only access to its own household doc (names,
+                    // stores, kid PIN hash for the gear menu).
+                    isDisplayOf(householdId);
 
       // Allow listing only if user is a member (prevents enumeration of all households)
       // Admin can list all households for the AI Meter
@@ -181,11 +205,19 @@ service cloud.firestore {
                         );
       allow delete: if isAdminOf(householdId);
 
+      // Wall display: a to-do linked to an unassigned habit credits the shared
+      // household points pool (todoMutations fireLinkedHabitInBatch). That is
+      // the ONLY household-doc field a display may touch.
+      allow update: if isDisplayOf(householdId) &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['points']);
+
       // Members subcollection
       match /members/{memberId} {
         // Allow users to read their own member doc (to check if already joined) or if they're a member
         // Also allow reading if user is in household's memberUids (for legacy migration auto-fix)
         allow read: if isMemberOf(householdId) ||
+                       // Wall display: names, colors and kid-points credit.
+                       isDisplayOf(householdId) ||
                        request.auth.uid == memberId ||
                        (isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.get('memberUids', []));
 
@@ -458,6 +490,18 @@ service cloud.firestore {
           )
         );
 
+        // Wall display: the Case 4 points body ONLY (a kid's to-do credit, or a
+        // linked habit's assignee). Deliberately its own statement, outside the
+        // isMemberOf() wrapper above: a display is never a member, and must not
+        // reach Cases 1-3. It can't create a member doc (no create grant).
+        allow update: if isDisplayOf(householdId) &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+                           ['points', 'lastDailyPointsReset', 'lastWeeklyPointsReset']
+                         ) &&
+                         isValidPointsMap(request.resource.data.get('points', null)) &&
+                         isValidOptionalString(request.resource.data.get('lastDailyPointsReset', null), 10) &&
+                         isValidOptionalString(request.resource.data.get('lastWeeklyPointsReset', null), 10);
+
         allow delete: if isAdminOf(householdId) ||
                           request.auth.uid == memberId ||
                           // Plan 080: any parent may remove a managed kid profile.
@@ -466,7 +510,16 @@ service cloud.firestore {
 
       // Habits subcollection
       match /habits/{habitId} {
-        allow read: if isMemberOf(householdId);
+        allow read: if isMemberOrDisplayOf(householdId);
+
+        // Wall display: completing a to-do fires its linkedHabitId
+        // (fireLinkedHabitInBatch), which touches only these counter fields.
+        allow update: if isDisplayOf(householdId) &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+                           ['count', 'totalCount', 'completedDates', 'completedBy', 'lastUpdated', 'streakDays']
+                         ) &&
+                         (request.resource.data.get('completedBy', null) == null ||
+                          request.resource.data.completedBy is map);
 
         // 🛡️ SENTINEL SECURITY FIX: Split write into create/update/delete to enforce validation
         // Prevent DoS/Storage Exhaustion by validating string lengths
@@ -540,14 +593,14 @@ service cloud.firestore {
 
       // Shopping list subcollection with input validation
       match /shoppingList/{itemId} {
-        allow read: if isMemberOf(householdId);
+        allow read: if isMemberOrDisplayOf(householdId);
 
         // 🛡️ SENTINEL SECURITY FIX: Validate shopping list items to prevent storage exhaustion
-        allow create, update: if isMemberOf(householdId) &&
+        allow create, update: if isMemberOrDisplayOf(householdId) &&
                               isValidString(request.resource.data.get('name', null), 100) &&
                               isValidOptionalString(request.resource.data.get('category', null), 50);
 
-        allow delete: if isMemberOf(householdId);
+        allow delete: if isMemberOrDisplayOf(householdId);
       }
 
       // Transactions subcollection with input validation
@@ -819,7 +872,7 @@ service cloud.firestore {
 
       // 🛡️ SENTINEL SECURITY FIX: Explicit rules for Meals
       match /meals/{mealId} {
-        allow read: if isMemberOf(householdId);
+        allow read: if isMemberOrDisplayOf(householdId);
         allow create, update: if isMemberOf(householdId) &&
                               // Allow only expected fields to prevent storage abuse.
                               // NOTE: this is a hasOnly() over the MERGED post-write
@@ -863,8 +916,8 @@ service cloud.firestore {
 
       // 🛡️ SENTINEL SECURITY FIX: Explicit rules for To-Dos
       match /todos/{todoId} {
-        allow read: if isMemberOf(householdId);
-        allow create, update: if isMemberOf(householdId) &&
+        allow read: if isMemberOrDisplayOf(householdId);
+        allow create, update: if isMemberOrDisplayOf(householdId) &&
                               // Allow only expected fields to prevent storage abuse
                               request.resource.data.keys().hasOnly([
                                 'text', 'completeByDate', 'isCompleted', 'completedAt',
@@ -945,13 +998,13 @@ service cloud.firestore {
                               isValidOptionalString(request.resource.data.get('category', null), 50) &&
                               // Metadata
                               (request.resource.data.get('createdBy', null) == null || request.resource.data.createdBy is string);
-        allow delete: if isMemberOf(householdId);
+        allow delete: if isMemberOrDisplayOf(householdId);
       }
 
       // 🛡️ SENTINEL SECURITY FIX: Explicit rules for Grocery Catalog
       match /groceryCatalog/{itemId} {
-        allow read: if isMemberOf(householdId);
-        allow create: if isMemberOf(householdId) &&
+        allow read: if isMemberOrDisplayOf(householdId);
+        allow create: if isMemberOrDisplayOf(householdId) &&
                       // Only allow known fields on create
                       request.resource.data.keys().hasOnly([
                         'name', 'category', 'defaultQuantity', 'defaultStore',
@@ -964,7 +1017,7 @@ service cloud.firestore {
                       isValidOptionalString(request.resource.data.get('lastPurchased', null), 30) && // ISO timestamp string
                       // purchaseCount is required on create
                       (request.resource.data.purchaseCount is number);
-        allow update: if isMemberOf(householdId) &&
+        allow update: if isMemberOrDisplayOf(householdId) &&
                       // Constrain updates to the same known fields
                       request.resource.data.keys().hasOnly([
                         'name', 'category', 'defaultQuantity', 'defaultStore',
@@ -1164,7 +1217,9 @@ service cloud.firestore {
       // feed to admins, but the data is household-internal activity).
       match /activityLog/{entryId} {
         allow read: if isMemberOf(householdId);
-        allow create: if isMemberOf(householdId);
+        allow create: if isMemberOf(householdId) ||
+                         // Wall display: may only log as itself.
+                         (isDisplayOf(householdId) && request.resource.data.get('actorUid', '') == request.auth.uid);
         allow update, delete: if false;
       }
 
@@ -1247,12 +1302,79 @@ service cloud.firestore {
         allow delete: if isMemberOf(householdId);
       }
 
+      // Weekly meal plan. Previously reached only through the catch-all below;
+      // it now has its own block so the wall display can read it. Member writes
+      // are unchanged (unvalidated, exactly as the catch-all allowed).
+      match /mealPlan/{entryId} {
+        allow read: if isMemberOrDisplayOf(householdId);
+        allow write: if isMemberOf(householdId);
+      }
+
+      // ── Wall display data (docs/plans/wall-display-kiosk.md §4.4/§4.6) ──
+      // Paired displays: written by the pairing Cloud Functions (Admin SDK).
+      // A display may read and heartbeat ONLY its own doc.
+      match /displays/{displayId} {
+        allow read: if isMemberOf(householdId) ||
+                       (isDisplayOf(householdId) && request.auth.token.did == displayId);
+        allow update: if isDisplayOf(householdId) &&
+                         request.auth.token.did == displayId &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeenAt', 'appVersion', 'layout']) &&
+                         (request.resource.data.get('lastSeenAt', null) == null || request.resource.data.lastSeenAt is timestamp) &&
+                         isValidOptionalString(request.resource.data.get('appVersion', null), 40) &&
+                         (request.resource.data.get('layout', null) == null ||
+                           (request.resource.data.layout is map &&
+                            request.resource.data.layout.keys().hasOnly(['modules']) &&
+                            request.resource.data.layout.modules is list &&
+                            request.resource.data.layout.modules.size() <= 2));
+      }
+
+      // Household wall settings (single doc `config`). Any member edits it from
+      // Settings → Wall display; the display only reads. lastManualSyncAt is
+      // server-written (sync throttle), so members can't touch it.
+      match /wallSettings/{docId} {
+        allow read: if isMemberOrDisplayOf(householdId);
+        allow create, update: if isMemberOf(householdId) &&
+                                 docId == 'config' &&
+                                 request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys().hasOnly([
+                                   'defaultModules', 'rotation', 'idleReturnSec', 'night', 'theme', 'textSize',
+                                   'showBills', 'holidaysEnabled', 'weather', 'timeZone'
+                                 ]) &&
+                                 (request.resource.data.get('defaultModules', null) == null ||
+                                   (request.resource.data.defaultModules is list && request.resource.data.defaultModules.size() <= 2)) &&
+                                 (request.resource.data.get('rotation', null) == null || request.resource.data.rotation is map) &&
+                                 (request.resource.data.get('night', null) == null || request.resource.data.night is map) &&
+                                 (request.resource.data.get('weather', null) == null || request.resource.data.weather is map) &&
+                                 isValidOptionalNumber(request.resource.data.get('idleReturnSec', null)) &&
+                                 isValidOptionalString(request.resource.data.get('theme', null), 10) &&
+                                 isValidOptionalString(request.resource.data.get('textSize', null), 10) &&
+                                 isValidOptionalString(request.resource.data.get('timeZone', null), 64) &&
+                                 (request.resource.data.get('showBills', null) == null || request.resource.data.showBills is bool) &&
+                                 (request.resource.data.get('holidaysEnabled', null) == null || request.resource.data.holidaysEnabled is bool);
+        allow delete: if false;
+      }
+
+      // Calendar lines and feed metadata: server-written (Phase 3 sync).
+      match /wallEvents/{eventId} {
+        allow read: if isMemberOrDisplayOf(householdId);
+        allow write: if false;
+      }
+      match /calendarFeeds/{feedId} {
+        allow read: if isMemberOrDisplayOf(householdId);
+        allow write: if false;
+      }
+      // Feed URLs are credentials (a Google "secret address"): no client access
+      // at all. Also excluded from the catch-all READ below.
+      match /calendarFeedSecrets/{feedId} {
+        allow read, write: if false;
+      }
+
       // All other subcollections that do not have explicit match blocks
       // Proper multi-household isolation using member document checks
       // Specific collections with custom rules are excluded via the conditions below
       match /{subcollection}/{document} {
         // 🛡️ CRITICAL: Exclude apiKeys + plaidItems from read to prevent bypass of admin-only / server-only access
-        allow read: if isMemberOf(householdId) && subcollection != 'apiKeys' && subcollection != 'plaidItems';
+        allow read: if isMemberOf(householdId) && subcollection != 'apiKeys' && subcollection != 'plaidItems' &&
+                       subcollection != 'calendarFeedSecrets';
         allow write: if isMemberOf(householdId) &&
                      subcollection != 'members' &&
                      subcollection != 'habits' &&
@@ -1278,8 +1400,23 @@ service cloud.firestore {
                      subcollection != 'moneyRecaps' &&
                      subcollection != 'netWorthSnapshots' &&
                      subcollection != 'noSpendDays' &&
-                     subcollection != 'activityLog';
+                     subcollection != 'activityLog' &&
+                     // Wall display collections (explicit blocks above).
+                     subcollection != 'mealPlan' &&
+                     subcollection != 'displays' &&
+                     subcollection != 'wallSettings' &&
+                     subcollection != 'wallEvents' &&
+                     subcollection != 'calendarFeeds' &&
+                     subcollection != 'calendarFeedSecrets';
       }
+    }
+
+    // Wall pairing codes and the redeem throttle: Cloud Functions only.
+    match /wallPairings/{codeHash} {
+      allow read, write: if false;
+    }
+    match /wallPairingThrottle/{key} {
+      allow read, write: if false;
     }
 
     // Invite codes collection

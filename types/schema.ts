@@ -2083,3 +2083,65 @@ export interface HouseholdApiKey {
   status: 'active' | 'revoked';
   permissions: ApiKeyPermissions;
 }
+
+// ---------------------------------------------------------------------------
+// Wall display (docs/plans/wall-display-kiosk.md §4.4)
+// ---------------------------------------------------------------------------
+
+/** Modules the Week screen's right panel can show. */
+export type WallModuleKey = 'coming' | 'shopping' | 'todos' | 'meals';
+
+/** A display's own panel layout (0–2 modules, top first). */
+export interface WallLayout {
+  modules: WallModuleKey[];
+}
+
+export type WallDisplayStatus = 'pending' | 'active' | 'revoked';
+
+/**
+ * `households/{hid}/displays/{did}`. Written by the pairing Cloud Functions;
+ * the display itself may only update `lastSeenAt`, `appVersion` and `layout`.
+ * The display signs in as uid `display_{did}` and is never a household member.
+ */
+export interface WallDisplay {
+  id: string;
+  name: string;
+  status: WallDisplayStatus;
+  createdBy: string;
+  createdAt: string;   // ISO
+  pairedAt?: string;   // ISO
+  lastSeenAt?: string; // ISO, heartbeat every 5 min
+  appVersion?: string;
+  layout?: WallLayout;
+}
+
+/** `households/{hid}/wallSettings/config`: one doc, any member may edit. */
+export interface WallSettings {
+  defaultModules: WallModuleKey[];
+  rotation: { enabled: boolean; intervalSec: number };
+  idleReturnSec: number;
+  night: { start: string; end: string }; // 'HH:mm'
+  theme: 'light' | 'dark';
+  textSize: 'normal' | 'large';
+  showBills: boolean;
+  holidaysEnabled: boolean;
+  weather?: { lat: number; lon: number; label: string };
+  /** IANA zone the wall's clock, night window and calendar use. */
+  timeZone?: string;
+  lastManualSyncAt?: string; // ISO
+}
+
+/** `households/{hid}/wallEvents/{id}`: server-written calendar lines (Phase 3). */
+export interface WallEvent {
+  id: string;
+  source: 'feed' | 'bill' | 'holiday';
+  feedId?: string;
+  /** A member uid or 'family'. */
+  ownerKey: string;
+  title: string;
+  allDay: boolean;
+  date: string;   // yyyy-MM-dd, local
+  start?: string; // ISO with offset, timed events only
+  end?: string;
+  location?: string;
+}

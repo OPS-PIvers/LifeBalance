@@ -1,0 +1,164 @@
+/*
+ * Wall display styles (docs/plans/wall-display-kiosk.md §4.9). Everything is
+ * scoped under .wall and lazy-loaded with the wall, so none of it reaches the
+ * phone bundle. Values come from the approved prototype
+ * (docs/plans/wall-display-prototype.html); app tokens are used where the
+ * prototype matches one. The wall sets its own light/dark palette from
+ * wallSettings rather than following the device theme.
+ */
+.wall {
+  --s: 1;
+  --bg: var(--color-brand-50);
+  --surface: var(--color-brand-100);
+  --card: #ffffff;
+  --line: #e8e5de;
+  --line-strong: #d6d2c8;
+  --fg: var(--color-brand-900);
+  --fg2: var(--color-brand-700);
+  --muted: #655f55;
+  --faint: #8a8478;
+  --accent: var(--color-accent-600);
+  --on-accent: #ffffff;
+  --warm: var(--color-warm-600);
+  --warm-fill: var(--color-warm-500);
+  --rain: #386695;
+  --neg: var(--color-money-neg);
+  --warm-bg: var(--color-warm-50);
+  --scrim: rgba(22, 21, 18, 0.28);
+  --shadow: 0 18px 48px rgba(22, 21, 18, 0.16);
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: calc(var(--s) * 22px);
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+}
+.wall.dark {
+  --bg: #1b1a17;
+  --surface: #24221f;
+  --card: #2a2825;
+  --line: #2a2825;
+  --line-strong: #3a3732;
+  --fg: #ece9e2;
+  --fg2: #cfcac0;
+  --muted: #a29d92;
+  --faint: #7d786e;
+  --accent: #8fbfa5;
+  --on-accent: #12201a;
+  --warm: #d9a75c;
+  --warm-fill: #d9a75c;
+  --rain: #8eaed6;
+  --neg: #e2857d;
+  --warm-bg: #33291b;
+  --scrim: rgba(0, 0, 0, 0.5);
+  --shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+.wall.large { --s: 1.15; }
+:where(.wall) button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+.wall button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.wall svg.wi { width: 1em; height: 1em; flex: none; }
+
+/* Rail */
+.wall .rail { border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 20px 0 16px; gap: 4px; min-height: 0; }
+.wall .rail .nav { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 0; color: var(--muted); font-size: 16px; font-weight: 500; text-align: center; width: 100%; }
+.wall .rail .nav svg { font-size: 34px; }
+.wall .rail .nav[aria-current='page'] { color: var(--fg); }
+.wall .rail .nav[aria-current='page']::before { content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 4px; border-radius: 0 3px 3px 0; background: var(--accent); }
+.wall .rail .badge { position: absolute; top: 8px; left: 58px; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: var(--warm-fill); color: #fff; font-size: 14px; font-weight: 700; display: grid; place-items: center; }
+.wall.dark .rail .badge { color: #1b1a17; }
+.wall .rail .sp { flex: 1; }
+.wall .rail .off { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--warm); font-size: 14px; font-weight: 600; margin-bottom: 18px; width: 100%; }
+.wall .rail .off svg { font-size: 30px; }
+.wall .rail .mic { margin: 0 auto; width: 76px; height: 76px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
+.wall .rail .mic svg { font-size: 34px; }
+.wall .rail .mic[aria-disabled='true'] { opacity: 0.35; }
+.wall .rail .gear { margin: 14px auto 0; width: 56px; height: 56px; display: grid; place-items: center; color: var(--faint); font-size: 26px; }
+
+.wall .main { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+/* Top bar */
+.wall .top { position: relative; display: flex; align-items: center; gap: 22px; padding: 16px 32px 16px 40px; border-bottom: 1px solid var(--line); min-height: 128px; }
+.wall .hero { display: flex; align-items: center; gap: 14px; flex: none; }
+.wall .hero .big { font-family: var(--font-display); font-size: 72px; font-weight: 500; line-height: 0.9; letter-spacing: -0.025em; }
+.wall .hero .sub { display: grid; gap: 2px; font-size: 21px; line-height: 1.15; color: var(--fg2); white-space: nowrap; text-align: left; flex: none; }
+.wall .hero svg { font-size: 46px; color: var(--warm); }
+.wall .top .vr { flex: none; width: 1px; align-self: stretch; background: var(--line); margin: 6px 0; }
+.wall .wxb { display: flex; align-items: center; gap: 22px; border-radius: 12px; padding: 6px 10px; margin-left: -10px; flex: none; }
+.wall .blocks { display: flex; gap: 16px; }
+.wall .blocks .b { display: grid; justify-items: center; gap: 3px; font-size: 17px; color: var(--muted); }
+.wall .blocks .b b { font-family: var(--font-display); font-size: 30px; font-weight: 500; line-height: 1; color: var(--fg); }
+.wall .blocks svg { font-size: 28px; color: var(--warm); }
+.wall .blocks svg.r { color: var(--rain); }
+.wall .rainnote { display: block; font-size: 18px; font-weight: 600; color: var(--rain); margin-top: 6px; text-align: center; white-space: nowrap; }
+.wall .top .right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+.wall .seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; border: 1px solid var(--line-strong); }
+.wall .seg button { font-size: 18px; font-weight: 600; padding: 0 18px; height: 50px; border-radius: 7px; color: var(--muted); }
+.wall .seg button[aria-pressed='true'] { background: var(--card); color: var(--fg); box-shadow: 0 0 0 1px var(--line-strong); }
+.wall .seg button:disabled { opacity: 0.45; cursor: default; }
+.wall .ostrip { display: flex; align-items: center; gap: 10px; padding: 9px 40px; background: var(--warm-bg); color: var(--warm); font-size: 17px; font-weight: 600; border-bottom: 1px solid var(--line); }
+.wall .ostrip svg { font-size: 20px; }
+
+/* Body placeholder until the calendar and list screens land (Phases 4–5) */
+.wall .soon { flex: 1; display: grid; place-items: center; text-align: center; padding: 40px; }
+.wall .soon h2 { margin: 0 0 12px; font-family: var(--font-display); font-size: 40px; font-weight: 600; }
+.wall .soon p { margin: 0; color: var(--muted); font-size: 22px; max-width: 34ch; }
+
+/* Overlays */
+.wall .scrim { position: absolute; inset: 0; background: var(--scrim); z-index: 20; }
+.wall .fc { position: absolute; left: 200px; right: 200px; top: 150px; z-index: 21; background: var(--card); border-radius: 16px; box-shadow: var(--shadow); padding: 26px 32px; }
+.wall .fc h3 { margin: 0 0 14px; font-family: var(--font-display); font-size: 30px; font-weight: 600; }
+.wall .fc .days { display: grid; grid-template-columns: repeat(5, 1fr); }
+.wall .fc .days > div { display: grid; justify-items: center; gap: 8px; padding: 14px 0; border-left: 1px solid var(--line); }
+.wall .fc .days > div:first-child { border-left: 0; }
+.wall .fc .days .w { font-size: 18px; color: var(--muted); font-weight: 600; }
+.wall .fc .days svg { font-size: 44px; color: var(--warm); }
+.wall .fc .days svg.r { color: var(--rain); }
+.wall .fc .days b { font-family: var(--font-display); font-size: 30px; font-weight: 500; }
+.wall .fc .days small { font-size: 17px; color: var(--muted); }
+.wall .fc p { margin: 16px 0 0; color: var(--muted); font-size: 17px; }
+
+.wall .note { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 30; display: inline-flex; align-items: center; gap: 18px; background: var(--fg); color: var(--bg); border-radius: 12px; padding: 0 22px; min-height: 64px; font-size: 21px; max-width: 900px; }
+
+.wall .night { position: absolute; inset: 0; z-index: 40; background: #000; display: grid; place-items: center; text-align: center; cursor: pointer; width: 100%; }
+.wall .night .c { font-family: var(--font-display); font-size: 220px; color: #4f4b44; line-height: 1; }
+.wall .night .d { color: #36332e; font-size: 30px; margin-top: 16px; }
+.wall .night .n { color: #36332e; font-size: 24px; margin-top: 26px; }
+
+.wall .full { position: absolute; inset: 0; z-index: 35; background: var(--bg); display: grid; grid-template-columns: 1fr 1fr; align-items: center; }
+.wall .full.center { grid-template-columns: 1fr; place-items: center; }
+.wall .ptext { padding: 0 60px 0 100px; display: grid; gap: 18px; }
+.wall .ptext h2 { margin: 0; font-family: var(--font-display); font-size: 54px; font-weight: 600; line-height: 1.05; letter-spacing: -0.02em; }
+.wall .ptext p { margin: 0; font-size: 22px; color: var(--fg2); line-height: 1.45; }
+.wall .ptext ol { margin: 0; padding-left: 1.2em; font-size: 19px; color: var(--muted); line-height: 1.45; display: grid; gap: 6px; }
+.wall .ptext .warn { color: var(--warm); font-weight: 600; }
+.wall .code { display: flex; gap: 12px; }
+.wall .code span { width: 72px; height: 90px; border: 2px solid var(--line-strong); border-radius: 12px; display: grid; place-items: center; font-family: var(--font-mono); font-size: 44px; }
+.wall .code span.f { border-color: var(--accent); }
+.wall .code i { width: 14px; }
+.wall .pad { display: grid; grid-template-columns: repeat(3, 112px); gap: 14px; justify-content: center; }
+.wall .pad button { height: 94px; border-radius: 14px; border: 1px solid var(--line-strong); background: var(--card); font-family: var(--font-display); font-size: 40px; text-align: center; }
+.wall .pad button.k2 { font-family: var(--font-sans); font-size: 18px; font-weight: 600; background: none; color: var(--muted); }
+.wall .pad button:disabled { opacity: 0.4; }
+.wall .perr { min-height: 30px; font-size: 20px; color: var(--neg); text-align: center; max-width: 520px; }
+.wall .pin { display: grid; gap: 24px; justify-items: center; }
+.wall .pin h2 { margin: 0; font-family: var(--font-display); font-size: 40px; font-weight: 600; }
+.wall .dots4 { display: flex; gap: 20px; }
+.wall .dots4 i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--fg2); }
+.wall .dots4 i.f { background: var(--fg); border-color: var(--fg); }
+.wall .gmenu { width: 540px; border-top: 1px solid var(--line-strong); }
+.wall .gmenu button { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 80px; border-bottom: 1px solid var(--line); font-size: 24px; gap: 16px; }
+.wall .gmenu button span:last-child { font-size: 17px; color: var(--muted); }
+.wall .gmenu button.danger { color: var(--neg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .wall * { animation: none !important; transition: none !important; }
+}

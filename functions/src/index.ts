@@ -57,6 +57,11 @@ export { geminiproxy } from "./geminiProxy";
 // server-side fetch with SSRF guards, so exporting it cannot break CI deploys.
 export { fetchrecipepage } from "./fetchRecipePage";
 
+// Wall display pairing (docs/plans/wall-display-kiosk.md §4.1). Needs the
+// runtime service account to hold Service Account Token Creator on itself
+// for createCustomToken; see docs/WALL_DISPLAY_RUNBOOK.md.
+export { createwallpairing, redeemwallpairing, revokewalldisplay } from "./wall/pairing";
+
 // Stripe billing functions (Plan 050a) live in ./stripe and are fully implemented
 // and unit-tested, but are intentionally NOT exported here yet. Exporting a function
 // deploys it, and deploying these binds the STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET

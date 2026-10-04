@@ -2472,3 +2472,248 @@ describe('challenges (client write shapes must satisfy hasOnly + string timestam
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Wall display identity (docs/plans/wall-display-kiosk.md §4.6)
+// ---------------------------------------------------------------------------
+describe('wall display identity', () => {
+  const DID = 'd1';
+  const DISPLAY_UID = `display_${DID}`;
+  const CLAIMS = { display: true, hid: H1, did: DID };
+
+  function displayDb(claims: Record<string, unknown> = CLAIMS, uid = DISPLAY_UID): Firestore {
+    return asFirestore(testEnv.authenticatedContext(uid, claims).firestore());
+  }
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = asFirestore(ctx.firestore());
+      await setDoc(doc(db, 'households', H1, 'displays', DID), { name: 'Kitchen iPad', status: 'active', createdBy: ALICE });
+      await setDoc(doc(db, 'households', H1, 'displays', 'd2'), { name: 'Hall', status: 'active', createdBy: ALICE });
+      await setDoc(doc(db, 'households', H1, 'displays', 'gone'), { name: 'Old', status: 'revoked', createdBy: ALICE });
+      await setDoc(doc(db, 'households', H1, 'shoppingList', 'milk'), { name: 'Milk', category: 'Dairy', isPurchased: false });
+      await setDoc(doc(db, 'households', H1, 'todos', 't1'), { text: 'Feed the cat', completeByDate: '2026-10-03', isCompleted: false });
+      await setDoc(doc(db, 'households', H1, 'groceryCatalog', 'c1'), { name: 'Milk', category: 'Dairy', purchaseCount: 3 });
+      await setDoc(doc(db, 'households', H1, 'habits', 'hab1'), { title: 'Read', category: 'Health', count: 0, totalCount: 0, completedDates: [], streakDays: 0 });
+      await setDoc(doc(db, 'households', H1, 'meals', 'm1'), { name: 'Tacos', ingredients: [], tags: [] });
+      await setDoc(doc(db, 'households', H1, 'mealPlan', 'p1'), { date: '2026-10-03', mealId: 'm1' });
+      await setDoc(doc(db, 'households', H1, 'wallEvents', 'e1'), { title: 'Soccer', date: '2026-10-03', allDay: false, source: 'feed', ownerKey: 'family' });
+      await setDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { theme: 'light' });
+      await setDoc(doc(db, 'households', H1, 'calendarFeeds', 'f1'), { label: 'School', ownerKey: 'family', kind: 'ics' });
+      await setDoc(doc(db, 'households', H1, 'calendarFeedSecrets', 'f1'), { url: 'https://calendar.google.com/secret.ics' });
+      await setDoc(doc(db, 'households', H1, 'accounts', 'a1'), { name: 'Checking', type: 'checking', balance: 100 });
+      await setDoc(doc(db, 'households', H1, 'buckets', 'b1'), { name: 'Food', limit: 100 });
+      await setDoc(doc(db, 'households', H1, 'calendarItems', 'ci1'), { title: 'Rent', amount: 1000 });
+      await setDoc(doc(db, 'households', H1, 'notificationLog', 'n1'), { type: 'x' });
+      await setDoc(doc(db, 'households', H1, 'recaps', '2026-W40'), { weekId: '2026-W40' });
+      await setDoc(doc(db, 'households', H1, 'activityLog', 'log1'), { actorUid: ALICE, summary: 'x' });
+      await setDoc(doc(db, 'households', H2, 'shoppingList', 'other'), { name: 'Other', category: 'Dairy' });
+      await setDoc(doc(db, 'wallPairings', 'hash1'), { hid: H1, did: DID });
+    });
+  });
+
+  describe('allowed', () => {
+    it('reads the household doc, members, lists, meals and wall data', async () => {
+      const db = displayDb();
+      await assertSucceeds(getDoc(doc(db, 'households', H1)));
+      await assertSucceeds(getDoc(doc(db, 'households', H1, 'members', BOB)));
+      await assertSucceeds(getDocs(collection(db, 'households', H1, 'members')));
+      await assertSucceeds(getDocs(collection(db, 'households', H1, 'shoppingList')));
+      await assertSucceeds(getDocs(collection(db, 'households', H1, 'todos')));
+      await assertSucceeds(getDocs(collection(db, 'households', H1, 'groceryCatalog')));
+      await assertSucceeds(getDoc(doc(db, 'households', H1, 'habits', 'hab1')));
+      await assertSucceeds(getDocs(collection(db, 'households', H1, 'meals')));
+      await assertSucceeds(getDocs(collection(db, 'households', H1, 'mealPlan')));
+      await assertSucceeds(getDocs(collection(db, 'households', H1, 'wallEvents')));
+      await assertSucceeds(getDoc(doc(db, 'households', H1, 'wallSettings', 'config')));
+      await assertSucceeds(getDocs(collection(db, 'households', H1, 'calendarFeeds')));
+      await assertSucceeds(getDoc(doc(db, 'households', H1, 'displays', DID)));
+    });
+
+    it('adds, checks off and deletes shopping items', async () => {
+      const db = displayDb();
+      await assertSucceeds(setDoc(doc(db, 'households', H1, 'shoppingList', 'eggs'), { name: 'Eggs', category: 'Dairy' }));
+      await assertSucceeds(updateDoc(doc(db, 'households', H1, 'shoppingList', 'milk'), { isPurchased: true }));
+      await assertSucceeds(deleteDoc(doc(db, 'households', H1, 'shoppingList', 'milk')));
+    });
+
+    it('creates and updates catalog items', async () => {
+      const db = displayDb();
+      await assertSucceeds(setDoc(doc(db, 'households', H1, 'groceryCatalog', 'c2'), { name: 'Eggs', category: 'Dairy', purchaseCount: 1 }));
+      await assertSucceeds(updateDoc(doc(db, 'households', H1, 'groceryCatalog', 'c1'), { purchaseCount: 4 }));
+    });
+
+    it('adds, completes and deletes to-dos with the member validators', async () => {
+      const db = displayDb();
+      await assertSucceeds(setDoc(doc(db, 'households', H1, 'todos', 't2'), { text: 'Call dentist', completeByDate: '2026-10-04', isCompleted: false, createdBy: DISPLAY_UID }));
+      await assertSucceeds(updateDoc(doc(db, 'households', H1, 'todos', 't1'), { isCompleted: true, completedAt: '2026-10-03T20:00:00.000Z' }));
+      await assertSucceeds(deleteDoc(doc(db, 'households', H1, 'todos', 't1')));
+    });
+
+    it('credits member points (Case 4 body only)', async () => {
+      await assertSucceeds(
+        updateDoc(doc(displayDb(), 'households', H1, 'members', KID), { points: { daily: 5, weekly: 5, total: 5 } })
+      );
+    });
+
+    it('fires a linked habit (counter fields only) and credits household points', async () => {
+      const db = displayDb();
+      await assertSucceeds(
+        updateDoc(doc(db, 'households', H1, 'habits', 'hab1'), {
+          count: 1, totalCount: 1, completedDates: arrayUnion('2026-10-03'), streakDays: 1, lastUpdated: serverTimestamp(),
+        })
+      );
+      await assertSucceeds(updateDoc(doc(db, 'households', H1), { points: { daily: 1, weekly: 1, total: 1 } }));
+    });
+
+    it('logs activity as itself', async () => {
+      await assertSucceeds(
+        setDoc(doc(displayDb(), 'households', H1, 'activityLog', 'log2'), { actorUid: DISPLAY_UID, summary: 'Completed Feed the cat' })
+      );
+    });
+
+    it('heartbeats and saves its own layout', async () => {
+      await assertSucceeds(
+        updateDoc(doc(displayDb(), 'households', H1, 'displays', DID), {
+          lastSeenAt: serverTimestamp(), appVersion: '1.0.2', layout: { modules: ['coming', 'shopping'] },
+        })
+      );
+    });
+  });
+
+  describe('denied', () => {
+    it('cannot read finance, notifications, recaps or the activity log', async () => {
+      const db = displayDb();
+      await assertFails(getDoc(doc(db, 'households', H1, 'transactions', 'txn-seed')));
+      await assertFails(getDoc(doc(db, 'households', H1, 'accounts', 'a1')));
+      await assertFails(getDoc(doc(db, 'households', H1, 'buckets', 'b1')));
+      await assertFails(getDoc(doc(db, 'households', H1, 'calendarItems', 'ci1')));
+      await assertFails(getDoc(doc(db, 'households', H1, 'notificationLog', 'n1')));
+      await assertFails(getDoc(doc(db, 'households', H1, 'apiKeys', 'key-seed')));
+      await assertFails(getDoc(doc(db, 'households', H1, 'recaps', '2026-W40')));
+      await assertFails(getDoc(doc(db, 'households', H1, 'activityLog', 'log1')));
+      await assertFails(getDoc(doc(db, 'households', H1, 'lists', 'x')));
+    });
+
+    it('cannot read calendar feed secrets (nor can members)', async () => {
+      await assertFails(getDoc(doc(displayDb(), 'households', H1, 'calendarFeedSecrets', 'f1')));
+      await assertFails(getDoc(doc(dbFor(ALICE), 'households', H1, 'calendarFeedSecrets', 'f1')));
+      await assertFails(setDoc(doc(dbFor(ALICE), 'households', H1, 'calendarFeedSecrets', 'f2'), { url: 'x' }));
+    });
+
+    it("cannot read or write another household's data", async () => {
+      const db = displayDb();
+      await assertFails(getDoc(doc(db, 'households', H2)));
+      await assertFails(getDoc(doc(db, 'households', H2, 'shoppingList', 'other')));
+      await assertFails(setDoc(doc(db, 'households', H2, 'shoppingList', 'x'), { name: 'X', category: 'Dairy' }));
+    });
+
+    it('cannot list households', async () => {
+      await assertFails(getDocs(collection(displayDb(), 'households')));
+    });
+
+    it('cannot change member profile fields or create a member doc', async () => {
+      const db = displayDb();
+      await assertFails(updateDoc(doc(db, 'households', H1, 'members', BOB), { role: 'admin' }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'members', BOB), { displayName: 'Hacked' }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'members', BOB), { points: { daily: 1 }, role: 'admin' }));
+      await assertFails(setDoc(doc(db, 'households', H1, 'members', DISPLAY_UID), { displayName: 'Wall', role: 'member' }));
+    });
+
+    it('cannot change other household fields or habit definitions', async () => {
+      const db = displayDb();
+      await assertFails(updateDoc(doc(db, 'households', H1), { name: 'Renamed' }));
+      await assertFails(updateDoc(doc(db, 'households', H1), { memberUids: [ALICE, BOB, DISPLAY_UID] }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'habits', 'hab1'), { title: 'Changed' }));
+      await assertFails(setDoc(doc(db, 'households', H1, 'habits', 'hab2'), { title: 'New', category: 'Health' }));
+      await assertFails(deleteDoc(doc(db, 'households', H1, 'habits', 'hab1')));
+    });
+
+    it('cannot write meals, the meal plan, settings, events or feeds', async () => {
+      const db = displayDb();
+      await assertFails(setDoc(doc(db, 'households', H1, 'meals', 'm2'), { name: 'X', ingredients: [], tags: [] }));
+      await assertFails(setDoc(doc(db, 'households', H1, 'mealPlan', 'p2'), { date: '2026-10-04' }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { theme: 'dark' }));
+      await assertFails(setDoc(doc(db, 'households', H1, 'wallEvents', 'e2'), { title: 'Fake' }));
+      await assertFails(setDoc(doc(db, 'households', H1, 'calendarFeeds', 'f2'), { label: 'Fake' }));
+    });
+
+    it('cannot delete catalog items', async () => {
+      await assertFails(deleteDoc(doc(displayDb(), 'households', H1, 'groceryCatalog', 'c1')));
+    });
+
+    it('cannot forge another actor in the activity log', async () => {
+      await assertFails(
+        setDoc(doc(displayDb(), 'households', H1, 'activityLog', 'log3'), { actorUid: ALICE, summary: 'Forged' })
+      );
+    });
+
+    it('cannot read or write another display, or reactivate itself', async () => {
+      const db = displayDb();
+      await assertFails(getDoc(doc(db, 'households', H1, 'displays', 'd2')));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'displays', 'd2'), { layout: { modules: [] } }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { status: 'active', name: 'Renamed' }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['a', 'b', 'c'] } }));
+    });
+
+    it('a revoked display loses all access immediately', async () => {
+      const db = displayDb({ display: true, hid: H1, did: 'gone' }, 'display_gone');
+      await assertFails(getDoc(doc(db, 'households', H1)));
+      await assertFails(getDocs(collection(db, 'households', H1, 'shoppingList')));
+      await assertFails(setDoc(doc(db, 'households', H1, 'shoppingList', 'x'), { name: 'X', category: 'Dairy' }));
+    });
+
+    it('a token whose hid does not match, or with no display doc, gets nothing', async () => {
+      await assertFails(getDoc(doc(displayDb({ display: true, hid: H2, did: DID }), 'households', H1)));
+      await assertFails(getDoc(doc(displayDb({ display: true, hid: H1, did: 'nope' }, 'display_nope'), 'households', H1)));
+      // A display claim pointed at H2 can't read H2 either (no displays/d1 there).
+      await assertFails(getDoc(doc(displayDb({ display: true, hid: H2, did: DID }), 'households', H2)));
+    });
+
+    it('nobody can touch pairing codes from a client', async () => {
+      await assertFails(getDoc(doc(displayDb(), 'wallPairings', 'hash1')));
+      await assertFails(getDoc(doc(dbFor(ALICE), 'wallPairings', 'hash1')));
+      await assertFails(setDoc(doc(dbFor(null), 'wallPairings', 'hash2'), { hid: H1, did: 'x' }));
+    });
+  });
+
+  describe('members and wall data', () => {
+    it('members read displays, events, feeds and settings, and edit settings', async () => {
+      const db = dbFor(BOB);
+      await assertSucceeds(getDocs(collection(db, 'households', H1, 'displays')));
+      await assertSucceeds(getDocs(collection(db, 'households', H1, 'wallEvents')));
+      await assertSucceeds(getDocs(collection(db, 'households', H1, 'calendarFeeds')));
+      await assertSucceeds(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { theme: 'dark', textSize: 'large' }));
+      await assertSucceeds(getDocs(collection(db, 'households', H1, 'mealPlan')));
+      await assertSucceeds(setDoc(doc(db, 'households', H1, 'mealPlan', 'p3'), { date: '2026-10-05', mealId: 'm1' }));
+    });
+
+    it('a member can create the settings doc on first save (merge write)', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await deleteDoc(doc(asFirestore(ctx.firestore()), 'households', H1, 'wallSettings', 'config'));
+      });
+      await assertSucceeds(
+        setDoc(
+          doc(dbFor(BOB), 'households', H1, 'wallSettings', 'config'),
+          { theme: 'dark', timeZone: 'America/Chicago', night: { start: '22:00', end: '06:00' } },
+          { merge: true },
+        ),
+      );
+    });
+
+    it('members cannot forge displays, events, feeds or the sync throttle', async () => {
+      const db = dbFor(ALICE);
+      await assertFails(setDoc(doc(db, 'households', H1, 'displays', 'forged'), { name: 'X', status: 'active' }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'displays', 'gone'), { status: 'active' }));
+      await assertFails(setDoc(doc(db, 'households', H1, 'wallEvents', 'e9'), { title: 'Fake' }));
+      await assertFails(setDoc(doc(db, 'households', H1, 'calendarFeeds', 'f9'), { label: 'Fake' }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { lastManualSyncAt: '2020-01-01' }));
+      await assertFails(setDoc(doc(db, 'households', H1, 'wallSettings', 'other'), { theme: 'dark' }));
+    });
+
+    it('a non-member cannot read wall data', async () => {
+      await assertFails(getDocs(collection(dbFor(CAROL), 'households', H1, 'wallEvents')));
+      await assertFails(getDocs(collection(dbFor(CAROL), 'households', H1, 'displays')));
+    });
+  });
+});

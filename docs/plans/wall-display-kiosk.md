@@ -1,7 +1,11 @@
 # Wall Display (Kiosk Mode)
 
-> **Status:** Phase 0 lab built; device run pending (see
-> [`wall-display-phase0-results.md`](wall-display-phase0-results.md)). Every product and UI decision below was made
+> **Status:** Phase 0 lab built, device run pending (see
+> [`wall-display-phase0-results.md`](wall-display-phase0-results.md)).
+> Phases 1 and 2 (identity + shell) shipped together in one PR; the setup
+> steps are in [`../WALL_DISPLAY_RUNBOOK.md`](../WALL_DISPLAY_RUNBOOK.md).
+> Where the build differs from this plan, the section says so inline
+> ("**As built:**"). Every product and UI decision below was made
 > with the owner in a structured interview (Oct 2026). The clickable UI spec is
 > [`wall-display-prototype.html`](wall-display-prototype.html) in this folder:
 > open it in a browser. Where this document and the prototype disagree, this
@@ -313,7 +317,7 @@ All of these live under `households/{hid}/…`:
 | Function | Trigger | Notes |
 |---|---|---|
 | `createwallpairing` | onCall, admin only (mirror `deletehousehold`'s role check) | Body `{name}`. Creates a pending display and a 6-digit code (crypto random, never starting with 0). Max 3 pending per household. Returns `{code, expiresAt, did}`. |
-| `redeemwallpairing` | onCall, unauthenticated | Body `{code}`. Hash lookup, TTL, attempts ≤ 5 then delete; plus a per-household lockout of 20 failures/hour. Claims + token as in §4.1. |
+| `redeemwallpairing` | onCall, unauthenticated | Body `{code}`. Hash lookup, TTL, claims + token as in §4.1. **As built:** a per-code attempt count can't work (a wrong guess hashes to a different doc, so it never touches the real code), so guessing is bounded by failure windows instead: 10 per caller (hashed IP) and 200 across all callers per hour (`wallPairingThrottle`). The identity is minted before the code is consumed, so an IAM misconfiguration leaves the code usable once fixed. |
 | `revokewalldisplay` | onCall, admin | Body `{did}`. |
 | `syncwallcalendars` | onSchedule `every 15 minutes`, timeoutSeconds 300 | For each household that has feeds, sync each feed, then project bills (below). |
 | `syncwallcalendarsnow` | onCall, member **or** display of that household | Same per-household sync. Throttled to once per 2 min via `wallSettings/config.lastManualSyncAt`. |
@@ -392,6 +396,7 @@ function isDisplayOf(hid) {
   - Add `https://api.open-meteo.com` and `https://geocoding-api.open-meteo.com` to the (report-only) CSP `connect-src`.
   - Add `https://*.cloudfunctions.net` and `https://*.run.app` if they're missing, since callables use them.
 - **Service-worker update prompt** (`index.html:105–146`): the `confirm()` at L129 must not run on a wall.
+  - **As built:** `public/sw.js` calls `skipWaiting()` on install, so a new version activates and the existing `controllerchange` listener reloads every device within seconds of a deploy. A wall therefore just skips the `confirm()` (it would freeze an unattended screen) and reloads like any other device. The 3 am reload below remains the backstop.
   - The registration script checks `localStorage.LB_WALL_DEVICE === '1'`. On a wall it stores the waiting worker on `window.__lbSwUpdate` instead of prompting.
   - `WallApp`'s maintenance timer posts `'skipWaiting'` (the plain string `public/sw.js:446` listens for) during the night window. The existing `controllerchange` listener then reloads.
 - **Manifest:** `orientation` stays `portrait` for phones. iPadOS 16 standalone apps don't enforce it, and the wall is physically mounted. No manifest change is needed.
@@ -424,7 +429,7 @@ run in the node test project), wired in through one `useWallRuntime()` hook.
   - The three time-of-day blocks are the next three of Morning (6–12), Afternoon (12–17), Evening (17–21) and Overnight (21–6). Each shows the median temperature and the dominant weather code.
   - The rain note shows when a precipitation probability of 50% or more falls within the next 12 h, as "Rain likely 6–8 pm".
   - On a failed fetch, keep showing the last good data. Hide the weather after 6 h stale.
-- **Theme:** apply `settings.theme` and `settings.textSize` through the existing `ThemeContext` setters (`setTheme`, font scale `'100' | '115'`). The display device has its own localStorage, so this doesn't affect phones.
+- **Theme:** ~~apply through the `ThemeContext` setters~~ **As built:** the wall root takes `dark` / `large` classes from `wallSettings`, and `components/wall/wall.css` defines both palettes. That keeps a member previewing `#/wall` on their own phone from having their app theme changed, and the wall doesn't depend on the app's `html.dark`.
 
 ### 4.9 Components (`components/wall/`)
 
@@ -485,7 +490,7 @@ prompt per launch is accepted.
 
 ## 5. Phone Settings: Settings → Wall display
 
-New `components/settings/WallDisplaySettings.tsx`, matching the prototype's "Phone settings" screen:
+New `components/settings/WallDisplaySettings.tsx`, matching the prototype's "Phone settings" screen. **As built (Phases 1–2):** Displays, plus Night & look (night hours, theme, text size, weather location) and "Back to calendar after". Calendars, the week-layout modules/rotation and the voice line ship with the phases whose screens use them, so Settings never offers a control that does nothing yet:
 
 1. **Displays** (admin):
    - A list with name, status, last seen (red after 30 min) and **Revoke**.
@@ -541,7 +546,7 @@ Record the results in `docs/plans/wall-display-phase0-results.md`. Delete the la
 | Phase | Contents | Done when |
 |---|---|---|
 | **0 Spike** | §6 | Results doc committed, engine chosen |
-| **1 Identity** | Pairing/revoke functions, `isDisplayOf` rules + full allow/deny tests, AuthContext `isDisplay`, `/wall/pair` screen, login link, `LB_WALL_DEVICE` flag, Settings → Displays section, IAM runbook | Pair a real iPad from a phone; revoke kicks it to `/wall/pair` within one request; `pnpm test:rules` covers the matrix |
+| **1 Identity** (shipped with 2) | Pairing/revoke functions, `isDisplayOf` rules + full allow/deny tests, AuthContext `isDisplay`, `/wall/pair` screen, login link, `LB_WALL_DEVICE` flag, Settings → Displays section, IAM runbook | Pair a real iPad from a phone; revoke kicks it to `/wall/pair` within one request; `pnpm test:rules` covers the matrix |
 | **2 Shell + data** | `HouseholdOrWallProvider`, `WallFirestoreProvider` + `WallSlicesProvider`, rail, top bar (time + weather), status/offline, toast/undo, idle, night, maintenance, SW update handling, Permissions-Policy/CSP, theme/text size from settings, `wallSettings` doc + Settings sections 3–4 | Wall boots signed in as display; no permission-denied errors in console; survives airplane-mode on/off and an overnight cycle; e2e smoke in Test Mode |
 | **3 Calendar backend** | Feed callables, `syncwallcalendars`, `syncwallcalendarsnow`, `projectwallbills`, holidays, stale push, `ical.js`, Settings → Calendars | Google secret iCal, iCloud public link and a school ICS all sync with correct times across a DST change (unit fixtures); paid bill disappears from `wallEvents` within 10 s |
 | **4 Calendar UI** | Week (Today + panel + Coming up), Month, Day, modules framework (switch/add/remove/fit split/duplicate suppression), rotation | Matches prototype at Normal and Large, Light and Dark; 14-day scroll performant on device (no jank on 300 events) |

@@ -81,6 +81,8 @@ describe('App Routing', () => {
     setHouseholdId: vi.fn(),
     accessDeniedEmail: null as string | null,
     clearAccessError: vi.fn(),
+    isDisplay: false,
+    displayId: null,
   };
 
   it('renders Dashboard at root path /', async () => {

@@ -12,6 +12,7 @@ import PlanTabRedirect from './components/auth/PlanTabRedirect';
 import MainLayout from './components/layout/MainLayout';
 import OfflineBanner from './components/layout/OfflineBanner';
 import ErrorBoundary from './components/ErrorBoundary';
+import HouseholdOrWallProvider from './components/wall/HouseholdOrWallProvider';
 import { ConfirmDialogHost } from './components/ui/ConfirmDialogHost';
 import { ToastLimiter } from './components/ui/ToastLimiter';
 // Static import (not lazy): ProtectedRoute already statically imports Loading,
@@ -31,6 +32,10 @@ const Habits = React.lazy(() => import('./pages/Habits'));
 const Settings = React.lazy(() => import('./pages/Settings'));
 const OnboardingWizard = React.lazy(() => import('./components/onboarding/OnboardingWizard'));
 const ListsPage = React.lazy(() => import('./pages/ListsPage'));
+// Wall display (docs/plans/wall-display-kiosk.md §4.2). Lazy so none of it
+// reaches the phone boot bundle.
+const WallMemberRoot = React.lazy(() => import('./components/wall/WallMemberRoot'));
+const WallPairing = React.lazy(() => import('./components/wall/WallPairing'));
 // Wall display Phase 0 device spike (docs/plans/wall-display-kiosk.md §6).
 // Only the wall-lab preview-channel workflow sets VITE_WALL_LAB, so the route
 // doesn't exist in production builds.
@@ -137,7 +142,7 @@ const App: React.FC = () => {
     <HashRouter>
       <ThemeProvider>
       <AuthProviderComponent>
-        <HouseholdProviderComponent>
+        <HouseholdOrWallProvider household={HouseholdProviderComponent}>
           <div className="min-h-screen bg-brand-50 dark:bg-brand-900 font-sans text-brand-800 dark:text-brand-100 transition-colors">
             {isTestMode && (
               <div className="bg-warm-600 text-white text-xs font-bold text-center px-2 py-1 fixed top-0 left-0 right-0 z-banner shadow-raised">
@@ -173,6 +178,21 @@ const App: React.FC = () => {
                   }
                 />
 
+                {/* Wall display: pairing is public (the only screen a signed-out
+                    wall shows); #/wall for a member is the preview. A paired
+                    display never reaches these routes — HouseholdOrWallProvider
+                    renders the wall for it directly. */}
+                <Route path="/wall/pair" element={<WallPairing />} />
+                <Route
+                  path="/wall"
+                  element={
+                    <ProtectedRoute>
+                      <ErrorBoundary>
+                        <WallMemberRoot />
+                      </ErrorBoundary>
+                    </ProtectedRoute>
+                  }
+                />
                 {WallLab && (
                   <Route
                     path="/wall-lab"
@@ -302,7 +322,7 @@ const App: React.FC = () => {
             <ConfirmDialogHost />
             <OfflineBanner />
           </div>
-        </HouseholdProviderComponent>
+        </HouseholdOrWallProvider>
       </AuthProviderComponent>
       </ThemeProvider>
     </HashRouter>
