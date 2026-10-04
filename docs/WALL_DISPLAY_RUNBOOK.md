@@ -34,7 +34,7 @@ the same code again (within its 10 minutes).
 
 ## 2. Prepare the iPad
 
-1. **Update** to the latest iPadOS 16.7.x: Settings → General → Software Update.
+1. **Update** to the latest iPadOS 16.7.x if you can: Settings → General → Software Update. The wall also runs on 16.2 or later, so a failed update isn't a blocker.
 2. **Never lock:** Settings → Display & Brightness → Auto-Lock → **Never**.
 3. **Auto-Brightness off:** Settings → Accessibility → Display & Text Size → Auto-Brightness off.
 4. Open Safari, go to the LifeBalance site, then Share → **Add to Home Screen**.

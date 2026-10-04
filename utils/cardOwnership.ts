@@ -31,9 +31,11 @@ export function normalizeCardDigits(input: unknown): string | null {
     input = String(Math.trunc(input));
   }
   if (typeof input !== 'string') return null;
-  const matches = input.match(/(?<!\d)\d{4}(?!\d)/g);
-  if (!matches || matches.length === 0) return null;
-  return matches[matches.length - 1] ?? null;
+  // A standalone 4-digit run is a maximal digit run of length exactly 4.
+  // (No regex lookbehind: Safari < 16.4 rejects it at parse time, which would
+  // blank the whole app on the iPadOS 16 wall display.)
+  const runs = input.match(/\d+/g)?.filter(run => run.length === 4);
+  return runs?.[runs.length - 1] ?? null;
 }
 
 /**
