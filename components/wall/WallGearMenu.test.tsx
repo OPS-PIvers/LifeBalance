@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { hashKidPin } from '@/utils/kidPin';
 import WallGearMenu from './WallGearMenu';
 
-const props = { title: 'Kitchen iPad', isDisplay: true, onClose: vi.fn(), onReload: vi.fn(), onUnpair: vi.fn() };
+const props = { title: 'Kitchen iPad', isDisplay: true, onClose: vi.fn(), onReload: vi.fn(), onUnpair: vi.fn(), onSyncCalendars: vi.fn(async () => ({ failed: 0 })) };
 
 function typePin(pin: string) {
   for (const d of pin) fireEvent.click(screen.getByRole('button', { name: d }));
@@ -34,5 +34,17 @@ describe('WallGearMenu', () => {
   it('says "Leave the wall" for a member preview', () => {
     render(<WallGearMenu {...props} isDisplay={false} />);
     expect(screen.getByRole('button', { name: /Leave the wall/ })).toBeInTheDocument();
+  });
+
+  it('syncs calendars and reports the outcome in place', async () => {
+    const onSyncCalendars = vi
+      .fn<() => Promise<{ failed: number }>>()
+      .mockResolvedValueOnce({ failed: 1 })
+      .mockRejectedValueOnce(new Error('Calendars synced a moment ago. Try again in a couple of minutes.'));
+    render(<WallGearMenu {...props} onSyncCalendars={onSyncCalendars} />);
+    fireEvent.click(screen.getByRole('button', { name: /Sync calendars now/ }));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent("1 calendar couldn't be read"));
+    fireEvent.click(screen.getByRole('button', { name: /Sync calendars now/ }));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('synced a moment ago'));
   });
 });

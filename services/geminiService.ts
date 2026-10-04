@@ -78,7 +78,7 @@ export type {
  * Override at build/runtime via VITE_GEMINI_MODEL env var.
  * Bump the string here when moving to a newer model.
  */
-export const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-3.1-flash-lite';
+export const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-3.5-flash-lite';
 
 // Initialize Gemini Client.
 // Reads the Vite env var for the API key, falling back to process.env for tests.

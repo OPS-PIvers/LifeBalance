@@ -74,7 +74,7 @@ The wall still switches to its dim night clock on its own.
 
 - **Settings → Wall display** on any phone: night hours, light/dark, text
   size, weather location, and "back to calendar after".
-- **Gear button** (bottom of the wall's left rail): reload, or unpair. It
+- **Gear button** (bottom of the wall's left rail): sync calendars now, reload, or unpair. It
   asks for the **family PIN** when one is set (Settings → Household → Wall
   display → Family PIN; it's the same PIN as Kid Mode's). Without a PIN,
   anyone at the wall can open it.
@@ -82,14 +82,39 @@ The wall still switches to its dim night clock on its own.
   30 minutes (it checks in every 5).
 - The wall reloads itself once a night at 3 am and picks up app updates silently.
 
-## 7. Revoke or replace
+## 7. Calendars
+
+An admin adds calendars on a phone: **Settings → Wall display → Calendars →
+Add a calendar link**. Paste the link, name it, and pick whose it is (the
+owner's color marks its events). The link is checked before it's saved, so a
+bad one fails right there with the reason.
+
+| Calendar | Where the link is |
+|---|---|
+| Google | calendar.google.com → the calendar's **Settings and sharing** → **Secret address in iCal format**. Use the *secret* address; the public one only works for public calendars. |
+| iCloud | Calendar app → the calendar's **(i)** → **Public Calendar** on → **Share Link**. The `webcal://` link is fine as is. |
+| School, team, league | Their **Subscribe**, **iCal** or **.ics** link. |
+
+- Calendars sync every 15 minutes, for households with a paired wall.
+  **Sync now** (Settings, or the wall's gear menu) runs one right away, at
+  most once every 2 minutes.
+- **US holidays** and **Bills on calendar** are toggles in the same section.
+  Bills show their name only; amounts never reach the wall.
+- A link is a password to that calendar: it's stored where neither the app
+  nor the wall can read it back. If one leaks, reset it at the source (Google:
+  **Reset** next to the secret address), then **Edit** the calendar here and
+  paste the new link.
+- If a calendar fails for a day, admins get a push and its line turns red:
+  "Hasn't updated since … · re-paste the link".
+
+## 8. Revoke or replace
 
 - Phone: Settings → Wall display → **Revoke** next to the display. The wall
   loses access on its next request and goes back to its pairing screen.
 - On the wall: gear → **Unpair this iPad** signs it out and turns it back
   into an ordinary LifeBalance install.
 
-## 8. Hardware care
+## 9. Hardware care
 
 The 2015 battery is on the charger permanently. **Check the case edges
 monthly** for swelling: a bulge, or the screen lifting at a corner. If you

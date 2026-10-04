@@ -5,6 +5,7 @@ import { useHouseholdCore, useMealPlan, useShopping, useTodos } from '@/contexts
 import { wallEventConverter, wallSettingsConverter } from '@/utils/firestoreConverters';
 import { DEFAULT_WALL_SETTINGS, effectiveLayout, normalizeLayout } from '@/utils/wall/wallSettings';
 import type { WallEvent, WallLayout, WallSettings } from '@/types/schema';
+import { syncWallCalendarsNow } from '@/components/wall/wallCalendarService';
 import { WallDataContext, type WallData, type WallDataActions } from './wallData';
 import { wallEventWindow } from './wallWindows';
 
@@ -110,8 +111,12 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // Per-device convenience only.
         }
       },
+      syncCalendarsNow: async () => {
+        if (!householdId || sessionStorage.getItem('LIFEBALANCE_TEST_MODE') === 'true') return { failed: 0 };
+        return syncWallCalendarsNow(householdId);
+      },
     }),
-    [shopping, todoSlice]
+    [shopping, todoSlice, householdId]
   );
 
   const value = useMemo<WallData | null>(() => {

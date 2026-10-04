@@ -338,6 +338,15 @@ All of these live under `households/{hid}/…`:
 - **Holidays:** a built-in feed doc with `kind:'holidays'`, pointing at Google's public US holidays ICS. It's created when the first wall is paired and toggled by `holidaysEnabled`.
 - **Bills projection:** expand unpaid, non-deleted expense `calendarItems` across the window. Use the same template/instance rules as `functions/src/shared/bills.ts` `findBillsDueOnDate` and `calendarFeed.ts`: skip paid instances and templates whose instance on that date is paid.
 
+**As built (Phase 3)** (`functions/src/wall/calendar/`):
+- `icsParse.ts` resolves each TZID with `date-fns-tz` rather than ical.js's process-global `TimezoneService`, so one feed's VTIMEZONE can't redefine another household's zone in a shared instance. Non-IANA TZIDs (Outlook's "Eastern Standard Time") map through a small table, then fall back to the file's own VTIMEZONE. CLASS:PRIVATE/CONFIDENTIAL events show as "Busy" with no location.
+- Every redirect hop is checked with `assertFetchableUrl`, not only the final URL.
+- **Cost:** each feed's server-only secret doc keeps an `id → hash` index of the rows it last wrote, plus the body hash and a sync key (window, zone, owner). An unchanged feed costs one secret read and **no `wallEvents` reads**, even when the server sends no ETag. Bills keep their index on `calendarFeedSecrets/_bills`. The scheduled run re-projects bills only when the window or zone moved; `projectwallbills` handles every bill edit.
+- The schedule syncs only households with an **active** display (collection-group query on `displays.status`; field override in `firestore.indexes.json`). Adding a feed syncs it at once either way.
+- The holidays feed is created and removed by the sync itself to match `holidaysEnabled`, not at pairing time. `onwallsettingswritten` re-syncs when `showBills`, `holidaysEnabled` or `timeZone` change.
+- Window: first day of the previous month through the **end** of the month three months out, so Month view always has whole months.
+- Timed events get one row on their start date, even when they run past midnight.
+
 **`geminiproxy` changes** (geminiProxy.ts):
 - In `enforceAiQuota`, accept `request.auth.token.display === true && token.hid === householdId`, provided `displays/{token.did}.status == 'active'` (read inside the same transaction). Skip the `memberUids` check only in that case.
 - Add a `contents` size guard: reject if the base64 inline audio is over 2 MB (about 60 s of AAC).
@@ -490,7 +499,7 @@ prompt per launch is accepted.
 
 ## 5. Phone Settings: Settings → Wall display
 
-New `components/settings/WallDisplaySettings.tsx`, matching the prototype's "Phone settings" screen. **As built (Phases 1–2):** Displays, plus Night & look (night hours, theme, text size, weather location) and "Back to calendar after". Calendars, the week-layout modules/rotation and the voice line ship with the phases whose screens use them, so Settings never offers a control that does nothing yet:
+New `components/settings/WallDisplaySettings.tsx`, matching the prototype's "Phone settings" screen. **As built (Phases 1–3):** Displays; Calendars (Phase 3, `WallCalendarSettings.tsx`: feeds with owner chip and health line, add/edit/remove for admins, the holidays and bills toggles, and Sync now for everyone); Night & look (night hours, theme, text size, weather location) and "Back to calendar after". The week-layout modules/rotation and the voice line ship with the phases whose screens use them, so Settings never offers a control that does nothing yet:
 
 1. **Displays** (admin):
    - A list with name, status, last seen (red after 30 min) and **Revoke**.

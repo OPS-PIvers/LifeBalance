@@ -35,31 +35,9 @@ import {
   isPairingCode,
   normalizeDisplayName,
 } from "./pairingLogic";
+import { HOUSEHOLD_ID_RE, requireAdmin, requireHouseholdId } from "./auth";
 
-const HOUSEHOLD_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const THROTTLE = "wallPairingThrottle";
-
-function requireHouseholdId(raw: unknown): string {
-  if (typeof raw !== "string" || !HOUSEHOLD_ID_RE.test(raw)) {
-    throw new HttpsError("invalid-argument", "A householdId is required.");
-  }
-  return raw;
-}
-
-/** Caller must be signed in as an admin member of the household (mirrors deletehousehold). */
-async function requireAdmin(request: CallableRequest, householdId: string): Promise<string> {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "You must be signed in.");
-  }
-  if (request.auth.token.display === true) {
-    throw new HttpsError("permission-denied", "A wall display can't manage displays.");
-  }
-  const member = await admin.firestore().doc(`households/${householdId}/members/${request.auth.uid}`).get();
-  if (!member.exists || member.data()?.role !== "admin") {
-    throw new HttpsError("permission-denied", "Only a household admin can manage wall displays.");
-  }
-  return request.auth.uid;
-}
 
 const toMillis = (v: unknown): number =>
   v instanceof admin.firestore.Timestamp ? v.toMillis() : typeof v === "number" ? v : 0;

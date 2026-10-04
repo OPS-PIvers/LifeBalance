@@ -9,6 +9,7 @@ interface WallGearMenuProps {
   onClose: () => void;
   onReload: () => void;
   onUnpair: () => void;
+  onSyncCalendars: () => Promise<{ failed: number }>;
 }
 
 const MAX_TRIES = 5;
@@ -18,13 +19,28 @@ const LOCKOUT_MS = 60_000;
  * The wall's only settings surface (plan §3): behind the family (Kid Mode)
  * PIN when one is set. Everything else is configured on the phone.
  */
-const WallGearMenu: React.FC<WallGearMenuProps> = ({ title, pinHash, isDisplay, onClose, onReload, onUnpair }) => {
+const WallGearMenu: React.FC<WallGearMenuProps> = ({ title, pinHash, isDisplay, onClose, onReload, onUnpair, onSyncCalendars }) => {
   const [unlocked, setUnlocked] = useState(!pinHash);
   const [digits, setDigits] = useState('');
   const [error, setError] = useState('');
   const [tries, setTries] = useState(0);
   const [locked, setLocked] = useState(false);
   const unlockTimer = useRef<number | undefined>(undefined);
+  const [syncNote, setSyncNote] = useState('Pulls the latest from every calendar');
+  const [syncing, setSyncing] = useState(false);
+
+  const syncCalendars = async () => {
+    setSyncing(true);
+    setSyncNote('Syncing…');
+    try {
+      const { failed } = await onSyncCalendars();
+      setSyncNote(failed > 0 ? `Synced. ${failed} calendar${failed === 1 ? '' : 's'} couldn't be read; see Settings on a phone.` : 'Synced');
+    } catch (e) {
+      setSyncNote(e instanceof Error && e.message ? e.message : "Couldn't sync. Try again in a minute.");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   useEffect(() => () => window.clearTimeout(unlockTimer.current), []);
 
@@ -89,6 +105,10 @@ const WallGearMenu: React.FC<WallGearMenuProps> = ({ title, pinHash, isDisplay, 
           <button type="button" onClick={onReload}>
             <span>Reload display</span>
             <span>Fixes a stuck screen</span>
+          </button>
+          <button type="button" disabled={syncing} onClick={() => void syncCalendars()}>
+            <span>Sync calendars now</span>
+            <span role="status">{syncNote}</span>
           </button>
           <button type="button" className="danger" onClick={onUnpair}>
             <span>{isDisplay ? 'Unpair this iPad' : 'Leave the wall'}</span>
