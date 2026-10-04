@@ -7,7 +7,7 @@ import { makeWallPeople } from '@/utils/wall/wallPeople';
 import { zonedDateString } from '@/utils/wall/wallTime';
 import { useWallData } from './data/wallData';
 import { useWallRuntime } from './runtime/useWallRuntime';
-import { WallToastContext, useWallToastController } from './wallToast';
+import { WallToastContext, useWallToastController, type WallToaster } from './wallToast';
 import WallDay from './calendar/WallDay';
 import WallMonth from './calendar/WallMonth';
 import WallWeek from './calendar/WallWeek';
@@ -22,6 +22,9 @@ import WallNight from './WallNight';
 import WallRail, { type WallView } from './WallRail';
 import WallToast from './WallToast';
 import WallTopBar from './WallTopBar';
+import WallVoiceBanner from './voice/WallVoiceBanner';
+import { useWallVoice } from './voice/useWallVoice';
+import type { VoiceTarget } from '@/utils/wall/wallVoice';
 import './wall.css';
 
 type Overlay = 'none' | 'weather' | 'gear';
@@ -29,7 +32,6 @@ type CalendarView = 'day' | 'week' | 'month';
 
 const NOTES = {
   offline: "The wall can't reach the internet. It keeps showing what it last saw, and anything you change is saved and syncs when the connection is back.",
-  voice: 'Voice commands are coming in a later update.',
 } as const;
 
 const CAL_VIEWS: { key: CalendarView; label: string }[] = [
@@ -46,7 +48,22 @@ interface WallAppProps {
 /** The wall shell (docs/plans/wall-display-kiosk.md §4.9): rail, top bar, screens, overlays. */
 const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   const data = useWallData();
-  const { toast, dismiss, toaster } = useWallToastController();
+  const { toast, dismiss, toaster: slotToaster } = useWallToastController();
+  // The voice banner and the toast share one slot: a new toast replaces the banner.
+  const cancelVoiceRef = useRef<() => void>(() => undefined);
+  const toaster = useMemo<WallToaster>(
+    () => ({
+      show: (text, undo) => {
+        cancelVoiceRef.current();
+        slotToaster.show(text, undo);
+      },
+      run: (write, text, undo) => {
+        cancelVoiceRef.current();
+        slotToaster.run(write, text, undo);
+      },
+    }),
+    [slotToaster]
+  );
   const [view, setView] = useState<WallView>('calendar');
   const [calView, setCalView] = useState<CalendarView>('week');
   const [dayDate, setDayDate] = useState<string | null>(null);
@@ -68,6 +85,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     setMealDate(null);
     setRotationPaused(false);
     dismiss();
+    cancelVoiceRef.current();
   }, [dismiss]);
   const listActions = useWallListActions(toaster);
   const runtime = useWallRuntime({
@@ -83,6 +101,41 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   const tomorrowFirst = useMemo(() => firstEventOn(data.wallEvents, tomorrow), [data.wallEvents, tomorrow]);
   const dark = data.settings.theme === 'dark';
   const people = useMemo(() => makeWallPeople(data.members, dark), [data.members, dark]);
+
+  const showTarget = (target: VoiceTarget) => {
+    if (target === 'week' || target === 'day' || target === 'month') {
+      setView('calendar');
+      setCalView(target);
+      setDayDate(null);
+    } else {
+      setView(target);
+    }
+    setOverlay('none');
+    setSheet(null);
+    setMealDate(null);
+  };
+  const setRotation = (on: boolean) => {
+    setRotateOverride(on);
+    setRotationPaused(false);
+    setRotated(null);
+  };
+  const voice = useWallVoice({
+    setting: data.settings.voice,
+    today,
+    timeZone: runtime.timeZone,
+    onShow: showTarget,
+    onRotate: setRotation,
+  });
+  useEffect(() => {
+    cancelVoiceRef.current = voice.cancel;
+  }, [voice.cancel]);
+  const listening = voice.state?.phase === 'listening';
+  const startVoice = () => {
+    dismiss();
+    setSheet(null);
+    setOverlay('none');
+    voice.start();
+  };
 
   const rotating = rotateOverride ?? data.settings.rotation.enabled;
   // Compared by content: the providers rebuild the layout object on every snapshot.
@@ -212,7 +265,8 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
           todoBadge={badge}
           offline={runtime.offline}
           onOfflineInfo={() => toaster.show(NOTES.offline)}
-          onMic={() => toaster.show(NOTES.voice)}
+          {...(voice.available ? { onMic: listening ? voice.finish : startVoice } : {})}
+          micLive={listening}
           onGear={() => setOverlay('gear')}
         />
         <div className="main">
@@ -225,11 +279,33 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
             right={topRight}
           />
           {body}
-          {sheet && <WallAddSheet kind={sheet} today={today} people={people} onDone={() => setSheet(null)} />}
+          {sheet && (
+            <WallAddSheet
+              kind={sheet}
+              today={today}
+              people={people}
+              onDone={() => setSheet(null)}
+              {...(voice.available ? { onVoice: startVoice } : {})}
+            />
+          )}
           {overlay === 'weather' && runtime.weather && (
             <WallForecastSheet weather={runtime.weather} place={data.settings.weather?.label} onClose={() => setOverlay('none')} />
           )}
-          {toast && <WallToast key={toast.id} toast={toast} toaster={toaster} onDismiss={dismiss} />}
+          {voice.state ? (
+            <WallVoiceBanner
+              state={voice.state}
+              onFinish={voice.finish}
+              onCancel={voice.cancel}
+              onRetry={startVoice}
+              onUndo={voice.undo}
+              onShow={target => {
+                voice.cancel();
+                showTarget(target);
+              }}
+            />
+          ) : (
+            toast && <WallToast key={toast.id} toast={toast} toaster={toaster} onDismiss={dismiss} />
+          )}
         </div>
         {overlay === 'gear' && (
           <WallGearMenu
@@ -239,9 +315,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
             rotating={rotating}
             rotationIntervalSec={data.settings.rotation.intervalSec}
             onToggleRotation={() => {
-              setRotateOverride(!rotating);
-              setRotationPaused(false);
-              setRotated(null);
+              setRotation(!rotating);
               setOverlay('none');
             }}
             onClose={() => setOverlay('none')}

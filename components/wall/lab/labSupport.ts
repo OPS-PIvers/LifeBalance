@@ -2,32 +2,10 @@
  * Non-component helpers for the Phase 0 wall lab (kept apart from the
  * components so fast refresh works). Throwaway: deleted with the lab.
  */
+import { getSpeechRecognition } from '@/components/wall/voice/voiceEngines';
 import { LAUNCH_ID, isStandalone } from './labLog';
 
-/** The slice of the (webkit)SpeechRecognition API the lab uses; TS's DOM lib omits it. */
-export interface SpeechRecognitionLike {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  maxAlternatives: number;
-  start: () => void;
-  abort: () => void;
-  onstart: (() => void) | null;
-  onspeechstart: (() => void) | null;
-  onspeechend: (() => void) | null;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: { error: string; message?: string }) => void) | null;
-  onend: (() => void) | null;
-}
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
-
-export function getSpeechRecognition(): SpeechRecognitionCtor | undefined {
-  const w = window as unknown as {
-    SpeechRecognition?: SpeechRecognitionCtor;
-    webkitSpeechRecognition?: SpeechRecognitionCtor;
-  };
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition;
-}
+export { getSpeechRecognition, type SpeechRecognitionLike } from '@/components/wall/voice/voiceEngines';
 
 const supports = (css: string) => typeof CSS !== 'undefined' && CSS.supports(css);
 

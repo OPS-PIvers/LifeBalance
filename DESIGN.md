@@ -362,6 +362,24 @@ These are the "generic AI slop" markers the redesign removed:
 
 ---
 
+## 12. Wall display (`#/wall`)
+
+The wall is a separate surface with its own rules: a 1366×1024 iPad on the wall, read from across the kitchen. **The approved prototype `docs/plans/wall-display-prototype.html` is its source of truth**, and everything above applies only where this section doesn't override it.
+
+- **Styles live in `components/wall/wall.css`**, scoped under `.wall` and lazy-loaded with the wall. They're plain CSS, not Tailwind utilities, because the sizes are fixed for one device and come straight from the prototype. Colors come from the app tokens (`--color-brand-*`, `accent-*`, `warm-*`) wherever the prototype matches one.
+- **Theme and size come from `wallSettings`, not the device:** `.wall.dark` and `.wall.large` (`--s: 1.15`, which multiplies body text). Don't make the wall follow `html.dark`. A member previewing `#/wall` on a phone must not have their app theme changed.
+- **Scale:**
+  - touch targets are at least 56 px;
+  - body text is 22 px or more;
+  - the clock and day headings use Besley;
+  - times use tabular numbers.
+- **Member colors:** use `memberColorFor(..., { scheme: 'dark' })` in dark. `DARK_MEMBER_COLORS` must cover every palette color, and a test enforces it.
+- **One bottom-center slot** holds either the dark Undo toast or the voice banner, never both. Every write gets an Undo for 10 s.
+- **Motion:** only the voice pulse, spinner and level bars animate, and `prefers-reduced-motion` turns them off.
+- **Phone chrome is off on the wall:** no phone toasts, no offline banner, no drawers. Wall overlays are the add sheet (top-anchored, above the iPad keyboard), the module menu, the recipe panel and the gear menu.
+
+---
+
 ## Appendix — token quick reference
 
 Defined in [`index.css`](index.css) `@theme`:

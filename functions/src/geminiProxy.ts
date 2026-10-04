@@ -15,7 +15,8 @@
  * SDK path it uses today.
  *
  * Plan 10 adds server-side spend protection before that forward: the caller
- * must be a member of the `householdId` it names, the `aiEnabled` kill-switch
+ * must be a member of the `householdId` it names (or its active wall display,
+ * see AiCaller), the `aiEnabled` kill-switch
  * is honored, and the daily AI quota is checked-and-incremented atomically on
  * the household doc. On the proxy path the SERVER owns the `aiUsage` counter —
  * the client skips its own increment (see geminiService.generateJsonContent),
@@ -136,6 +137,35 @@ export function inlineAudioChars(contents: unknown): number {
   return total;
 }
 
+/** Ids a wall display carries in its token (functions/src/wall/pairing.ts). */
+const DISPLAY_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+
+/**
+ * Who is spending the quota: a household member, or a paired wall display
+ * (uid `display_{did}`, claims `{display, hid, did}`), which is never in
+ * `memberUids`. A display may spend only its own household's quota, and only
+ * while `displays/{did}.status` is `active` (the same test as firestore.rules'
+ * isDisplayOf), so revoking a wall stops its voice commands at once.
+ */
+export type AiCaller = { uid: string; displayId?: undefined } | { uid: string; displayId: string };
+
+/**
+ * Reads the caller out of the callable's auth token. A display token for a
+ * different household, or with a malformed id, is rejected outright.
+ */
+export function aiCallerFrom(
+  auth: { uid: string; token?: Record<string, unknown> },
+  householdId: string
+): AiCaller {
+  const token = auth.token ?? {};
+  if (token.display !== true) return { uid: auth.uid };
+  const did = token.did;
+  if (token.hid !== householdId || typeof did !== "string" || !DISPLAY_ID_RE.test(did)) {
+    throw new HttpsError("permission-denied", "This display belongs to another household.");
+  }
+  return { uid: auth.uid, displayId: did };
+}
+
 /** Shape of the `aiUsage` counter stored on the household doc. */
 interface AiUsage {
   dailyCount: number;
@@ -157,7 +187,7 @@ interface AiUsage {
  *   non-member request never spends the server-side key.
  */
 async function enforceAiQuota(
-  uid: string,
+  caller: AiCaller,
   householdId: string,
   today: string
 ): Promise<void> {
@@ -192,6 +222,10 @@ async function enforceAiQuota(
   // previously did its own get() outside the transaction, doubling the read
   // cost of every proxy call).
   await db.runTransaction(async (txn) => {
+    // Firestore transactions need every read before the first write.
+    const displaySnap = caller.displayId
+      ? await txn.get(db.doc(`households/${householdId}/displays/${caller.displayId}`))
+      : undefined;
     const snap = await txn.get(householdRef);
     if (!snap.exists) {
       throw new HttpsError("not-found", "Household not found.");
@@ -201,8 +235,12 @@ async function enforceAiQuota(
       memberUids?: unknown;
     };
 
-    // Only a member of the household may spend its quota.
-    if (!Array.isArray(data.memberUids) || !data.memberUids.includes(uid)) {
+    // Only a member of the household, or its active wall display, may spend its quota.
+    if (displaySnap) {
+      if (displaySnap.data()?.status !== "active") {
+        throw new HttpsError("permission-denied", "This display has been unpaired.");
+      }
+    } else if (!Array.isArray(data.memberUids) || !data.memberUids.includes(caller.uid)) {
       throw new HttpsError(
         "permission-denied",
         "You are not a member of this household."
@@ -299,7 +337,11 @@ export const geminiproxy = onCall(
     // (Plan 10). Throws before any Gemini call, so an over-cap / non-member
     // request never spends the server-side key. Kept OUTSIDE the try below so
     // its HttpsErrors are not remapped by the upstream-Gemini error mapping.
-    await enforceAiQuota(request.auth.uid, householdId, resolveQuotaDay(today));
+    await enforceAiQuota(
+      aiCallerFrom(request.auth, householdId),
+      householdId,
+      resolveQuotaDay(today)
+    );
 
     try {
       const ai = new GoogleGenAI({ apiKey: geminiApiKey.value() });

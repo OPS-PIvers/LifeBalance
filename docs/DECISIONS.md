@@ -229,3 +229,22 @@ pin it against the LIVE scorer, not only across the twins.
 Comparing the two needs a vantage point where every fixture period is CLOSED (the test uses a week
 later): the live scorer additionally consults `Habit.count` for whichever period contains its
 `today`, and the recap never does. That is a real, intended difference, not drift.
+
+---
+
+## Wall display: a display is not a member, and calendars are ICS only
+
+**A paired wall signs in as `display_{did}`, never as a household member** (`functions/src/wall/pairing.ts`; plan `docs/plans/wall-display-kiosk.md` §4.1). Don't "simplify" it into a member account or a member's long-lived session.
+- **Least privilege.** A member can read finance, which an unattended iPad in the kitchen must not. `firestore.rules` grants a display only the paths that call `isDisplayOf`, so adding it to the catch-all subcollection rule undoes this.
+- **Immediate revoke.** Every display rule also reads `displays/{did}.status`, so Revoke takes effect on the wall's next request. A member's refresh token can't be killed per device like that.
+- **Accounting.** A display isn't in `memberUids`, so it never counts toward the member cap or appears in standings. Writes are attributed to the display's name.
+- **Every server path that checks membership needs an explicit display branch.** `geminiproxy` (voice) and `syncwallcalendarsnow` have one, and both re-check `status == 'active'`. A new callable the wall uses needs the same: copy `requireMemberOrDisplay` (`functions/src/wall/auth.ts`). Don't treat a display claim as membership.
+- `FirebaseHouseholdProvider` must never mount for a display: it attaches finance listeners that fail for it. That's why `HouseholdOrWallProvider` exists.
+
+**Calendars come in only as ICS/iCal links fetched by the server**, never through Google or Apple OAuth on the wall.
+- One mechanism covers Google (the secret iCal address), iCloud (a public link), and school and team feeds.
+- No OAuth tokens to store, refresh or scope. The wall is read-only, so write scopes would be pure risk.
+- A feed URL is a credential. It lives in server-only `calendarFeedSecrets`, is never returned or logged, and is changed only through the `*wallcalendarfeed` callables.
+- The cost is that a Google secret feed can lag by minutes. That's accepted; "Sync now" exists for it.
+- Revisit only if two-way editing from the wall becomes a requirement.
+
