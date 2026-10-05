@@ -421,3 +421,22 @@ html:has(.wall.dark) body { background: #1b1a17; }
 @media (prefers-reduced-motion: reduce) {
   .wall * { animation: none !important; transition: none !important; }
 }
+
+/* Spotlight: the big centered card (voice confirmations, alerts, the brief), read from across the room */
+.wall .spot-scrim { z-index: 36; background: rgba(22, 21, 18, 0.42); }
+.wall .spot { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 37; width: 920px; max-width: calc(100% - 64px); max-height: calc(100% - 64px); overflow-y: auto; background: var(--card); border-radius: 28px; box-shadow: var(--shadow); padding: 44px 56px 40px; display: grid; justify-items: center; text-align: center; gap: 12px; animation: wall-spot-in 0.22s ease-out; }
+.wall .spot-orb { width: 108px; height: 108px; border-radius: 50%; display: grid; place-items: center; font-size: 56px; background: var(--accent); color: var(--on-accent); margin-bottom: 6px; }
+.wall .spot.error .spot-orb { background: var(--surface); color: var(--fg2); }
+.wall .spot.alert .spot-orb { background: var(--warm-fill); color: #fff; }
+.wall .spot.brief .spot-orb { background: var(--warm-fill); color: #fff; }
+.wall .spot-k { font-size: calc(var(--s) * 22px); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.wall .spot-t { font-family: var(--font-display); font-size: calc(var(--s) * 64px); font-weight: 600; line-height: 1.08; letter-spacing: -0.015em; overflow-wrap: anywhere; }
+.wall .spot-d { font-size: calc(var(--s) * 30px); color: var(--fg2); line-height: 1.3; }
+.wall .spot-d b { color: var(--fg); }
+.wall .spot-a { display: flex; gap: 14px; margin-top: 18px; }
+.wall .spot-a .btn { height: 68px; padding: 0 32px; font-size: 24px; }
+@keyframes wall-spot-in { from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); } to { opacity: 1; transform: translate(-50%, -50%); } }
+@media (prefers-reduced-motion: reduce) { .wall .spot { animation: none; } }
+
+/* "Tap to turn on sound": iPadOS keeps audio locked until a touch */
+.wall .sndchip { position: absolute; left: 128px; bottom: 24px; z-index: 29; display: inline-flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 20px; border-radius: 26px; background: var(--card); border: 1px solid var(--line-strong); box-shadow: var(--shadow); font-size: 19px; font-weight: 600; color: var(--fg2); }

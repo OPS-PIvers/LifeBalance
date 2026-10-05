@@ -42,6 +42,9 @@ export function makeWallData(spy: Spy, overrides: Partial<WallData> = {}): WallD
       deleteToDo: spy(async () => undefined),
       setLayout: spy(async () => undefined),
       syncCalendarsNow: spy(async () => ({ failed: 0 })),
+      synthesizeSpeech: spy(async () => {
+        throw new Error('No cloud voice in tests');
+      }),
     },
     ...overrides,
   };

@@ -23,7 +23,9 @@ import WallRail, { type WallView } from './WallRail';
 import WallToast from './WallToast';
 import WallTopBar from './WallTopBar';
 import WallVoiceBanner from './voice/WallVoiceBanner';
-import { useWallVoice } from './voice/useWallVoice';
+import { useWallVoice, type WallVoiceFeedback } from './voice/useWallVoice';
+import WallSoundChip from './sound/WallSoundChip';
+import { WallSoundContext, useSoundState, useWallSoundEngine } from './sound/useWallSound';
 import type { VoiceTarget } from '@/utils/wall/wallVoice';
 import './wall.css';
 
@@ -90,6 +92,24 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     cancelVoiceRef.current();
   }, [dismiss]);
   const listActions = useWallListActions(toaster);
+  // One stable cloud-voice function: the actions object is rebuilt on every
+  // list snapshot, and swapping the synthesizer would empty the audio cache.
+  const synthRef = useRef(data.actions.synthesizeSpeech);
+  useEffect(() => {
+    synthRef.current = data.actions.synthesizeSpeech;
+  }, [data.actions.synthesizeSpeech]);
+  const synthesize = useCallback((text: string) => synthRef.current(text), []);
+  const sound = useWallSoundEngine(data.settings.sound.volume, synthesize);
+  const soundState = useSoundState(sound);
+  /** A chime, then (when Settings says so) the words, timed to start as the chime fades. */
+  const playFeedback = useCallback(
+    (tone: 'ok' | 'error', speech: string, style: 'speak' | 'chime') => {
+      if (style === 'speak') sound.prepare(speech);
+      const wait = sound.chime(tone);
+      if (style === 'speak') window.setTimeout(() => void sound.speak(speech), wait);
+    },
+    [sound]
+  );
   const runtime = useWallRuntime({
     settings: data.settings,
     householdId: data.householdId,
@@ -127,6 +147,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     timeZone: runtime.timeZone,
     onShow: showTarget,
     onRotate: setRotation,
+    onFeedback: (f: WallVoiceFeedback) => playFeedback(f.tone, f.speech, data.settings.sound.confirm),
   });
   useEffect(() => {
     cancelVoiceRef.current = voice.cancel;
@@ -268,88 +289,92 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   }
 
   return (
-    <WallToastContext.Provider value={toaster}>
-      <div className={className} onPointerDownCapture={() => setRotationPaused(true)}>
-        <WallRail
-          view={view}
-          onView={v => {
-            if (v === 'calendar') goCalendar('week');
-            else setView(v);
-            setOverlay('none');
-            setSheet(null);
-            setMealDate(null);
-          }}
-          todoBadge={badge}
-          offline={runtime.offline}
-          onOfflineInfo={() => toaster.show(NOTES.offline)}
-          {...(voice.available ? { onMic: listening ? voice.finish : startVoice } : {})}
-          micLive={listening}
-          onGear={() => setOverlay('gear')}
-        />
-        <div className="main">
-          <WallTopBar
-            now={runtime.now}
-            timeZone={runtime.timeZone}
-            weather={runtime.weather}
+    <WallSoundContext.Provider value={sound}>
+      <WallToastContext.Provider value={toaster}>
+        <div className={className} onPointerDownCapture={() => setRotationPaused(true)}>
+          <WallRail
+            view={view}
+            onView={v => {
+              if (v === 'calendar') goCalendar('week');
+              else setView(v);
+              setOverlay('none');
+              setSheet(null);
+              setMealDate(null);
+            }}
+            todoBadge={badge}
             offline={runtime.offline}
-            onWeather={() => setOverlay('weather')}
-            right={topRight}
+            onOfflineInfo={() => toaster.show(NOTES.offline)}
+            {...(voice.available ? { onMic: listening ? voice.finish : startVoice } : {})}
+            micLive={listening}
+            onGear={() => setOverlay('gear')}
           />
-          {body}
-          {sheet && (
-            <WallAddSheet
-              kind={sheet}
-              today={today}
-              people={people}
-              {...(sheetDate ? { dueDate: sheetDate } : {})}
-              onDone={() => {
-                setSheet(null);
-                setSheetDate(undefined);
+          <div className="main">
+            <WallTopBar
+              now={runtime.now}
+              timeZone={runtime.timeZone}
+              weather={runtime.weather}
+              offline={runtime.offline}
+              onWeather={() => setOverlay('weather')}
+              right={topRight}
+            />
+            {body}
+            {sheet && (
+              <WallAddSheet
+                kind={sheet}
+                today={today}
+                people={people}
+                {...(sheetDate ? { dueDate: sheetDate } : {})}
+                onDone={() => {
+                  setSheet(null);
+                  setSheetDate(undefined);
+                }}
+                {...(voice.available ? { onVoice: startVoice } : {})}
+              />
+            )}
+            {overlay === 'weather' && runtime.weather && (
+              <WallForecastSheet weather={runtime.weather} place={data.settings.weather?.label} onClose={() => setOverlay('none')} />
+            )}
+            {soundState === 'locked' && data.ready && !runtime.nightShowing && <WallSoundChip />}
+            {voice.state ? (
+              <WallVoiceBanner
+                state={voice.state}
+                onFinish={voice.finish}
+                onCancel={voice.cancel}
+                onRetry={startVoice}
+                onUndo={voice.undo}
+                onShow={target => {
+                  voice.cancel();
+                  showTarget(target);
+                }}
+              />
+            ) : (
+              toast && <WallToast key={toast.id} toast={toast} toaster={toaster} onDismiss={dismiss} />
+            )}
+          </div>
+          {overlay === 'gear' && (
+            <WallGearMenu
+              title={data.display?.name ?? data.householdName ?? 'Wall display'}
+              pinHash={data.kidModePinHash}
+              isDisplay={data.isDisplay}
+              rotating={rotating}
+              rotationIntervalSec={data.settings.rotation.intervalSec}
+              onToggleRotation={() => {
+                setRotation(!rotating);
+                setOverlay('none');
               }}
-              {...(voice.available ? { onVoice: startVoice } : {})}
+              onClose={() => setOverlay('none')}
+              onReload={() => window.location.reload()}
+              onUnpair={onLeave}
+              onSyncCalendars={data.actions.syncCalendarsNow}
+              onTestSound={() => playFeedback('ok', 'Sound is on. This is how the wall sounds.', 'speak')}
             />
           )}
-          {overlay === 'weather' && runtime.weather && (
-            <WallForecastSheet weather={runtime.weather} place={data.settings.weather?.label} onClose={() => setOverlay('none')} />
-          )}
-          {voice.state ? (
-            <WallVoiceBanner
-              state={voice.state}
-              onFinish={voice.finish}
-              onCancel={voice.cancel}
-              onRetry={startVoice}
-              onUndo={voice.undo}
-              onShow={target => {
-                voice.cancel();
-                showTarget(target);
-              }}
-            />
-          ) : (
-            toast && <WallToast key={toast.id} toast={toast} toaster={toaster} onDismiss={dismiss} />
+          {runtime.nightShowing && overlay !== 'gear' && (
+            <WallNight now={runtime.now} timeZone={runtime.timeZone} tomorrowFirst={tomorrowFirst} onWake={runtime.wake} />
           )}
         </div>
-        {overlay === 'gear' && (
-          <WallGearMenu
-            title={data.display?.name ?? data.householdName ?? 'Wall display'}
-            pinHash={data.kidModePinHash}
-            isDisplay={data.isDisplay}
-            rotating={rotating}
-            rotationIntervalSec={data.settings.rotation.intervalSec}
-            onToggleRotation={() => {
-              setRotation(!rotating);
-              setOverlay('none');
-            }}
-            onClose={() => setOverlay('none')}
-            onReload={() => window.location.reload()}
-            onUnpair={onLeave}
-            onSyncCalendars={data.actions.syncCalendarsNow}
-          />
-        )}
-        {runtime.nightShowing && overlay !== 'gear' && (
-          <WallNight now={runtime.now} timeZone={runtime.timeZone} tomorrowFirst={tomorrowFirst} onWake={runtime.wake} />
-        )}
-      </div>
-    </WallToastContext.Provider>
+      </WallToastContext.Provider>
+    </WallSoundContext.Provider>
   );
 };
 

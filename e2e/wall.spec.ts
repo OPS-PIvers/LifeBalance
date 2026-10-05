@@ -196,4 +196,17 @@ test.describe('Wall display shell (Test Mode)', () => {
     await mic.click();
     await expect(page.getByRole('group', { name: 'Calendar view' }).getByRole('button', { name: 'Month', exact: true })).toHaveAttribute('aria-pressed', 'true');
   });
+
+  test('a voice result opens the big card, and sound waits for a touch', async ({ page }) => {
+    await fakeSpeech(page, ['stop rotating']);
+    await openWall(page, '15:15:00');
+    // No touch yet: iPadOS would keep audio locked, and the wall says so.
+    await expect(page.getByRole('button', { name: 'Tap to turn on sound' })).toBeVisible();
+    await page.getByRole('button', { name: 'Voice command' }).click();
+    const card = page.getByRole('status', { name: 'Voice' });
+    await expect(card).toContainText('Stopped rotating');
+    await expect(card).toContainText('The panel stays as it is.');
+    // The tap on the mic unlocked sound.
+    await expect(page.getByRole('button', { name: 'Tap to turn on sound' })).toHaveCount(0);
+  });
 });

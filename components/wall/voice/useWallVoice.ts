@@ -29,10 +29,18 @@ import {
 export type WallVoiceState =
   | { phase: 'listening'; interim: string }
   | { phase: 'working'; heard: string | null }
-  | { phase: 'result'; id: number; title: string; text: string; undo?: () => Promise<void>; show?: VoiceTarget }
-  | { phase: 'error'; id: number; title: string; text: string; retry: boolean };
+  | { phase: 'result'; id: number; big: boolean; title: string; text: string; undo?: () => Promise<void>; show?: VoiceTarget }
+  | { phase: 'error'; id: number; big: boolean; title: string; text: string; retry: boolean };
 
 export const WALL_VOICE_BANNER_MS = 10_000;
+/** Results and errors open as the big centered card, then shrink to the banner. */
+export const WALL_VOICE_BIG_MS = 5_000;
+
+/** What the wall plays when a command lands: a chime, and maybe these words. */
+export interface WallVoiceFeedback {
+  tone: 'ok' | 'error';
+  speech: string;
+}
 
 export interface WallVoiceDeps {
   support?: VoiceSupport;
@@ -47,6 +55,8 @@ interface UseWallVoiceOptions {
   timeZone: string;
   onShow: (target: VoiceTarget) => void;
   onRotate: (on: boolean) => void;
+  /** Called once per result or error, for the chime and spoken reply. */
+  onFeedback?: (feedback: WallVoiceFeedback) => void;
   deps?: WallVoiceDeps;
 }
 
@@ -78,7 +88,7 @@ function parseErrorState(error: unknown): { title: string; text: string; retry: 
  * the same list writes as a tap, with Undo. Writes go through
  * useWallListActions, whose toast is captured into the voice banner instead.
  */
-export function useWallVoice({ setting, today, timeZone, onShow, onRotate, deps }: UseWallVoiceOptions) {
+export function useWallVoice({ setting, today, timeZone, onShow, onRotate, onFeedback, deps }: UseWallVoiceOptions) {
   const { householdId, members, groceryCatalog } = useWallData();
   const [state, setState] = useState<WallVoiceState | null>(null);
   const support = useMemo<VoiceSupport>(
@@ -107,9 +117,9 @@ export function useWallVoice({ setting, today, timeZone, onShow, onRotate, deps 
   );
   const act = useWallListActions(voiceToaster);
 
-  const latest = useRef({ members, groceryCatalog, today, timeZone, onShow, onRotate, act, parseText, parseAudio, householdId });
+  const latest = useRef({ members, groceryCatalog, today, timeZone, onShow, onRotate, onFeedback, act, parseText, parseAudio, householdId });
   useEffect(() => {
-    latest.current = { members, groceryCatalog, today, timeZone, onShow, onRotate, act, parseText, parseAudio, householdId };
+    latest.current = { members, groceryCatalog, today, timeZone, onShow, onRotate, onFeedback, act, parseText, parseAudio, householdId };
   });
 
   const available = pickVoiceEngine(setting, support, false) !== null;
@@ -122,30 +132,35 @@ export function useWallVoice({ setting, today, timeZone, onShow, onRotate, deps 
     []
   );
 
-  // Results and errors clear themselves (plan §3: "auto-dismisses after 10 s").
+  // Results and errors open big, shrink to the banner, then clear themselves
+  // (plan §3: "auto-dismisses after 10 s").
+  const doneId = state?.phase === 'result' || state?.phase === 'error' ? state.id : null;
   useEffect(() => {
-    if (state?.phase !== 'result' && state?.phase !== 'error') return undefined;
-    const { id } = state;
-    const timer = window.setTimeout(
-      () => setState(cur => (cur && (cur.phase === 'result' || cur.phase === 'error') && cur.id === id ? null : cur)),
-      WALL_VOICE_BANNER_MS
-    );
-    return () => window.clearTimeout(timer);
-  }, [state]);
+    if (doneId === null) return undefined;
+    const mine = (cur: WallVoiceState | null) => cur && (cur.phase === 'result' || cur.phase === 'error') && cur.id === doneId;
+    const shrink = window.setTimeout(() => setState(cur => (mine(cur) && cur ? { ...cur, big: false } : cur)), WALL_VOICE_BIG_MS);
+    const clear = window.setTimeout(() => setState(cur => (mine(cur) ? null : cur)), WALL_VOICE_BANNER_MS);
+    return () => {
+      window.clearTimeout(shrink);
+      window.clearTimeout(clear);
+    };
+  }, [doneId]);
 
-  const result = useCallback((r: Omit<Extract<WallVoiceState, { phase: 'result' }>, 'phase' | 'id'>) => {
+  const result = useCallback((r: Omit<Extract<WallVoiceState, { phase: 'result' }>, 'phase' | 'id' | 'big'>, speech: string) => {
     seq.current += 1;
-    setState({ phase: 'result', id: seq.current, ...r });
+    setState({ phase: 'result', id: seq.current, big: true, ...r });
+    latest.current.onFeedback?.({ tone: 'ok', speech });
   }, []);
   const fail = useCallback((title: string, text: string, retry = true) => {
     seq.current += 1;
-    setState({ phase: 'error', id: seq.current, title, text, retry });
+    setState({ phase: 'error', id: seq.current, big: true, title, text, retry });
+    latest.current.onFeedback?.({ tone: 'error', speech: title });
   }, []);
 
   const runUndo = useCallback(
     (undo: () => Promise<void>, text: string) => {
       lastUndo.current = null;
-      result({ title: 'Undone', text });
+      result({ title: 'Undone', text }, 'Undone.');
       undo().catch(error => {
         console.error('[wall] voice undo failed:', error);
         fail("Couldn't undo that", 'Remove it from the list instead.', false);
@@ -162,7 +177,10 @@ export function useWallVoice({ setting, today, timeZone, onShow, onRotate, deps 
         setState(null);
       } else if (command.kind === 'rotate') {
         l.onRotate(command.on);
-        result({ title: command.on ? 'Rotating the panel' : 'Stopped rotating', text: command.on ? 'Say “stop rotating” to keep one module.' : 'The panel stays as it is.' });
+        result(
+          { title: command.on ? 'Rotating the panel' : 'Stopped rotating', text: command.on ? 'Say “stop rotating” to keep one module.' : 'The panel stays as it is.' },
+          command.on ? 'Rotating the panel.' : 'Stopped rotating.'
+        );
       } else if (command.kind === 'undo') {
         if (lastUndo.current) runUndo(lastUndo.current.undo, lastUndo.current.text);
         else fail('Nothing to undo', 'Voice can undo the last thing it added.', false);
@@ -197,9 +215,9 @@ export function useWallVoice({ setting, today, timeZone, onShow, onRotate, deps 
         text: action.summary,
         ...(undo ? { undo } : {}),
         show: action.kind === 'shopping' ? 'shopping' : 'todos',
-      });
+      }, action.spoken);
       done?.write.catch(() => {
-        setState(cur => (cur?.phase === 'result' && cur.id === id ? { phase: 'error', id, title: "Couldn't save that", text: 'Try again.', retry: true } : cur));
+        setState(cur => (cur?.phase === 'result' && cur.id === id ? { phase: 'error', id, big: cur.big, title: "Couldn't save that", text: 'Try again.', retry: true } : cur));
       });
     },
     [fail, result]

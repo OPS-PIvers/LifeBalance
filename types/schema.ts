@@ -2123,6 +2123,18 @@ export interface WallDisplay {
  */
 export type WallVoiceEngine = 'auto' | 'speech' | 'audio' | 'off';
 
+/** What the wall plays: a chime alone, or a chime and a spoken line. */
+export type WallSoundStyle = 'speak' | 'chime';
+
+export interface WallSoundSettings {
+  /** After a voice command. */
+  confirm: WallSoundStyle;
+  /** For a starting-soon alert (always silent during the night window). */
+  alerts: WallSoundStyle;
+  /** 0.2–1, the wall's own volume on top of the iPad's. */
+  volume: number;
+}
+
 export interface WallSettings {
   defaultModules: WallModuleKey[];
   rotation: { enabled: boolean; intervalSec: number };
@@ -2133,6 +2145,7 @@ export interface WallSettings {
   showBills: boolean;
   holidaysEnabled: boolean;
   voice: WallVoiceEngine;
+  sound: WallSoundSettings;
   weather?: { lat: number; lon: number; label: string };
   /** IANA zone the wall's clock, night window and calendar use. */
   timeZone?: string;

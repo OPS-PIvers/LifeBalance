@@ -1337,8 +1337,9 @@ service cloud.firestore {
                                  docId == 'config' &&
                                  request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys().hasOnly([
                                    'defaultModules', 'rotation', 'idleReturnSec', 'night', 'theme', 'textSize',
-                                   'showBills', 'holidaysEnabled', 'weather', 'timeZone', 'voice'
+                                   'showBills', 'holidaysEnabled', 'weather', 'timeZone', 'voice', 'sound'
                                  ]) &&
+                                 (request.resource.data.get('sound', null) == null || request.resource.data.sound is map) &&
                                  (request.resource.data.get('defaultModules', null) == null ||
                                    (request.resource.data.defaultModules is list && request.resource.data.defaultModules.size() <= 2)) &&
                                  (request.resource.data.get('rotation', null) == null || request.resource.data.rotation is map) &&

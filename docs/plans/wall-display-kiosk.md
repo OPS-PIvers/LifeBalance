@@ -662,3 +662,46 @@ Record the results in `docs/plans/wall-display-phase0-results.md`. Delete the la
   - `functions/src/wall/**`
   - `docs/WALL_DISPLAY_RUNBOOK.md`, `docs/plans/wall-display-phase0-results.md`
   - `e2e/wall.spec.ts`
+
+## 12. Beyond Echo Show: sound, alerts, the brief, wake word (Oct 2026)
+
+Decided with the owner in a second interview (Oct 5, 2026). The goal is to
+beat an Echo Show or Skylight from **across the room**: you should know a
+command worked, know when to leave, and hear your day, without walking up to
+the wall.
+
+### Decisions
+
+| Topic | Decision |
+|---|---|
+| Voice confirmation | A **big centered card** (64px title) for 5 s, then it shrinks to the bottom banner (Undo + Show list stay for 10 s total). A setting chooses **chime + spoken reply** (default) or **chime only**. |
+| Speech voice | **Google Cloud TTS** (Chirp 3 HD) via the `walltts` callable, falling back to the iPad's built-in voice when offline, slow (>5 s) or refused (then for 10 min). |
+| Starting-soon alerts | **Opt-in per calendar**, timed events only (never all-day, bills or holidays). |
+| Alert timing | **With a location:** a heads-up 10 min before leave-by, then "Leave now" at leave-by. **Without a location:** one alert at a household lead time (default 10 min). |
+| Travel time | **Google Routes, live traffic**, from a home address. Driving by default; a calendar can be set to walk, bike or transit. Rechecked about 90 min before the event. |
+| Home address | Entered in Settings → Wall display, stored **server-only** (like feed URLs). Only the minutes reach the wall. |
+| Alert on screen | A big centered card with a chime for **1 minute**. A setting chooses chime + spoken (default) or chime only. **Night window:** shown on the dimmed screen with no sound. |
+| Day brief | **On voice request** ("what's my day", "what's tomorrow"; after 6 pm "my day" means tomorrow). **Weather + events** with leave-by times. A big card lists the lines and highlights each as it's read. |
+| Wake word | "**Hey Home**", Picovoice Porcupine on-device, **not during the night window**, a mic icon whenever it listens. Proven in `#/wall-lab` on the iPad **before** it goes live. |
+| Reloads | No blind 3 am reload. The wall reloads **only when a new version is deployed, and only during the night window** (a reload re-locks audio and mic until the next touch). A "Tap to turn on sound" chip shows whenever audio is locked. |
+
+### Phases
+
+| Phase | Contents | Status |
+|---|---|---|
+| **B Sound** | `walltts` (+ 500/day cap in `apiUsage/wallTts`), `components/wall/sound/` (Web Audio chimes, cloud voice with cache and fallback, unlock on touch, chip), big card (`WallSpotlight`), spoken confirmations (`VoiceAction.spoken`), Settings → Sound (volume, confirm style), gear **Test sound**, version-gated night reload (`utils/wall/wallVersion.ts`) | Built |
+| **C Alerts** | Per-feed `alerts` + `travelMode`, household lead time, home address (server-only), Routes travel minutes on events, client alert scheduler + card, quiet at night | Next |
+| **D Brief** | Local grammar for "what's my day / tomorrow", spoken lines from weather + events, brief card with line highlight | After C |
+| **A Wake word** | Lab tab: AccessKey + `.ppn` (or a built-in keyword), detection log, false triggers, mic prompts across launches | After D; owner supplies the Picovoice key and "Hey Home" model |
+
+### iPadOS 16 constraints this design works around
+
+- **Audio needs a touch.** Web Audio and `speechSynthesis` stay silent until a
+  touch in the current page session. The engine unlocks on `touchend`,
+  `pointerup`, `click` or `keydown` (capture phase), primes `speechSynthesis`
+  with a silent utterance, and re-unlocks if iPadOS suspends it.
+- **The mic re-prompts per launch.** Fewer reloads means fewer prompts; the
+  wake-word lab measures what's left.
+- **Cloud voice auth.** `walltts` (and Routes in C) use the function's
+  service-account token (`functions/src/wall/googleAuth.ts`), so the only
+  setup is enabling the API (runbook §1).

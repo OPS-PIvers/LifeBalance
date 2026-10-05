@@ -32,6 +32,19 @@ If this step is missing, entering a code on the iPad shows "The server can't
 create display sign-ins yet". The code stays valid, so fix the role and try
 the same code again (within its 10 minutes).
 
+**Spoken replies** use Google Cloud Text-to-Speech through the `walltts`
+function, signed in as the same service account (no API key). Turn the API on
+once:
+
+```sh
+gcloud services enable texttospeech.googleapis.com --project "$PROJECT"
+```
+
+Or in the console: **APIs & Services → Enable APIs → Cloud Text-to-Speech
+API**. Without it the wall still talks, in the iPad's own (more robotic)
+voice. A household can use up to 500 spoken phrases a day; typical use is
+well under 100, inside Google's free monthly allowance.
+
 ## 2. Prepare the iPad
 
 1. **Update** to the latest iPadOS 16.7.x if you can: Settings → General → Software Update. The wall also runs on 16.2 or later, so a failed update isn't a blocker.
@@ -83,13 +96,24 @@ The wall still switches to its dim night clock on its own.
   Every change shows an **Undo** for 10 seconds. A kid's to-do credits their
   points exactly as on the phone, and Undo takes them back. Meals are
   read-only: tap a dinner for its recipe and "Add N missing to Shopping".
-- **Gear button** (bottom of the wall's left rail): sync calendars now, start or stop rotating, reload, or unpair. It
+- **Gear button** (bottom of the wall's left rail): sync calendars now, test sound, start or stop rotating, reload, or unpair. It
   asks for the **family PIN** when one is set (Settings → Household → Wall
   display → Family PIN; it's the same PIN as Kid Mode's). Without a PIN,
   anyone at the wall can open it.
 - **Last seen** on the phone turns red when the wall hasn't checked in for
   30 minutes (it checks in every 5).
-- The wall reloads itself once a night at 3 am and picks up app updates silently.
+- **App updates** install themselves overnight: the wall checks for a new
+  version every 30 minutes and reloads only while the night screen is up.
+  There's no other scheduled reload.
+- **Sound:** iPadOS keeps a web app silent until someone touches the screen
+  after it launches or reloads. While that's the case the wall shows **Tap to
+  turn on sound** at the bottom left; any touch turns it on. Settings → Wall
+  display → Sound sets the volume (on top of the iPad's own) and whether a
+  voice command gets a spoken reply or just a chime. **Test sound** in the
+  gear menu plays both.
+- For a nicer built-in fallback voice, download one on the iPad: Settings →
+  Accessibility → Spoken Content → Voices → English → an **Enhanced** or
+  **Premium** voice. The wall picks it automatically.
 
 ### Voice
 
@@ -103,7 +127,10 @@ Tap the **mic** at the bottom of the rail, or the mic in the Add sheet, and spea
 | "Stop rotating" / "Start rotating" | Same as the gear menu | No |
 | "Undo" | Removes what voice just added | No |
 
-- The banner shows **Undo** and **Show list** for 10 seconds after an add.
+- A result opens as a **big card** in the middle of the screen (readable from
+  across the room) with a chime, and by default a spoken reply ("Added milk
+  and eggs to shopping."). After 5 seconds it shrinks to the bottom banner;
+  **Undo** and **Show list** stay for 10 seconds in all.
 - Voice adds use the household's **daily AI allowance**, the same one the
   phone uses. Settings → Wall display → Voice shows how much is left.
 - iPadOS asks for the microphone the first time voice is used after each

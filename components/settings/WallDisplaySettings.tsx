@@ -16,6 +16,7 @@ import {
   WALL_IDLE_RETURN_OPTIONS,
   WALL_MODULE_KEYS,
   WALL_ROTATION_INTERVALS,
+  WALL_VOLUMES,
   normalizeModules,
 } from '@/utils/wall/wallSettings';
 import {
@@ -438,6 +439,40 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
               />
             </Row>
           )}
+        </SurfaceList>
+      </Section>
+
+      <Section title="Sound">
+        <SurfaceList>
+          <Row className="flex-wrap">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Volume</p>
+              <p className="text-xs text-brand-500 dark:text-brand-400">On top of the iPad’s own volume. Test it from the wall’s gear menu.</p>
+            </div>
+            <SegmentedControl
+              name="Wall volume"
+              size="sm"
+              options={WALL_VOLUMES.map((v, i) => ({ value: String(v), label: ['Low', 'Medium', 'High'][i] ?? String(v) }))}
+              value={String(WALL_VOLUMES.includes(settings.sound.volume) ? settings.sound.volume : DEFAULT_WALL_SETTINGS.sound.volume)}
+              onChange={v => void save({ sound: { ...settings.sound, volume: Number(v) } })}
+            />
+          </Row>
+          <Row className="flex-wrap">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">After a voice command</p>
+              <p className="text-xs text-brand-500 dark:text-brand-400">A big card always shows what happened</p>
+            </div>
+            <SegmentedControl
+              name="After a voice command"
+              size="sm"
+              options={[
+                { value: 'speak', label: 'Chime + speak' },
+                { value: 'chime', label: 'Chime only' },
+              ]}
+              value={settings.sound.confirm}
+              onChange={confirm => void save({ sound: { ...settings.sound, confirm } })}
+            />
+          </Row>
         </SurfaceList>
       </Section>
     </>

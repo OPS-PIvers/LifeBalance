@@ -35,6 +35,8 @@ export interface WallDataActions {
   setLayout: (layout: WallLayout) => Promise<void>;
   /** Re-syncs the household's calendar feeds and bills now (server-throttled to once per 2 min). */
   syncCalendarsNow: () => Promise<{ failed: number }>;
+  /** A natural cloud voice for one phrase (base64 MP3). Rejects where there's none (Test Mode). */
+  synthesizeSpeech: (text: string) => Promise<string>;
 }
 
 export interface WallData {

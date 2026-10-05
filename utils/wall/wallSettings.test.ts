@@ -24,6 +24,7 @@ describe('resolveWallSettings', () => {
       showBills: false,
       holidaysEnabled: false,
       voice: 'audio',
+      sound: { confirm: 'chime', alerts: 'chime', volume: 1 },
       weather: { lat: 44.97, lon: -93.6, label: 'Orono, MN' },
       timeZone: 'America/Chicago',
       lastManualSyncAt: '2026-10-03T20:00:00.000Z',
@@ -38,6 +39,7 @@ describe('resolveWallSettings', () => {
       showBills: false,
       holidaysEnabled: false,
       voice: 'audio',
+      sound: { confirm: 'chime', alerts: 'chime', volume: 1 },
       weather: { lat: 44.97, lon: -93.6, label: 'Orono, MN' },
       timeZone: 'America/Chicago',
       lastManualSyncAt: '2026-10-03T20:00:00.000Z',
@@ -52,6 +54,7 @@ describe('resolveWallSettings', () => {
       night: { start: '25:00', end: 6 },
       theme: 'neon',
       voice: 'telepathy',
+      sound: { confirm: 'sing', alerts: 3, volume: 5 },
       weather: { lat: 200, lon: 0, label: 'x' },
       timeZone: 'Mars/Olympus',
     });

@@ -6,7 +6,7 @@ import type { WallVoiceCommand } from '@/services/geminiService.types';
 import { WallDataContext, type WallData } from '@/components/wall/data/wallData';
 import { makeWallData } from '@/components/wall/data/wallTestData';
 import { VoiceCaptureError, type VoiceCapture, type VoiceEngine } from './voiceEngines';
-import { WALL_VOICE_BANNER_MS, useWallVoice, type WallVoiceDeps } from './useWallVoice';
+import { WALL_VOICE_BANNER_MS, WALL_VOICE_BIG_MS, useWallVoice, type WallVoiceDeps, type WallVoiceFeedback } from './useWallVoice';
 import WallVoiceBanner from './WallVoiceBanner';
 
 vi.mock('@/services/geminiService', () => ({
@@ -46,8 +46,9 @@ const Harness: React.FC<{
   deps: WallVoiceDeps;
   onShow: (t: string) => void;
   onRotate: (on: boolean) => void;
-}> = ({ setting = 'auto', deps, onShow, onRotate }) => {
-  const voice = useWallVoice({ setting, today: TODAY, timeZone: 'America/Chicago', onShow, onRotate, deps });
+  onFeedback: (f: WallVoiceFeedback) => void;
+}> = ({ setting = 'auto', deps, onShow, onRotate, onFeedback }) => {
+  const voice = useWallVoice({ setting, today: TODAY, timeZone: 'America/Chicago', onShow, onRotate, onFeedback, deps });
   return (
     <>
       <button type="button" onClick={voice.start}>
@@ -83,9 +84,10 @@ function setup(opts: { setting?: WallVoiceEngine; parse?: (c: WallVoiceCommand) 
   const data = makeWallData(vi.fn, { shoppingList: [] });
   const onShow = vi.fn();
   const onRotate = vi.fn();
+  const onFeedback = vi.fn();
   const ui = () => (
     <WallDataContext.Provider value={data}>
-      <Harness setting={opts.setting} deps={deps} onShow={onShow} onRotate={onRotate} />
+      <Harness setting={opts.setting} deps={deps} onShow={onShow} onRotate={onRotate} onFeedback={onFeedback} />
     </WallDataContext.Provider>
   );
   const utils = render(ui());
@@ -99,7 +101,7 @@ function setup(opts: { setting?: WallVoiceEngine; parse?: (c: WallVoiceCommand) 
       engines.sessions.at(-1)!.resolve(capture);
     });
   };
-  return { engines, parse, data, onShow, onRotate, rerenderWith, say };
+  return { engines, parse, data, onShow, onRotate, onFeedback, rerenderWith, say };
 }
 
 afterEach(() => {
@@ -139,6 +141,31 @@ describe('wall voice', () => {
     expect(data.actions.deleteShoppingItem).toHaveBeenCalledWith('n1');
     expect(data.actions.deleteShoppingItem).toHaveBeenCalledWith('n2');
     expect(screen.getByText('Undone')).toBeInTheDocument();
+  });
+
+  it('opens as the big card with a spoken reply, then shrinks to the banner', async () => {
+    vi.useFakeTimers();
+    const { say, onFeedback } = setup();
+    await say({ kind: 'text', transcript: 'add milk and eggs' });
+    expect(onFeedback).toHaveBeenCalledWith({ tone: 'ok', speech: 'Added milk and eggs to shopping.' });
+    expect(document.querySelector('.spot')).not.toBeNull();
+    expect(document.querySelector('.vb')).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(WALL_VOICE_BIG_MS);
+    });
+    expect(document.querySelector('.spot')).toBeNull();
+    expect(document.querySelector('.vb')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(WALL_VOICE_BANNER_MS - WALL_VOICE_BIG_MS);
+    });
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('an error is spoken by its title', async () => {
+    const { say, onFeedback } = setup({ command: { transcript: 'sing', intent: 'unknown' } });
+    await say({ kind: 'text', transcript: 'sing' });
+    expect(onFeedback).toHaveBeenCalledWith({ tone: 'error', speech: 'Didn’t catch that' });
   });
 
   it('“Show list” goes to the list it added to', async () => {
