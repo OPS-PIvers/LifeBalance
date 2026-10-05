@@ -167,8 +167,12 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   });
   const alertKey = alert?.key ?? null;
   useEffect(() => {
+    if (!alertKey) return;
+    // An alert outranks the brief: close it first, or the two would cut each
+    // other's speech off line by line and stack two cards.
+    closeBriefRef.current();
     const { speech, style, night } = alertSound.current;
-    if (alertKey && !night) playFeedback('alert', speech, style);
+    if (!night) playFeedback('alert', speech, style);
   }, [alertKey, playFeedback]);
 
   // "What's my day" is asked for out loud, so it's always read out (when sound is on).
@@ -177,6 +181,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     closeBriefRef.current = brief.close;
   }, [brief.close]);
   const openBrief = (asked: 'today' | 'tomorrow' | 'auto') => {
+    alerts.dismiss();
     const day = briefDayFor(asked, zonedParts(runtime.now, runtime.timeZone).hour);
     brief.open(
       composeBrief({

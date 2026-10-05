@@ -236,4 +236,14 @@ test.describe('Wall display shell (Test Mode)', () => {
     await card.getByRole('button', { name: /Stop|Close/ }).click();
     await expect(page.getByRole('status', { name: 'Your day' })).toHaveCount(0);
   });
+
+  test('an alert takes over from the brief', async ({ page }) => {
+    await fakeSpeech(page, ["What's my day?"]);
+    await openWall(page, '15:59:30');
+    await page.getByRole('button', { name: 'Voice command' }).click();
+    await expect(page.getByRole('status', { name: 'Your day' })).toBeVisible();
+    await page.clock.fastForward('00:45');
+    await expect(page.getByRole('alertdialog')).toContainText('Leave in 10 min');
+    await expect(page.getByRole('status', { name: 'Your day' })).toHaveCount(0);
+  });
 });
