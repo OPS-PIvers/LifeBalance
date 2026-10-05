@@ -21,6 +21,9 @@ importers:
       '@google/genai':
         specifier: ^2.8.0
         version: 2.8.0(@modelcontextprotocol/sdk@1.26.0(zod@3.25.76))
+      '@picovoice/cheetah-web':
+        specifier: 4.2.0
+        version: 4.2.0
       '@picovoice/porcupine-web':
         specifier: 4.0.1
         version: 4.0.1
@@ -1321,6 +1324,10 @@ packages:
   '@oxc-project/types@0.133.0':
     resolution: {integrity: sha512-KzkdCd6Uxqnf6l3HOw1xfatAlUURA0g14cvBYFyJ5SaNOQbOUvBr9PKArcPcrNIeRsBdgcUzOGrhKveVpvOIGA==}
 
+  '@picovoice/cheetah-web@4.2.0':
+    resolution: {integrity: sha512-UNSp08j2x8K8PWoelv/vUEtDJ2d0g1eL9Ixpmwzs7MHbfo0Bt5EBvv00NBahDA42dkFgKmZvj6QcWwN6uXrkGw==}
+    engines: {node: '>=18'}
+
   '@picovoice/porcupine-web@4.0.1':
     resolution: {integrity: sha512-FtmVJmxcyZS0zLf3X7Uo2ecnX49gTmw5hqI44LHTlf3VScfqoUT5h7CRSbX9Rqi478bexFpK7fnyMeALDniQ4Q==}
     engines: {node: '>=18'}
@@ -1331,6 +1338,11 @@ packages:
 
   '@picovoice/web-utils@1.4.4':
     resolution: {integrity: sha512-jmwzU3v7ZvL98LbHI0Df99RNz/THCvp8S7DCFvH4KH7GL6kO1YqHDuqdkuy7/xLt+76nbj8R/2LSeVbLsSFGAw==}
+    engines: {node: '>=14'}
+    hasBin: true
+
+  '@picovoice/web-utils@1.4.8':
+    resolution: {integrity: sha512-251nUTlx4yeJAx6vtJj5h/JJ49S2RD97mHDjMTnu+6z7sNhiJQHa4aJu/7YZY1R/G8MSy4oz+zaVOrsRwepXLw==}
     engines: {node: '>=14'}
     hasBin: true
 
@@ -6822,6 +6834,11 @@ snapshots:
 
   '@oxc-project/types@0.133.0': {}
 
+  '@picovoice/cheetah-web@4.2.0':
+    dependencies:
+      '@picovoice/web-utils': 1.4.8
+      yaml: 2.9.0
+
   '@picovoice/porcupine-web@4.0.1':
     dependencies:
       '@picovoice/web-utils': 1.4.4
@@ -6831,6 +6848,10 @@ snapshots:
       commander: 9.5.0
 
   '@picovoice/web-utils@1.4.4':
+    dependencies:
+      commander: 10.0.1
+
+  '@picovoice/web-utils@1.4.8':
     dependencies:
       commander: 10.0.1
 

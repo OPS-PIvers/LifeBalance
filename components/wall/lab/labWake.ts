@@ -37,8 +37,8 @@ const SESSIONS_KEY = 'LB_LAB_WAKE_SESSIONS';
 const MISSES_KEY = 'LB_LAB_WAKE_MISSES';
 const MAX = 500;
 
-/** Porcupine's language model, from Picovoice's own repo (no app asset needed). */
-export const PORCUPINE_MODEL_URL = 'https://cdn.jsdelivr.net/gh/Picovoice/porcupine@v4.0/lib/common/porcupine_params.pv';
+/** Porcupine's language model, from Picovoice's own repo (no app asset needed); the wall uses the same one. */
+export { PORCUPINE_MODEL_URL } from '@/components/wall/voice/deviceEngine';
 
 export const DEFAULT_WAKE_SETTINGS: WakeSettings = { accessKey: '', keyword: 'Computer', sensitivity: 0.5, customLabel: 'Hey Home', customPpn: '' };
 
@@ -141,10 +141,5 @@ export function wakeMarkdown(summary: WakeSummary, settings: WakeSettings): stri
   ].join('\n');
 }
 
-/** File → base64 (for the uploaded .ppn). */
-export async function fileToBase64(file: Blob): Promise<string> {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  let bin = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(bin);
-}
+/** File → base64 (for the uploaded .ppn); shared with Settings → Wall display → Voice. */
+export { fileToBase64 } from '@/utils/wall/wallSettingsView';

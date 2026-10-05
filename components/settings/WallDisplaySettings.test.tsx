@@ -74,6 +74,44 @@ describe('WallDisplaySettings → Voice', () => {
   });
 });
 
+describe('WallDisplaySettings → Voice → Picovoice', () => {
+  const PV = { accessKey: 'abcd1234', keyword: 'Computer', label: 'Computer', sensitivity: 0.5 };
+
+  it('saves an AccessKey and starts on a built-in word', async () => {
+    renderIt();
+    fireEvent.change(screen.getByLabelText('Picovoice AccessKey'), { target: { value: ' key-1 ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save key' }));
+    await waitFor(() => expect(saved()).toMatchObject({ picovoice: { accessKey: 'key-1', keyword: 'Computer', sensitivity: 0.5 } }));
+  });
+
+  it('says on-device voice never uses the allowance, and shows the key only by its last four', () => {
+    mocks.settings = { ...DEFAULT_WALL_SETTINGS, picovoice: PV };
+    renderIt();
+    expect(screen.getByText(/never uses the AI allowance/)).toBeInTheDocument();
+    expect(screen.getByText(/…1234/)).toBeInTheDocument();
+    expect(screen.queryByText('abcd1234')).toBeNull();
+  });
+
+  it('turns hands-free off and picks a word and sensitivity', () => {
+    mocks.settings = { ...DEFAULT_WALL_SETTINGS, picovoice: PV };
+    renderIt();
+    fireEvent.change(screen.getByLabelText('Wake word'), { target: { value: 'Jarvis' } });
+    expect(saved()).toMatchObject({ picovoice: { keyword: 'Jarvis', label: 'Jarvis', accessKey: 'abcd1234' } });
+    fireEvent.click(screen.getAllByRole('radio', { name: 'High' })[0]!);
+    expect(saved()).toMatchObject({ picovoice: { sensitivity: 0.65 } });
+    fireEvent.click(screen.getByRole('radiogroup', { name: 'Hands-free wake word' }).querySelector('[role="radio"]:last-child')!);
+    expect(saved()).toMatchObject({ wakeWord: false });
+  });
+
+  it('uploads a custom .ppn under its label', async () => {
+    mocks.settings = { ...DEFAULT_WALL_SETTINGS, picovoice: PV };
+    renderIt();
+    const file = new File([new Uint8Array([104, 105])], 'hey-home_en_wasm.ppn');
+    fireEvent.change(screen.getByLabelText('Wake word file'), { target: { files: [file] } });
+    await waitFor(() => expect(saved()).toMatchObject({ picovoice: { keyword: 'custom', ppn: 'aGk=', label: 'Hey Home' } }));
+  });
+});
+
 describe('WallDisplaySettings → Sound', () => {
   it('sets the volume and the reply style', () => {
     renderIt();

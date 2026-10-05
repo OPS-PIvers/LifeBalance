@@ -2135,10 +2135,30 @@ export interface WallDisplay {
 
 /** `households/{hid}/wallSettings/config`: one doc, any member may edit. */
 /**
- * How the wall listens: `auto` tries on-device speech recognition and falls
- * back to recorded audio sent to Gemini; `off` hides the mic.
+ * How the wall listens. `device` is Picovoice on the iPad (wake word +
+ * speech-to-text, no Gemini); `speech` is Safari's recognizer, `audio` is
+ * recorded audio sent to Gemini. `auto` uses `device` once a Picovoice
+ * AccessKey is saved, otherwise `speech` falling back to `audio`. `off`
+ * hides the mic.
  */
-export type WallVoiceEngine = 'auto' | 'speech' | 'audio' | 'off';
+export type WallVoiceEngine = 'auto' | 'device' | 'speech' | 'audio' | 'off';
+
+/**
+ * Picovoice setup for the on-device engine (`wallSettings/config.picovoice`).
+ * The AccessKey is a client key by design (Picovoice runs in the browser);
+ * members and the household's displays can read it.
+ */
+export interface WallPicovoice {
+  accessKey: string;
+  /** A Porcupine built-in keyword name, or 'custom' for `ppn`. */
+  keyword: string;
+  /** Base64 of a custom wake word trained for "Web (WASM)". */
+  ppn?: string;
+  /** What the wake word is called on screen, e.g. "Hey Home". */
+  label: string;
+  /** 0–1; higher hears more and false-triggers more. */
+  sensitivity: number;
+}
 
 /** What the wall plays: a chime alone, or a chime and a spoken line. */
 export type WallSoundStyle = 'speak' | 'chime';
@@ -2162,6 +2182,9 @@ export interface WallSettings {
   showBills: boolean;
   holidaysEnabled: boolean;
   voice: WallVoiceEngine;
+  /** Hands-free: listen for the wake word (on-device engine only; never at night). */
+  wakeWord: boolean;
+  picovoice?: WallPicovoice;
   sound: WallSoundSettings;
   /** Starting-soon alerts: minutes ahead for an event with no travel time. */
   alerts: { leadMin: number };

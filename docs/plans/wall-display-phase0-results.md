@@ -103,6 +103,12 @@ Chosen engine: **(pending)**
 
 ## Wake word ("Hey Home", plan §12)
 
+> **Update (Oct 2026):** the wall now listens with Picovoice itself (wake word
+> + on-device speech-to-text, no Gemini), so this run tunes it rather than
+> gating it. Engine A (`webkitSpeechRecognition`) is known dead in Home Screen
+> apps (it fires no events), so check 2 fails by design; see
+> `docs/DECISIONS.md` "Wall voice".
+
 The lab's **Wake word** tab runs Picovoice Porcupine on the iPad with the mic
 open. It decides whether the wall goes hands-free.
 

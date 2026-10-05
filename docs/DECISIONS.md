@@ -288,3 +288,18 @@ later): the live scorer additionally consults `Habit.count` for whichever period
 - The cost is that a Google secret feed can lag by minutes. That's accepted; "Sync now" exists for it.
 - Revisit only if two-way editing from the wall becomes a requirement.
 
+---
+
+## Wall voice: on-device (Picovoice), not Safari's recognizer, not Gemini audio
+
+**Safari's `webkitSpeechRecognition` does not work in a Home Screen app on iPadOS.** It exists, `start()` succeeds, and then it fires nothing: no `start`, no `result`, no `error`, no `end` (WebKit bug 225298). The wall runs as a Home Screen app, so the `speech` engine sat on "Listening" forever with Done doing nothing. It now has a start watchdog (`SPEECH_START_MS` → `unsupported`) and settles on its own after `stop()`/`abort()`. Don't remove either because "the recognizer always ends".
+
+**The answer is Picovoice on the iPad** (`components/wall/voice/deviceEngine.ts`): Porcupine for the wake word, Cheetah for the command, both WebAssembly, fed by one `WebVoiceProcessor` mic stream.
+- **No AI cost.** The owner rejected Recording (every command is a Gemini audio call). The `device` engine never calls Gemini: `parseLocalCommand` + `parseLocalAdd` read everything, and what they can't read is "Didn't catch that". Don't add a Gemini fallback to that path without the owner. The Safari/Recording engines still fall back to Gemini, after the same local grammar.
+- **One mic, handed over, never dropped.** `WebVoiceProcessor` stops the mic whenever its subscriber list empties, and a fresh `getUserMedia` can re-prompt on iPadOS. So Cheetah subscribes BEFORE Porcupine unsubscribes, and the reverse after. `deviceEngine.test.ts` asserts the list never empties.
+- **Cheetah keeps audio until a flush.** Every command ends with one (a cancelled or timed-out command's answer is discarded via `staleFlushes`), or half a sentence would open the next command.
+- **The AccessKey lives in `wallSettings/config.picovoice`**, readable by members and the household's displays. That's by design: Picovoice keys are client keys (the SDK runs in the browser), the free plan has no billing to abuse, and the display has to read it. It is shown in Settings only by its last four characters.
+- **Free plan limits:** Porcupine is unlimited; Cheetah is 5 hours of audio a month. Cheetah only hears audio after the wake word or a tap (a command is capped at 12 s), so that's thousands of commands.
+- **Models load from Picovoice's own repos** (Porcupine via jsDelivr; Cheetah's 35.7 MB model from `raw.githubusercontent.com`, over jsDelivr's 20 MB limit) and are cached in IndexedDB after the first load.
+- **The wake word listens only on a paired display, outside the night window, after a touch has unlocked audio.** Never on a member's phone preview.
+

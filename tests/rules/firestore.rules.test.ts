@@ -2691,6 +2691,15 @@ describe('wall display identity', () => {
       await assertSucceeds(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { sound: { confirm: 'chime', alerts: 'speak', volume: 1 } }));
       await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { sound: 'loud' }));
       await assertSucceeds(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { alerts: { leadMin: 15 } }));
+      await assertSucceeds(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), {
+        voice: 'device',
+        wakeWord: true,
+        picovoice: { accessKey: 'k', keyword: 'custom', ppn: 'AAAA', label: 'Hey Home', sensitivity: 0.5 },
+      }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { wakeWord: 'yes' }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { picovoice: 'k' }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { picovoice: { accessKey: 'k', extra: 1 } }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { picovoice: { accessKey: 'k', ppn: 'x'.repeat(200001) } }));
       await assertSucceeds(getDocs(collection(db, 'households', H1, 'wallTravel')));
       await assertSucceeds(getDocs(collection(db, 'households', H1, 'mealPlan')));
       await assertSucceeds(setDoc(doc(db, 'households', H1, 'mealPlan', 'p3'), { date: '2026-10-05', mealId: 'm1' }));

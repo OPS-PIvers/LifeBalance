@@ -197,8 +197,20 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     );
   };
 
+  // Hands-free only on a paired display (never a member's phone preview), never
+  // at night, and not until a touch has unlocked audio (iPadOS needs one).
+  const wakeWanted = data.settings.wakeWord && data.isDisplay && !runtime.nightShowing && soundState !== 'locked';
   const voice = useWallVoice({
     setting: data.settings.voice,
+    picovoice: data.settings.picovoice,
+    wake: wakeWanted,
+    onWake: () => {
+      brief.close();
+      dismiss();
+      setSheet(null);
+      setOverlay('none');
+      sound.chime('wake');
+    },
     today,
     timeZone: runtime.timeZone,
     onShow: showTarget,
@@ -364,6 +376,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
             onOfflineInfo={() => toaster.show(NOTES.offline)}
             {...(voice.available ? { onMic: listening ? voice.finish : startVoice } : {})}
             micLive={listening}
+            wakeLabel={voice.wakeListening ? data.settings.picovoice?.label : undefined}
             onGear={() => setOverlay('gear')}
           />
           <div className="main">

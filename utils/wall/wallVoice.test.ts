@@ -78,6 +78,11 @@ describe('pickVoiceEngine', () => {
     expect(pickVoiceEngine('audio', { speech: true, audio: false }, false)).toBeNull();
     expect(pickVoiceEngine('audio', both, false)).toBe('audio');
   });
+  it('auto uses the on-device engine once Picovoice is set up', () => {
+    expect(pickVoiceEngine('auto', { ...both, device: true }, false)).toBe('device');
+    expect(pickVoiceEngine('device', { ...both, device: true }, false)).toBe('device');
+    expect(pickVoiceEngine('device', both, false)).toBeNull();
+  });
   it('off hides voice', () => {
     expect(pickVoiceEngine('off', both, false)).toBeNull();
   });
