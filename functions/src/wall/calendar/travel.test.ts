@@ -126,6 +126,20 @@ describe("updateHouseholdTravel", () => {
     expect(two.store.get(`${H}/wallSettings/config`)?.travelError).toBeUndefined();
   });
 
+  it("still cleans up and clears a stale error once nothing alerts", async () => {
+    const s = seed({
+      [`${H}/wallTravel/old`]: { minutes: 5, start: "2026-10-05T08:00:00-05:00" },
+      [`${H}/wallSettings/config`]: { timeZone: "America/Chicago", travelError: "Turn on Routes" },
+      [`${H}/calendarFeeds/kids`]: { alerts: false },
+    });
+    const { db, store } = fakeDb(s);
+    const deps = routes({ status: 200, body: {} });
+    await updateHouseholdTravel(db, "h1", NOW, deps);
+    expect(deps.calls).not.toHaveBeenCalled();
+    expect(store.has(`${H}/wallTravel/old`)).toBe(false);
+    expect(store.get(`${H}/wallSettings/config`)?.travelError).toBeUndefined();
+  });
+
   it("forgets finished events", async () => {
     const { db, store } = fakeDb(seed({ [`${H}/wallTravel/old`]: { minutes: 5, start: "2026-10-05T08:00:00-05:00" } }));
     await updateHouseholdTravel(db, "h1", NOW, routes({ status: 200, body: { routes: [{ duration: "60s" }] } }));

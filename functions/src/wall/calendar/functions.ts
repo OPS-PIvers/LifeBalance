@@ -161,10 +161,10 @@ export const updatewallcalendarfeed = onCall(
     const feedId = requireFeedId(data.feedId);
     const db = admin.firestore();
     const feedRef = db.doc(`households/${householdId}/calendarFeeds/${feedId}`);
-    if (!(await feedRef.get()).exists) throw new HttpsError("not-found", "That calendar doesn't exist.");
+    const current = await feedRef.get();
+    if (!current.exists) throw new HttpsError("not-found", "That calendar doesn't exist.");
 
     const patch: Record<string, unknown> = { ...alertFields(data) };
-    const alertsOnly = Object.keys(patch).length > 0 && data.label === undefined && data.ownerKey === undefined && (data.url === undefined || data.url === "");
     if (data.label !== undefined) patch.label = requireLabel(data.label);
     if (data.ownerKey !== undefined) patch.ownerKey = await requireOwnerKey(householdId, data.ownerKey);
     let prefetched: IcsFetchResult | undefined;
@@ -175,9 +175,13 @@ export const updatewallcalendarfeed = onCall(
       await db.doc(`households/${householdId}/calendarFeedSecrets/${feedId}`).set({ url }, { merge: false });
       patch.stale = false;
     }
+    // Settings sends the whole form, so compare with what's stored: only a new
+    // link or owner changes the events (the label isn't on them). Turning
+    // alerts on or changing how you get there needs no re-sync.
+    const before = current.data() ?? {};
+    const eventsChange = prefetched !== undefined || (patch.ownerKey !== undefined && patch.ownerKey !== before.ownerKey);
     if (Object.keys(patch).length > 0) await feedRef.update(patch);
-    // Turning alerts on or changing how you get there doesn't change the events.
-    if (!alertsOnly) await syncHouseholdCalendars(db, householdId, { onlyFeedId: feedId, prefetched });
+    if (eventsChange) await syncHouseholdCalendars(db, householdId, { onlyFeedId: feedId, prefetched });
     if (patch.alerts !== undefined || patch.travelMode !== undefined) await refreshTravel(householdId);
     return { ok: true };
   }

@@ -65,6 +65,20 @@ async function lookUp(deps: TravelDeps, origin: string, destination: string, mod
   );
 }
 
+/** Deletes travel docs for events that ended over an hour ago. */
+async function forgetFinished(
+  db: Firestore,
+  travelCol: admin.firestore.CollectionReference,
+  existing: Map<string, admin.firestore.DocumentData>,
+  nowMs: number
+): Promise<void> {
+  const stale = [...existing.entries()].filter(([, t]) => typeof t.start !== "string" || Date.parse(t.start) < nowMs - 3_600_000);
+  if (stale.length === 0) return;
+  const batch = db.batch();
+  for (const [id] of stale) batch.delete(travelCol.doc(id));
+  await batch.commit();
+}
+
 export async function updateHouseholdTravel(
   db: Firestore,
   hid: string,
@@ -72,21 +86,27 @@ export async function updateHouseholdTravel(
   deps: TravelDeps = defaultDeps
 ): Promise<{ checked: number }> {
   const home = homeAddress((await db.doc(`households/${hid}/calendarFeedSecrets/${HOME_SECRET_ID}`).get()).data()?.address);
-  if (!home) return { checked: 0 };
   const feeds = await db.collection(`households/${hid}/calendarFeeds`).get();
   const modes = new Map<string, TravelMode>();
   for (const f of feeds.docs) if (f.data().alerts === true) modes.set(f.id, travelModeOf(f.data().travelMode));
-  if (modes.size === 0) return { checked: 0 };
-
+  const travelCol = db.collection(`households/${hid}/wallTravel`);
+  const existing = new Map((await travelCol.get()).docs.map((d) => [d.id, d.data()]));
   const settingsRef = db.doc(`households/${hid}/wallSettings/config`);
   const settings = (await settingsRef.get()).data() ?? {};
+  const nowMs = now.getTime();
+
+  // Nothing to look up (no home address, or no calendar with alerts): still
+  // forget finished events, and drop an error nothing is running into now.
+  if (!home || modes.size === 0) {
+    await forgetFinished(db, travelCol, existing, nowMs);
+    if (typeof settings.travelError === "string") await settingsRef.set({ travelError: admin.firestore.FieldValue.delete() }, { merge: true });
+    return { checked: 0 };
+  }
+
   const tz = await householdTimeZone(db, hid, settings);
   const days = [formatInTimeZone(now, tz, "yyyy-MM-dd"), formatInTimeZone(new Date(now.getTime() + 86_400_000), tz, "yyyy-MM-dd")];
   const events = await db.collection(`households/${hid}/wallEvents`).where("date", "in", days).get();
-  const travelCol = db.collection(`households/${hid}/wallTravel`);
-  const existing = new Map((await travelCol.get()).docs.map((d) => [d.id, d.data()]));
   const homeKey = homeKeyOf(home);
-  const nowMs = now.getTime();
 
   let checked = 0;
   let error: string | null = null;
@@ -118,13 +138,7 @@ export async function updateHouseholdTravel(
     }
   }
 
-  // Forget finished events.
-  const stale = [...existing.entries()].filter(([, t]) => typeof t.start !== "string" || Date.parse(t.start) < nowMs - 3_600_000);
-  if (stale.length > 0) {
-    const batch = db.batch();
-    for (const [id] of stale) batch.delete(travelCol.doc(id));
-    await batch.commit();
-  }
+  await forgetFinished(db, travelCol, existing, nowMs);
 
   const before = typeof settings.travelError === "string" ? settings.travelError : null;
   if (error !== before && (error !== null || checked > 0)) {
