@@ -32,17 +32,24 @@ which is how `needsReview` silently denied every approve.
 
 ---
 
-## Bill ↔ transaction matching: the amount tolerance is deliberate
+## Bill ↔ transaction matching: the amount tolerance guards GUESSES only
 
-**Decided 2026-07-27 (2H).** Two tests pin this. Do not "fix" it by widening the window.
+**Decided 2026-07-27 (2H); revised 2026-10-05 by the owner.** Tests in both matcher copies pin this.
 
-Only the **rule** tier bypasses the ±10% / ±$25 amount guard. The **alias** tier is gated by it, so on
-a variable-amount utility a learned alias still will not match — `Cpenergy Mngco` at $37.91 against a
-$142.00 scheduled Centerpoint bill stays two rows even after the alias is learned.
+The ±10% / ±$25 amount guard applies only to the **token** tier (a bill title sharing a word with the
+bank text), which is a guess. The **rule** tier (a merchant rule's `billId`) and the **alias** tier (a
+bank descriptor previously linked to that exact bill) are explicit links, so they bypass it: a
+variable bill (`Cpenergy Mngco` at $37.91 against a $142.00 scheduled Centerpoint bill) settles at
+what it actually cost.
 
-That is the correct trade. A false positive here **silently marks the wrong bill paid**, which is
-worse than a visible duplicate. The affordance gap it leaves was closed by giving the user an explicit
-merge action (`settleBillWithTransaction`), not by loosening matching.
+The original 2H decision gated the alias tier too, preferring a visible duplicate over a wrong bill
+marked paid. The owner reversed that: the risk is bounded because an alias is an exact, full-text
+match that a person created (and can retract with `forgetBillDescriptorAlias`), and an alias naming
+two unpaid bills still matches neither. What the guard used to protect against — a price the user
+didn't expect — is now surfaced instead of blocking: the sync stamps `Transaction.billPriceChange`
+and the Dashboard's `BillPriceChangeCard` asks the household to acknowledge it (and offers the
+buckets when it cost more). Don't re-gate the alias tier to "fix" a surprising settle; retract the
+alias.
 
 ---
 

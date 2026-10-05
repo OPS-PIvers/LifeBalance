@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import type { BankEmailWithdrawal } from "./bankEmailParser";
 import type { ReconcileCandidate } from "./reconcile";
 import {
+  billPriceChangeFor,
   dayGap,
   significantTokens,
   shareSignificantToken,
@@ -362,6 +363,29 @@ describe("pickBillToPay", () => {
     const got = pickBillToPay(w, [aliasBill]);
     expect(got?.bill.id).toBe("electric");
     expect(got?.matchedBy).toBe("alias");
+  });
+
+  it("pays via a learned alias even far outside the amount tolerance", () => {
+    // A learned alias is an explicit link, not a guess — the variable utility
+    // settles at what it actually cost and the difference is flagged instead.
+    const w = withdrawal({ descriptor: "CPENERGY MNGCO", amount: 37.91 });
+    const gas = bill({
+      id: "gas",
+      title: "Centerpoint Energy (Natural Gas)",
+      amount: 142,
+      bankDescriptorAliases: ["CPENERGY MNGCO"],
+    });
+    expect(billAmountWithinTolerance(142, 37.91)).toBe(false);
+    const got = pickBillToPay(w, [gas]);
+    expect(got?.bill.id).toBe("gas");
+    expect(got?.matchedBy).toBe("alias");
+  });
+
+  it("still refuses an alias that names two unpaid bills", () => {
+    const w = withdrawal({ descriptor: "CPENERGY MNGCO", amount: 37.91 });
+    const a = bill({ id: "a", amount: 142, bankDescriptorAliases: ["CPENERGY MNGCO"] });
+    const b = bill({ id: "b", amount: 60, bankDescriptorAliases: ["CPENERGY MNGCO"] });
+    expect(pickBillToPay(w, [a, b])).toBeNull();
   });
 
   it("returns null when amount is out of tolerance", () => {
@@ -1082,5 +1106,22 @@ describe("emailAddsNothingNew", () => {
         storedEnding: -50.0,
       })
     ).toBe(true);
+  });
+});
+
+describe("billPriceChangeFor", () => {
+  it("is empty when the bill was paid at exactly its scheduled amount", () => {
+    expect(billPriceChangeFor({ title: "Rent", amount: 1500 }, 1500)).toEqual({});
+    // Float drift never reads as a price change.
+    expect(billPriceChangeFor({ title: "Rent", amount: 0.1 + 0.2 }, 0.3)).toEqual({});
+  });
+
+  it("records the scheduled amount when the price went up or down", () => {
+    expect(billPriceChangeFor({ title: "Gas", amount: 142 }, 187.4)).toEqual({
+      billPriceChange: { billTitle: "Gas", scheduledAmount: 142 },
+    });
+    expect(billPriceChangeFor({ title: "Gas", amount: 142 }, 37.91)).toEqual({
+      billPriceChange: { billTitle: "Gas", scheduledAmount: 142 },
+    });
   });
 });

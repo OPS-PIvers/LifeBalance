@@ -110,13 +110,22 @@ describe('pickBillToPay', () => {
     expect(got?.matchedBy).toBe('token');
   });
 
-  it('refuses an alias match outside the amount tolerance', () => {
+  // The variable utility: once the household has linked this exact bank text to
+  // the bill, the price it actually came in at no longer blocks the match — the
+  // difference is surfaced for acknowledgement instead (see docs/DECISIONS.md).
+  it('matches a learned alias even outside the amount tolerance', () => {
     const learned = bill({
       amount: 142,
       title: 'Centerpoint Energy (Natural Gas)',
       bankDescriptorAliases: ['CPENERGY MNGCO'],
     });
-    expect(pickBillToPay({ descriptor: 'Cpenergy Mngco', amount: 37.91 }, [learned])).toBeNull();
+    const got = pickBillToPay({ descriptor: 'Cpenergy Mngco', amount: 37.91 }, [learned]);
+    expect(got?.bill.id).toBe(learned.id);
+    expect(got?.matchedBy).toBe('alias');
+  });
+
+  it('still refuses a title token-overlap outside the amount tolerance', () => {
+    expect(pickBillToPay({ descriptor: 'XCEL ENERGY WEB PYMT', amount: 900 }, [bill()])).toBeNull();
   });
 
   it('refuses to guess when two candidates are ambiguous', () => {

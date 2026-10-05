@@ -16,8 +16,8 @@
  *                PAY), the bill is settled by it too — see `decideWithdrawal`
  *   d. PAY     — pay a matching unpaid calendar bill (a household-authored
  *                merchant rule's `billId`, OR a learned alias, OR descriptor
- *                token-overlap with the title; the latter two additionally
- *                require the amount within ±10% or ±$25)
+ *                token-overlap with the title; only the last additionally
+ *                requires the amount within ±10% or ±$25)
  *   e. CREATE  — otherwise a new verified, `needsCategory` transaction
  *
  * KEEP THE BILL-MATCHING SLICE IN LOCKSTEP with its client twin
@@ -390,16 +390,20 @@ export function pickBillToPay(
     // named.length === 0 → the bill isn't payable right now; fall through.
   }
 
-  const inTol = candidates.filter((c) =>
-    billAmountWithinTolerance(c.amount, withdrawal.amount)
-  );
-  if (inTol.length === 0) return null;
-
-  const aliasMatches = inTol.filter((c) =>
+  // A learned alias is the bank's exact text that a person (or an earlier
+  // confirmed match) linked to this bill — not a guess, so like a rule it is NOT
+  // held to the amount window. That is what lets a variable bill (a utility, a
+  // card statement) settle at whatever it actually cost; the price difference
+  // is surfaced for acknowledgement (`billPriceChangeFor`) instead of blocking.
+  const aliasMatches = candidates.filter((c) =>
     matchesAlias(withdrawal.descriptor, c.bankDescriptorAliases)
   );
   if (aliasMatches.length === 1) return { bill: aliasMatches[0]!, matchedBy: "alias" };
   if (aliasMatches.length > 1) return null; // ambiguous alias → don't guess
+
+  const inTol = candidates.filter((c) =>
+    billAmountWithinTolerance(c.amount, withdrawal.amount)
+  );
 
   const tokenMatches = inTol.filter((c) =>
     shareSignificantToken(withdrawal.descriptor, c.title)
@@ -750,4 +754,34 @@ export function emailAddsNothingNew(input: EmailAddsNothingNewInput): boolean {
     signedCents(incomingAvailable) === signedCents(storedAvailable) &&
     signedCents(incomingEnding) === signedCents(storedEnding)
   );
+}
+
+// ---------------------------------------------------------------------------
+// Price change on a settled bill
+// ---------------------------------------------------------------------------
+
+/** What a settled bill was planned at, stamped on the paying transaction. */
+export interface BillPriceChange {
+  billTitle: string;
+  /** The bill's SCHEDULED amount, decimal dollars. */
+  scheduledAmount: number;
+}
+
+/**
+ * When a bill settles at a different amount than it was scheduled for, the
+ * transaction that paid it carries `billPriceChange` so the Action Queue can ask
+ * the household to acknowledge the difference (and rebalance a bucket if it
+ * cost more). Cent-exact comparison; an exact payment carries nothing.
+ */
+export function billPriceChangeFor(
+  bill: Pick<BillPayCandidate, "title" | "amount">,
+  paidAmount: number
+): { billPriceChange: BillPriceChange } | Record<string, never> {
+  if (cents(bill.amount) === cents(paidAmount)) return {};
+  return {
+    billPriceChange: {
+      billTitle: bill.title,
+      scheduledAmount: Math.round(Math.abs(bill.amount) * 100) / 100,
+    },
+  };
 }

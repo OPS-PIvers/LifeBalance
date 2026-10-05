@@ -90,6 +90,7 @@ import {
   type BillPayCandidate,
   type BillPayMatch,
   type PaidIncomeLike,
+  billPriceChangeFor,
 } from "./bankSyncMatch";
 import {
   sendNotificationToUser,
@@ -1037,13 +1038,11 @@ export const bankEmailSync = onRequest(
             // the household already filed into a bucket keeps its category;
             // an unfiled one is filed as the bill payment, exactly as the
             // client's settleBillWithTransaction does.
+            const confirmPaid = Math.round(w.amount * 100) / 100;
             const billLink = decision.bill
               ? {
-                  paidCalendarItemId: stageBillPaid(
-                    decision.bill,
-                    w.descriptor,
-                    Math.round(w.amount * 100) / 100
-                  ),
+                  paidCalendarItemId: stageBillPaid(decision.bill, w.descriptor, confirmPaid),
+                  ...billPriceChangeFor(decision.bill.bill, confirmPaid),
                   ...(!refilesAsBill
                     ? {}
                     : {
@@ -1090,6 +1089,9 @@ export const bankEmailSync = onRequest(
               payPeriodId: billPayPeriodId,
               accountId: resolvedAccountId,
               bankRef: w.bankRef,
+              // Settled at a different price than planned → the Action Queue
+              // asks the household to acknowledge the difference.
+              ...billPriceChangeFor(bill, paidAmount),
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
             });
             break;

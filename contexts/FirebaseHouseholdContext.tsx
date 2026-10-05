@@ -130,6 +130,7 @@ import {
   makePayCalendarItem,
   makeDeferCalendarItem,
   makeForgetBillDescriptorAlias,
+  makeAcknowledgeBillPriceChange,
   makeLinkBankTransactionToBill,
   makeSettleBillWithTransaction,
 } from '@/contexts/household/mutations/calendarMutations';
@@ -2079,6 +2080,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeForgetBillDescriptorAlias({ db, householdId }).forgetBillDescriptorAlias(calendarItemId, alias);
   }, [householdId]);
 
+  const acknowledgeBillPriceChange = useCallback(async (transactionId: string) => {
+    await makeAcknowledgeBillPriceChange({ db, householdId }).acknowledgeBillPriceChange(transactionId);
+  }, [householdId]);
+
   const settleBillWithTransaction = useCallback(async (
     transactionId: string,
     calendarItemId: string,
@@ -2892,6 +2897,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     linkBankTransactionToBill,
     settleBillWithTransaction,
     forgetBillDescriptorAlias,
+    acknowledgeBillPriceChange,
     addTransaction,
     addTransactions,
     updateTransactionCategory,
@@ -2914,7 +2920,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     defaultAccountId, setDefaultAccountId,
     addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, setBucketLimits, saveCeremonyChanges, reallocateBucket,
-    addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem, linkBankTransactionToBill, settleBillWithTransaction, forgetBillDescriptorAlias,
+    addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem, linkBankTransactionToBill, settleBillWithTransaction, forgetBillDescriptorAlias, acknowledgeBillPriceChange,
     addTransaction, addTransactions, updateTransactionCategory, reverseTransactionApproval, updateTransaction, deleteTransaction, splitTransaction,
     setTransactionSplit, markSplitSettled,
     mergeTransactions, keepBothTransactions, getTransactionComments, addTransactionComment, deleteTransactionComment,

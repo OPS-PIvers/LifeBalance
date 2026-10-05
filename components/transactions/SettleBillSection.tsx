@@ -18,9 +18,10 @@ export interface SettleBillSectionProps {
    * `matchedBills` entry, when the shared descriptor matcher linked the two.
    * Pre-selects that bill so the common case is one tap. Absent for everything
    * else, which is most of the time: the motivating Centerpoint case does NOT
-   * match (the alias tier sits behind a ±10%/±$25 amount guard a variable
-   * utility bill fails), which is exactly why the picker below is offered on
-   * ANY transaction rather than only on matched ones.
+   * match on a first sighting (no learned alias yet, and title token-overlap
+   * sits behind a ±10%/±$25 amount guard a variable utility bill fails), which
+   * is exactly why the picker below is offered on ANY transaction rather than
+   * only on matched ones.
    */
   matchedBill?: { id: string; title: string };
   /**

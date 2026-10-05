@@ -389,6 +389,9 @@ export interface HouseholdContextType {
    *  into `updateCalendarItem`, whose field allowlist omits this array on
    *  purpose so a stale-snapshot Save can never clobber it. */
   forgetBillDescriptorAlias: (calendarItemId: string, alias: string) => Promise<void>;
+  /** Clear `Transaction.billPriceChange` once the household has seen that a
+   *  bill settled at a different price than planned. No money field moves. */
+  acknowledgeBillPriceChange: (transactionId: string) => Promise<void>;
   /** TODO.md 2H(a) — "this charge IS that planned bill". Settles an unpaid
    *  expense calendar item using an EXISTING transaction, creating no second
    *  transaction: marks the bill paid at the transaction's (scanned) amount,
@@ -853,7 +856,7 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal'
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'setBucketLimits' | 'saveCeremonyChanges' | 'reallocateBucket'
   | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
-  | 'linkBankTransactionToBill' | 'settleBillWithTransaction' | 'forgetBillDescriptorAlias'
+  | 'linkBankTransactionToBill' | 'settleBillWithTransaction' | 'forgetBillDescriptorAlias' | 'acknowledgeBillPriceChange'
   | 'addTransaction' | 'addTransactions' | 'updateTransactionCategory' | 'reverseTransactionApproval' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
   | 'setTransactionSplit' | 'markSplitSettled'
   | 'mergeTransactions' | 'keepBothTransactions'

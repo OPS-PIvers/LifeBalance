@@ -213,13 +213,17 @@ export function pickBillToPay(
     if (namedBill) return { bill: namedBill, matchedBy: 'rule' };
   }
 
-  const inTol = candidates.filter(c => billAmountWithinTolerance(c.amount, charge.amount));
-  if (inTol.length === 0) return null;
-
-  const aliasMatches = inTol.filter(c => matchesAlias(charge.descriptor, c.bankDescriptorAliases));
+  // A learned alias is the bank's exact text that a person (or an earlier
+  // confirmed match) linked to this bill — not a guess, so like a rule it is NOT
+  // held to the amount window. That is what lets a variable bill (a utility, a
+  // card statement) settle at whatever it actually cost; the price difference
+  // is surfaced for acknowledgement rather than blocking the match.
+  const aliasMatches = candidates.filter(c => matchesAlias(charge.descriptor, c.bankDescriptorAliases));
   if (aliasMatches.length > 1) return null; // ambiguous alias → don't guess
   const [aliasBill] = aliasMatches;
   if (aliasBill) return { bill: aliasBill, matchedBy: 'alias' };
+
+  const inTol = candidates.filter(c => billAmountWithinTolerance(c.amount, charge.amount));
 
   const tokenMatches = inTol.filter(c => shareSignificantToken(charge.descriptor, c.title));
   if (tokenMatches.length > 1) return null;

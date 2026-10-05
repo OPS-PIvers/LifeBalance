@@ -63,6 +63,7 @@ vi.mock('@/utils/firestoreSanitizer', () => ({
 
 import { updateDoc } from 'firebase/firestore';
 import {
+  makeAcknowledgeBillPriceChange,
   makeForgetBillDescriptorAlias,
   makeLinkBankTransactionToBill,
   makePayCalendarItem,
@@ -623,5 +624,29 @@ describe('makeForgetBillDescriptorAlias', () => {
       householdId: HOUSEHOLD_ID,
     });
     await expect(forgetBillDescriptorAlias('bill-1', 'CPENERGY MNGCO')).rejects.toThrow();
+  });
+});
+
+describe('makeAcknowledgeBillPriceChange', () => {
+  beforeEach(() => {
+    vi.mocked(updateDoc).mockClear();
+  });
+
+  it('clears only the price-change marker — no money field is written', async () => {
+    const { acknowledgeBillPriceChange } = makeAcknowledgeBillPriceChange({ db, householdId: HOUSEHOLD_ID });
+    await acknowledgeBillPriceChange('tx-1');
+
+    const [ref, payload] = vi.mocked(updateDoc).mock.calls[0] as unknown as [
+      { __path: string },
+      Record<string, unknown>,
+    ];
+    expect(ref.__path).toBe(`households/${HOUSEHOLD_ID}/transactions/tx-1`);
+    expect(payload).toEqual({ billPriceChange: { __deleteField: true } });
+  });
+
+  it('no-ops without a household', async () => {
+    const { acknowledgeBillPriceChange } = makeAcknowledgeBillPriceChange({ db, householdId: null });
+    await acknowledgeBillPriceChange('tx-1');
+    expect(updateDoc).not.toHaveBeenCalled();
   });
 });

@@ -3343,6 +3343,14 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Forgotten — future syncs won’t match that name');
   }, []);
 
+  // Mirrors makeAcknowledgeBillPriceChange in calendarMutations.ts — clears
+  // only the marker; no money field moves.
+  const acknowledgeBillPriceChange = useCallback(async (transactionId: string) => {
+    setTransactions(prev => prev.map(t => t.id === transactionId
+      ? { ...t, billPriceChange: undefined }
+      : t));
+  }, []);
+
   // Mirrors makeSettleBillWithTransaction in calendarMutations.ts (TODO.md
   // 2H(a)) — "this charge IS that planned bill". Unlike the mock above it DOES
   // move the balance: a pending_review row has not touched any account yet.
@@ -4459,6 +4467,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     linkBankTransactionToBill,
     settleBillWithTransaction,
     forgetBillDescriptorAlias,
+    acknowledgeBillPriceChange,
     addHabit,
     updateHabit,
     deleteHabit,

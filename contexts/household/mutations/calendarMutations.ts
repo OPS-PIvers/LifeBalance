@@ -989,6 +989,36 @@ export function makeForgetBillDescriptorAlias(deps: {
 }
 
 /**
+ * acknowledgeBillPriceChange — the household has seen that a bill settled at a
+ * different price than planned (`Transaction.billPriceChange`, written by the
+ * nightly bank-email sync). Clears just that marker; touches no money field, so
+ * it is deliberately NOT routed through `updateTransaction` and its balance /
+ * settled-bill machinery.
+ */
+export function makeAcknowledgeBillPriceChange(deps: {
+  db: Firestore;
+  householdId: string | null;
+}) {
+  const { db, householdId } = deps;
+
+  const acknowledgeBillPriceChange = async (transactionId: string): Promise<void> => {
+    if (!householdId) return;
+
+    try {
+      await updateDoc(doc(db, `households/${householdId}/transactions`, transactionId), {
+        billPriceChange: deleteField(),
+      });
+    } catch (error) {
+      console.error('[acknowledgeBillPriceChange] Failed:', error);
+      toast.error(describeError(error, 'dismiss that price change'));
+      throw error;
+    }
+  };
+
+  return { acknowledgeBillPriceChange };
+}
+
+/**
  * deferCalendarItem — original closure captured `householdId`, `user`,
  * `calendarItems`.
  */
