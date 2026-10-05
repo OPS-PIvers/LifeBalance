@@ -2,9 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import { useHouseholdCore, useMealPlan, useShopping, useTodos } from '@/contexts/FirebaseHouseholdContext';
-import { wallEventConverter, wallSettingsConverter } from '@/utils/firestoreConverters';
+import { wallCalendarFeedConverter, wallEventConverter, wallSettingsConverter, wallTravelConverter } from '@/utils/firestoreConverters';
 import { DEFAULT_WALL_SETTINGS, effectiveLayout, normalizeLayout } from '@/utils/wall/wallSettings';
-import type { Meal, MealPlanItem, WallEvent, WallLayout, WallSettings } from '@/types/schema';
+import type { Meal, MealPlanItem, WallCalendarFeed, WallEvent, WallLayout, WallSettings, WallTravel } from '@/types/schema';
 import { syncWallCalendarsNow, synthesizeWallSpeech } from '@/components/wall/wallCalendarService';
 import { WallDataContext, type WallData, type WallDataActions } from './wallData';
 import { wallEventWindow } from './wallWindows';
@@ -34,6 +34,8 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const householdId = core.householdId;
   const [settings, setSettings] = useState<WallSettings>(DEFAULT_WALL_SETTINGS);
   const [wallEvents, setWallEvents] = useState<WallEvent[]>([]);
+  const [calendarFeeds, setCalendarFeeds] = useState<WallCalendarFeed[]>([]);
+  const [travel, setTravel] = useState<WallTravel[]>([]);
   const [extrasReady, setExtrasReady] = useState(false);
   const [fixtureMeals, setFixtureMeals] = useState<{ meals: Meal[]; mealPlan: MealPlanItem[] } | null>(null);
   const [localLayout, setLocalLayout] = useState<WallLayout | undefined>(readLocalLayout);
@@ -52,6 +54,8 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (cancelled) return;
         const fx = wallTestFixtures();
         setWallEvents(fx.events);
+        setCalendarFeeds(fx.feeds);
+        setTravel(fx.travel);
         setSettings(fx.settings);
         setFixtureMeals({ meals: fx.meals, mealPlan: fx.mealPlan });
         setExtrasReady(true);
@@ -88,10 +92,23 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       },
       error => console.error('[wallEvents] listener failed:', error)
     );
+    // Alerts only; they don't hold up `ready`.
+    const unsubFeeds = onSnapshot(
+      collection(db, `households/${householdId}/calendarFeeds`).withConverter(wallCalendarFeedConverter),
+      snap => setCalendarFeeds(snap.docs.map(d => d.data())),
+      error => console.error('[calendarFeeds] listener failed:', error)
+    );
+    const unsubTravel = onSnapshot(
+      collection(db, `households/${householdId}/wallTravel`).withConverter(wallTravelConverter),
+      snap => setTravel(snap.docs.map(d => d.data())),
+      error => console.error('[wallTravel] listener failed:', error)
+    );
     return () => {
       cancelled = true;
       unsubSettings();
       unsubEvents();
+      unsubFeeds();
+      unsubTravel();
     };
   }, [householdId]);
 
@@ -139,6 +156,8 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       members: core.members,
       stores: core.household?.stores ?? [],
       wallEvents,
+      calendarFeeds,
+      travel,
       todos: todoSlice.todos,
       shoppingList: shopping.shoppingList,
       groceryCatalog: shopping.groceryCatalog,
@@ -149,7 +168,7 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ready: !core.isLoading && extrasReady,
       actions,
     };
-  }, [householdId, core.household, core.members, core.isLoading, wallEvents, todoSlice.todos, shopping.shoppingList, shopping.groceryCatalog, mealSlice.meals, mealSlice.mealPlan, fixtureMeals, settings, localLayout, extrasReady, actions]);
+  }, [householdId, core.household, core.members, core.isLoading, wallEvents, calendarFeeds, travel, todoSlice.todos, shopping.shoppingList, shopping.groceryCatalog, mealSlice.meals, mealSlice.mealPlan, fixtureMeals, settings, localLayout, extrasReady, actions]);
 
   if (!value) return null;
   return <WallDataContext.Provider value={value}>{children}</WallDataContext.Provider>;

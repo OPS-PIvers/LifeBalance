@@ -440,3 +440,11 @@ html:has(.wall.dark) body { background: #1b1a17; }
 
 /* "Tap to turn on sound": iPadOS keeps audio locked until a touch */
 .wall .sndchip { position: absolute; left: 128px; bottom: 24px; z-index: 29; display: inline-flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 20px; border-radius: 26px; background: var(--card); border: 1px solid var(--line-strong); box-shadow: var(--shadow); font-size: 19px; font-weight: 600; color: var(--fg2); }
+/* An alert during the night window sits above the black night screen, dimmed */
+.wall .spot-scrim.night { z-index: 45; background: rgba(0, 0, 0, 0.5); }
+.wall .spot.night { z-index: 46; background: #1b1a17; color: #b9b3a8; box-shadow: none; border: 1px solid #36332e; }
+.wall .spot.night .spot-k, .wall .spot.night .spot-d { color: #8a8478; }
+.wall .spot.night .spot-orb { background: #4f4b44; color: #1b1a17; }
+.wall .spot.night .btn { color: #b9b3a8; border-color: #36332e; }
+.wall .spot .spot-lb { font-size: calc(var(--s) * 34px); font-weight: 700; color: var(--warm); }
+.wall .spot.night .spot-lb { color: #a88a5e; }

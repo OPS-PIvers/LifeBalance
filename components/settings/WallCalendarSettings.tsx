@@ -13,7 +13,7 @@ import { syncWallCalendarsNow } from '@/components/wall/wallCalendarService';
 import { wallCalendarFeedConverter } from '@/utils/firestoreConverters';
 import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 import { feedStatus } from '@/utils/wall/wallSettingsView';
-import type { HouseholdMember, WallCalendarFeed, WallSettings } from '@/types/schema';
+import type { HouseholdMember, WallCalendarFeed, WallSettings, WallTravelMode } from '@/types/schema';
 
 interface WallCalendarSettingsProps {
   householdId: string;
@@ -29,9 +29,13 @@ interface FeedForm {
   url: string;
   label: string;
   ownerKey: string;
+  alerts: boolean;
+  travelMode: WallTravelMode;
 }
 
-const EMPTY_FORM: FeedForm = { feedId: null, url: '', label: '', ownerKey: 'family' };
+const EMPTY_FORM: FeedForm = { feedId: null, url: '', label: '', ownerKey: 'family', alerts: false, travelMode: 'drive' };
+
+const TRAVEL_LABELS: Record<WallTravelMode, string> = { drive: 'Drive', walk: 'Walk', bike: 'Bike', transit: 'Transit' };
 
 async function callable<Req, Res>(name: string, data: Req): Promise<Res> {
   const [{ httpsCallable }, functions] = await Promise.all([import('firebase/functions'), getFunctionsInstance()]);
@@ -95,6 +99,8 @@ const WallCalendarSettings: React.FC<WallCalendarSettingsProps> = ({ householdId
           feedId: form.feedId,
           label: form.label,
           ownerKey: form.ownerKey,
+          alerts: form.alerts,
+          travelMode: form.travelMode,
           ...(form.url.trim() ? { url: form.url.trim() } : {}),
         });
         toast.success('Calendar updated');
@@ -104,6 +110,8 @@ const WallCalendarSettings: React.FC<WallCalendarSettingsProps> = ({ householdId
           url: form.url.trim(),
           label: form.label,
           ownerKey: form.ownerKey,
+          alerts: form.alerts,
+          travelMode: form.travelMode,
         });
         toast.success(`Calendar added: ${eventCount} ${eventCount === 1 ? 'event' : 'events'}`);
       }
@@ -162,6 +170,11 @@ const WallCalendarSettings: React.FC<WallCalendarSettingsProps> = ({ householdId
                   </span>
                 </div>
                 <p className={`text-xs ${TONE_CLASS[status.tone]}`}>{status.text}</p>
+                {feed.alerts && (
+                  <p className="text-xs text-brand-500 dark:text-brand-400">
+                    Starting-soon alerts on · {TRAVEL_LABELS[feed.travelMode ?? 'drive'].toLowerCase()}
+                  </p>
+                )}
               </div>
               {isAdmin && feed.kind === 'ics' && (
                 <div className="flex gap-1">
@@ -170,7 +183,14 @@ const WallCalendarSettings: React.FC<WallCalendarSettingsProps> = ({ householdId
                     size="sm"
                     onClick={() => {
                       setFormError('');
-                      setForm({ feedId: feed.id, url: '', label: feed.label, ownerKey: feed.ownerKey });
+                      setForm({
+                        feedId: feed.id,
+                        url: '',
+                        label: feed.label,
+                        ownerKey: feed.ownerKey,
+                        alerts: feed.alerts === true,
+                        travelMode: feed.travelMode ?? 'drive',
+                      });
                     }}
                   >
                     Edit
@@ -264,6 +284,34 @@ const WallCalendarSettings: React.FC<WallCalendarSettingsProps> = ({ householdId
               </Select>
             </div>
           </div>
+          <div className="flex flex-wrap items-center gap-3 px-1">
+            <p className="flex-1 min-w-0 text-sm font-semibold text-brand-900 dark:text-brand-100">Starting-soon alerts</p>
+            <SegmentedControl
+              name="Starting-soon alerts"
+              size="sm"
+              options={[
+                { value: 'on', label: 'On' },
+                { value: 'off', label: 'Off' },
+              ]}
+              value={form.alerts ? 'on' : 'off'}
+              onChange={v => setForm(f => ({ ...f, alerts: v === 'on' }))}
+            />
+          </div>
+          {form.alerts && (
+            <div className="flex flex-wrap items-center gap-3 px-1">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Getting there</p>
+                <p className="text-xs text-brand-500 dark:text-brand-400">For travel time to events with a location</p>
+              </div>
+              <SegmentedControl
+                name="Getting there"
+                size="sm"
+                options={(Object.keys(TRAVEL_LABELS) as WallTravelMode[]).map(m => ({ value: m, label: TRAVEL_LABELS[m] }))}
+                value={form.travelMode}
+                onChange={travelMode => setForm(f => ({ ...f, travelMode }))}
+              />
+            </div>
+          )}
           {formError && (
             <p role="alert" className="text-sm text-money-neg px-1">
               {formError}

@@ -13,6 +13,7 @@ import Select from '@/components/ui/Select';
 import { MODULE_TITLES } from '@/utils/wall/wallModules';
 import {
   DEFAULT_WALL_SETTINGS,
+  WALL_ALERT_LEADS,
   WALL_IDLE_RETURN_OPTIONS,
   WALL_MODULE_KEYS,
   WALL_ROTATION_INTERVALS,
@@ -71,6 +72,8 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
   const [busy, setBusy] = useState(false);
   const [place, setPlace] = useState('');
   const [places, setPlaces] = useState<GeocodeResult[]>([]);
+  const [address, setAddress] = useState('');
+  const [savingAddress, setSavingAddress] = useState(false);
   const aiUsage = useAiUsageToday();
 
   useEffect(() => {
@@ -148,6 +151,19 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
       setPlaces(parseGeocode(await res.json()));
     } catch {
       toast.error("Couldn't look up that place.");
+    }
+  };
+
+  const saveAddress = async (value: string) => {
+    setSavingAddress(true);
+    try {
+      await callable('setwallhomeaddress', { householdId, address: value });
+      setAddress('');
+      toast.success(value ? 'Home address saved' : 'Home address removed');
+    } catch (e) {
+      toast.error(errorText(e));
+    } finally {
+      setSavingAddress(false);
     }
   };
 
@@ -442,6 +458,70 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
         </SurfaceList>
       </Section>
 
+      <Section title="Starting-soon alerts">
+        <SurfaceList>
+          <Row className="flex-col items-stretch gap-1">
+            <p className="text-sm text-brand-700 dark:text-brand-300">
+              Turn alerts on for a calendar under Calendars → Edit. Events with a location get a heads-up 10 minutes before it’s time to
+              leave (live traffic from home), then “Time to leave”. Others alert before they start. During night hours alerts show
+              without sound.
+            </p>
+          </Row>
+          <Row className="flex-wrap">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Without travel time, alert</p>
+              <p className="text-xs text-brand-500 dark:text-brand-400">Before the event starts</p>
+            </div>
+            <SegmentedControl
+              name="Alert lead time"
+              size="sm"
+              options={WALL_ALERT_LEADS.map(m => ({ value: String(m), label: `${m} min` }))}
+              value={String(settings.alerts.leadMin)}
+              onChange={v => void save({ alerts: { leadMin: Number(v) } })}
+            />
+          </Row>
+          <Row className="flex-col items-stretch gap-2">
+            <div>
+              <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Home address</p>
+              <p className={settings.travelError ? 'text-xs text-money-neg' : 'text-xs text-brand-500 dark:text-brand-400'}>
+                {settings.travelError ??
+                  (settings.homeAddressSet
+                    ? 'Saved. Only travel times reach the wall; the address stays on the server.'
+                    : 'Not set: alerts use the lead time above instead of travel time.')}
+              </p>
+            </div>
+            {isAdmin && (
+              <form
+                className="flex gap-2 items-end"
+                onSubmit={e => {
+                  e.preventDefault();
+                  void saveAddress(address.trim());
+                }}
+              >
+                <div className="flex-1">
+                  <Input
+                    aria-label="Home address"
+                    placeholder={settings.homeAddressSet ? 'Enter a new address to replace it' : 'Street, city, state'}
+                    autoComplete="street-address"
+                    maxLength={200}
+                    value={address}
+                    onChange={e => setAddress(e.target.value)}
+                  />
+                </div>
+                <Button type="submit" variant="secondary" isLoading={savingAddress} disabled={!address.trim()}>
+                  Save
+                </Button>
+                {settings.homeAddressSet && (
+                  <Button type="button" variant="ghost-danger" disabled={savingAddress} onClick={() => void saveAddress('')}>
+                    Remove
+                  </Button>
+                )}
+              </form>
+            )}
+          </Row>
+        </SurfaceList>
+      </Section>
+
       <Section title="Sound">
         <SurfaceList>
           <Row className="flex-wrap">
@@ -471,6 +551,22 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
               ]}
               value={settings.sound.confirm}
               onChange={confirm => void save({ sound: { ...settings.sound, confirm } })}
+            />
+          </Row>
+          <Row className="flex-wrap">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Starting-soon alerts</p>
+              <p className="text-xs text-brand-500 dark:text-brand-400">Silent during night hours</p>
+            </div>
+            <SegmentedControl
+              name="Alert sound"
+              size="sm"
+              options={[
+                { value: 'speak', label: 'Chime + speak' },
+                { value: 'chime', label: 'Chime only' },
+              ]}
+              value={settings.sound.alerts}
+              onChange={alerts => void save({ sound: { ...settings.sound, alerts } })}
             />
           </Row>
         </SurfaceList>

@@ -23,6 +23,8 @@ export function makeWallData(spy: Spy, overrides: Partial<WallData> = {}): WallD
     ] as HouseholdMember[],
     stores: [],
     wallEvents: [],
+    calendarFeeds: [],
+    travel: [],
     todos: [],
     shoppingList: [],
     groceryCatalog: [],

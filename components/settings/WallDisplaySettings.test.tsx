@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { DEFAULT_WALL_SETTINGS } from '@/utils/wall/wallSettings';
 import type { WallSettings } from '@/types/schema';
 
 const mocks = vi.hoisted(() => ({
   settings: null as WallSettings | null,
   setDoc: vi.fn(async () => undefined),
+  call: vi.fn(async (_name: string, _data: unknown): Promise<unknown> => ({ ok: true })),
 }));
+vi.mock('firebase/functions', () => ({ httpsCallable: (_f: unknown, name: string) => (data: unknown) => mocks.call(name, data).then(r => ({ data: r })) }));
 
 vi.mock('@/firebase.config', () => ({ db: {}, getFunctionsInstance: async () => ({}) }));
 vi.mock('firebase/firestore', () => ({
@@ -31,6 +33,7 @@ const saved = () => (mocks.setDoc.mock.calls.at(-1) as unknown[] | undefined)?.[
 beforeEach(() => {
   mocks.settings = null;
   mocks.setDoc.mockClear();
+  mocks.call.mockClear();
 });
 
 describe('WallDisplaySettings → Week layout', () => {
@@ -76,7 +79,33 @@ describe('WallDisplaySettings → Sound', () => {
     renderIt();
     fireEvent.click(screen.getByRole('radio', { name: 'High' }));
     expect(saved()).toMatchObject({ sound: { confirm: 'speak', alerts: 'speak', volume: 1 } });
-    fireEvent.click(screen.getByRole('radio', { name: 'Chime only' }));
+    fireEvent.click(screen.getAllByRole('radio', { name: 'Chime only' })[0]!);
     expect(saved()).toMatchObject({ sound: { confirm: 'chime', volume: 0.7 } });
+    fireEvent.click(screen.getAllByRole('radio', { name: 'Chime only' })[1]!);
+    expect(saved()).toMatchObject({ sound: { alerts: 'chime' } });
+  });
+});
+
+describe('WallDisplaySettings → Starting-soon alerts', () => {
+  it('sets the lead time', () => {
+    renderIt();
+    fireEvent.click(screen.getByRole('radio', { name: '15 min' }));
+    expect(saved()).toMatchObject({ alerts: { leadMin: 15 } });
+  });
+
+  it('saves the home address through the server, never to settings', async () => {
+    renderIt();
+    expect(screen.getByText(/Not set: alerts use the lead time/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Home address'), { target: { value: ' 1 Main St, Orono ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledWith('setwallhomeaddress', { householdId: 'h1', address: '1 Main St, Orono' }));
+    expect(mocks.setDoc).not.toHaveBeenCalled();
+  });
+
+  it('shows the server’s travel problem and offers Remove once saved', () => {
+    mocks.settings = { ...DEFAULT_WALL_SETTINGS, homeAddressSet: true, travelError: 'Travel times need the Routes API turned on.' };
+    renderIt();
+    expect(screen.getByText('Travel times need the Routes API turned on.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
   });
 });

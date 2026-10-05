@@ -25,6 +25,9 @@ import WallTopBar from './WallTopBar';
 import WallVoiceBanner from './voice/WallVoiceBanner';
 import { useWallVoice, type WallVoiceFeedback } from './voice/useWallVoice';
 import WallSoundChip from './sound/WallSoundChip';
+import WallAlertCard from './alerts/WallAlertCard';
+import { useWallAlerts } from './alerts/useWallAlerts';
+import { alertWords } from '@/utils/wall/wallAlerts';
 import { WallSoundContext, useSoundState, useWallSoundEngine } from './sound/useWallSound';
 import type { VoiceTarget } from '@/utils/wall/wallVoice';
 import './wall.css';
@@ -103,7 +106,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   const soundState = useSoundState(sound);
   /** A chime, then (when Settings says so) the words, timed to start as the chime fades. */
   const playFeedback = useCallback(
-    (tone: 'ok' | 'error', speech: string, style: 'speak' | 'chime') => {
+    (tone: 'ok' | 'error' | 'alert', speech: string, style: 'speak' | 'chime') => {
       if (style === 'speak') sound.prepare(speech);
       const wait = sound.chime(tone);
       if (style === 'speak') window.setTimeout(() => void sound.speak(speech), wait);
@@ -141,6 +144,28 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     setRotationPaused(false);
     setRotated(null);
   };
+  const alerts = useWallAlerts({
+    events: data.wallEvents,
+    feeds: data.calendarFeeds,
+    travel: data.travel,
+    leadMin: data.settings.alerts.leadMin,
+    now: runtime.now,
+  });
+  const alert = alerts.alert;
+  const alertText = alert
+    ? alertWords(alert, runtime.now.getTime(), runtime.timeZone, alert.event.ownerKey === 'family' ? null : (people.name(alert.event.ownerKey).split(' ')[0] ?? null))
+    : null;
+  // An alert sounds once, when it appears; never during the night window.
+  const alertSound = useRef({ speech: '', style: data.settings.sound.alerts, night: false });
+  useEffect(() => {
+    alertSound.current = { speech: alertText?.speech ?? '', style: data.settings.sound.alerts, night: runtime.nightShowing };
+  });
+  const alertKey = alert?.key ?? null;
+  useEffect(() => {
+    const { speech, style, night } = alertSound.current;
+    if (alertKey && !night) playFeedback('alert', speech, style);
+  }, [alertKey, playFeedback]);
+
   const voice = useWallVoice({
     setting: data.settings.voice,
     today,
@@ -369,7 +394,10 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
               onTestSound={() => playFeedback('ok', 'Sound is on. This is how the wall sounds.', 'speak')}
             />
           )}
-          {runtime.nightShowing && overlay !== 'gear' && (
+          {alert && alertText && overlay !== 'gear' && (
+          <WallAlertCard alert={alert} words={alertText} night={runtime.nightShowing} onClose={alerts.dismiss} />
+        )}
+        {runtime.nightShowing && overlay !== 'gear' && (
             <WallNight now={runtime.now} timeZone={runtime.timeZone} tomorrowFirst={tomorrowFirst} onWake={runtime.wake} />
           )}
         </div>

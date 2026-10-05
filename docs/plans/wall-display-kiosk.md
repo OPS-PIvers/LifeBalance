@@ -690,7 +690,7 @@ the wall.
 | Phase | Contents | Status |
 |---|---|---|
 | **B Sound** | `walltts` (+ 500/day cap in `apiUsage/wallTts`), `components/wall/sound/` (Web Audio chimes, cloud voice with cache and fallback, unlock on touch, chip), big card (`WallSpotlight`), spoken confirmations (`VoiceAction.spoken`), Settings → Sound (volume, confirm style), gear **Test sound**, version-gated night reload (`utils/wall/wallVersion.ts`) | Built |
-| **C Alerts** | Per-feed `alerts` + `travelMode`, household lead time, home address (server-only), Routes travel minutes on events, client alert scheduler + card, quiet at night | Next |
+| **C Alerts** | Per-feed `alerts` + `travelMode` (feed callables), `wallSettings.alerts.leadMin`, `setwallhomeaddress` (address in `calendarFeedSecrets/_home`; `homeAddressSet` / `travelError` server-written), `functions/src/wall/calendar/travel.ts` writing `wallTravel/{eventId}` (minutes only) every 15 min and on sync now, `utils/wall/wallAlerts.ts` (plan, due, words, seen-across-reloads), `WallAlertCard` (over the night screen, silent, at night) | Built |
 | **D Brief** | Local grammar for "what's my day / tomorrow", spoken lines from weather + events, brief card with line highlight | After C |
 | **A Wake word** | Lab tab: AccessKey + `.ppn` (or a built-in keyword), detection log, false triggers, mic prompts across launches | After D; owner supplies the Picovoice key and "Hey Home" model |
 
@@ -702,6 +702,6 @@ the wall.
   with a silent utterance, and re-unlocks if iPadOS suspends it.
 - **The mic re-prompts per launch.** Fewer reloads means fewer prompts; the
   wake-word lab measures what's left.
-- **Cloud voice auth.** `walltts` (and Routes in C) use the function's
+- **Cloud voice auth.** `walltts` and Routes use the function's
   service-account token (`functions/src/wall/googleAuth.ts`), so the only
-  setup is enabling the API (runbook §1).
+  setup is enabling the two APIs (runbook §1).

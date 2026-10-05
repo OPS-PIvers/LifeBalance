@@ -42,6 +42,7 @@ import {
   wallSettingsConverter,
   wallEventConverter,
   wallCalendarFeedConverter,
+  wallTravelConverter,
 } from './firestoreConverters';
 
 /** Minimal fake QueryDocumentSnapshot for converter tests. */
@@ -1583,5 +1584,26 @@ describe('wallCalendarFeedConverter', () => {
       stale: false,
     });
     expect(callToFirestore(wallCalendarFeedConverter, feed)).not.toHaveProperty('id');
+  });
+
+  it('reads alerts and travel mode, dropping junk', () => {
+    expect(wallCalendarFeedConverter.fromFirestore(fakeSnap('f2', { alerts: true, travelMode: 'bike' }))).toMatchObject({ alerts: true, travelMode: 'bike' });
+    const plain = wallCalendarFeedConverter.fromFirestore(fakeSnap('f3', { alerts: 'yes', travelMode: 'boat' }));
+    expect(plain).not.toHaveProperty('alerts');
+    expect(plain).not.toHaveProperty('travelMode');
+  });
+});
+
+describe('wallTravelConverter', () => {
+  it('reads minutes, and junk as no route', () => {
+    expect(wallTravelConverter.fromFirestore(fakeSnap('e1', { minutes: 22, mode: 'drive', start: 's', checkedAt: 'c' }))).toEqual({
+      id: 'e1',
+      minutes: 22,
+      mode: 'drive',
+      start: 's',
+      checkedAt: 'c',
+    });
+    expect(wallTravelConverter.fromFirestore(fakeSnap('e2', { minutes: null, mode: 'x' }))).toMatchObject({ minutes: null, mode: 'drive', start: '' });
+    expect(callToFirestore(wallTravelConverter, { id: 'e1', minutes: 1, mode: 'walk', start: '', checkedAt: '' })).not.toHaveProperty('id');
   });
 });

@@ -7,10 +7,12 @@ import type {
   ShoppingItem,
   Store,
   ToDo,
+  WallCalendarFeed,
   WallDisplay,
   WallEvent,
   WallLayout,
   WallSettings,
+  WallTravel,
 } from '@/types/schema';
 
 /**
@@ -52,6 +54,10 @@ export interface WallData {
   /** The household's stores, in their visit order (shopping groups). */
   stores: Store[];
   wallEvents: WallEvent[];
+  /** The household's calendars (which ones alert, and how people get there). */
+  calendarFeeds: WallCalendarFeed[];
+  /** Server-measured travel minutes for upcoming alert events. */
+  travel: WallTravel[];
   todos: ToDo[];
   shoppingList: ShoppingItem[];
   groceryCatalog: GroceryCatalogItem[];
