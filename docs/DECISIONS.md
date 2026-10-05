@@ -69,6 +69,23 @@ confirmed overnight and the bill sat in the queue forever: the next night's emai
 
 ---
 
+## Apple Pay / Shortcut captures auto-approve only when already learned
+
+**Decided 2026-10-05 by the owner.** `quickAddExpense` approves a capture on arrival — `verified`,
+filed, account balance moved in the same batch, exactly like a swipe-approve — only when BOTH are
+known (`functions/src/quickAdd/autoApprove.ts`): the category comes from a merchant rule or from the
+last 5 categorised verified rows for the exact merchant text all agreeing (and it must be a current
+bucket); the account is the one the capture resolved (card last-4) or the one those rows agree on.
+Anything else — a new merchant, disagreeing history, a $0 stub, a possible duplicate — stays
+`pending_review` for the Action Queue.
+
+Auto-approved rows carry `autoApproved: true` and stay in the reconcile pool, so the bank notification
+that follows an Apple Pay capture still folds into it instead of becoming a second row. Those merges
+never change amount or account (an auto-approved row always has one), so they need no balance
+bookkeeping. Don't narrow the reconcile pool back to `pending_review` only.
+
+---
+
 ## Settled bills: undo is one-directional by design
 
 **Decided 2026-07-27 (2H).**
