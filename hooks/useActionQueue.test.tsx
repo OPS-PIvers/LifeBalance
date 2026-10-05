@@ -481,16 +481,21 @@ describe('useActionQueue', () => {
     expect(tx && isTransactionQueueItem(tx) && tx.matchedBill).toBeUndefined();
   });
 
-  // The amount guard is not optional on the alias tier: a learned alias alone
-  // must not link a $37.91 charge to a $142 bill.
-  it('keeps two rows when a learned alias matches but the amount is out of tolerance', () => {
+  // A learned alias is an explicit link, so it is NOT held to the amount window
+  // (docs/DECISIONS.md): once the household has linked this bank text to the
+  // bill, a $37.91 charge collapses into the $142 bill it pays. The first
+  // sighting (no alias, test above) still stays two rows.
+  it('collapses the pair once the bank text is a learned alias, whatever the amount', () => {
     setMocks({
       calendar: [gasBill({ bankDescriptorAliases: ['CPENERGY MNGCO'] })],
       transactions: [gasCharge()],
     });
 
     const { result } = renderHook(() => useActionQueue());
-    expect(result.current.actionQueue.map(i => i.id)).toEqual(['tmpl-gas', 'tx-gas']);
+    const queue = result.current.actionQueue;
+    expect(queue.map(i => i.id)).toEqual(['tx-gas']);
+    const item = queue[0];
+    expect(item && isTransactionQueueItem(item) && item.matchedBill?.matchedBy).toBe('alias');
   });
 
   it('never collapses a bill into an Apple Pay $0 stub (amount not yet known)', () => {

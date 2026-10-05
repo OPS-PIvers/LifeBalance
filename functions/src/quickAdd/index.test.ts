@@ -650,6 +650,93 @@ describe("quickAddExpense", () => {
     expect(res.body).toMatchObject({ data: { amount: 50 } });
   });
 
+  // --- Auto-approval of learned purchases (autoApprove.ts) ---
+
+  describe("auto-approval of a learned purchase", () => {
+    const snapDoc = (id: string, data: Record<string, unknown>) => ({
+      id,
+      data: () => data,
+      ref: { id, update: vi.fn(() => Promise.resolve()) },
+    });
+
+    function configureLearned(history: Record<string, unknown>[]) {
+      collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = {
+        add: vi.fn(() => Promise.resolve({ id: "pending1" })),
+        // Served to both the recent-rows reconcile query and the merchant
+        // history query; dated far back and priced differently so the identity
+        // dedup never mistakes them for this purchase.
+        whereGetDocs: history.map((h, i) => snapDoc(`h${i}`, h)),
+      };
+      collectionOverrides[`households/${HOUSEHOLD_ID}/buckets`] = {
+        getDocs: [snapDoc("b1", { name: "Coffee" })],
+      };
+      collectionOverrides[`households/${HOUSEHOLD_ID}/accounts`] = {
+        getDocs: [snapDoc("chk", { type: "checking" }), snapDoc("visa", { type: "credit" })],
+      };
+      configureCollections();
+    }
+
+    const learnedRow = {
+      merchant: "Starbucks",
+      amount: 5,
+      date: "2026-01-01",
+      status: "verified",
+      category: "Coffee",
+      accountId: "chk",
+      source: "shortcut",
+    };
+
+    it("approves on arrival and debits the account in one batch", async () => {
+      configureLearned([learnedRow, { ...learnedRow, date: "2026-01-08" }]);
+      const res = makeRes();
+      await asHandler(quickAddExpense)(
+        makeReq({ body: { amount: 6.45, merchant: "Starbucks", today: "2026-10-05" } }),
+        res
+      );
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toMatchObject({
+        success: true,
+        data: { status: "verified", category: "Coffee", accountId: "chk", autoApproved: true },
+      });
+      const add = collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`]?.add;
+      expect(add).not.toHaveBeenCalled();
+      const [, written] = lastBatch.set.mock.calls[0] as [unknown, Record<string, unknown>];
+      expect(written).toMatchObject({
+        amount: 6.45,
+        status: "verified",
+        category: "Coffee",
+        accountId: "chk",
+        autoApproved: true,
+      });
+      const [, balance] = lastBatch.update.mock.calls[0] as [unknown, Record<string, unknown>];
+      expect(balance.balance).toEqual({ __inc: -6.45 });
+      expect(lastBatch.commit).toHaveBeenCalledTimes(1);
+    });
+
+    it("leaves an unlearned purchase pending for the Action Queue", async () => {
+      configureLearned([]);
+      const res = makeRes();
+      await asHandler(quickAddExpense)(
+        makeReq({ body: { amount: 6.45, merchant: "Starbucks", today: "2026-10-05" } }),
+        res
+      );
+      expect(res.body).toMatchObject({ data: { status: "pending_review" } });
+      const add = collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`]?.add;
+      expect(add).toHaveBeenCalledTimes(1);
+      expect((add?.mock.calls[0] as unknown[] | undefined)?.[0]).toMatchObject({ status: "pending_review" });
+    });
+
+    it("leaves it pending when the history disagrees", async () => {
+      configureLearned([learnedRow, { ...learnedRow, date: "2026-01-08", category: "Treats" }]);
+      const res = makeRes();
+      await asHandler(quickAddExpense)(
+        makeReq({ body: { amount: 6.45, merchant: "Starbucks", today: "2026-10-05" } }),
+        res
+      );
+      expect(res.body).toMatchObject({ data: { status: "pending_review" } });
+    });
+  });
+
   // --- CARD-1: persisting the parsed card last-4 onto the transaction ---
 
   it("persists an explicit cardLast4 body field onto the created transaction", async () => {

@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import type { BankEmailWithdrawal } from "./bankEmailParser";
 import type { ReconcileCandidate } from "./reconcile";
 import {
+  billPriceChangeFor,
   dayGap,
   significantTokens,
   shareSignificantToken,
@@ -364,6 +365,29 @@ describe("pickBillToPay", () => {
     expect(got?.matchedBy).toBe("alias");
   });
 
+  it("pays via a learned alias even far outside the amount tolerance", () => {
+    // A learned alias is an explicit link, not a guess — the variable utility
+    // settles at what it actually cost and the difference is flagged instead.
+    const w = withdrawal({ descriptor: "CPENERGY MNGCO", amount: 37.91 });
+    const gas = bill({
+      id: "gas",
+      title: "Centerpoint Energy (Natural Gas)",
+      amount: 142,
+      bankDescriptorAliases: ["CPENERGY MNGCO"],
+    });
+    expect(billAmountWithinTolerance(142, 37.91)).toBe(false);
+    const got = pickBillToPay(w, [gas]);
+    expect(got?.bill.id).toBe("gas");
+    expect(got?.matchedBy).toBe("alias");
+  });
+
+  it("still refuses an alias that names two unpaid bills", () => {
+    const w = withdrawal({ descriptor: "CPENERGY MNGCO", amount: 37.91 });
+    const a = bill({ id: "a", amount: 142, bankDescriptorAliases: ["CPENERGY MNGCO"] });
+    const b = bill({ id: "b", amount: 60, bankDescriptorAliases: ["CPENERGY MNGCO"] });
+    expect(pickBillToPay(w, [a, b])).toBeNull();
+  });
+
   it("returns null when amount is out of tolerance", () => {
     const w = withdrawal({ descriptor: "COMCAST CABLE", amount: 500 });
     expect(pickBillToPay(w, [bill()])).toBeNull();
@@ -555,7 +579,74 @@ describe("decideWithdrawal order of operations", () => {
       ...emptyDecideBase,
       withdrawal: withdrawal(),
       pendingCandidates: [pending()],
-      billCandidates: [bill({ title: "Target", amount: 18.86 })], // confirm wins over pay
+      billCandidates: [bill()], // Comcast — nothing to do with this charge
+    });
+    expect(decision).toEqual({ kind: "confirm_pending", transactionId: "txn1" });
+  });
+
+  // The owner-reported miss: a bill's charge that was ALREADY captured (a
+  // screenshot import, a bank alert) used to be confirmed and the bill left due
+  // in the Action Queue. Confirming the row now settles the bill it pays.
+  it("c. a confirmed row that pays an unpaid bill settles that bill too", () => {
+    const decision = decideWithdrawal({
+      ...emptyDecideBase,
+      withdrawal: withdrawal(),
+      pendingCandidates: [pending()],
+      billCandidates: [bill({ title: "Target", amount: 18.86 })],
+    });
+    expect(decision.kind).toBe("confirm_pending");
+    if (decision.kind === "confirm_pending") {
+      expect(decision.transactionId).toBe("txn1");
+      expect(decision.bill?.bill.id).toBe("bill1");
+      expect(decision.bill?.matchedBy).toBe("token");
+    }
+  });
+
+  it("c. falls back to the row's stored merchant when the bank text shares nothing", () => {
+    // The Action Queue matched on the row's merchant; the bank's descriptor
+    // can be opaque ("ACH DEBIT 0042") and must not undo that recognition.
+    const decision = decideWithdrawal({
+      ...emptyDecideBase,
+      withdrawal: withdrawal({ descriptor: "ACH DEBIT 0042", amount: 153.95 }),
+      pendingCandidates: [pending({ merchant: "Comcast", amount: 153.95 })],
+      billCandidates: [bill()],
+    });
+    expect(decision.kind).toBe("confirm_pending");
+    if (decision.kind === "confirm_pending") {
+      expect(decision.bill?.bill.id).toBe("bill1");
+    }
+  });
+
+  it("c. leaves the bill due when the match is in doubt", () => {
+    // Two equally plausible bills → no guess; both stay in the queue.
+    const decision = decideWithdrawal({
+      ...emptyDecideBase,
+      withdrawal: withdrawal(),
+      pendingCandidates: [pending()],
+      billCandidates: [
+        bill({ id: "a", title: "Target card", amount: 18.86 }),
+        bill({ id: "b", title: "Target RedCard", amount: 18.86 }),
+      ],
+    });
+    expect(decision).toEqual({ kind: "confirm_pending", transactionId: "txn1" });
+  });
+
+  it("c. leaves the bill due when the amount is outside tolerance", () => {
+    const decision = decideWithdrawal({
+      ...emptyDecideBase,
+      withdrawal: withdrawal(),
+      pendingCandidates: [pending()],
+      billCandidates: [bill({ title: "Target", amount: 120 })],
+    });
+    expect(decision).toEqual({ kind: "confirm_pending", transactionId: "txn1" });
+  });
+
+  it("c. never pairs a row that already settles a bill with a second one", () => {
+    const decision = decideWithdrawal({
+      ...emptyDecideBase,
+      withdrawal: withdrawal(),
+      pendingCandidates: [pending({ alreadySettlesBill: true })],
+      billCandidates: [bill({ title: "Target", amount: 18.86 })],
     });
     expect(decision).toEqual({ kind: "confirm_pending", transactionId: "txn1" });
   });
@@ -604,15 +695,20 @@ describe("decideWithdrawal order of operations", () => {
       })
     ).toEqual({ kind: "fill_stub", stubId: "stub1" });
 
-    expect(
-      decideWithdrawal({
-        ...emptyDecideBase,
-        withdrawal: w,
-        pendingCandidates: [pending()],
-        billCandidates,
-        merchantRules: rules,
-      })
-    ).toEqual({ kind: "confirm_pending", transactionId: "txn1" });
+    // Confirm still wins the identity question; the rule then names the bill
+    // the confirmed row settles.
+    const confirmed = decideWithdrawal({
+      ...emptyDecideBase,
+      withdrawal: w,
+      pendingCandidates: [pending()],
+      billCandidates,
+      merchantRules: rules,
+    });
+    expect(confirmed.kind).toBe("confirm_pending");
+    if (confirmed.kind === "confirm_pending") {
+      expect(confirmed.transactionId).toBe("txn1");
+      expect(confirmed.bill?.matchedBy).toBe("rule");
+    }
   });
 
   it("d. pays the rule's bill when nothing earlier claims the withdrawal", () => {
@@ -1010,5 +1106,22 @@ describe("emailAddsNothingNew", () => {
         storedEnding: -50.0,
       })
     ).toBe(true);
+  });
+});
+
+describe("billPriceChangeFor", () => {
+  it("is empty when the bill was paid at exactly its scheduled amount", () => {
+    expect(billPriceChangeFor({ title: "Rent", amount: 1500 }, 1500)).toEqual({});
+    // Float drift never reads as a price change.
+    expect(billPriceChangeFor({ title: "Rent", amount: 0.1 + 0.2 }, 0.3)).toEqual({});
+  });
+
+  it("records the scheduled amount when the price went up or down", () => {
+    expect(billPriceChangeFor({ title: "Gas", amount: 142 }, 187.4)).toEqual({
+      billPriceChange: { billTitle: "Gas", scheduledAmount: 142 },
+    });
+    expect(billPriceChangeFor({ title: "Gas", amount: 142 }, 37.91)).toEqual({
+      billPriceChange: { billTitle: "Gas", scheduledAmount: 142 },
+    });
   });
 });

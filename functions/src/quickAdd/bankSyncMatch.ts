@@ -11,11 +11,13 @@
  *   a. SKIP    — a transaction already carries this bankRef (idempotent re-file)
  *   b. FILL    — fill a prior Apple Pay $0 `needsAmount` stub (reconcile.ts rules)
  *   c. CONFIRM — mark an existing pending_review transaction verified
- *                (cent-exact amount + date within ±3 days + UNIQUE)
+ *                (cent-exact amount + date within ±3 days + UNIQUE). When that
+ *                row is itself the payment of an unpaid bill (same matcher as
+ *                PAY), the bill is settled by it too — see `decideWithdrawal`
  *   d. PAY     — pay a matching unpaid calendar bill (a household-authored
  *                merchant rule's `billId`, OR a learned alias, OR descriptor
- *                token-overlap with the title; the latter two additionally
- *                require the amount within ±10% or ±$25)
+ *                token-overlap with the title; only the last additionally
+ *                requires the amount within ±10% or ±$25)
  *   e. CREATE  — otherwise a new verified, `needsCategory` transaction
  *
  * KEEP THE BILL-MATCHING SLICE IN LOCKSTEP with its client twin
@@ -65,6 +67,10 @@ export interface PendingConfirmCandidate {
    *  display `merchant`). Consulted ONLY by the merchant tie-break in
    *  {@link pickPendingToConfirm} via `namesSimilar`. */
   bankDescriptor?: string;
+  /** True when the row ALREADY settles a bill (filed `Budgeted in Calendar`
+   *  or stamped `paidCalendarItemId`). Such a row is never offered a second
+   *  bill when it is confirmed — it already answered that question. */
+  alreadySettlesBill?: boolean;
 }
 
 /**
@@ -384,16 +390,20 @@ export function pickBillToPay(
     // named.length === 0 → the bill isn't payable right now; fall through.
   }
 
-  const inTol = candidates.filter((c) =>
-    billAmountWithinTolerance(c.amount, withdrawal.amount)
-  );
-  if (inTol.length === 0) return null;
-
-  const aliasMatches = inTol.filter((c) =>
+  // A learned alias is the bank's exact text that a person (or an earlier
+  // confirmed match) linked to this bill — not a guess, so like a rule it is NOT
+  // held to the amount window. That is what lets a variable bill (a utility, a
+  // card statement) settle at whatever it actually cost; the price difference
+  // is surfaced for acknowledgement (`billPriceChangeFor`) instead of blocking.
+  const aliasMatches = candidates.filter((c) =>
     matchesAlias(withdrawal.descriptor, c.bankDescriptorAliases)
   );
   if (aliasMatches.length === 1) return { bill: aliasMatches[0]!, matchedBy: "alias" };
   if (aliasMatches.length > 1) return null; // ambiguous alias → don't guess
+
+  const inTol = candidates.filter((c) =>
+    billAmountWithinTolerance(c.amount, withdrawal.amount)
+  );
 
   const tokenMatches = inTol.filter((c) =>
     shareSignificantToken(withdrawal.descriptor, c.title)
@@ -409,7 +419,14 @@ export function pickBillToPay(
 export type WithdrawalDecision =
   | { kind: "skip_bankref" }
   | { kind: "fill_stub"; stubId: string }
-  | { kind: "confirm_pending"; transactionId: string }
+  | {
+      kind: "confirm_pending";
+      transactionId: string;
+      /** The unpaid bill the confirmed row pays, when the PAY matcher links
+       *  them. Absent when there is no unique match — the bill then stays in
+       *  the queue, exactly as before. */
+      bill?: BillPayMatch;
+    }
   | { kind: "pay_bill"; match: BillPayMatch }
   | { kind: "create" };
 
@@ -465,8 +482,35 @@ export function decideWithdrawal(input: DecideWithdrawalInput): WithdrawalDecisi
   if (stub) return { kind: "fill_stub", stubId: stub.id };
 
   // c. Confirm an existing pending transaction (account-gated).
+  //
+  //    CONFIRM runs before PAY, so a charge that was already captured (a
+  //    statement screenshot, a bank alert, a hand entry) used to swallow the
+  //    withdrawal: the row was verified and the bill it pays was never
+  //    reached, so the bill stayed in the Action Queue as due even though the
+  //    money had demonstrably left the account. Worse, the Action Queue had
+  //    been showing that very row as "pays <bill>", so verifying it made the
+  //    bill's own row pop back.
+  //
+  //    So the confirmed row is also offered to the SAME bill matcher PAY uses,
+  //    at the same strictness: the bank's own descriptor first, then the row's
+  //    stored merchant (what the Action Queue matched on). Ambiguity or no
+  //    match leaves the bill alone, as before.
   const pending = pickPendingToConfirm(withdrawal, pendingCandidates, input.resolvedAccountId);
-  if (pending) return { kind: "confirm_pending", transactionId: pending.id };
+  if (pending) {
+    const bill = pending.alreadySettlesBill
+      ? null
+      : (pickBillToPay(withdrawal, billCandidates, input.merchantRules) ??
+        (pending.merchant && pending.merchant !== withdrawal.descriptor
+          ? pickBillToPay(
+              { ...withdrawal, descriptor: pending.merchant },
+              billCandidates,
+              input.merchantRules
+            )
+          : null));
+    return bill
+      ? { kind: "confirm_pending", transactionId: pending.id, bill }
+      : { kind: "confirm_pending", transactionId: pending.id };
+  }
 
   // d. Pay a matching unpaid bill (rule > learned alias > title token-overlap).
   const bill = pickBillToPay(withdrawal, billCandidates, input.merchantRules);
@@ -710,4 +754,34 @@ export function emailAddsNothingNew(input: EmailAddsNothingNewInput): boolean {
     signedCents(incomingAvailable) === signedCents(storedAvailable) &&
     signedCents(incomingEnding) === signedCents(storedEnding)
   );
+}
+
+// ---------------------------------------------------------------------------
+// Price change on a settled bill
+// ---------------------------------------------------------------------------
+
+/** What a settled bill was planned at, stamped on the paying transaction. */
+export interface BillPriceChange {
+  billTitle: string;
+  /** The bill's SCHEDULED amount, decimal dollars. */
+  scheduledAmount: number;
+}
+
+/**
+ * When a bill settles at a different amount than it was scheduled for, the
+ * transaction that paid it carries `billPriceChange` so the Action Queue can ask
+ * the household to acknowledge the difference (and rebalance a bucket if it
+ * cost more). Cent-exact comparison; an exact payment carries nothing.
+ */
+export function billPriceChangeFor(
+  bill: Pick<BillPayCandidate, "title" | "amount">,
+  paidAmount: number
+): { billPriceChange: BillPriceChange } | Record<string, never> {
+  if (cents(bill.amount) === cents(paidAmount)) return {};
+  return {
+    billPriceChange: {
+      billTitle: bill.title,
+      scheduledAmount: Math.round(Math.abs(bill.amount) * 100) / 100,
+    },
+  };
 }

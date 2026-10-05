@@ -54,6 +54,8 @@ import { fuzzyMatchMember, type MemberLike } from "./todoMatch";
 import { resolveTodoCategory } from "./todoCategoryMatch";
 import { parseTodoPhrase } from "./todoParser";
 import { isManualReview } from "./captureReview";
+import { decideAutoApprove, type AutoApproval, type LearnedRow } from "./autoApprove";
+import { readMerchantRules } from "./merchantRuleEffects";
 import { mergeQuantity, resolveNewQuantityField } from "./quantityLogic";
 
 // Read/export GET endpoint (getTodos). Kept in its own module and re-exported
@@ -353,6 +355,80 @@ export const quickAddHabit = onRequest(
     }
   }
 );
+
+/**
+ * Has the household already taught the app where this purchase goes? Loads what
+ * {@link decideAutoApprove} needs — verified rows under this exact merchant
+ * text, today's bucket names, the accounts, the merchant rules — and returns its
+ * verdict. Best effort: any read failure means "not learned", and the capture
+ * goes to the Action Queue as before.
+ */
+async function learnedApproval(
+  householdId: string,
+  householdData: Record<string, unknown> | undefined,
+  capture: { amount: number; merchant: string; resolvedAccountId?: string; possibleDuplicate: boolean }
+): Promise<AutoApproval | null> {
+  if (!(capture.amount > 0) || capture.possibleDuplicate || !capture.merchant) return null;
+  try {
+    const hh = `households/${householdId}`;
+    const [historySnap, bucketsSnap, accountsSnap] = await Promise.all([
+      // Single-field equality → served by the automatic index; status is
+      // filtered in memory so no composite index is needed.
+      db.collection(`${hh}/transactions`).where("merchant", "==", capture.merchant).get(),
+      db.collection(`${hh}/buckets`).get(),
+      db.collection(`${hh}/accounts`).get(),
+    ]);
+    const history: LearnedRow[] = [];
+    for (const d of historySnap.docs) {
+      const data = d.data() as Record<string, unknown>;
+      if (data.status !== "verified") continue;
+      history.push({
+        category: typeof data.category === "string" ? data.category : undefined,
+        accountId: typeof data.accountId === "string" ? data.accountId : undefined,
+        date: typeof data.date === "string" ? data.date : undefined,
+      });
+    }
+    const bucketNames = bucketsSnap.docs
+      .map((d) => (d.data() as Record<string, unknown>)?.name)
+      .filter((n): n is string => typeof n === "string");
+    const accounts = accountsSnap.docs.map((d) => {
+      const data = d.data() as Record<string, unknown>;
+      return { id: d.id, type: typeof data?.type === "string" ? data.type : undefined };
+    });
+    return decideAutoApprove({
+      ...capture,
+      history,
+      bucketNames,
+      accounts,
+      merchantRules: readMerchantRules(householdData?.merchantRules),
+    });
+  } catch (err) {
+    logger.warn(`Auto-approve lookup failed; leaving capture for review: ${err}`);
+    return null;
+  }
+}
+
+/** The fields an auto-approved capture is stored with (see autoApprove.ts). */
+function approvedFields(approval: AutoApproval): Record<string, unknown> {
+  return {
+    status: "verified",
+    category: approval.category,
+    accountId: approval.accountId,
+    autoCategorized: true,
+    // Marks a row approved on arrival, so a later capture of the SAME purchase
+    // (the bank notification after Apple Pay, or vice versa) can still fold into
+    // it instead of becoming a duplicate — see the reconcile candidates below.
+    autoApproved: true,
+  };
+}
+
+/** The account-balance write that goes with an auto-approval. */
+function approvedBalanceUpdate(approval: AutoApproval): Record<string, unknown> {
+  return {
+    balance: admin.firestore.FieldValue.increment(approval.balanceDelta),
+    lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+  };
+}
 
 /**
  * POST /quickAddExpense
@@ -830,7 +906,13 @@ export const quickAddExpense = onRequest(
           if (
             withinStubWindow &&
             data.source === "shortcut" &&
-            data.status === "pending_review" &&
+            // An auto-approved capture is still the same purchase a moment
+            // later: keep it foldable, or the bank notification that follows an
+            // Apple Pay capture would land as a second row. Its merges never
+            // touch amount or account (it always carries one), so no balance
+            // bookkeeping is needed. ($0 stubs are never auto-approved.)
+            (data.status === "pending_review" ||
+              (data.status === "verified" && data.autoApproved === true)) &&
             typeof data.amount === "number" &&
             Number.isFinite(data.amount)
           ) {
@@ -882,36 +964,55 @@ export const quickAddExpense = onRequest(
           );
           const targetRef = target ? refById.get(target.id) : undefined;
           if (target && targetRef) {
-            await targetRef.update(
-              buildFillUpdates(
-                {
-                  amount,
-                  merchant: merchant.trim(),
-                  category,
-                  accountId: resolvedAccountId,
-                  cardLast4: persistedCardLast4,
-                  // CARD-1 (finding 3): this branch is gated on
-                  // `fromBankNotification && amount > 0`, so the incoming
-                  // record IS the bank notification — "bank wins" the
-                  // cardLast4 conflict policy.
-                  fromBankNotification,
-                },
-                target
-              )
+            const fillUpdates = buildFillUpdates(
+              {
+                amount,
+                merchant: merchant.trim(),
+                category,
+                accountId: resolvedAccountId,
+                cardLast4: persistedCardLast4,
+                // CARD-1 (finding 3): this branch is gated on
+                // `fromBankNotification && amount > 0`, so the incoming
+                // record IS the bank notification — "bank wins" the
+                // cardLast4 conflict policy.
+                fromBankNotification,
+              },
+              target
             );
+            // The stub now has its amount: if the purchase is already learned,
+            // approve it in the same write instead of leaving it for review.
+            const fillApproval = await learnedApproval(householdId, householdData, {
+              amount,
+              merchant: merchant.trim(),
+              resolvedAccountId: resolvedAccountId ?? target.accountId,
+              possibleDuplicate: false,
+            });
+            if (fillApproval) {
+              const fillBatch = db.batch();
+              fillBatch.update(targetRef, { ...fillUpdates, ...approvedFields(fillApproval) });
+              fillBatch.update(
+                db.doc(`households/${householdId}/accounts/${fillApproval.accountId}`),
+                approvedBalanceUpdate(fillApproval)
+              );
+              await fillBatch.commit();
+            } else {
+              await targetRef.update(fillUpdates);
+            }
             await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 200);
             jsonResponse(res, 200, {
               success: true,
               merged: true,
-              message: `Updated pending: ${formatCurrency(amount, { currency })} at ${merchant} (filled awaiting-amount)`,
+              message: fillApproval
+                ? `Approved: ${formatCurrency(amount, { currency })} at ${merchant} → ${fillApproval.category}`
+                : `Updated pending: ${formatCurrency(amount, { currency })} at ${merchant} (filled awaiting-amount)`,
               data: {
                 transactionId: target.id,
                 amount,
                 merchant,
-                category,
+                category: fillApproval?.category ?? category,
                 date: transactionDate,
-                status: "pending_review",
-                accountId: resolvedAccountId ?? null,
+                status: fillApproval ? "verified" : "pending_review",
+                accountId: fillApproval?.accountId ?? resolvedAccountId ?? null,
               },
             });
             return;
@@ -1131,11 +1232,31 @@ export const quickAddExpense = onRequest(
         ...(possibleDuplicateOf ? { possibleDuplicateOf } : {}),
       };
 
-      const transactionRef = await db
-        .collection(transactionsPath)
-        .add(transactionData);
+      // Already learned (bucket AND account known)? Approve on arrival, exactly
+      // as a swipe-approve would: verified, filed, and the balance moved in the
+      // same atomic batch. Otherwise it goes to the Action Queue as before.
+      const approval = await learnedApproval(householdId, householdData, {
+        amount,
+        merchant: merchant.trim(),
+        resolvedAccountId,
+        possibleDuplicate: possibleDuplicateOf !== undefined,
+      });
 
-      // Note: Don't deduct from checking yet - that happens when user verifies the transaction
+      let transactionRef: { id: string };
+      if (approval) {
+        const newRef = db.collection(transactionsPath).doc();
+        const createBatch = db.batch();
+        createBatch.set(newRef, { ...transactionData, ...approvedFields(approval) });
+        createBatch.update(
+          db.doc(`households/${householdId}/accounts/${approval.accountId}`),
+          approvedBalanceUpdate(approval)
+        );
+        await createBatch.commit();
+        transactionRef = newRef;
+      } else {
+        // Note: Don't deduct from checking yet - that happens when user verifies the transaction
+        transactionRef = await db.collection(transactionsPath).add(transactionData);
+      }
 
       // 7. Log API call
       await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 200);
@@ -1144,18 +1265,20 @@ export const quickAddExpense = onRequest(
       //    "$0.00" so the iOS notification isn't misleading.
       jsonResponse(res, 200, {
         success: true,
-        message:
-          amount === 0
+        message: approval
+          ? `Approved: ${formatCurrency(amount, { currency })} at ${merchant} → ${approval.category}`
+          : amount === 0
             ? `Awaiting amount: ${merchant} (added for review)`
             : `Expense added: ${formatCurrency(amount, { currency })} at ${merchant} (pending review)`,
         data: {
           transactionId: transactionRef.id,
           amount,
           merchant,
-          category,
+          category: approval?.category ?? category,
           date: transactionDate,
-          status: "pending_review",
-          accountId: resolvedAccountId ?? null,
+          status: approval ? "verified" : "pending_review",
+          accountId: approval?.accountId ?? resolvedAccountId ?? null,
+          ...(approval ? { autoApproved: true } : {}),
         },
       });
     } catch (error) {

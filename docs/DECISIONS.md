@@ -32,17 +32,57 @@ which is how `needsReview` silently denied every approve.
 
 ---
 
-## Bill ↔ transaction matching: the amount tolerance is deliberate
+## Bill ↔ transaction matching: the amount tolerance guards GUESSES only
 
-**Decided 2026-07-27 (2H).** Two tests pin this. Do not "fix" it by widening the window.
+**Decided 2026-07-27 (2H); revised 2026-10-05 by the owner.** Tests in both matcher copies pin this.
 
-Only the **rule** tier bypasses the ±10% / ±$25 amount guard. The **alias** tier is gated by it, so on
-a variable-amount utility a learned alias still will not match — `Cpenergy Mngco` at $37.91 against a
-$142.00 scheduled Centerpoint bill stays two rows even after the alias is learned.
+The ±10% / ±$25 amount guard applies only to the **token** tier (a bill title sharing a word with the
+bank text), which is a guess. The **rule** tier (a merchant rule's `billId`) and the **alias** tier (a
+bank descriptor previously linked to that exact bill) are explicit links, so they bypass it: a
+variable bill (`Cpenergy Mngco` at $37.91 against a $142.00 scheduled Centerpoint bill) settles at
+what it actually cost.
 
-That is the correct trade. A false positive here **silently marks the wrong bill paid**, which is
-worse than a visible duplicate. The affordance gap it leaves was closed by giving the user an explicit
-merge action (`settleBillWithTransaction`), not by loosening matching.
+The original 2H decision gated the alias tier too, preferring a visible duplicate over a wrong bill
+marked paid. The owner reversed that: the risk is bounded because an alias is an exact, full-text
+match that a person created (and can retract with `forgetBillDescriptorAlias`), and an alias naming
+two unpaid bills still matches neither. What the guard used to protect against — a price the user
+didn't expect — is now surfaced instead of blocking: the sync stamps `Transaction.billPriceChange`
+and the Dashboard's `BillPriceChangeCard` asks the household to acknowledge it (and offers the
+buckets when it cost more). Don't re-gate the alias tier to "fix" a surprising settle; retract the
+alias.
+
+---
+
+## Nightly sync: a CONFIRMED row also settles the bill it pays
+
+**Decided 2026-10-05.** `decideWithdrawal` still checks CONFIRM (an existing captured row) before PAY,
+because "is this the same purchase?" must be answered first. But a confirm no longer ends the line:
+the confirmed row is run through the same `pickBillToPay` (bank descriptor first, then the row's stored
+merchant, which is what the Action Queue matched on). A unique match marks the bill paid, stamps
+`paidCalendarItemId`, and files an unfiled row as `Budgeted in Calendar`; a row the household already
+filed into a bucket keeps its category. No match or an ambiguous one leaves the bill due — the same
+"doubt stays in the queue" rule as everywhere else, and the amount tolerance above is unchanged.
+
+Before this, a bill whose charge had already been captured (screenshot import, bank alert) was
+confirmed overnight and the bill sat in the queue forever: the next night's email skips the line by
+`bankRef`, so nothing ever revisited it.
+
+---
+
+## Apple Pay / Shortcut captures auto-approve only when already learned
+
+**Decided 2026-10-05 by the owner.** `quickAddExpense` approves a capture on arrival — `verified`,
+filed, account balance moved in the same batch, exactly like a swipe-approve — only when BOTH are
+known (`functions/src/quickAdd/autoApprove.ts`): the category comes from a merchant rule or from the
+last 5 categorised verified rows for the exact merchant text all agreeing (and it must be a current
+bucket); the account is the one the capture resolved (card last-4) or the one those rows agree on.
+Anything else — a new merchant, disagreeing history, a $0 stub, a possible duplicate — stays
+`pending_review` for the Action Queue.
+
+Auto-approved rows carry `autoApproved: true` and stay in the reconcile pool, so the bank notification
+that follows an Apple Pay capture still folds into it instead of becoming a second row. Those merges
+never change amount or account (an auto-approved row always has one), so they need no balance
+bookkeeping. Don't narrow the reconcile pool back to `pending_review` only.
 
 ---
 

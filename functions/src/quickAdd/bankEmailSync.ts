@@ -88,7 +88,9 @@ import {
   isVerifiedConfirmCandidate,
   type PendingConfirmCandidate,
   type BillPayCandidate,
+  type BillPayMatch,
   type PaidIncomeLike,
+  billPriceChangeFor,
 } from "./bankSyncMatch";
 import {
   sendNotificationToUser,
@@ -124,6 +126,33 @@ const db = admin.firestore();
 const BUDGETED_IN_CALENDAR = NO_SPEND_BILL_CATEGORY;
 /** The category a needs-category created row lands under until reviewed. */
 const UNCATEGORIZED = "Uncategorized";
+
+/**
+ * A CONFIRM candidate plus the one fact only the endpoint needs: whether the
+ * household already filed the row into a bucket. A confirm that also settles a
+ * bill leaves such a row's category alone and files any other row as the bill
+ * payment.
+ */
+type ConfirmPoolRow = PendingConfirmCandidate & { userCategorized?: boolean };
+
+/** The row already pays a bill — it must not be matched to a second one. */
+function rowSettlesBill(data: Record<string, unknown>): boolean {
+  return (
+    data.category === BUDGETED_IN_CALENDAR ||
+    (typeof data.paidCalendarItemId === "string" && data.paidCalendarItemId !== "")
+  );
+}
+
+/** A verified row the household (or a rule) has already filed into a bucket. */
+function rowUserCategorized(data: Record<string, unknown>): boolean {
+  return (
+    data.status === "verified" &&
+    data.needsCategory !== true &&
+    typeof data.category === "string" &&
+    data.category !== "" &&
+    data.category !== UNCATEGORIZED
+  );
+}
 
 /**
  * Hard cap on withdrawal lines processed per request (abuse / runaway-parse
@@ -588,7 +617,7 @@ export const bankEmailSync = onRequest(
         .collection(`households/${householdId}/transactions`)
         .where("status", "==", "pending_review")
         .get();
-      const pendingCandidates: PendingConfirmCandidate[] = [];
+      const pendingCandidates: ConfirmPoolRow[] = [];
       const stubCandidates: (ReconcileCandidate & { date?: string })[] = [];
       for (const d of pendingSnap.docs) {
         const data = d.data() as Record<string, unknown>;
@@ -603,7 +632,15 @@ export const bankEmailSync = onRequest(
         const bankDescriptor = typeof data.bankDescriptor === "string" ? data.bankDescriptor : undefined;
         // accountId gates CONFIRM so a credit-card / other-account pending row is
         // never verified by this checking email (item 3).
-        pendingCandidates.push({ id: d.id, amount, date, merchant, accountId, bankDescriptor });
+        pendingCandidates.push({
+          id: d.id,
+          amount,
+          date,
+          merchant,
+          accountId,
+          bankDescriptor,
+          alreadySettlesBill: rowSettlesBill(data),
+        });
         stubCandidates.push({
           id: d.id,
           amount,
@@ -721,6 +758,8 @@ export const bankEmailSync = onRequest(
             merchant: typeof data.merchant === "string" ? data.merchant : "",
             accountId: typeof data.accountId === "string" ? data.accountId : undefined,
             bankDescriptor: typeof data.bankDescriptor === "string" ? data.bankDescriptor : undefined,
+            alreadySettlesBill: rowSettlesBill(data),
+            userCategorized: rowUserCategorized(data),
           });
         }
       }
@@ -766,7 +805,7 @@ export const bankEmailSync = onRequest(
       // drop a real transaction). The displaced withdrawal then falls through the
       // remaining a→e steps (ultimately CREATE) — item 2.
       let stubPool: (ReconcileCandidate & { date?: string })[] = stubCandidates;
-      let pendingPool: PendingConfirmCandidate[] = pendingCandidates;
+      let pendingPool: ConfirmPoolRow[] = pendingCandidates;
       let billPool: BillPayCandidate[] = billCandidates;
 
       // F-HABITS-14 — spend this email is about to record, PER JUDGED DAY,
@@ -796,6 +835,59 @@ export const bankEmailSync = onRequest(
       // breaks the day the app shows it on — a day whose visible transaction list
       // is empty is never reported as spent.
       const noSpendExtraSpendByDate = new Map<string, SpendCandidate[]>();
+
+      // Marks one matched bill PAID at the withdrawal's amount, inside this
+      // email's batch, and returns the id of the paid calendar doc (the real
+      // paid-instance doc for a recurring occurrence). Shared by PAY and by a
+      // CONFIRM whose row turned out to pay a bill, so both settle a bill the
+      // same way. NO balance delta: the ending-balance overwrite is authoritative.
+      const stageBillPaid = (
+        match: BillPayMatch,
+        descriptor: string,
+        paidAmount: number
+      ): string => {
+        const { bill, matchedBy } = match;
+        // Prune the consumed bill so a second withdrawal can't re-pay it (item 2).
+        billPool = billPool.filter((b) => b.id !== bill.id);
+        let paidDocId = bill.id;
+        if (bill.isRecurringInstance && bill.templateId) {
+          // Recurring occurrence → paid-instance record (suppresses the
+          // synthetic occurrence on future expansions).
+          const paidRef = db.collection(calendarPath).doc();
+          paidDocId = paidRef.id;
+          batch.set(paidRef, {
+            title: bill.title,
+            amount: paidAmount,
+            date: bill.date,
+            type: "expense",
+            isPaid: true,
+            isRecurring: false,
+            parentRecurringId: bill.templateId,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        } else {
+          batch.update(db.doc(`${calendarPath}/${bill.id}`), {
+            isPaid: true,
+            amount: paidAmount,
+          });
+        }
+        // Learn the descriptor as an alias ONLY for a token-overlap match —
+        // the guess we want to stop having to make again. An alias match
+        // already knows it, and a RULE match is already recorded by the rule
+        // the household wrote: learning an alias too would create a second,
+        // redundant source of truth that survives deleting the rule, so the
+        // link could not be undone by undoing the thing that made it.
+        // Write onto the template for a recurring occurrence, else the item.
+        if (matchedBy === "token") {
+          const aliasTargetId = bill.templateId ?? bill.id;
+          batch.update(db.doc(`${calendarPath}/${aliasTargetId}`), {
+            bankDescriptorAliases: admin.firestore.FieldValue.arrayUnion(descriptor),
+          });
+        }
+        counts.billsPaid++;
+        if (matchedBy === "rule") counts.ruleBilled++;
+        return paidDocId;
+      };
 
       for (const w of parsed.withdrawals) {
         const decision = decideWithdrawal({
@@ -828,7 +920,18 @@ export const bankEmailSync = onRequest(
         // whole point of exemption reaching the loaded query). See
         // `ruleExemptedCharge` for which decisions are excluded and why the
         // three counters have to stay disjoint.
-        if (ruleExemptedCharge(rule, decision.kind)) {
+        //
+        // A confirm that also settles a bill re-files an unfiled row under
+        // `BUDGETED_IN_CALENDAR`, so for this counter it is a bill payment.
+        const confirmTarget =
+          decision.kind === "confirm_pending"
+            ? pendingPool.find((p) => p.id === decision.transactionId)
+            : undefined;
+        const refilesAsBill =
+          decision.kind === "confirm_pending" &&
+          decision.bill !== undefined &&
+          confirmTarget?.userCategorized !== true;
+        if (ruleExemptedCharge(rule, refilesAsBill ? "pay_bill" : decision.kind)) {
           counts.ruleExempted++;
         }
         // The category a brand-new row would be born with — needed BEFORE the
@@ -928,10 +1031,31 @@ export const bankEmailSync = onRequest(
             // Re-writing `verified` onto it is a no-op; the write that matters
             // is the `bankRef`, which is what stops a later email creating a
             // duplicate of a row someone had already dealt with.
+            //
+            // When the row also pays an unpaid bill (see decideWithdrawal),
+            // settle the bill here too and stamp the link, so the bill leaves
+            // the Action Queue the night its money leaves the account. A row
+            // the household already filed into a bucket keeps its category;
+            // an unfiled one is filed as the bill payment, exactly as the
+            // client's settleBillWithTransaction does.
+            const confirmPaid = Math.round(w.amount * 100) / 100;
+            const billLink = decision.bill
+              ? {
+                  paidCalendarItemId: stageBillPaid(decision.bill, w.descriptor, confirmPaid),
+                  ...billPriceChangeFor(decision.bill.bill, confirmPaid),
+                  ...(!refilesAsBill
+                    ? {}
+                    : {
+                        category: BUDGETED_IN_CALENDAR,
+                        needsCategory: admin.firestore.FieldValue.delete(),
+                      }),
+                }
+              : {};
             batch.update(db.doc(`${transactionsPath}/${decision.transactionId}`), {
               status: "verified",
               bankRef: w.bankRef,
               accountId: resolvedAccountId,
+              ...billLink,
             });
             // Prune the consumed pending row from BOTH pools (item 2).
             pendingPool = pendingPool.filter((p) => p.id !== decision.transactionId);
@@ -940,7 +1064,7 @@ export const bankEmailSync = onRequest(
             break;
           }
           case "pay_bill": {
-            const { bill, matchedBy } = decision.match;
+            const { bill } = decision.match;
             const paidAmount = Math.round(w.amount * 100) / 100;
             // Retro-file under the bill's DUE-date pay period (mirrors the client
             // payCalendarItem convention), NOT the withdrawal clearing date — an
@@ -950,27 +1074,7 @@ export const bankEmailSync = onRequest(
               householdData?.lastPaycheckDate,
               calendarItems as PaidIncomeLike[]
             );
-            // Prune the consumed bill so a second withdrawal can't re-pay it (item 2).
-            billPool = billPool.filter((b) => b.id !== bill.id);
-            if (bill.isRecurringInstance && bill.templateId) {
-              // Recurring occurrence → paid-instance record (suppresses the
-              // synthetic occurrence on future expansions).
-              batch.set(db.collection(calendarPath).doc(), {
-                title: bill.title,
-                amount: paidAmount,
-                date: bill.date,
-                type: "expense",
-                isPaid: true,
-                isRecurring: false,
-                parentRecurringId: bill.templateId,
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-              });
-            } else {
-              batch.update(db.doc(`${calendarPath}/${bill.id}`), {
-                isPaid: true,
-                amount: paidAmount,
-              });
-            }
+            const paidDocId = stageBillPaid(decision.match, w.descriptor, paidAmount);
             // Verified transaction dated to the bill's due date. NO balance
             // delta (ending-balance overwrite is authoritative).
             batch.set(db.collection(transactionsPath).doc(), {
@@ -985,23 +1089,15 @@ export const bankEmailSync = onRequest(
               payPeriodId: billPayPeriodId,
               accountId: resolvedAccountId,
               bankRef: w.bankRef,
+              // Link the row to the paid calendar doc, as the client's
+              // payCalendarItem does, so settledBillGuard protects the pair and
+              // the row can't be picked to settle a second bill.
+              paidCalendarItemId: paidDocId,
+              // Settled at a different price than planned → the Action Queue
+              // asks the household to acknowledge the difference.
+              ...billPriceChangeFor(bill, paidAmount),
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
             });
-            // Learn the descriptor as an alias ONLY for a token-overlap match —
-            // the guess we want to stop having to make again. An alias match
-            // already knows it, and a RULE match is already recorded by the rule
-            // the household wrote: learning an alias too would create a second,
-            // redundant source of truth that survives deleting the rule, so the
-            // link could not be undone by undoing the thing that made it.
-            // Write onto the template for a recurring occurrence, else the item.
-            if (matchedBy === "token") {
-              const aliasTargetId = bill.templateId ?? bill.id;
-              batch.update(db.doc(`${calendarPath}/${aliasTargetId}`), {
-                bankDescriptorAliases: admin.firestore.FieldValue.arrayUnion(w.descriptor),
-              });
-            }
-            counts.billsPaid++;
-            if (matchedBy === "rule") counts.ruleBilled++;
             break;
           }
           case "create": {

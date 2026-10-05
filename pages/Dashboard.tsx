@@ -26,6 +26,7 @@ const ReviewPendingDrawer = React.lazy(() => import('@/components/modals/ReviewP
 import { LazyMount } from '@/components/ui/LazyMount';
 import { buildReviewQueueSnapshot, type ReviewQueueItem } from '@/utils/reviewQueue';
 import { ReviewQueueCard } from '@/components/dashboard/ReviewQueueCard';
+import { BillPriceChangeCard } from '@/components/dashboard/BillPriceChangeCard';
 import {
   isCalendarQueueItem,
   isTodoQueueItem,
@@ -625,6 +626,10 @@ const Dashboard: React.FC = () => {
             held Quick-Add captures stay discoverable even on an otherwise
             "all caught up" day. */}
         <ReviewQueueCard count={reviewQueueItems.length} onOpen={openReviewQueue} />
+
+        {/* Bills the nightly sync settled at a different price than planned —
+            nothing to approve, only a difference to acknowledge (money domain). */}
+        {isModuleEnabled('money') && <BillPriceChangeCard />}
 
         {/* TIER 1 — the hero slot: the queue when it has items, the "today at
             a glance" moment when it doesn't. Always the page's focal point. */}
