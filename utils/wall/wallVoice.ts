@@ -1,6 +1,7 @@
 import type { GroceryCatalogItem, HouseholdMember, ShoppingItem, ToDo, WallVoiceEngine } from '@/types/schema';
 import type { WallVoiceCommand } from '@/services/geminiService.types';
 import { dueDateFor, newShoppingItem } from './wallLists';
+import { spokenDay, spokenList } from './wallSpeech';
 
 /**
  * Pure logic for the wall's tap-to-talk commands
@@ -84,8 +85,8 @@ export function pickVoiceEngine(setting: WallVoiceEngine, support: VoiceSupport,
 type NewTodo = Omit<ToDo, 'id' | 'createdAt' | 'createdBy'>;
 
 export type VoiceAction =
-  | { kind: 'shopping'; items: Omit<ShoppingItem, 'id'>[]; summary: string }
-  | { kind: 'todo'; todo: NewTodo; summary: string }
+  | { kind: 'shopping'; items: Omit<ShoppingItem, 'id'>[]; summary: string; spoken: string }
+  | { kind: 'todo'; todo: NewTodo; summary: string; spoken: string }
   | { kind: 'unknown' };
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -131,7 +132,8 @@ export function resolveVoiceCommand(
     }
     if (items.length === 0) return { kind: 'unknown' };
     const summary = items.map(i => (i.quantity ? `${i.name} (${i.quantity})` : i.name)).join(', ');
-    return { kind: 'shopping', items, summary };
+    const spoken = `Added ${spokenList(items.map(i => i.name.toLowerCase()))} to shopping.`;
+    return { kind: 'shopping', items, summary, spoken };
   }
   if (command.intent === 'add_todo' && command.todo?.text.trim()) {
     const text = capitalize(command.todo.text.trim());
@@ -144,9 +146,12 @@ export function resolveVoiceCommand(
       source: 'voice',
       ...(member ? { assignedTo: member.uid } : {}),
     };
-    const when = completeByDate === ctx.today ? 'today' : completeByDate === dueDateFor('tomorrow', ctx.today) ? 'tomorrow' : completeByDate;
+    const tomorrow = dueDateFor('tomorrow', ctx.today);
+    const when = completeByDate === ctx.today ? 'today' : completeByDate === tomorrow ? 'tomorrow' : completeByDate;
     const summary = `${text} · ${member?.displayName ?? 'Family'} · ${when}`;
-    return { kind: 'todo', todo, summary };
+    const firstName = member?.displayName?.split(' ')[0];
+    const spoken = `Added ${text.charAt(0).toLowerCase()}${text.slice(1)}${firstName ? ` for ${firstName}` : ''}, due ${spokenDay(completeByDate, ctx.today, tomorrow)}.`;
+    return { kind: 'todo', todo, summary, spoken };
   }
   return { kind: 'unknown' };
 }

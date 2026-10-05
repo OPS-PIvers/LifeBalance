@@ -10,6 +10,8 @@ interface WallGearMenuProps {
   onReload: () => void;
   onUnpair: () => void;
   onSyncCalendars: () => Promise<{ failed: number }>;
+  /** Plays a chime and says a line, so the volume can be checked from here. */
+  onTestSound: () => void;
   /** The Week panel's auto-rotate, started or stopped for this wall. */
   rotating: boolean;
   rotationIntervalSec: number;
@@ -33,6 +35,7 @@ const WallGearMenu: React.FC<WallGearMenuProps> = ({
   onReload,
   onUnpair,
   onSyncCalendars,
+  onTestSound,
   rotating,
   rotationIntervalSec,
   onToggleRotation,
@@ -126,6 +129,10 @@ const WallGearMenu: React.FC<WallGearMenuProps> = ({
           <button type="button" disabled={syncing} onClick={() => void syncCalendars()}>
             <span>Sync calendars now</span>
             <span role="status">{syncNote}</span>
+          </button>
+          <button type="button" onClick={onTestSound}>
+            <span>Test sound</span>
+            <span>Chimes and speaks at the wall’s volume</span>
           </button>
           <button type="button" onClick={onToggleRotation}>
             <span>{rotating ? 'Stop rotating the panel' : 'Start rotating the panel'}</span>

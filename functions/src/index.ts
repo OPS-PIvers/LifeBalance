@@ -72,6 +72,9 @@ export {
   projectwallbills,
   onwallsettingswritten,
 } from "./wall/calendar/functions";
+// Wall sound (docs/plans/wall-display-kiosk.md §12): spoken replies via Google
+// Cloud Text-to-Speech, authed by the runtime service account (no secret).
+export { walltts } from "./wall/tts";
 
 // Stripe billing functions (Plan 050a) live in ./stripe and are fully implemented
 // and unit-tested, but are intentionally NOT exported here yet. Exporting a function

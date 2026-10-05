@@ -5,7 +5,7 @@ import { useHouseholdCore, useMealPlan, useShopping, useTodos } from '@/contexts
 import { wallEventConverter, wallSettingsConverter } from '@/utils/firestoreConverters';
 import { DEFAULT_WALL_SETTINGS, effectiveLayout, normalizeLayout } from '@/utils/wall/wallSettings';
 import type { Meal, MealPlanItem, WallEvent, WallLayout, WallSettings } from '@/types/schema';
-import { syncWallCalendarsNow } from '@/components/wall/wallCalendarService';
+import { syncWallCalendarsNow, synthesizeWallSpeech } from '@/components/wall/wallCalendarService';
 import { WallDataContext, type WallData, type WallDataActions } from './wallData';
 import { wallEventWindow } from './wallWindows';
 
@@ -116,6 +116,11 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       syncCalendarsNow: async () => {
         if (!householdId || sessionStorage.getItem('LIFEBALANCE_TEST_MODE') === 'true') return { failed: 0 };
         return syncWallCalendarsNow(householdId);
+      },
+      synthesizeSpeech: async text => {
+        // Test Mode has no backend: the iPad's own voice speaks instead.
+        if (!householdId || sessionStorage.getItem('LIFEBALANCE_TEST_MODE') === 'true') throw new Error('No cloud voice in Test Mode');
+        return synthesizeWallSpeech(householdId, text);
       },
     }),
     [shopping, todoSlice, householdId]

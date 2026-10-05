@@ -3,12 +3,11 @@ import { doc, onSnapshot, serverTimestamp, updateDoc, waitForPendingWrites } fro
 import { auth, db } from '@/firebase.config';
 import { createIdleTimer } from '@/utils/wall/wallIdle';
 import { isNight } from '@/utils/wall/wallNight';
-import { zonedDateString, zonedParts } from '@/utils/wall/wallTime';
+import { UPDATE_CHECK_MS, entryScriptOf, isUpdateAvailable, runningEntryScript } from '@/utils/wall/wallVersion';
 import {
   HEARTBEAT_INTERVAL_MS,
   HEARTBEAT_PENDING_OFFLINE_MS,
   NIGHT_WAKE_MS,
-  isMaintenanceDue,
   offlineLevel,
   type OfflineLevel,
 } from '@/utils/wall/wallStatus';
@@ -16,8 +15,8 @@ import { WEATHER_REFRESH_MS, WEATHER_STALE_MS, forecastUrl, parseForecast, type 
 import type { WallSettings } from '@/types/schema';
 
 /** Reported in displays/{did}.appVersion; bump when the wall's behavior changes. */
-const APP_VERSION = 'wall-2';
-const MAINTENANCE_KEY = 'LB_WALL_MAINTENANCE_DATE';
+const APP_VERSION = 'wall-3';
+const RELOADED_FOR_KEY = 'LB_WALL_RELOADED_FOR';
 const WEATHER_KEY = 'LB_WALL_WEATHER';
 const HIDDEN_RESYNC_MS = 5 * 60 * 1000;
 
@@ -190,28 +189,56 @@ export function useWallRuntime({ settings, householdId, displayId, onIdle }: Opt
     };
   }, []);
 
-  // Nightly maintenance (03:00 in the household zone): one full reload, which
-  // also picks up any app update, skipped while writes are still queued.
-  const hour = zonedParts(now, timeZone).hour;
-  const today = zonedDateString(now, timeZone);
-  // Re-attempt each minute of the 3 am hour (a pending-writes skip retries).
-  const maintenanceTick = hour === 3 ? now.getMinutes() : -1;
+  const effectiveOfflineSince =
+    offlineSince ?? (heartbeatStuckSince !== null && now.getTime() - heartbeatStuckSince > HEARTBEAT_PENDING_OFFLINE_MS ? heartbeatStuckSince : null);
+
+  const wake = useCallback(() => setWakeUntil(Date.now() + NIGHT_WAKE_MS), []);
+  const nightShowing = isNight(now, settings.night, timeZone) && now.getTime() >= wakeUntil;
+
+  // Updates: ask every 30 min whether a new version is deployed...
+  const [running] = useState(() => runningEntryScript(document));
+  const [served, setServed] = useState<string | null>(null);
   useEffect(() => {
-    let last: string | null = null;
+    if (!running) return undefined; // dev server: nothing to compare
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const res = await fetch('/index.html', { cache: 'no-store', signal: AbortSignal.timeout(15_000) });
+        if (!res.ok) return;
+        const next = entryScriptOf(await res.text());
+        if (!cancelled && next) setServed(next);
+      } catch {
+        // Offline: ask again next time.
+      }
+    };
+    void check();
+    const id = window.setInterval(() => void check(), UPDATE_CHECK_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [running]);
+
+  // ...and apply it only while the night screen is up: a reload locks the
+  // iPad's audio and mic until the next touch, which nobody notices at night.
+  // Skipped while writes are queued (retried each minute) and never twice
+  // for the same build, so a stale CDN can't cause a reload loop.
+  const updateReady = isUpdateAvailable(running, served);
+  const minuteTick = nightShowing && updateReady ? now.getMinutes() : -1;
+  useEffect(() => {
+    if (!updateReady || !nightShowing || !served) return undefined;
     try {
-      last = localStorage.getItem(MAINTENANCE_KEY);
+      if (localStorage.getItem(RELOADED_FOR_KEY) === served) return undefined;
     } catch {
-      last = null;
+      return undefined; // without storage we couldn't stop a loop
     }
-    if (!isMaintenanceDue(hour, today, last)) return;
     let cancelled = false;
     const timeout = new Promise<'timeout'>(resolve => window.setTimeout(() => resolve('timeout'), 30_000));
     void Promise.race([waitForPendingWrites(db).then(() => 'done' as const), timeout]).then(result => {
-      if (cancelled || result !== 'done') return; // retried on a later minute this hour
+      if (cancelled || result !== 'done') return;
       try {
-        localStorage.setItem(MAINTENANCE_KEY, today);
+        localStorage.setItem(RELOADED_FOR_KEY, served);
       } catch {
-        // Without storage we'd reload every minute of the hour; skip instead.
         return;
       }
       window.location.reload();
@@ -219,13 +246,7 @@ export function useWallRuntime({ settings, householdId, displayId, onIdle }: Opt
     return () => {
       cancelled = true;
     };
-  }, [hour, today, maintenanceTick]);
-
-  const effectiveOfflineSince =
-    offlineSince ?? (heartbeatStuckSince !== null && now.getTime() - heartbeatStuckSince > HEARTBEAT_PENDING_OFFLINE_MS ? heartbeatStuckSince : null);
-
-  const wake = useCallback(() => setWakeUntil(Date.now() + NIGHT_WAKE_MS), []);
-  const nightShowing = isNight(now, settings.night, timeZone) && now.getTime() >= wakeUntil;
+  }, [updateReady, nightShowing, served, minuteTick]);
 
   // Re-check the wake window when it ends (the minute tick may be up to 15 s late).
   useEffect(() => {

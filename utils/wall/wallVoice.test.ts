@@ -86,7 +86,11 @@ describe('resolveVoiceCommand', () => {
       },
       ctx
     );
-    expect(action).toMatchObject({ kind: 'shopping', summary: 'Milk (1 gal), Eggs, Avocados (2)' });
+    expect(action).toMatchObject({
+      kind: 'shopping',
+      summary: 'Milk (1 gal), Eggs, Avocados (2)',
+      spoken: 'Added milk, eggs and avocados to shopping.',
+    });
     if (action.kind !== 'shopping') throw new Error('expected shopping');
     expect(action.items).toEqual([
       expect.objectContaining({ name: 'Milk', category: 'Dairy', store: 'Costco', quantity: '1 gal', source: 'voice' }),
@@ -104,6 +108,7 @@ describe('resolveVoiceCommand', () => {
       kind: 'todo',
       todo: { text: 'Feed the cat', completeByDate: '2026-10-05', isCompleted: false, source: 'voice', assignedTo: 'u2' },
       summary: 'Feed the cat · Alex Rivera · tomorrow',
+      spoken: 'Added feed the cat for Alex, due tomorrow.',
     });
   });
 
@@ -111,6 +116,7 @@ describe('resolveVoiceCommand', () => {
     expect(resolveVoiceCommand({ transcript: '', intent: 'add_todo', todo: { text: 'call the dentist', assigneeName: 'Sam' } }, ctx)).toMatchObject({
       todo: { completeByDate: TODAY },
       summary: 'Call the dentist · Family · today',
+      spoken: 'Added call the dentist, due today.',
     });
     expect(resolveVoiceCommand({ transcript: '', intent: 'add_todo', todo: { text: 'x', due: '2026-10-20' } }, ctx)).toMatchObject({
       todo: { completeByDate: '2026-10-20' },

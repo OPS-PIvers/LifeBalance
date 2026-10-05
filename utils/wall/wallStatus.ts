@@ -15,12 +15,3 @@ export function offlineLevel(offlineSince: number | null, now: number): OfflineL
   if (offlineSince === null) return 'online';
   return now - offlineSince >= OFFLINE_STRIP_AFTER_MS ? 'strip' : 'mark';
 }
-
-/**
- * The nightly maintenance reload runs once per local date, any time from
- * 03:00 to 03:59 (a skipped attempt, e.g. writes still pending, simply tries
- * again on a later minute in that hour).
- */
-export function isMaintenanceDue(hour: number, today: string, lastRunDate: string | null): boolean {
-  return hour === 3 && lastRunDate !== today;
-}

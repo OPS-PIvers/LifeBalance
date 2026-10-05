@@ -11,3 +11,14 @@ export async function syncWallCalendarsNow(householdId: string): Promise<{ faile
   const { data } = await sync({ householdId });
   return { failed: data.failed };
 }
+
+/**
+ * One spoken phrase in a natural cloud voice (functions/src/wall/tts.ts
+ * `walltts`), as base64 MP3. Members and the household's active display.
+ */
+export async function synthesizeWallSpeech(householdId: string, text: string): Promise<string> {
+  const [{ httpsCallable }, functions] = await Promise.all([import('firebase/functions'), getFunctionsInstance()]);
+  const tts = httpsCallable<{ householdId: string; text: string }, { audioContent: string }>(functions, 'walltts');
+  const { data } = await tts({ householdId, text });
+  return data.audioContent;
+}

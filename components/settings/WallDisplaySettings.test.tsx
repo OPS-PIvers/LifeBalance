@@ -70,3 +70,13 @@ describe('WallDisplaySettings → Voice', () => {
     expect(saved()).toMatchObject({ voice: 'auto' });
   });
 });
+
+describe('WallDisplaySettings → Sound', () => {
+  it('sets the volume and the reply style', () => {
+    renderIt();
+    fireEvent.click(screen.getByRole('radio', { name: 'High' }));
+    expect(saved()).toMatchObject({ sound: { confirm: 'speak', alerts: 'speak', volume: 1 } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Chime only' }));
+    expect(saved()).toMatchObject({ sound: { confirm: 'chime', volume: 0.7 } });
+  });
+});

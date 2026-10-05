@@ -38,7 +38,7 @@ import type {
   WallLayout,
   WallSettings,
 } from '@/types/schema';
-import { syncWallCalendarsNow } from '@/components/wall/wallCalendarService';
+import { syncWallCalendarsNow, synthesizeWallSpeech } from '@/components/wall/wallCalendarService';
 import { WallDataContext, type WallData, type WallDataActions } from './wallData';
 import { wallEventWindow, wallMealPlanWindow } from './wallWindows';
 
@@ -230,6 +230,7 @@ const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked
         await updateDoc(doc(db, `households/${householdId}/displays/${displayId}`), { layout });
       },
       syncCalendarsNow: () => syncWallCalendarsNow(householdId ?? ''),
+      synthesizeSpeech: text => synthesizeWallSpeech(householdId ?? '', text),
     };
   }, [householdId, displayId, actor, shoppingList, groceryCatalog, completeToDo, uncompleteToDo]);
 
