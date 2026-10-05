@@ -6,6 +6,7 @@ import LabMicA from './LabMicA';
 import LabMicB from './LabMicB';
 import LabPrototype from './LabPrototype';
 import LabTimers from './LabTimers';
+import LabWake from './LabWake';
 import { LAUNCH_ID, isStandalone, logEvent, readAttempts, saveAttempt, type LabAttempt } from './labLog';
 
 /**
@@ -13,12 +14,13 @@ import { LAUNCH_ID, isStandalone, logEvent, readAttempts, saveAttempt, type LabA
  * Only routed when the build sets VITE_WALL_LAB=true, which only the
  * wall-lab preview-channel workflow does. Delete with Phase 6.
  */
-type Tab = 'env' | 'a' | 'b' | 'proto' | 'timers';
+type Tab = 'env' | 'a' | 'b' | 'wake' | 'proto' | 'timers';
 
 const TABS: [Tab, string][] = [
   ['env', 'Environment'],
   ['a', 'Mic A · on-device'],
   ['b', 'Mic B · Gemini audio'],
+  ['wake', 'Wake word'],
   ['proto', 'Prototype'],
   ['timers', 'Timers'],
 ];
@@ -89,6 +91,7 @@ const WallLab: React.FC = () => {
       </nav>
       {tab === 'env' && <LabEnvironment onCleared={() => setAttempts([])} />}
       {tab === 'timers' && <LabTimers />}
+      {tab === 'wake' && <LabWake />}
       {(tab === 'a' || tab === 'b') && (
         <div className="grid grid-cols-[1fr_22rem] gap-10">
           <div className="space-y-6">

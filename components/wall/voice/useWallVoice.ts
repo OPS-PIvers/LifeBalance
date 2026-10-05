@@ -55,6 +55,8 @@ interface UseWallVoiceOptions {
   timeZone: string;
   onShow: (target: VoiceTarget) => void;
   onRotate: (on: boolean) => void;
+  /** "What's my day": the wall shows and reads the brief itself. */
+  onBrief?: (day: 'today' | 'tomorrow' | 'auto') => void;
   /** Called once per result or error, for the chime and spoken reply. */
   onFeedback?: (feedback: WallVoiceFeedback) => void;
   deps?: WallVoiceDeps;
@@ -88,7 +90,7 @@ function parseErrorState(error: unknown): { title: string; text: string; retry: 
  * the same list writes as a tap, with Undo. Writes go through
  * useWallListActions, whose toast is captured into the voice banner instead.
  */
-export function useWallVoice({ setting, today, timeZone, onShow, onRotate, onFeedback, deps }: UseWallVoiceOptions) {
+export function useWallVoice({ setting, today, timeZone, onShow, onRotate, onBrief, onFeedback, deps }: UseWallVoiceOptions) {
   const { householdId, members, groceryCatalog } = useWallData();
   const [state, setState] = useState<WallVoiceState | null>(null);
   const support = useMemo<VoiceSupport>(
@@ -117,9 +119,9 @@ export function useWallVoice({ setting, today, timeZone, onShow, onRotate, onFee
   );
   const act = useWallListActions(voiceToaster);
 
-  const latest = useRef({ members, groceryCatalog, today, timeZone, onShow, onRotate, onFeedback, act, parseText, parseAudio, householdId });
+  const latest = useRef({ members, groceryCatalog, today, timeZone, onShow, onRotate, onBrief, onFeedback, act, parseText, parseAudio, householdId });
   useEffect(() => {
-    latest.current = { members, groceryCatalog, today, timeZone, onShow, onRotate, onFeedback, act, parseText, parseAudio, householdId };
+    latest.current = { members, groceryCatalog, today, timeZone, onShow, onRotate, onBrief, onFeedback, act, parseText, parseAudio, householdId };
   });
 
   const available = pickVoiceEngine(setting, support, false) !== null;
@@ -181,6 +183,9 @@ export function useWallVoice({ setting, today, timeZone, onShow, onRotate, onFee
           { title: command.on ? 'Rotating the panel' : 'Stopped rotating', text: command.on ? 'Say “stop rotating” to keep one module.' : 'The panel stays as it is.' },
           command.on ? 'Rotating the panel.' : 'Stopped rotating.'
         );
+      } else if (command.kind === 'brief') {
+        setState(null);
+        l.onBrief?.(command.day);
       } else if (command.kind === 'undo') {
         if (lastUndo.current) runUndo(lastUndo.current.undo, lastUndo.current.text);
         else fail('Nothing to undo', 'Voice can undo the last thing it added.', false);

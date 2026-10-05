@@ -34,6 +34,25 @@ describe('parseLocalCommand (the no-AI grammar)', () => {
     expect(parseLocalCommand(text)).toEqual(expected);
   });
 
+  it.each([
+    ["What's my day?", 'auto'],
+    ['Hey, brief me please', 'auto'],
+    ['my day', 'auto'],
+    ['Good morning!', 'today'],
+    ["What's on today", 'today'],
+    ["what's on my calendar", 'today'],
+    ["What's tomorrow?", 'tomorrow'],
+    ['How does tomorrow look', 'tomorrow'],
+    ["what's on the calendar tomorrow", 'tomorrow'],
+  ])('“%s” asks for the day brief (%s)', (text, day) => {
+    expect(parseLocalCommand(text)).toEqual({ kind: 'brief', day });
+  });
+
+  it('"today" alone still opens the Day view', () => {
+    expect(parseLocalCommand('show today')).toEqual({ kind: 'show', target: 'day' });
+    expect(parseLocalCommand('today')).toEqual({ kind: 'show', target: 'day' });
+  });
+
   it.each(['add milk to the shopping list', 'remind Sam to feed the cat', 'show me something nice', '', '   '])(
     'leaves %j for the model',
     text => {

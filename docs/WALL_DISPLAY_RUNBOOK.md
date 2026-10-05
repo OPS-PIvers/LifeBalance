@@ -148,6 +148,7 @@ Tap the **mic** at the bottom of the rail, or the mic in the Add sheet, and spea
 | "Show the calendar / month / today / shopping / to-dos / meals" | Switches the screen | No |
 | "Stop rotating" / "Start rotating" | Same as the gear menu | No |
 | "Undo" | Removes what voice just added | No |
+| "What's my day?" / "Good morning" / "What's tomorrow?" | Shows and reads the day brief: weather, what's left on the calendar, bills due, leave-by times. After 6 pm "my day" means tomorrow | No |
 
 - A result opens as a **big card** in the middle of the screen (readable from
   across the room) with a chime, and by default a spoken reply ("Added milk

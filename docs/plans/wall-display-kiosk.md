@@ -620,12 +620,26 @@ Record the results in `docs/plans/wall-display-phase0-results.md`. Delete the la
 - [ ] Idle 3 min returns to Week and resets scroll.
 - [ ] Rotation pauses on touch.
 - [ ] Night screen at 10 pm; a tap wakes it for 60 s; brightness automation fires.
-- [ ] 3 am reload happens; a deployed update is applied overnight with no prompt.
+- [ ] A deployed update is applied overnight (during the night screen) with no prompt, and the wall doesn't reload at any other time.
 
 **Voice and access control**
 - [ ] Voice: 20 scripted commands; the undo of a voice add works.
 - [ ] Revoke on the phone returns the wall to the pairing screen.
 - [ ] Gear: a wrong PIN is rejected; Unpair works.
+
+**Sound, alerts and the brief** (§12; enable the Text-to-Speech and Routes APIs first, runbook §1)
+- [ ] After a launch, "Tap to turn on sound" shows; one tap clears it. Gear → Test sound chimes and speaks in the natural (cloud) voice.
+- [ ] A voice add shows the big centered card and says "Added … to shopping"; after 5 s it shrinks to the banner; Undo still works.
+- [ ] Settings → Sound → Chime only: the next command only chimes. Volume Low/High is noticeably different.
+- [ ] Speech right after a voice command isn't ducked or tinny while the mic stream is held open.
+- [ ] Alerts: turn them on for one calendar, save the home address. An event with a location 30–60 min out shows "Leave in 10 min" at leave-by −10 and "Time to leave" at leave-by, with sensible drive minutes. An event without a location alerts at the lead time.
+- [ ] An alert during night hours shows dimmed over the night screen with no sound.
+- [ ] "What's my day?" and "What's tomorrow?" show the brief and read it line by line; Stop works.
+- [ ] The next morning, sound works without a tap when no update was deployed overnight (no reload happened).
+
+**Wake word** (lab only for now; see `wall-display-phase0-results.md`)
+- [ ] Picovoice account, AccessKey, "Hey Home" trained for Web (WASM).
+- [ ] A day of listening in the lab's Wake word tab; results pasted; pass/fail decided.
 
 **Soak**
 - [ ] 72 h soak: no crash, no memory growth over 30%.
@@ -691,8 +705,8 @@ the wall.
 |---|---|---|
 | **B Sound** | `walltts` (+ 500/day cap in `apiUsage/wallTts`), `components/wall/sound/` (Web Audio chimes, cloud voice with cache and fallback, unlock on touch, chip), big card (`WallSpotlight`), spoken confirmations (`VoiceAction.spoken`), Settings → Sound (volume, confirm style), gear **Test sound**, version-gated night reload (`utils/wall/wallVersion.ts`) | Built |
 | **C Alerts** | Per-feed `alerts` + `travelMode` (feed callables), `wallSettings.alerts.leadMin`, `setwallhomeaddress` (address in `calendarFeedSecrets/_home`; `homeAddressSet` / `travelError` server-written), `functions/src/wall/calendar/travel.ts` writing `wallTravel/{eventId}` (minutes only) every 15 min and on sync now, `utils/wall/wallAlerts.ts` (plan, due, words, seen-across-reloads), `WallAlertCard` (over the night screen, silent, at night) | Built |
-| **D Brief** | Local grammar for "what's my day / tomorrow", spoken lines from weather + events, brief card with line highlight | After C |
-| **A Wake word** | Lab tab: AccessKey + `.ppn` (or a built-in keyword), detection log, false triggers, mic prompts across launches | After D; owner supplies the Picovoice key and "Hey Home" model |
+| **D Brief** | `parseLocalCommand` → `{kind:'brief', day}` ("what's my day", "good morning", "what's tomorrow", "what's on my calendar"; no AI), `utils/wall/wallBrief.ts` (weather + what's left + bills/holidays + leave-by, capped at 8 events), `useWallBrief` (chime, then line by line, prefetching each line's audio), `WallBriefCard` (lights the line being read; lingers 30 s; closes on idle or a new voice command) | Built |
+| **A Wake word** | Lab tab **Wake word** (`components/wall/lab/LabWake.tsx`, `labWake.ts`): AccessKey + uploaded `.ppn` or a built-in word, sensitivity, detections marked real/false, misses, ready time per launch (mic prompts), summary to paste into the Phase 0 results. `@picovoice/porcupine-web` + `web-voice-processor` load only from the lab; the model file comes from Picovoice's repo on jsDelivr | Lab built; device run pending, then wire "Hey Home" into the wall if it passes |
 
 ### iPadOS 16 constraints this design works around
 

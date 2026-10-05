@@ -4,7 +4,7 @@ import type { WallLayout, WallModuleKey } from '@/types/schema';
 import { firstEventOn, dueTodayTodos } from '@/utils/wall/wallSelectors';
 import { nextRotation } from '@/utils/wall/wallModules';
 import { makeWallPeople } from '@/utils/wall/wallPeople';
-import { zonedDateString } from '@/utils/wall/wallTime';
+import { zonedDateString, zonedParts } from '@/utils/wall/wallTime';
 import { useWallData } from './data/wallData';
 import { useWallRuntime } from './runtime/useWallRuntime';
 import { WallToastContext, useWallToastController, type WallToaster } from './wallToast';
@@ -28,6 +28,9 @@ import WallSoundChip from './sound/WallSoundChip';
 import WallAlertCard from './alerts/WallAlertCard';
 import { useWallAlerts } from './alerts/useWallAlerts';
 import { alertWords } from '@/utils/wall/wallAlerts';
+import { briefDayFor, composeBrief } from '@/utils/wall/wallBrief';
+import WallBriefCard from './brief/WallBriefCard';
+import { useWallBrief } from './brief/useWallBrief';
 import { WallSoundContext, useSoundState, useWallSoundEngine } from './sound/useWallSound';
 import type { VoiceTarget } from '@/utils/wall/wallVoice';
 import './wall.css';
@@ -56,6 +59,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   const { toast, dismiss, toaster: slotToaster } = useWallToastController();
   // The voice banner and the toast share one slot: a new toast replaces the banner.
   const cancelVoiceRef = useRef<() => void>(() => undefined);
+  const closeBriefRef = useRef<() => void>(() => undefined);
   const toaster = useMemo<WallToaster>(
     () => ({
       show: (text, undo) => {
@@ -93,6 +97,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     setRotationPaused(false);
     dismiss();
     cancelVoiceRef.current();
+    closeBriefRef.current();
   }, [dismiss]);
   const listActions = useWallListActions(toaster);
   // One stable cloud-voice function: the actions object is rebuilt on every
@@ -153,7 +158,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   });
   const alert = alerts.alert;
   const alertText = alert
-    ? alertWords(alert, runtime.now.getTime(), runtime.timeZone, alert.event.ownerKey === 'family' ? null : (people.name(alert.event.ownerKey).split(' ')[0] ?? null))
+    ? alertWords(alert, runtime.now.getTime(), runtime.timeZone, people.firstName(alert.event.ownerKey))
     : null;
   // An alert sounds once, when it appears; never during the night window.
   const alertSound = useRef({ speech: '', style: data.settings.sound.alerts, night: false });
@@ -166,12 +171,34 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     if (alertKey && !night) playFeedback('alert', speech, style);
   }, [alertKey, playFeedback]);
 
+  // "What's my day" is asked for out loud, so it's always read out (when sound is on).
+  const brief = useWallBrief(sound, true);
+  useEffect(() => {
+    closeBriefRef.current = brief.close;
+  }, [brief.close]);
+  const openBrief = (asked: 'today' | 'tomorrow' | 'auto') => {
+    const day = briefDayFor(asked, zonedParts(runtime.now, runtime.timeZone).hour);
+    brief.open(
+      composeBrief({
+        day,
+        date: day === 'today' ? today : tomorrow,
+        events: data.wallEvents,
+        travel: data.travel,
+        weather: runtime.weather,
+        now: runtime.now.getTime(),
+        timeZone: runtime.timeZone,
+        person: people.firstName,
+      })
+    );
+  };
+
   const voice = useWallVoice({
     setting: data.settings.voice,
     today,
     timeZone: runtime.timeZone,
     onShow: showTarget,
     onRotate: setRotation,
+    onBrief: openBrief,
     onFeedback: (f: WallVoiceFeedback) => playFeedback(f.tone, f.speech, data.settings.sound.confirm),
   });
   useEffect(() => {
@@ -179,6 +206,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   }, [voice.cancel]);
   const listening = voice.state?.phase === 'listening';
   const startVoice = () => {
+    brief.close();
     dismiss();
     setSheet(null);
     setOverlay('none');
@@ -360,7 +388,8 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
               <WallForecastSheet weather={runtime.weather} place={data.settings.weather?.label} onClose={() => setOverlay('none')} />
             )}
             {soundState === 'locked' && data.ready && !runtime.nightShowing && <WallSoundChip />}
-            {voice.state ? (
+            {brief.state && <WallBriefCard state={brief.state} people={people} onClose={brief.close} />}
+          {voice.state ? (
               <WallVoiceBanner
                 state={voice.state}
                 onFinish={voice.finish}
