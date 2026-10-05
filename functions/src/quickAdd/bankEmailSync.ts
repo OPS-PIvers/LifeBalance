@@ -1074,7 +1074,7 @@ export const bankEmailSync = onRequest(
               householdData?.lastPaycheckDate,
               calendarItems as PaidIncomeLike[]
             );
-            stageBillPaid(decision.match, w.descriptor, paidAmount);
+            const paidDocId = stageBillPaid(decision.match, w.descriptor, paidAmount);
             // Verified transaction dated to the bill's due date. NO balance
             // delta (ending-balance overwrite is authoritative).
             batch.set(db.collection(transactionsPath).doc(), {
@@ -1089,6 +1089,10 @@ export const bankEmailSync = onRequest(
               payPeriodId: billPayPeriodId,
               accountId: resolvedAccountId,
               bankRef: w.bankRef,
+              // Link the row to the paid calendar doc, as the client's
+              // payCalendarItem does, so settledBillGuard protects the pair and
+              // the row can't be picked to settle a second bill.
+              paidCalendarItemId: paidDocId,
               // Settled at a different price than planned → the Action Queue
               // asks the household to acknowledge the difference.
               ...billPriceChangeFor(bill, paidAmount),
