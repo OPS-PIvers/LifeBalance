@@ -1,5 +1,5 @@
 import { addDays, format } from 'date-fns';
-import type { Meal, MealPlanItem, WallEvent, WallSettings } from '@/types/schema';
+import type { Meal, MealPlanItem, WallCalendarFeed, WallEvent, WallSettings, WallTravel } from '@/types/schema';
 import { DEFAULT_WALL_SETTINGS } from '@/utils/wall/wallSettings';
 
 /**
@@ -9,6 +9,8 @@ import { DEFAULT_WALL_SETTINGS } from '@/utils/wall/wallSettings';
  */
 export function wallTestFixtures(today = new Date()): {
   events: WallEvent[];
+  feeds: WallCalendarFeed[];
+  travel: WallTravel[];
   settings: WallSettings;
   meals: Meal[];
   mealPlan: MealPlanItem[];
@@ -29,7 +31,13 @@ export function wallTestFixtures(today = new Date()): {
     { id: 'fx4', source: 'bill', ownerKey: 'family', title: 'Water bill', allDay: true, date: day(1) },
     { id: 'fx5', source: 'feed', ownerKey: 'test-user-id', title: 'Dentist', allDay: false, date: day(1), start: at(1, '08:00'), end: at(1, '09:00') },
     { id: 'fx6', source: 'holiday', ownerKey: 'family', title: 'Columbus Day', allDay: true, date: day(2) },
+    // On the Kids calendar (alerts on) with a 20-minute drive: a heads-up at 4:00, "Time to leave" at 4:10.
+    { id: 'fx8', source: 'feed', feedId: 'kids', ownerKey: 'test-user-id', title: 'Piano lesson', allDay: false, date: day(0), start: at(0, '16:30'), end: at(0, '17:00'), location: 'Lakeside Music, Wayzata' },
   ];
+  const feeds: WallCalendarFeed[] = [
+    { id: 'kids', label: 'Kids', ownerKey: 'family', kind: 'ics', createdBy: 'test-user-id', eventCount: 1, stale: false, alerts: true, travelMode: 'drive' },
+  ];
+  const travel: WallTravel[] = [{ id: 'fx8', minutes: 20, mode: 'drive', start: at(0, '16:30'), checkedAt: at(0, '15:00') }];
   // Test Mode's household seeds no meals, so the wall brings its own week.
   const meals: Meal[] = [
     {
@@ -45,5 +53,5 @@ export function wallTestFixtures(today = new Date()): {
     { id: 'fxp2', date: day(0), type: 'breakfast', mealName: 'Pancakes', isCooked: false },
     { id: 'fxp3', date: day(1), type: 'dinner', mealName: 'Roast chicken', isCooked: false },
   ];
-  return { events, meals, mealPlan, settings: { ...DEFAULT_WALL_SETTINGS, weather: { lat: 44.97, lon: -93.59, label: 'Test City' } } };
+  return { events, feeds, travel, meals, mealPlan, settings: { ...DEFAULT_WALL_SETTINGS, weather: { lat: 44.97, lon: -93.59, label: 'Test City' } } };
 }

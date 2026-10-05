@@ -2527,6 +2527,7 @@ describe('wall display identity', () => {
       await assertSucceeds(getDocs(collection(db, 'households', H1, 'wallEvents')));
       await assertSucceeds(getDoc(doc(db, 'households', H1, 'wallSettings', 'config')));
       await assertSucceeds(getDocs(collection(db, 'households', H1, 'calendarFeeds')));
+      await assertSucceeds(getDocs(collection(db, 'households', H1, 'wallTravel')));
       await assertSucceeds(getDoc(doc(db, 'households', H1, 'displays', DID)));
     });
 
@@ -2636,6 +2637,7 @@ describe('wall display identity', () => {
       await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { theme: 'dark' }));
       await assertFails(setDoc(doc(db, 'households', H1, 'wallEvents', 'e2'), { title: 'Fake' }));
       await assertFails(setDoc(doc(db, 'households', H1, 'calendarFeeds', 'f2'), { label: 'Fake' }));
+      await assertFails(setDoc(doc(db, 'households', H1, 'wallTravel', 'e1'), { minutes: 1 }));
     });
 
     it('cannot delete catalog items', async () => {
@@ -2688,6 +2690,8 @@ describe('wall display identity', () => {
       await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { voice: 'x'.repeat(11) }));
       await assertSucceeds(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { sound: { confirm: 'chime', alerts: 'speak', volume: 1 } }));
       await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { sound: 'loud' }));
+      await assertSucceeds(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { alerts: { leadMin: 15 } }));
+      await assertSucceeds(getDocs(collection(db, 'households', H1, 'wallTravel')));
       await assertSucceeds(getDocs(collection(db, 'households', H1, 'mealPlan')));
       await assertSucceeds(setDoc(doc(db, 'households', H1, 'mealPlan', 'p3'), { date: '2026-10-05', mealId: 'm1' }));
     });
@@ -2712,6 +2716,10 @@ describe('wall display identity', () => {
       await assertFails(setDoc(doc(db, 'households', H1, 'wallEvents', 'e9'), { title: 'Fake' }));
       await assertFails(setDoc(doc(db, 'households', H1, 'calendarFeeds', 'f9'), { label: 'Fake' }));
       await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { lastManualSyncAt: '2020-01-01' }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { homeAddressSet: true }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { travelError: 'x' }));
+      await assertFails(setDoc(doc(db, 'households', H1, 'wallTravel', 'e9'), { minutes: 1 }));
+      await assertFails(getDoc(doc(db, 'households', H1, 'calendarFeedSecrets', '_home')));
       await assertFails(setDoc(doc(db, 'households', H1, 'wallSettings', 'other'), { theme: 'dark' }));
     });
 

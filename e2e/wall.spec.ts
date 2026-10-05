@@ -209,4 +209,41 @@ test.describe('Wall display shell (Test Mode)', () => {
     // The tap on the mic unlocked sound.
     await expect(page.getByRole('button', { name: 'Tap to turn on sound' })).toHaveCount(0);
   });
+
+  test('a starting-soon alert says when to leave', async ({ page }) => {
+    // Fixture: Piano lesson at 4:30 on an alert calendar, a 20-minute drive away.
+    await openWall(page, '15:59:30');
+    await expect(page.getByRole('banner').getByText('3:59')).toBeVisible();
+    await page.clock.fastForward('00:45');
+    const card = page.getByRole('alertdialog');
+    await expect(card).toContainText('Leave in 10 min');
+    await expect(card).toContainText('Piano lesson');
+    await expect(card).toContainText('20 min drive');
+    await expect(card).toContainText('Leave by 4:10 PM');
+    await card.getByRole('button', { name: 'Got it' }).click();
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  });
+
+  test('“what’s my day” shows the day brief', async ({ page }) => {
+    await fakeSpeech(page, ["What's my day?"]);
+    await openWall(page, '15:15:00');
+    await page.getByRole('button', { name: 'Voice command' }).click();
+    const card = page.getByRole('status', { name: 'Your day' });
+    await expect(card).toContainText('Today');
+    await expect(card).toContainText('54° now');
+    await expect(card).toContainText('2 things left today');
+    await expect(card).toContainText('4:30 PM · Piano lesson · Test · leave by 4:10 PM');
+    await card.getByRole('button', { name: /Stop|Close/ }).click();
+    await expect(page.getByRole('status', { name: 'Your day' })).toHaveCount(0);
+  });
+
+  test('an alert takes over from the brief', async ({ page }) => {
+    await fakeSpeech(page, ["What's my day?"]);
+    await openWall(page, '15:59:30');
+    await page.getByRole('button', { name: 'Voice command' }).click();
+    await expect(page.getByRole('status', { name: 'Your day' })).toBeVisible();
+    await page.clock.fastForward('00:45');
+    await expect(page.getByRole('alertdialog')).toContainText('Leave in 10 min');
+    await expect(page.getByRole('status', { name: 'Your day' })).toHaveCount(0);
+  });
 });

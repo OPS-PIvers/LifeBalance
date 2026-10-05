@@ -6,6 +6,7 @@
  *   syncwallcalendars      (every 15 min, households with an active wall)
  *   projectwallbills       (calendarItems written → bill lines within seconds)
  *   onwallsettingswritten  (bills / holidays / zone toggled → re-sync)
+ *   setwallhomeaddress     (admin; the origin for alert travel times, server-only)
  *
  * Feed links are credentials: they live in calendarFeedSecrets (no client
  * access) and are never returned or logged.
@@ -19,6 +20,8 @@ import { HOUSEHOLD_ID_RE, requireAdmin, requireHouseholdId, requireMemberOrDispl
 import { FeedFetchError, fetchIcs, normalizeFeedUrl, type IcsFetchResult } from "./icsFetch";
 import { IcsParseError, expandIcs } from "./icsParse";
 import { hasActiveWall, householdsWithActiveWalls, removeFeedEverywhere, syncHouseholdCalendars } from "./sync";
+import { updateHouseholdTravel } from "./travel";
+import { HOME_SECRET_ID, TRAVEL_MODES, homeAddress } from "./travelLogic";
 import {
   HOLIDAYS_FEED_ID,
   MANUAL_SYNC_COOLDOWN_MS,
@@ -44,6 +47,30 @@ async function requireOwnerKey(householdId: string, raw: unknown): Promise<strin
     if (member.exists) return raw;
   }
   throw new HttpsError("invalid-argument", "Pick whose calendar this is.");
+}
+
+/** The optional alert fields a feed may carry (absent = leave as is). */
+function alertFields(data: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (data.alerts !== undefined) {
+    if (typeof data.alerts !== "boolean") throw new HttpsError("invalid-argument", "Alerts are on or off.");
+    out.alerts = data.alerts;
+  }
+  if (data.travelMode !== undefined) {
+    const mode = TRAVEL_MODES.find((m) => m === data.travelMode);
+    if (!mode) throw new HttpsError("invalid-argument", "Pick how you get there.");
+    out.travelMode = mode;
+  }
+  return out;
+}
+
+/** Travel times are a nicety: never let them fail a sync or a settings change. */
+async function refreshTravel(householdId: string): Promise<void> {
+  try {
+    await updateHouseholdTravel(admin.firestore(), householdId);
+  } catch (error) {
+    logger.error("wall travel: update failed", { householdId, error: String(error) });
+  }
 }
 
 function requireFeedId(raw: unknown): string {
@@ -95,6 +122,7 @@ export const addwallcalendarfeed = onCall(
     const label = requireLabel(data.label);
     const ownerKey = await requireOwnerKey(householdId, data.ownerKey);
     const url = normalizeFeedUrl(data.url);
+    const alerts = alertFields(data);
 
     const db = admin.firestore();
     const feeds = await db.collection(`households/${householdId}/calendarFeeds`).get();
@@ -113,11 +141,13 @@ export const addwallcalendarfeed = onCall(
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       eventCount: 0,
       stale: false,
+      ...alerts,
     });
     batch.set(db.doc(`households/${householdId}/calendarFeedSecrets/${feedRef.id}`), { url });
     await batch.commit();
 
     const summary = await syncHouseholdCalendars(db, householdId, { onlyFeedId: feedRef.id, prefetched });
+    if (alerts.alerts === true) await refreshTravel(householdId);
     return { feedId: feedRef.id, eventCount: summary.feeds[0]?.eventCount ?? 0 };
   }
 );
@@ -131,9 +161,10 @@ export const updatewallcalendarfeed = onCall(
     const feedId = requireFeedId(data.feedId);
     const db = admin.firestore();
     const feedRef = db.doc(`households/${householdId}/calendarFeeds/${feedId}`);
-    if (!(await feedRef.get()).exists) throw new HttpsError("not-found", "That calendar doesn't exist.");
+    const current = await feedRef.get();
+    if (!current.exists) throw new HttpsError("not-found", "That calendar doesn't exist.");
 
-    const patch: Record<string, unknown> = {};
+    const patch: Record<string, unknown> = { ...alertFields(data) };
     if (data.label !== undefined) patch.label = requireLabel(data.label);
     if (data.ownerKey !== undefined) patch.ownerKey = await requireOwnerKey(householdId, data.ownerKey);
     let prefetched: IcsFetchResult | undefined;
@@ -144,8 +175,14 @@ export const updatewallcalendarfeed = onCall(
       await db.doc(`households/${householdId}/calendarFeedSecrets/${feedId}`).set({ url }, { merge: false });
       patch.stale = false;
     }
+    // Settings sends the whole form, so compare with what's stored: only a new
+    // link or owner changes the events (the label isn't on them). Turning
+    // alerts on or changing how you get there needs no re-sync.
+    const before = current.data() ?? {};
+    const eventsChange = prefetched !== undefined || (patch.ownerKey !== undefined && patch.ownerKey !== before.ownerKey);
     if (Object.keys(patch).length > 0) await feedRef.update(patch);
-    await syncHouseholdCalendars(db, householdId, { onlyFeedId: feedId, prefetched });
+    if (eventsChange) await syncHouseholdCalendars(db, householdId, { onlyFeedId: feedId, prefetched });
+    if (patch.alerts !== undefined || patch.travelMode !== undefined) await refreshTravel(householdId);
     return { ok: true };
   }
 );
@@ -178,6 +215,7 @@ export const syncwallcalendarsnow = onCall(
       txn.set(settingsRef, { lastManualSyncAt: new Date(now).toISOString() }, { merge: true });
     });
     const summary = await syncHouseholdCalendars(db, householdId, { forceBills: true });
+    await refreshTravel(householdId);
     return { ok: true, failed: summary.feeds.filter((f) => !f.ok).length };
   }
 );
@@ -191,6 +229,7 @@ export const syncwallcalendars = onSchedule(
     for (const hid of hids) {
       try {
         await syncHouseholdCalendars(db, hid, { now });
+        await updateHouseholdTravel(db, hid, now);
       } catch (error) {
         logger.error("syncwallcalendars: household failed", { hid, error: String(error) });
       }
@@ -217,4 +256,32 @@ export const onwallsettingswritten = onDocumentWritten("households/{householdId}
   const hid = event.params.householdId;
   if (!(await hasActiveWall(db, hid))) return;
   await syncHouseholdCalendars(db, hid, { forceBills: true });
+});
+
+/**
+ * The home address alert travel times start from. Like a feed link it's kept
+ * server-only; the wall only ever learns "22 min". An empty address removes it.
+ */
+export const setwallhomeaddress = onCall({ cors: true }, async (request): Promise<{ ok: true; set: boolean }> => {
+  const data = (request.data ?? {}) as Record<string, unknown>;
+  const householdId = requireHouseholdId(data.householdId);
+  await requireAdmin(request, householdId);
+  const db = admin.firestore();
+  const secretRef = db.doc(`households/${householdId}/calendarFeedSecrets/${HOME_SECRET_ID}`);
+  const settingsRef = db.doc(`households/${householdId}/wallSettings/config`);
+  const raw = typeof data.address === "string" ? data.address.trim() : "";
+  if (!raw) {
+    await secretRef.delete();
+    await settingsRef.set(
+      { homeAddressSet: false, travelError: admin.firestore.FieldValue.delete() },
+      { merge: true }
+    );
+    return { ok: true, set: false };
+  }
+  const address = homeAddress(raw);
+  if (!address) throw new HttpsError("invalid-argument", "Enter a street address (up to 200 characters).");
+  await secretRef.set({ address });
+  await settingsRef.set({ homeAddressSet: true }, { merge: true });
+  await refreshTravel(householdId);
+  return { ok: true, set: true };
 });

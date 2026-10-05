@@ -20,9 +20,11 @@ import {
 } from '@/contexts/household/mutations/todoMutations';
 import {
   householdMemberConverter,
+  wallCalendarFeedConverter,
   wallDisplayConverter,
   wallEventConverter,
   wallSettingsConverter,
+  wallTravelConverter,
 } from '@/utils/firestoreConverters';
 import { DEFAULT_WALL_SETTINGS, effectiveLayout } from '@/utils/wall/wallSettings';
 import type {
@@ -33,10 +35,12 @@ import type {
   ShoppingItem,
   Store,
   ToDo,
+  WallCalendarFeed,
   WallDisplay,
   WallEvent,
   WallLayout,
   WallSettings,
+  WallTravel,
 } from '@/types/schema';
 import { syncWallCalendarsNow, synthesizeWallSpeech } from '@/components/wall/wallCalendarService';
 import { WallDataContext, type WallData, type WallDataActions } from './wallData';
@@ -66,6 +70,8 @@ const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked
   const [display, setDisplay] = useState<WallDisplay | null>(null);
   const [settings, setSettings] = useState<WallSettings>(DEFAULT_WALL_SETTINGS);
   const [wallEvents, setWallEvents] = useState<WallEvent[]>([]);
+  const [calendarFeeds, setCalendarFeeds] = useState<WallCalendarFeed[]>([]);
+  const [travel, setTravel] = useState<WallTravel[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
   const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>([]);
   const [activeTodos, setActiveTodos] = useState<ToDo[]>([]);
@@ -150,6 +156,17 @@ const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked
           mark('events');
         },
         logError('wallEvents')
+      ),
+      // Alerts only: neither gates `ready`, so the wall never waits on them.
+      onSnapshot(
+        collection(db, `${base}/calendarFeeds`).withConverter(wallCalendarFeedConverter),
+        snap => setCalendarFeeds(snap.docs.map(d => d.data())),
+        logError('calendarFeeds')
+      ),
+      onSnapshot(
+        collection(db, `${base}/wallTravel`).withConverter(wallTravelConverter),
+        snap => setTravel(snap.docs.map(d => d.data())),
+        logError('wallTravel')
       ),
       ...attachShoppingListeners({
         db,
@@ -246,6 +263,8 @@ const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked
       members,
       stores,
       wallEvents,
+      calendarFeeds,
+      travel,
       todos,
       shoppingList: visibleShopping,
       groceryCatalog,
@@ -256,7 +275,7 @@ const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked
       ready: LISTENERS.every(key => delivered.has(key)),
       actions,
     };
-  }, [householdId, householdName, kidModePinHash, displayId, display, members, stores, wallEvents, todos, visibleShopping, groceryCatalog, meals, mealPlan, settings, delivered, actions]);
+  }, [householdId, householdName, kidModePinHash, displayId, display, members, stores, wallEvents, calendarFeeds, travel, todos, visibleShopping, groceryCatalog, meals, mealPlan, settings, delivered, actions]);
 
   if (!value) return null;
   return <WallDataContext.Provider value={value}>{children}</WallDataContext.Provider>;

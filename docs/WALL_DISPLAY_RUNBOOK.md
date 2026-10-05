@@ -41,7 +41,18 @@ gcloud services enable texttospeech.googleapis.com --project "$PROJECT"
 ```
 
 Or in the console: **APIs & Services → Enable APIs → Cloud Text-to-Speech
-API**. Without it the wall still talks, in the iPad's own (more robotic)
+API**.
+
+**Travel times** for starting-soon alerts use Google's **Routes API**, the
+same way:
+
+```sh
+gcloud services enable routes.googleapis.com --project "$PROJECT"
+```
+
+Until it's on, Settings → Wall display → Starting-soon alerts says so, and
+alerts fall back to the lead time. A family's lookups (about two per event
+with a location) stay well inside Google's free monthly allowance. Without it the wall still talks, in the iPad's own (more robotic)
 voice. A household can use up to 500 spoken phrases a day; typical use is
 well under 100, inside Google's free monthly allowance.
 
@@ -111,6 +122,17 @@ The wall still switches to its dim night clock on its own.
   display → Sound sets the volume (on top of the iPad's own) and whether a
   voice command gets a spoken reply or just a chime. **Test sound** in the
   gear menu plays both.
+- **Starting-soon alerts:** turn them on per calendar (Settings → Wall
+  display → Calendars → Edit → Starting-soon alerts, plus how its people get
+  there: drive, walk, bike or transit). An admin enters the **home address**
+  under Starting-soon alerts; it stays on the server. For an event with a
+  location the wall shows a big card **10 minutes before it's time to leave**
+  ("Leave in 10 min · Leave by 4:10 PM · 20 min drive", live traffic,
+  rechecked about 90 minutes before), then **"Time to leave"**. Events with
+  no location (or no home address) alert once, a set number of minutes
+  before they start. Each card chimes, reads itself out (unless Sound says
+  chime only) and stays a minute; **Got it** closes it. During night hours
+  the card shows over the night screen with no sound.
 - For a nicer built-in fallback voice, download one on the iPad: Settings →
   Accessibility → Spoken Content → Voices → English → an **Enhanced** or
   **Premium** voice. The wall picks it automatically.
@@ -126,6 +148,7 @@ Tap the **mic** at the bottom of the rail, or the mic in the Add sheet, and spea
 | "Show the calendar / month / today / shopping / to-dos / meals" | Switches the screen | No |
 | "Stop rotating" / "Start rotating" | Same as the gear menu | No |
 | "Undo" | Removes what voice just added | No |
+| "What's my day?" / "Good morning" / "What's tomorrow?" | Shows and reads the day brief: weather, what's left on the calendar, bills due, leave-by times. After 6 pm "my day" means tomorrow | No |
 
 - A result opens as a **big card** in the middle of the screen (readable from
   across the room) with a chime, and by default a spoken reply ("Added milk

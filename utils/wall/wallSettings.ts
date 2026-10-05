@@ -15,6 +15,7 @@ export const WALL_VOICE_ENGINES: readonly WallVoiceEngine[] = ['auto', 'speech',
 export const WALL_SOUND_STYLES: readonly WallSoundStyle[] = ['speak', 'chime'];
 /** Settings' Low / Medium / High. */
 export const WALL_VOLUMES: readonly number[] = [0.4, 0.7, 1];
+export const WALL_ALERT_LEADS: readonly number[] = [5, 10, 15, 30];
 
 export const DEFAULT_WALL_SETTINGS: WallSettings = {
   defaultModules: ['coming'],
@@ -27,6 +28,7 @@ export const DEFAULT_WALL_SETTINGS: WallSettings = {
   holidaysEnabled: true,
   voice: 'auto',
   sound: { confirm: 'speak', alerts: 'speak', volume: 0.7 },
+  alerts: { leadMin: 10 },
 };
 
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -68,6 +70,7 @@ export function resolveWallSettings(raw: unknown): WallSettings {
   const weather = isRecord(d['weather']) ? d['weather'] : undefined;
   const sound = isRecord(d['sound']) ? d['sound'] : {};
   const volume = Number(sound['volume']);
+  const alerts = isRecord(d['alerts']) ? d['alerts'] : {};
 
   const settings: WallSettings = {
     defaultModules: Array.isArray(d['defaultModules']) ? normalizeModules(d['defaultModules']) : def.defaultModules,
@@ -94,6 +97,9 @@ export function resolveWallSettings(raw: unknown): WallSettings {
       alerts: WALL_SOUND_STYLES.find(v => v === sound['alerts']) ?? def.sound.alerts,
       volume: Number.isFinite(volume) && volume >= 0.2 && volume <= 1 ? volume : def.sound.volume,
     },
+    alerts: {
+      leadMin: WALL_ALERT_LEADS.includes(Number(alerts['leadMin'])) ? Number(alerts['leadMin']) : def.alerts.leadMin,
+    },
   };
   if (
     weather &&
@@ -105,6 +111,8 @@ export function resolveWallSettings(raw: unknown): WallSettings {
   }
   if (typeof d['timeZone'] === 'string' && isValidTimeZone(d['timeZone'])) settings.timeZone = d['timeZone'];
   if (typeof d['lastManualSyncAt'] === 'string') settings.lastManualSyncAt = d['lastManualSyncAt'];
+  if (d['homeAddressSet'] === true) settings.homeAddressSet = true;
+  if (typeof d['travelError'] === 'string' && d['travelError']) settings.travelError = d['travelError'];
   return settings;
 }
 

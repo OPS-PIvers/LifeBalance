@@ -67,6 +67,7 @@ import type {
   WallCalendarFeed,
   WallDisplay,
   WallEvent,
+  WallTravel,
   WallSettings,
 } from '@/types/schema';
 import { normalizeLayout, resolveWallSettings } from '@/utils/wall/wallSettings';
@@ -689,7 +690,28 @@ export const wallCalendarFeedConverter: FirestoreDataConverter<WallCalendarFeed>
     if (lastSuccessAt) feed.lastSuccessAt = lastSuccessAt;
     if (typeof d['lastError'] === 'string') feed.lastError = d['lastError'];
     if (d['truncated'] === true) feed.truncated = true;
+    if (d['alerts'] === true) feed.alerts = true;
+    const travelMode = (['drive', 'walk', 'bike', 'transit'] as const).find(m => m === d['travelMode']);
+    if (travelMode) feed.travelMode = travelMode;
     return feed;
+  },
+};
+
+/** Server-written travel minutes; a malformed doc reads as "no route". */
+export const wallTravelConverter: FirestoreDataConverter<WallTravel> = {
+  toFirestore(travel: WallTravel): DocumentData {
+    return omitKey(travel, 'id');
+  },
+  fromFirestore(snapshot: QueryDocumentSnapshot): WallTravel {
+    const d = snapshot.data();
+    const minutes = d['minutes'];
+    return {
+      id: snapshot.id,
+      minutes: typeof minutes === 'number' && Number.isFinite(minutes) && minutes > 0 ? minutes : null,
+      mode: (['drive', 'walk', 'bike', 'transit'] as const).find(m => m === d['mode']) ?? 'drive',
+      start: typeof d['start'] === 'string' ? d['start'] : '',
+      checkedAt: typeof d['checkedAt'] === 'string' ? d['checkedAt'] : '',
+    };
   },
 };
 

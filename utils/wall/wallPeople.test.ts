@@ -27,3 +27,12 @@ describe('makeWallPeople', () => {
     expect(dark.color(undefined)).toBe('#a8a399');
   });
 });
+
+describe('firstName', () => {
+  it('is the first word of a member’s name, or null for Family and strangers', () => {
+    const people = makeWallPeople([{ uid: 'u1', displayName: 'Leo Ivers', role: 'member' } as HouseholdMember], false);
+    expect(people.firstName('u1')).toBe('Leo');
+    expect(people.firstName('family')).toBeNull();
+    expect(people.firstName('gone')).toBeNull();
+  });
+});

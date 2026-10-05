@@ -16,7 +16,9 @@ export type LocalCommand =
   | { kind: 'show'; target: VoiceTarget }
   | { kind: 'rotate'; on: boolean }
   | { kind: 'undo' }
-  | { kind: 'cancel' };
+  | { kind: 'cancel' }
+  /** The day brief; "auto" = today, or tomorrow in the evening. */
+  | { kind: 'brief'; day: 'today' | 'tomorrow' | 'auto' };
 
 const TARGETS: [RegExp, VoiceTarget][] = [
   [/^(the )?(calendar|week|this week|week view)$/, 'week'],
@@ -48,8 +50,20 @@ export function normalizeSpeech(text: string): string {
     .trim();
 }
 
+const BRIEF_TODAY = /^(good morning|(whats|what is) (on |happening )?today|whats the plan( for)? today|(give me )?(my |the )?(morning |daily |day )?brief(ing)?( me)?|brief me|how does (my |the )?(day|today) look|(whats|what is|tell me about) (my|the|our) day( today)?|my day|day at a glance|(whats|what is) on (my|the|our) calendar( today)?)$/;
+const BRIEF_TOMORROW = /^((whats|what is) (on |happening )?tomorrow|whats the plan( for)? tomorrow|how does tomorrow look|(whats|what is|tell me about) (my|the|our) day tomorrow|(whats|what is) on (my|the|our) calendar tomorrow|tomorrow)$/;
+
+function briefOf(t: string): LocalCommand | null {
+  if (BRIEF_TOMORROW.test(t)) return { kind: 'brief', day: 'tomorrow' };
+  if (BRIEF_TODAY.test(t)) {
+    // "What's today" / "good morning" mean today; "what's my day" follows the clock.
+    return { kind: 'brief', day: /today|good morning|calendar/.test(t) ? 'today' : 'auto' };
+  }
+  return null;
+}
+
 /**
- * The no-AI grammar: navigation, rotation, undo and cancel. Anything else
+ * The no-AI grammar: navigation, rotation, undo, cancel and the day brief. Anything else
  * (adds above all) returns null and goes to Gemini.
  */
 export function parseLocalCommand(text: string): LocalCommand | null {
@@ -57,6 +71,8 @@ export function parseLocalCommand(text: string): LocalCommand | null {
   if (!t) return null;
   if (/^(undo|undo that|take that back|remove that)$/.test(t)) return { kind: 'undo' };
   if (/^(cancel|never ?mind|stop|nothing|forget it)$/.test(t)) return { kind: 'cancel' };
+  const brief = briefOf(t);
+  if (brief) return brief;
   if (/^(start|resume|turn on) (the )?rotat(e|ing|ion)( the panel| modules?)?$/.test(t)) return { kind: 'rotate', on: true };
   if (/^(stop|pause|turn off) (the )?rotat(e|ing|ion)( the panel| modules?)?$/.test(t)) return { kind: 'rotate', on: false };
   const show = /^(show|open|go to|switch to|display)( me)? (.+)$/.exec(t);

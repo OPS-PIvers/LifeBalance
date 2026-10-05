@@ -1329,17 +1329,19 @@ service cloud.firestore {
       }
 
       // Household wall settings (single doc `config`). Any member edits it from
-      // Settings → Wall display; the display only reads. lastManualSyncAt is
-      // server-written (sync throttle), so members can't touch it.
+      // Settings → Wall display; the display only reads. lastManualSyncAt (sync
+      // throttle), homeAddressSet and travelError are server-written, so
+      // members can't touch them.
       match /wallSettings/{docId} {
         allow read: if isMemberOrDisplayOf(householdId);
         allow create, update: if isMemberOf(householdId) &&
                                  docId == 'config' &&
                                  request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys().hasOnly([
                                    'defaultModules', 'rotation', 'idleReturnSec', 'night', 'theme', 'textSize',
-                                   'showBills', 'holidaysEnabled', 'weather', 'timeZone', 'voice', 'sound'
+                                   'showBills', 'holidaysEnabled', 'weather', 'timeZone', 'voice', 'sound', 'alerts'
                                  ]) &&
                                  (request.resource.data.get('sound', null) == null || request.resource.data.sound is map) &&
+                                 (request.resource.data.get('alerts', null) == null || request.resource.data.alerts is map) &&
                                  (request.resource.data.get('defaultModules', null) == null ||
                                    (request.resource.data.defaultModules is list && request.resource.data.defaultModules.size() <= 2)) &&
                                  (request.resource.data.get('rotation', null) == null || request.resource.data.rotation is map) &&
@@ -1361,6 +1363,11 @@ service cloud.firestore {
         allow write: if false;
       }
       match /calendarFeeds/{feedId} {
+        allow read: if isMemberOrDisplayOf(householdId);
+        allow write: if false;
+      }
+      // Travel minutes for starting-soon alerts: server-written (Google Routes).
+      match /wallTravel/{eventId} {
         allow read: if isMemberOrDisplayOf(householdId);
         allow write: if false;
       }
@@ -1409,6 +1416,7 @@ service cloud.firestore {
                      subcollection != 'wallSettings' &&
                      subcollection != 'wallEvents' &&
                      subcollection != 'calendarFeeds' &&
+                     subcollection != 'wallTravel' &&
                      subcollection != 'calendarFeedSecrets';
       }
     }

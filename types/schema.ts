@@ -2146,6 +2146,12 @@ export interface WallSettings {
   holidaysEnabled: boolean;
   voice: WallVoiceEngine;
   sound: WallSoundSettings;
+  /** Starting-soon alerts: minutes ahead for an event with no travel time. */
+  alerts: { leadMin: number };
+  /** Server-written: a home address is saved (the address itself is server-only). */
+  homeAddressSet?: boolean;
+  /** Server-written: why travel times aren't working, worded for the admin. */
+  travelError?: string;
   weather?: { lat: number; lon: number; label: string };
   /** IANA zone the wall's clock, night window and calendar use. */
   timeZone?: string;
@@ -2175,6 +2181,25 @@ export interface WallCalendarFeed {
   stale: boolean;
   /** More occurrences than the per-feed cap; the furthest ones were dropped. */
   truncated?: boolean;
+  /** Starting-soon alerts on the wall for this calendar's timed events. */
+  alerts?: boolean;
+  /** How this calendar's people get to its events (travel time). Absent = drive. */
+  travelMode?: WallTravelMode;
+}
+
+export type WallTravelMode = 'drive' | 'walk' | 'bike' | 'transit';
+
+/**
+ * `households/{hid}/wallTravel/{eventId}`: server-written travel time from
+ * home to an event's location (Google Routes). `minutes` null = no route.
+ */
+export interface WallTravel {
+  id: string;
+  minutes: number | null;
+  mode: WallTravelMode;
+  /** The event start it was measured for (a moved event is re-measured). */
+  start: string;
+  checkedAt: string;
 }
 
 /** `households/{hid}/wallEvents/{id}`: server-written calendar lines (Phase 3). */

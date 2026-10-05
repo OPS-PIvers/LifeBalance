@@ -72,6 +72,8 @@ const sync = vi.hoisted(() => ({
   householdsWithActiveWalls: vi.fn(async () => []),
 }));
 vi.mock("./sync", () => sync);
+const travel = vi.hoisted(() => ({ updateHouseholdTravel: vi.fn(async () => ({ checked: 0 })) }));
+vi.mock("./travel", () => travel);
 
 const fetchMock = vi.hoisted(() => vi.fn());
 vi.mock("./icsFetch", async (importOriginal) => ({
@@ -146,6 +148,25 @@ describe("updatewallcalendarfeed / removewallcalendarfeed", () => {
     await call(updatewallcalendarfeed, { householdId: HID, feedId: "f1", label: "New", ownerKey: "admin1" }, adminAuth);
     expect(fake.store.get(`households/${HID}/calendarFeeds/f1`)).toMatchObject({ label: "New", ownerKey: "admin1" });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("turns on alerts from the full Settings form without re-syncing the feed", async () => {
+    await call(
+      updatewallcalendarfeed,
+      { householdId: HID, feedId: "f1", label: "Old", ownerKey: "family", alerts: true, travelMode: "walk" },
+      adminAuth
+    );
+    expect(fake.store.get(`households/${HID}/calendarFeeds/f1`)).toMatchObject({ alerts: true, travelMode: "walk" });
+    expect(sync.syncHouseholdCalendars).not.toHaveBeenCalled();
+    expect(travel.updateHouseholdTravel).toHaveBeenCalled();
+    await expect(
+      call(updatewallcalendarfeed, { householdId: HID, feedId: "f1", travelMode: "boat" }, adminAuth)
+    ).rejects.toMatchObject({ code: "invalid-argument" });
+  });
+
+  it("re-syncs when the owner changes (it's on every event)", async () => {
+    await call(updatewallcalendarfeed, { householdId: HID, feedId: "f1", label: "Old", ownerKey: "admin1", alerts: false }, adminAuth);
+    expect(sync.syncHouseholdCalendars).toHaveBeenCalledWith(expect.anything(), HID, expect.objectContaining({ onlyFeedId: "f1" }));
   });
 
   it("replaces a link from scratch, dropping the old validators", async () => {

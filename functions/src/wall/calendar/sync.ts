@@ -269,7 +269,7 @@ async function syncBills(ctx: HouseholdContext, showBills: boolean, force: boole
   return rows.length;
 }
 
-async function householdTimeZone(db: Firestore, hid: string, settings: Record<string, unknown>): Promise<string> {
+export async function householdTimeZone(db: Firestore, hid: string, settings: Record<string, unknown>): Promise<string> {
   if (typeof settings.timeZone === "string") return resolveTimeZone(settings.timeZone);
   const admins = await db.collection(`households/${hid}/members`).where("role", "==", "admin").get();
   const zones = admins.docs.map((d) => (d.data().notificationPreferences as { timezone?: unknown } | undefined)?.timezone);

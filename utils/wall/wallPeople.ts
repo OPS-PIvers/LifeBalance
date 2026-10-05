@@ -11,6 +11,8 @@ export interface WallPeople {
   color: (key: string | undefined) => string;
   name: (key: string | undefined) => string;
   initial: (key: string | undefined) => string;
+  /** A first name to say out loud ("Leo"), or null for Family or someone who left. */
+  firstName: (key: string | undefined) => string | null;
   /** Members in roster order, for filter chips and pickers. */
   members: { uid: string; name: string }[];
 }
@@ -25,6 +27,10 @@ export function makeWallPeople(members: readonly HouseholdMember[], dark: boolea
       isFamily(key) ? FAMILY_COLOR[dark ? 'dark' : 'light'] : memberColorFor(colors, key ?? '', { scheme: dark ? 'dark' : 'light' }),
     name,
     initial: key => name(key).trim().charAt(0).toUpperCase() || '?',
+    firstName: key => {
+      const full = isFamily(key) ? undefined : names.get(key ?? '');
+      return full && full !== 'Someone' ? (full.trim().split(/\s+/)[0] ?? null) : null;
+    },
     members: members.map(m => ({ uid: m.uid, name: names.get(m.uid) ?? 'Someone' })),
   };
 }

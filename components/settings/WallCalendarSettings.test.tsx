@@ -85,6 +85,8 @@ describe('WallCalendarSettings', () => {
       url: 'webcal://cal.example.com/a.ics',
       label: 'Soccer',
       ownerKey: 'u2',
+      alerts: false,
+      travelMode: 'drive',
     });
     fireEvent.click(screen.getByRole('button', { name: 'Add calendar' }));
     await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue(''));
@@ -98,8 +100,36 @@ describe('WallCalendarSettings', () => {
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Office' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() =>
-      expect(mocks.call).toHaveBeenCalledWith('updatewallcalendarfeed', { householdId: 'h1', feedId: 'f1', label: 'Office', ownerKey: 'u1' })
+      expect(mocks.call).toHaveBeenCalledWith('updatewallcalendarfeed', {
+        householdId: 'h1',
+        feedId: 'f1',
+        label: 'Office',
+        ownerKey: 'u1',
+        alerts: false,
+        travelMode: 'drive',
+      })
     );
+  });
+
+  it('turns on alerts with a way of getting there', async () => {
+    mocks.feeds = [feed({})];
+    mocks.call.mockResolvedValue({ ok: true });
+    renderIt();
+    expect(screen.queryByText(/Starting-soon alerts on/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.queryByRole('radio', { name: 'Walk' })).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: 'On' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Walk' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(mocks.call).toHaveBeenCalledWith('updatewallcalendarfeed', expect.objectContaining({ feedId: 'f1', alerts: true, travelMode: 'walk' }))
+    );
+  });
+
+  it('says which calendars alert', () => {
+    mocks.feeds = [feed({ alerts: true, travelMode: 'bike' })];
+    renderIt();
+    expect(screen.getByText('Starting-soon alerts on · bike')).toBeInTheDocument();
   });
 
   it('gives non-admins the toggles and sync, but no editing', async () => {

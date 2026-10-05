@@ -101,6 +101,42 @@ Extra observations to note:
 
 Chosen engine: **(pending)**
 
+## Wake word ("Hey Home", plan §12)
+
+The lab's **Wake word** tab runs Picovoice Porcupine on the iPad with the mic
+open. It decides whether the wall goes hands-free.
+
+**Before you start** (free personal account):
+
+1. Sign up at console.picovoice.ai and copy your **AccessKey**.
+2. Porcupine → train **"Hey Home"** → platform **Web (WASM)** → download
+   the `.ppn` (to iCloud Drive or Files on the iPad).
+3. In the lab: paste the AccessKey, choose **My .ppn file**, pick the file,
+   label it "Hey Home". (A built-in word such as "Computer" works with just
+   the AccessKey, if you want to try before training.)
+
+**Run** from the Home Screen app for a day: start listening, say the word now
+and then from about 3 m, mark each detection **Someone said it** or **False
+trigger**, and tap **I said it, nothing happened** for misses. Close and
+reopen the app a few times. Feel the back of the iPad after an hour or two.
+
+| Check | Pass | Result |
+|---|---|---|
+| Mic prompts | No prompt while listening within a launch; at most one per launch | |
+| Orange mic dot | Shows while listening (expected); note if it ever drops silently | |
+| False triggers | Under 1 per listening hour with the TV/kitchen noise on | |
+| Hit rate | 9 in 10 from 3 m | |
+| Heat / battery | Warm at most; battery holds on the charger | |
+| Sound + mic together | The detection chime is audible while the mic is open | |
+
+Paste **Copy** from the tab here:
+
+(pending)
+
+**Decision:** all pass → "Hey Home" goes live on the wall (night window off,
+mic icon while listening). Prompts every launch or > 2 false triggers an
+hour → stay tap-to-talk; try a higher sensitivity or a different phrase first.
+
 ## Raw export
 
 (paste the lab's Markdown export here)
