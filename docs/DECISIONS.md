@@ -46,6 +46,22 @@ merge action (`settleBillWithTransaction`), not by loosening matching.
 
 ---
 
+## Nightly sync: a CONFIRMED row also settles the bill it pays
+
+**Decided 2026-10-05.** `decideWithdrawal` still checks CONFIRM (an existing captured row) before PAY,
+because "is this the same purchase?" must be answered first. But a confirm no longer ends the line:
+the confirmed row is run through the same `pickBillToPay` (bank descriptor first, then the row's stored
+merchant, which is what the Action Queue matched on). A unique match marks the bill paid, stamps
+`paidCalendarItemId`, and files an unfiled row as `Budgeted in Calendar`; a row the household already
+filed into a bucket keeps its category. No match or an ambiguous one leaves the bill due — the same
+"doubt stays in the queue" rule as everywhere else, and the amount tolerance above is unchanged.
+
+Before this, a bill whose charge had already been captured (screenshot import, bank alert) was
+confirmed overnight and the bill sat in the queue forever: the next night's email skips the line by
+`bankRef`, so nothing ever revisited it.
+
+---
+
 ## Settled bills: undo is one-directional by design
 
 **Decided 2026-07-27 (2H).**

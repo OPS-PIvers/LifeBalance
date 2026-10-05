@@ -11,7 +11,9 @@
  *   a. SKIP    — a transaction already carries this bankRef (idempotent re-file)
  *   b. FILL    — fill a prior Apple Pay $0 `needsAmount` stub (reconcile.ts rules)
  *   c. CONFIRM — mark an existing pending_review transaction verified
- *                (cent-exact amount + date within ±3 days + UNIQUE)
+ *                (cent-exact amount + date within ±3 days + UNIQUE). When that
+ *                row is itself the payment of an unpaid bill (same matcher as
+ *                PAY), the bill is settled by it too — see `decideWithdrawal`
  *   d. PAY     — pay a matching unpaid calendar bill (a household-authored
  *                merchant rule's `billId`, OR a learned alias, OR descriptor
  *                token-overlap with the title; the latter two additionally
@@ -65,6 +67,10 @@ export interface PendingConfirmCandidate {
    *  display `merchant`). Consulted ONLY by the merchant tie-break in
    *  {@link pickPendingToConfirm} via `namesSimilar`. */
   bankDescriptor?: string;
+  /** True when the row ALREADY settles a bill (filed `Budgeted in Calendar`
+   *  or stamped `paidCalendarItemId`). Such a row is never offered a second
+   *  bill when it is confirmed — it already answered that question. */
+  alreadySettlesBill?: boolean;
 }
 
 /**
@@ -409,7 +415,14 @@ export function pickBillToPay(
 export type WithdrawalDecision =
   | { kind: "skip_bankref" }
   | { kind: "fill_stub"; stubId: string }
-  | { kind: "confirm_pending"; transactionId: string }
+  | {
+      kind: "confirm_pending";
+      transactionId: string;
+      /** The unpaid bill the confirmed row pays, when the PAY matcher links
+       *  them. Absent when there is no unique match — the bill then stays in
+       *  the queue, exactly as before. */
+      bill?: BillPayMatch;
+    }
   | { kind: "pay_bill"; match: BillPayMatch }
   | { kind: "create" };
 
@@ -465,8 +478,35 @@ export function decideWithdrawal(input: DecideWithdrawalInput): WithdrawalDecisi
   if (stub) return { kind: "fill_stub", stubId: stub.id };
 
   // c. Confirm an existing pending transaction (account-gated).
+  //
+  //    CONFIRM runs before PAY, so a charge that was already captured (a
+  //    statement screenshot, a bank alert, a hand entry) used to swallow the
+  //    withdrawal: the row was verified and the bill it pays was never
+  //    reached, so the bill stayed in the Action Queue as due even though the
+  //    money had demonstrably left the account. Worse, the Action Queue had
+  //    been showing that very row as "pays <bill>", so verifying it made the
+  //    bill's own row pop back.
+  //
+  //    So the confirmed row is also offered to the SAME bill matcher PAY uses,
+  //    at the same strictness: the bank's own descriptor first, then the row's
+  //    stored merchant (what the Action Queue matched on). Ambiguity or no
+  //    match leaves the bill alone, as before.
   const pending = pickPendingToConfirm(withdrawal, pendingCandidates, input.resolvedAccountId);
-  if (pending) return { kind: "confirm_pending", transactionId: pending.id };
+  if (pending) {
+    const bill = pending.alreadySettlesBill
+      ? null
+      : (pickBillToPay(withdrawal, billCandidates, input.merchantRules) ??
+        (pending.merchant && pending.merchant !== withdrawal.descriptor
+          ? pickBillToPay(
+              { ...withdrawal, descriptor: pending.merchant },
+              billCandidates,
+              input.merchantRules
+            )
+          : null));
+    return bill
+      ? { kind: "confirm_pending", transactionId: pending.id, bill }
+      : { kind: "confirm_pending", transactionId: pending.id };
+  }
 
   // d. Pay a matching unpaid bill (rule > learned alias > title token-overlap).
   const bill = pickBillToPay(withdrawal, billCandidates, input.merchantRules);
