@@ -1,4 +1,4 @@
-import type { WallLayout, WallModuleKey, WallSettings, WallSoundStyle, WallVoiceEngine } from '@/types/schema';
+import type { WallLayout, WallModuleKey, WallPicovoice, WallSettings, WallSoundStyle, WallVoiceEngine } from '@/types/schema';
 
 /**
  * Defaults and normalization for `wallSettings/config`
@@ -11,7 +11,7 @@ import type { WallLayout, WallModuleKey, WallSettings, WallSoundStyle, WallVoice
 export const WALL_MODULE_KEYS: readonly WallModuleKey[] = ['coming', 'shopping', 'todos', 'meals'];
 export const WALL_ROTATION_INTERVALS: readonly number[] = [30, 60, 120, 300];
 export const WALL_IDLE_RETURN_OPTIONS: readonly number[] = [60, 180, 300, 600];
-export const WALL_VOICE_ENGINES: readonly WallVoiceEngine[] = ['auto', 'speech', 'audio', 'off'];
+export const WALL_VOICE_ENGINES: readonly WallVoiceEngine[] = ['auto', 'device', 'speech', 'audio', 'off'];
 export const WALL_SOUND_STYLES: readonly WallSoundStyle[] = ['speak', 'chime'];
 /** Settings' Low / Medium / High. */
 export const WALL_VOLUMES: readonly number[] = [0.4, 0.7, 1];
@@ -27,6 +27,7 @@ export const DEFAULT_WALL_SETTINGS: WallSettings = {
   showBills: true,
   holidaysEnabled: true,
   voice: 'auto',
+  wakeWord: true,
   sound: { confirm: 'speak', alerts: 'speak', volume: 0.7 },
   alerts: { leadMin: 10 },
 };
@@ -62,6 +63,24 @@ function isValidTimeZone(zone: string): boolean {
   }
 }
 
+/** A usable Picovoice setup, or undefined (no key, or a custom word with no file). */
+export function normalizePicovoice(raw: unknown): WallPicovoice | undefined {
+  if (!isRecord(raw)) return undefined;
+  const accessKey = typeof raw['accessKey'] === 'string' ? raw['accessKey'].trim() : '';
+  if (!accessKey) return undefined;
+  const keyword = typeof raw['keyword'] === 'string' && raw['keyword'] ? raw['keyword'] : 'Computer';
+  const ppn = typeof raw['ppn'] === 'string' && raw['ppn'] ? raw['ppn'] : undefined;
+  const sensitivity = Number(raw['sensitivity']);
+  const label = typeof raw['label'] === 'string' && raw['label'].trim() ? raw['label'].trim() : keyword === 'custom' ? 'Hey Home' : keyword;
+  return {
+    accessKey,
+    keyword: keyword === 'custom' && !ppn ? 'Computer' : keyword,
+    ...(ppn && keyword === 'custom' ? { ppn } : {}),
+    label: keyword === 'custom' && !ppn ? 'Computer' : label,
+    sensitivity: Number.isFinite(sensitivity) && sensitivity >= 0 && sensitivity <= 1 ? sensitivity : 0.5,
+  };
+}
+
 export function resolveWallSettings(raw: unknown): WallSettings {
   const d = isRecord(raw) ? raw : {};
   const def = DEFAULT_WALL_SETTINGS;
@@ -92,6 +111,7 @@ export function resolveWallSettings(raw: unknown): WallSettings {
     showBills: typeof d['showBills'] === 'boolean' ? d['showBills'] : def.showBills,
     holidaysEnabled: typeof d['holidaysEnabled'] === 'boolean' ? d['holidaysEnabled'] : def.holidaysEnabled,
     voice: WALL_VOICE_ENGINES.find(v => v === d['voice']) ?? def.voice,
+    wakeWord: typeof d['wakeWord'] === 'boolean' ? d['wakeWord'] : def.wakeWord,
     sound: {
       confirm: WALL_SOUND_STYLES.find(v => v === sound['confirm']) ?? def.sound.confirm,
       alerts: WALL_SOUND_STYLES.find(v => v === sound['alerts']) ?? def.sound.alerts,
@@ -109,6 +129,8 @@ export function resolveWallSettings(raw: unknown): WallSettings {
   ) {
     settings.weather = { lat: weather['lat'], lon: weather['lon'], label: weather['label'] };
   }
+  const picovoice = normalizePicovoice(d['picovoice']);
+  if (picovoice) settings.picovoice = picovoice;
   if (typeof d['timeZone'] === 'string' && isValidTimeZone(d['timeZone'])) settings.timeZone = d['timeZone'];
   if (typeof d['lastManualSyncAt'] === 'string') settings.lastManualSyncAt = d['lastManualSyncAt'];
   if (d['homeAddressSet'] === true) settings.homeAddressSet = true;

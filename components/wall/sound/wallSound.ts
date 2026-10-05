@@ -12,7 +12,7 @@
  */
 
 export type SoundState = 'locked' | 'ready' | 'unsupported';
-export type ChimeKind = 'ok' | 'error' | 'alert' | 'brief';
+export type ChimeKind = 'ok' | 'error' | 'alert' | 'brief' | 'wake';
 
 interface Note {
   freq: number;
@@ -29,6 +29,8 @@ export const CHIMES: Record<ChimeKind, { notes: Note[]; peak: number }> = {
     peak: 0.2,
   },
   brief: { notes: [{ freq: 784, at: 0, dur: 0.5 }, { freq: 1046.5, at: 0.14, dur: 0.7 }], peak: 0.2 },
+  /** The wake word was heard: one short, high note, so it's out of the way before you talk. */
+  wake: { notes: [{ freq: 1174.7, at: 0, dur: 0.22 }], peak: 0.18 },
 };
 
 /** How long a chime rings before speech should start, in ms. */

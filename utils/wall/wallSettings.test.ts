@@ -4,6 +4,7 @@ import {
   effectiveLayout,
   normalizeLayout,
   normalizeModules,
+  normalizePicovoice,
   resolveWallSettings,
 } from './wallSettings';
 
@@ -24,6 +25,8 @@ describe('resolveWallSettings', () => {
       showBills: false,
       holidaysEnabled: false,
       voice: 'audio',
+      wakeWord: false,
+      picovoice: { accessKey: ' key ', keyword: 'custom', ppn: 'AAAA', label: 'Hey Home', sensitivity: 0.6 },
       sound: { confirm: 'chime', alerts: 'chime', volume: 1 },
       alerts: { leadMin: 15 },
       homeAddressSet: true,
@@ -42,6 +45,8 @@ describe('resolveWallSettings', () => {
       showBills: false,
       holidaysEnabled: false,
       voice: 'audio',
+      wakeWord: false,
+      picovoice: { accessKey: 'key', keyword: 'custom', ppn: 'AAAA', label: 'Hey Home', sensitivity: 0.6 },
       sound: { confirm: 'chime', alerts: 'chime', volume: 1 },
       alerts: { leadMin: 15 },
       homeAddressSet: true,
@@ -60,6 +65,8 @@ describe('resolveWallSettings', () => {
       night: { start: '25:00', end: 6 },
       theme: 'neon',
       voice: 'telepathy',
+      wakeWord: 'sure',
+      picovoice: { accessKey: '   ' },
       sound: { confirm: 'sing', alerts: 3, volume: 5 },
       alerts: { leadMin: 7 },
       homeAddressSet: 'yes',
@@ -71,6 +78,31 @@ describe('resolveWallSettings', () => {
 
   it('allows an empty module list (Today-only)', () => {
     expect(resolveWallSettings({ defaultModules: [] }).defaultModules).toEqual([]);
+  });
+});
+
+describe('normalizePicovoice', () => {
+  it('needs an AccessKey', () => {
+    expect(normalizePicovoice(undefined)).toBeUndefined();
+    expect(normalizePicovoice({ keyword: 'Computer' })).toBeUndefined();
+  });
+
+  it('falls back to a built-in word when a custom word has no file', () => {
+    expect(normalizePicovoice({ accessKey: 'k', keyword: 'custom', label: 'Hey Home' })).toEqual({
+      accessKey: 'k',
+      keyword: 'Computer',
+      label: 'Computer',
+      sensitivity: 0.5,
+    });
+  });
+
+  it('labels a built-in word with its name and clamps sensitivity', () => {
+    expect(normalizePicovoice({ accessKey: 'k', keyword: 'Jarvis', sensitivity: 4 })).toEqual({
+      accessKey: 'k',
+      keyword: 'Jarvis',
+      label: 'Jarvis',
+      sensitivity: 0.5,
+    });
   });
 });
 

@@ -139,32 +139,56 @@ The wall still switches to its dim night clock on its own.
 
 ### Voice
 
-Tap the **mic** at the bottom of the rail, or the mic in the Add sheet, and speak:
+**Set it up once (free, no AI cost):** voice runs on the iPad itself with
+Picovoice. Nothing you say is sent anywhere and it never uses the AI allowance.
 
-| Say | What happens | Uses AI? |
-|---|---|---|
-| "Add milk, eggs and two avocados" | Adds to Shopping (catalog store and category) | Yes |
-| "Remind Sam to feed the cat tomorrow" | To-do for Sam, due tomorrow (no name = Family, no day = today) | Yes |
-| "Show the calendar / month / today / shopping / to-dos / meals" | Switches the screen | No |
-| "Stop rotating" / "Start rotating" | Same as the gear menu | No |
-| "Undo" | Removes what voice just added | No |
-| "What's my day?" / "Good morning" / "What's tomorrow?" | Shows and reads the day brief: weather, what's left on the calendar, bills due, leave-by times. After 6 pm "my day" means tomorrow | No |
+1. Sign up at **console.picovoice.ai** (free plan) and copy your **AccessKey**.
+2. On a phone: Settings → Wall display → Voice → **Picovoice AccessKey** →
+   paste it → **Save key**. "How it listens" can stay on **Auto**.
+3. Hands-free is on by default with the built-in word **"Computer"**. For
+   **"Hey Home"**: Picovoice Console → Porcupine → type "Hey Home" → platform
+   **Web (WASM)** → download the `.ppn`. Then Settings → Wall display → Voice →
+   **My own word (.ppn)**: name it "Hey Home" and choose the file.
+4. On the wall, tap the screen once after it starts (iPadOS needs a touch
+   before it plays sound or listens), and allow the microphone when asked.
+   The first start downloads the speech model (about 36 MB, once).
+
+Say the wake word, wait for the short chime, then the command. Or tap the
+**mic** at the bottom of the rail (or in the Add sheet). The rail shows the
+wake word under the mic while it's listening for it. It doesn't listen during
+night hours.
+
+| Say | What happens |
+|---|---|
+| "Add milk, eggs and two avocados" / "We need paper towels" / "Put bread on the list" | Adds to Shopping (catalog store and category) |
+| "Remind Sam to feed the cat tomorrow" / "Add a to-do to call the dentist on Friday" / "Sam needs to clean his room tonight" | To-do for Sam, due that day (no name = Family, no day = today) |
+| "Show the calendar / month / today / shopping / to-dos / meals" | Switches the screen |
+| "Stop rotating" / "Start rotating" | Same as the gear menu |
+| "Undo" | Removes what voice just added |
+| "What's my day?" / "Good morning" / "What's tomorrow?" | Shows and reads the day brief: weather, what's left on the calendar, bills due, leave-by times. After 6 pm "my day" means tomorrow |
 
 - A result opens as a **big card** in the middle of the screen (readable from
   across the room) with a chime, and by default a spoken reply ("Added milk
   and eggs to shopping."). After 5 seconds it shrinks to the bottom banner;
   **Undo** and **Show list** stay for 10 seconds in all.
-- Voice adds use the household's **daily AI allowance**, the same one the
-  phone uses. Settings → Wall display → Voice shows how much is left.
-- iPadOS asks for the microphone the first time voice is used after each
-  launch. Allow it. If you tapped Don't Allow, go to iPad Settings → Safari →
-  Microphone and choose Ask or Allow.
+- Wording the wall can't read shows **Didn't catch that** with what it heard.
+  Say it more plainly ("add …", "remind … to …").
+- Picovoice's free plan: the wake word is unlimited; turning speech into text
+  is 5 hours of audio a month, and only the few seconds after the wake word or
+  a tap count.
+- iPadOS asks for the microphone once per launch. If you tapped Don't Allow,
+  go to iPad Settings → Safari → Microphone and choose Ask or Allow.
 - **How it listens** (Settings → Wall display → Voice):
-  - **Auto** uses the iPad's own speech recognition, and switches to recording
-    if that's refused.
-  - **iPad** and **Recording** force one method.
-  - Pick whichever passed the Phase 0 test (`plans/wall-display-phase0-results.md`).
+  - **Auto**: on-device once an AccessKey is saved.
+  - **On-device**: Picovoice only.
+  - **Safari**: Safari's own recognizer. It **doesn't work in a Home Screen
+    app** (it never hears anything), so the wall says so after a few seconds.
+  - **Recording**: sends each command to Gemini and uses the daily AI
+    allowance.
   - **Off** hides the mic.
+- **Hands-free** and the **sensitivity** are in the same section. Raise the
+  sensitivity if it misses you from across the room; lower it if it wakes
+  by mistake.
 
 ## 7. Calendars
 

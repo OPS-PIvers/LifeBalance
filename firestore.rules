@@ -1338,8 +1338,19 @@ service cloud.firestore {
                                  docId == 'config' &&
                                  request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys().hasOnly([
                                    'defaultModules', 'rotation', 'idleReturnSec', 'night', 'theme', 'textSize',
-                                   'showBills', 'holidaysEnabled', 'weather', 'timeZone', 'voice', 'sound', 'alerts'
+                                   'showBills', 'holidaysEnabled', 'weather', 'timeZone', 'voice', 'sound', 'alerts',
+                                   'wakeWord', 'picovoice'
                                  ]) &&
+                                 (request.resource.data.get('wakeWord', null) == null || request.resource.data.wakeWord is bool) &&
+                                 // A custom .ppn is a few KB; the cap keeps the doc small.
+                                 (request.resource.data.get('picovoice', null) == null ||
+                                   (request.resource.data.picovoice is map &&
+                                    request.resource.data.picovoice.keys().hasOnly(['accessKey', 'keyword', 'ppn', 'label', 'sensitivity']) &&
+                                    isValidOptionalString(request.resource.data.picovoice.get('accessKey', null), 200) &&
+                                    isValidOptionalString(request.resource.data.picovoice.get('keyword', null), 40) &&
+                                    isValidOptionalString(request.resource.data.picovoice.get('label', null), 40) &&
+                                    isValidOptionalString(request.resource.data.picovoice.get('ppn', null), 200000) &&
+                                    isValidOptionalNumber(request.resource.data.picovoice.get('sensitivity', null)))) &&
                                  (request.resource.data.get('sound', null) == null || request.resource.data.sound is map) &&
                                  (request.resource.data.get('alerts', null) == null || request.resource.data.alerts is map) &&
                                  (request.resource.data.get('defaultModules', null) == null ||

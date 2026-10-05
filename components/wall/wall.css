@@ -95,6 +95,8 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .rail .off svg { font-size: 30px; }
 .wall .rail .mic { margin: 0 auto; width: 76px; height: 76px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
 .wall .rail .mic svg { font-size: 34px; }
+.wall .rail .mic.wake { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent); }
+.wall .rail .wake { margin: 6px auto 0; max-width: 96px; font-size: 13px; line-height: 1.2; text-align: center; color: var(--muted); overflow-wrap: anywhere; }
 .wall .rail .mic.live { background: var(--warm-fill); color: #fff; box-shadow: 0 0 0 8px color-mix(in srgb, var(--warm-fill) 22%, transparent); }
 .wall .rail .gear { margin: 14px auto 0; width: 56px; height: 56px; display: grid; place-items: center; color: var(--faint); font-size: 26px; }
 

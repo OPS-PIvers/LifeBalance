@@ -1,11 +1,12 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import type { ShoppingItem, WallVoiceEngine } from '@/types/schema';
+import type { ShoppingItem, WallPicovoice, WallVoiceEngine } from '@/types/schema';
 import type { WallVoiceCommand } from '@/services/geminiService.types';
 import { WallDataContext, type WallData } from '@/components/wall/data/wallData';
 import { makeWallData } from '@/components/wall/data/wallTestData';
 import { VoiceCaptureError, type VoiceCapture, type VoiceEngine } from './voiceEngines';
+import type { DeviceVoiceEngine } from './deviceEngine';
 import { WALL_VOICE_BANNER_MS, WALL_VOICE_BIG_MS, useWallVoice, type WallVoiceDeps, type WallVoiceFeedback } from './useWallVoice';
 import WallVoiceBanner from './WallVoiceBanner';
 
@@ -17,7 +18,7 @@ vi.mock('@/services/geminiService', () => ({
 const TODAY = '2026-10-04';
 
 interface FakeSession {
-  kind: 'speech' | 'audio';
+  kind: 'speech' | 'audio' | 'device';
   resolve: (capture: VoiceCapture) => void;
   reject: (error: unknown) => void;
 }
@@ -38,22 +39,48 @@ function fakeEngines() {
       },
     })
   );
-  return { sessions, createEngine };
+  let onWake: () => void = () => undefined;
+  const setWake = vi.fn(async (_on: boolean) => undefined);
+  const createDeviceEngine = vi.fn(
+    (_config: WallPicovoice, wake: () => void): DeviceVoiceEngine => {
+      onWake = wake;
+      return {
+        kind: 'device',
+        dispose: vi.fn(),
+        setWake,
+        listen: () => {
+          let session!: FakeSession;
+          const result = new Promise<VoiceCapture>((resolve, reject) => {
+            session = { kind: 'device', resolve, reject };
+          });
+          sessions.push(session);
+          return { result, finish: vi.fn(), cancel: () => session.reject(new VoiceCaptureError('aborted')) };
+        },
+      };
+    }
+  );
+  return { sessions, createEngine, createDeviceEngine, setWake, wake: () => onWake() };
 }
+
+const PICOVOICE: WallPicovoice = { accessKey: 'k', keyword: 'Computer', label: 'Computer', sensitivity: 0.5 };
 
 const Harness: React.FC<{
   setting?: WallVoiceEngine;
+  picovoice?: WallPicovoice | undefined;
+  wake?: boolean;
+  onWake?: () => void;
   deps: WallVoiceDeps;
   onShow: (t: string) => void;
   onRotate: (on: boolean) => void;
   onFeedback: (f: WallVoiceFeedback) => void;
-}> = ({ setting = 'auto', deps, onShow, onRotate, onFeedback }) => {
-  const voice = useWallVoice({ setting, today: TODAY, timeZone: 'America/Chicago', onShow, onRotate, onFeedback, deps });
+}> = ({ setting = 'auto', picovoice, wake, onWake, deps, onShow, onRotate, onFeedback }) => {
+  const voice = useWallVoice({ setting, picovoice, wake, onWake, today: TODAY, timeZone: 'America/Chicago', onShow, onRotate, onFeedback, deps });
   return (
     <>
       <button type="button" onClick={voice.start}>
         Mic
       </button>
+      {voice.wakeListening && <span>wake on</span>}
       {voice.state && (
         <WallVoiceBanner
           state={voice.state}
@@ -68,7 +95,17 @@ const Harness: React.FC<{
   );
 };
 
-function setup(opts: { setting?: WallVoiceEngine; parse?: (c: WallVoiceCommand) => void; command?: WallVoiceCommand; parseError?: Error; support?: { speech: boolean; audio: boolean } } = {}) {
+function setup(
+  opts: {
+    setting?: WallVoiceEngine;
+    parse?: (c: WallVoiceCommand) => void;
+    command?: WallVoiceCommand;
+    parseError?: Error;
+    support?: { speech: boolean; audio: boolean; device?: boolean };
+    picovoice?: WallPicovoice;
+    wake?: boolean;
+  } = {}
+) {
   const engines = fakeEngines();
   const command = opts.command ?? { transcript: 'add milk and eggs', intent: 'add_shopping', items: [{ name: 'milk' }, { name: 'eggs' }] };
   const parse = vi.fn(async () => {
@@ -78,6 +115,7 @@ function setup(opts: { setting?: WallVoiceEngine; parse?: (c: WallVoiceCommand) 
   const deps: WallVoiceDeps = {
     support: opts.support ?? { speech: true, audio: true },
     createEngine: engines.createEngine,
+    createDeviceEngine: engines.createDeviceEngine,
     parseText: parse,
     parseAudio: parse,
   };
@@ -85,14 +123,29 @@ function setup(opts: { setting?: WallVoiceEngine; parse?: (c: WallVoiceCommand) 
   const onShow = vi.fn();
   const onRotate = vi.fn();
   const onFeedback = vi.fn();
+  const onWake = vi.fn();
+  let wake = opts.wake ?? false;
   const ui = () => (
     <WallDataContext.Provider value={data}>
-      <Harness setting={opts.setting} deps={deps} onShow={onShow} onRotate={onRotate} onFeedback={onFeedback} />
+      <Harness
+        setting={opts.setting}
+        picovoice={opts.picovoice}
+        wake={wake}
+        onWake={onWake}
+        deps={deps}
+        onShow={onShow}
+        onRotate={onRotate}
+        onFeedback={onFeedback}
+      />
     </WallDataContext.Provider>
   );
   const utils = render(ui());
   const rerenderWith = (patch: Partial<WallData>) => {
     Object.assign(data, patch);
+    utils.rerender(ui());
+  };
+  const setWake = (on: boolean) => {
+    wake = on;
     utils.rerender(ui());
   };
   const say = async (capture: VoiceCapture) => {
@@ -101,7 +154,7 @@ function setup(opts: { setting?: WallVoiceEngine; parse?: (c: WallVoiceCommand) 
       engines.sessions.at(-1)!.resolve(capture);
     });
   };
-  return { engines, parse, data, onShow, onRotate, onFeedback, rerenderWith, say };
+  return { engines, parse, data, onShow, onRotate, onFeedback, onWake, rerenderWith, setWake, say };
 }
 
 afterEach(() => {
@@ -122,8 +175,9 @@ describe('wall voice', () => {
 
   it('adds shopping items, then Undo removes exactly what it added', async () => {
     const { say, parse, data, rerenderWith } = setup();
-    await say({ kind: 'text', transcript: 'add milk and eggs' });
-    expect(parse).toHaveBeenCalledWith('h1', 'add milk and eggs', expect.objectContaining({ memberNames: ['Paul', 'Leo'], today: TODAY }));
+    // Wording the no-AI grammar can't read goes to Gemini.
+    await say({ kind: 'text', transcript: 'grab what we need for breakfast' });
+    expect(parse).toHaveBeenCalledWith('h1', 'grab what we need for breakfast', expect.objectContaining({ memberNames: ['Paul', 'Leo'], today: TODAY }));
     expect(screen.getByText('Added to Shopping')).toBeInTheDocument();
     expect(screen.getByText('Milk, Eggs')).toBeInTheDocument();
     expect(data.actions.addShoppingItem).toHaveBeenCalledTimes(2);
@@ -141,6 +195,14 @@ describe('wall voice', () => {
     expect(data.actions.deleteShoppingItem).toHaveBeenCalledWith('n1');
     expect(data.actions.deleteShoppingItem).toHaveBeenCalledWith('n2');
     expect(screen.getByText('Undone')).toBeInTheDocument();
+  });
+
+  it('reads a plain add itself, with no AI call', async () => {
+    const { say, parse, data } = setup();
+    await say({ kind: 'text', transcript: 'Add milk and eggs to the shopping list' });
+    expect(parse).not.toHaveBeenCalled();
+    expect(screen.getByText('Milk, Eggs')).toBeInTheDocument();
+    expect(data.actions.addShoppingItem).toHaveBeenCalledTimes(2);
   });
 
   it('opens as the big card with a spoken reply, then shrinks to the banner', async () => {
@@ -239,7 +301,7 @@ describe('wall voice', () => {
 
   it('explains a used-up AI allowance', async () => {
     const { say } = setup({ parseError: new Error('Daily AI quota exceeded (100 requests/day). Try again tomorrow.') });
-    await say({ kind: 'text', transcript: 'add milk' });
+    await say({ kind: 'text', transcript: 'grab what we need for breakfast' });
     expect(screen.getByText("Today's AI allowance is used up")).toBeInTheDocument();
   });
 
@@ -267,5 +329,82 @@ describe('wall voice', () => {
     });
     expect(parse).not.toHaveBeenCalled();
     expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  describe('on-device (Picovoice)', () => {
+    const device = { speech: true, audio: true, device: true };
+
+    it('Auto uses it once an AccessKey is saved, and never calls Gemini', async () => {
+      const { engines, parse, say, data } = setup({ picovoice: PICOVOICE, support: device });
+      await say({ kind: 'text', transcript: 'add milk and two avocados' });
+      expect(engines.sessions[0]?.kind).toBe('device');
+      expect(data.actions.addShoppingItem).toHaveBeenCalledTimes(2);
+      await say({ kind: 'text', transcript: 'grab what we need for breakfast' });
+      expect(parse).not.toHaveBeenCalled();
+      expect(screen.getByText('Didn’t catch that')).toBeInTheDocument();
+      expect(screen.getByText(/isn’t a command I know\. Try “add milk”/)).toBeInTheDocument();
+    });
+
+    it('without an AccessKey Auto stays on Safari', async () => {
+      const { engines } = setup({ support: device });
+      fireEvent.click(screen.getByRole('button', { name: 'Mic' }));
+      expect(engines.sessions[0]?.kind).toBe('speech');
+      expect(engines.createDeviceEngine).not.toHaveBeenCalled();
+    });
+
+    it('the wake word opens a command, and follows `wake`', async () => {
+      const { engines, setWake, onWake } = setup({ picovoice: PICOVOICE, support: device, wake: true });
+      await act(async () => undefined);
+      expect(engines.setWake).toHaveBeenLastCalledWith(true);
+      expect(screen.getByText('wake on')).toBeInTheDocument();
+      act(() => engines.wake());
+      expect(onWake).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('Listening')).toBeInTheDocument();
+      expect(engines.sessions).toHaveLength(1);
+      // Heard again mid-command: ignored.
+      act(() => engines.wake());
+      expect(engines.sessions).toHaveLength(1);
+      await act(async () => setWake(false));
+      expect(engines.setWake).toHaveBeenLastCalledWith(false);
+      expect(screen.queryByText('wake on')).toBeNull();
+    });
+
+    it('says when the wake word can’t start, once per setup', async () => {
+      const { engines, setWake, onFeedback } = setup({ picovoice: PICOVOICE, support: device });
+      engines.setWake.mockRejectedValue(new VoiceCaptureError('not-allowed'));
+      await act(async () => setWake(true));
+      expect(screen.getByText('The wake word isn’t listening')).toBeInTheDocument();
+      expect(screen.getByText(/Allow the microphone/)).toBeInTheDocument();
+      await act(async () => setWake(false));
+      await act(async () => setWake(true));
+      expect(onFeedback.mock.calls.filter(([f]) => f.speech === 'The wake word isn’t listening')).toHaveLength(1);
+    });
+
+    it('a bad AccessKey says so', async () => {
+      const { engines } = setup({ picovoice: PICOVOICE, support: device });
+      fireEvent.click(screen.getByRole('button', { name: 'Mic' }));
+      await act(async () => {
+        engines.sessions[0]!.reject(new VoiceCaptureError('unavailable', 'activation'));
+      });
+      expect(screen.getByText('Voice can’t start')).toBeInTheDocument();
+    });
+  });
+
+  it('Safari’s recognizer that never starts falls back to Recording on Auto', async () => {
+    const { engines } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Mic' }));
+    await act(async () => {
+      engines.sessions[0]!.reject(new VoiceCaptureError('unsupported'));
+    });
+    expect(engines.sessions[1]?.kind).toBe('audio');
+  });
+
+  it('Safari forced and dead says to set up on-device voice', async () => {
+    const { engines } = setup({ setting: 'speech' });
+    fireEvent.click(screen.getByRole('button', { name: 'Mic' }));
+    await act(async () => {
+      engines.sessions[0]!.reject(new VoiceCaptureError('unsupported'));
+    });
+    expect(screen.getByText('The iPad’s speech recognition doesn’t work here')).toBeInTheDocument();
   });
 });

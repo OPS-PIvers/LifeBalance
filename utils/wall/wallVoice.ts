@@ -63,8 +63,9 @@ function briefOf(t: string): LocalCommand | null {
 }
 
 /**
- * The no-AI grammar: navigation, rotation, undo, cancel and the day brief. Anything else
- * (adds above all) returns null and goes to Gemini.
+ * The no-AI grammar: navigation, rotation, undo, cancel and the day brief.
+ * Adds have their own no-AI grammar (`parseLocalAdd` in wallVoiceGrammar.ts);
+ * what neither reads goes to Gemini, except on the on-device engine.
  */
 export function parseLocalCommand(text: string): LocalCommand | null {
   const t = normalizeSpeech(text);
@@ -83,17 +84,26 @@ export function parseLocalCommand(text: string): LocalCommand | null {
 export interface VoiceSupport {
   speech: boolean;
   audio: boolean;
+  /** Picovoice is set up (an AccessKey is saved) and this browser can run it. */
+  device?: boolean;
 }
 
 /**
- * Which engine a tap uses. `auto` prefers on-device speech recognition and
- * falls back to recorded audio once speech has been refused on this launch
- * (plan §6 decision rule). Null = voice is unavailable here.
+ * Which engine a tap uses. `auto` uses the on-device Picovoice engine once
+ * it's set up; otherwise Safari's speech recognition, falling back to
+ * recorded audio once speech has been refused on this launch (plan §6
+ * decision rule). Null = voice is unavailable here.
  */
-export function pickVoiceEngine(setting: WallVoiceEngine, support: VoiceSupport, speechRefused: boolean): 'speech' | 'audio' | null {
+export function pickVoiceEngine(
+  setting: WallVoiceEngine,
+  support: VoiceSupport,
+  speechRefused: boolean
+): 'device' | 'speech' | 'audio' | null {
   if (setting === 'off') return null;
+  if (setting === 'device') return support.device ? 'device' : null;
   if (setting === 'speech') return support.speech ? 'speech' : null;
   if (setting === 'audio') return support.audio ? 'audio' : null;
+  if (support.device) return 'device';
   if (support.speech && !speechRefused) return 'speech';
   return support.audio ? 'audio' : null;
 }

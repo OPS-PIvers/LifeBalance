@@ -10,7 +10,8 @@ import { bytesToBase64, downmix, encodeWav, resample, rmsFromBytes } from '@/uti
 
 export type VoiceCapture = { kind: 'text'; transcript: string } | { kind: 'audio'; data: string; mimeType: string };
 
-export type VoiceErrorCode = 'no-speech' | 'not-allowed' | 'unavailable' | 'aborted' | 'failed';
+/** `unsupported`: the recognizer started but never ran (Safari in a Home Screen app). */
+export type VoiceErrorCode = 'no-speech' | 'not-allowed' | 'unavailable' | 'unsupported' | 'aborted' | 'failed';
 
 export class VoiceCaptureError extends Error {
   constructor(
@@ -37,7 +38,7 @@ export interface VoiceListeners {
 }
 
 export interface VoiceEngine {
-  kind: 'speech' | 'audio';
+  kind: 'speech' | 'audio' | 'device';
   listen: (listeners: VoiceListeners) => VoiceSession;
   /** Releases the microphone (unmount). */
   dispose: () => void;
@@ -76,6 +77,14 @@ export function getSpeechRecognition(): SpeechRecognitionCtor | undefined {
 
 /** Safari's recognizer has no end on its own when nobody speaks; this is the backstop. */
 const SPEECH_MAX_MS = 10_000;
+/**
+ * In a Home Screen app iPadOS's recognizer accepts start() and then fires
+ * nothing at all: no start, no result, no error, no end. No start event by
+ * now means it never will.
+ */
+export const SPEECH_START_MS = 2500;
+/** stop() and abort() can go unanswered too; settle with what was heard after this. */
+const SPEECH_SETTLE_MS = 1500;
 
 function speechErrorCode(error: string): VoiceErrorCode {
   if (error === 'not-allowed' || error === 'service-not-allowed') return 'not-allowed';
@@ -102,12 +111,30 @@ export function createSpeechEngine(Ctor: SpeechRecognitionCtor): VoiceEngine {
       let interimText = '';
       let error: VoiceErrorCode | null = null;
       let cancelled = false;
-      let timer = 0;
+      let started = false;
+      const timers: number[] = [];
+      let settle: () => void = () => undefined;
+      const later = (fn: () => void, ms: number) => timers.push(window.setTimeout(fn, ms));
       const result = new Promise<VoiceCapture>((resolve, reject) => {
-        r.onstart = null;
+        let settled = false;
+        settle = () => {
+          if (settled) return;
+          settled = true;
+          timers.forEach(id => window.clearTimeout(id));
+          // Safari sometimes ends without flagging a final result; use what it heard.
+          const transcript = (finalText || interimText).trim();
+          if (cancelled) reject(new VoiceCaptureError('aborted'));
+          else if (error === 'unsupported') reject(new VoiceCaptureError('unsupported'));
+          else if (transcript) resolve({ kind: 'text', transcript });
+          else reject(new VoiceCaptureError(error ?? 'no-speech'));
+        };
+        r.onstart = () => {
+          started = true;
+        };
         r.onspeechstart = null;
         r.onspeechend = null;
         r.onresult = event => {
+          started = true;
           let text = '';
           let isFinal = false;
           for (let i = 0; i < event.results.length; i++) {
@@ -121,31 +148,38 @@ export function createSpeechEngine(Ctor: SpeechRecognitionCtor): VoiceEngine {
           onInterim?.(text);
         };
         r.onerror = event => {
+          started = true;
           error = speechErrorCode(event.error);
         };
-        r.onend = () => {
-          window.clearTimeout(timer);
-          // Safari sometimes ends without flagging a final result; use what it heard.
-          const transcript = (finalText || interimText).trim();
-          if (cancelled) reject(new VoiceCaptureError('aborted'));
-          else if (transcript) resolve({ kind: 'text', transcript });
-          else reject(new VoiceCaptureError(error ?? 'no-speech'));
-        };
+        r.onend = () => settle();
       });
+      // Stop, and settle even if the recognizer never says it ended.
+      const stopNow = () => {
+        r.stop();
+        later(settle, SPEECH_SETTLE_MS);
+      };
       try {
         r.start();
-        timer = window.setTimeout(() => r.stop(), SPEECH_MAX_MS);
+        later(stopNow, SPEECH_MAX_MS);
+        later(() => {
+          if (started) return;
+          error = 'unsupported';
+          r.abort();
+          later(settle, 300);
+        }, SPEECH_START_MS);
       } catch {
         // start() throws InvalidStateError while a previous session is closing.
         r.abort();
+        timers.forEach(id => window.clearTimeout(id));
         return { result: Promise.reject(new VoiceCaptureError('failed', 'busy')), finish: () => undefined, cancel: () => undefined };
       }
       return {
         result,
-        finish: () => r.stop(),
+        finish: stopNow,
         cancel: () => {
           cancelled = true;
           r.abort();
+          later(settle, SPEECH_SETTLE_MS);
         },
       };
     },

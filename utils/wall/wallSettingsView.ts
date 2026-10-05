@@ -84,3 +84,11 @@ export function feedStatus(
   const count = `${feed.eventCount} ${feed.eventCount === 1 ? 'event' : 'events'}${feed.truncated ? ' (showing the nearest)' : ''}`;
   return { text: `${count} · synced ${agoText(feed.lastSuccessAt ?? feed.lastSyncAt, now)}`, tone: 'ok' };
 }
+
+/** File → base64, for a custom wake word's .ppn (a few KB). */
+export async function fileToBase64(file: Blob): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
