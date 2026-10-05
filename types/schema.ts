@@ -598,18 +598,18 @@ export interface Transaction {
    *  from the bill on the calendar instead. Absent on every transaction that has
    *  never settled a bill. */
   paidCalendarItemId?: string;
-  /** Set by the nightly bank-email sync when it settles a bill at a different
-   *  amount than the bill was scheduled for (the transaction's own `amount` is
-   *  what was actually paid). Drives the Dashboard's "price changed" card, where
-   *  the household acknowledges the difference — and rebalances a bucket when it
-   *  cost more. Cleared by `acknowledgeBillPriceChange`; absent ⇒ nothing to
-   *  acknowledge. Never affects any money math. */
   /** Set by quickAddExpense when an Apple Pay / Shortcut capture was approved
    *  on arrival because its bucket and account were already learned (see
    *  `functions/src/quickAdd/autoApprove.ts`). The row is an ordinary `verified`
    *  transaction whose balance impact was applied at capture; the flag only
    *  keeps it foldable by a later capture of the same purchase. */
   autoApproved?: boolean;
+  /** Set by the nightly bank-email sync when it settles a bill at a different
+   *  amount than the bill was scheduled for (the transaction's own `amount` is
+   *  what was actually paid). Drives the Dashboard's "price changed" card, where
+   *  the household acknowledges the difference — and rebalances a bucket when it
+   *  cost more. Cleared by `acknowledgeBillPriceChange`; absent ⇒ nothing to
+   *  acknowledge. Never affects any money math. */
   billPriceChange?: {
     billTitle: string;
     /** The bill's SCHEDULED amount, decimal dollars. */
