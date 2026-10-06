@@ -13,6 +13,7 @@ import type {
   WallLayout,
   WallSettings,
   WallTravel,
+  WallWakeFile,
 } from '@/types/schema';
 
 /**
@@ -39,6 +40,8 @@ export interface WallDataActions {
   syncCalendarsNow: () => Promise<{ failed: number }>;
   /** A natural cloud voice for one phrase (base64 MP3). Rejects where there's none (Test Mode). */
   synthesizeSpeech: (text: string) => Promise<string>;
+  /** A custom wake word's .onnx (`settings.wakeModel.file`). Rejects where there's none (Test Mode). */
+  loadWakeFile: (file: WallWakeFile) => Promise<Uint8Array>;
 }
 
 export interface WallData {

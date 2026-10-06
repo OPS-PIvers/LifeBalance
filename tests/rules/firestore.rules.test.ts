@@ -23,6 +23,7 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import {
+  Bytes,
   doc,
   collection,
   arrayUnion,
@@ -2499,6 +2500,7 @@ describe('wall display identity', () => {
       await setDoc(doc(db, 'households', H1, 'mealPlan', 'p1'), { date: '2026-10-03', mealId: 'm1' });
       await setDoc(doc(db, 'households', H1, 'wallEvents', 'e1'), { title: 'Soccer', date: '2026-10-03', allDay: false, source: 'feed', ownerKey: 'family' });
       await setDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { theme: 'light' });
+      await setDoc(doc(db, 'households', H1, 'wallSettings', 'wake-0'), { id: 'f1', data: Bytes.fromUint8Array(new Uint8Array(3)) });
       await setDoc(doc(db, 'households', H1, 'calendarFeeds', 'f1'), { label: 'School', ownerKey: 'family', kind: 'ics' });
       await setDoc(doc(db, 'households', H1, 'calendarFeedSecrets', 'f1'), { url: 'https://calendar.google.com/secret.ics' });
       await setDoc(doc(db, 'households', H1, 'accounts', 'a1'), { name: 'Checking', type: 'checking', balance: 100 });
@@ -2526,6 +2528,7 @@ describe('wall display identity', () => {
       await assertSucceeds(getDocs(collection(db, 'households', H1, 'mealPlan')));
       await assertSucceeds(getDocs(collection(db, 'households', H1, 'wallEvents')));
       await assertSucceeds(getDoc(doc(db, 'households', H1, 'wallSettings', 'config')));
+      await assertSucceeds(getDoc(doc(db, 'households', H1, 'wallSettings', 'wake-0')));
       await assertSucceeds(getDocs(collection(db, 'households', H1, 'calendarFeeds')));
       await assertSucceeds(getDocs(collection(db, 'households', H1, 'wallTravel')));
       await assertSucceeds(getDoc(doc(db, 'households', H1, 'displays', DID)));
@@ -2635,6 +2638,7 @@ describe('wall display identity', () => {
       await assertFails(setDoc(doc(db, 'households', H1, 'meals', 'm2'), { name: 'X', ingredients: [], tags: [] }));
       await assertFails(setDoc(doc(db, 'households', H1, 'mealPlan', 'p2'), { date: '2026-10-04' }));
       await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { theme: 'dark' }));
+      await assertFails(setDoc(doc(db, 'households', H1, 'wallSettings', 'wake-0'), { id: 'x', data: Bytes.fromUint8Array(new Uint8Array(3)) }));
       await assertFails(setDoc(doc(db, 'households', H1, 'wallEvents', 'e2'), { title: 'Fake' }));
       await assertFails(setDoc(doc(db, 'households', H1, 'calendarFeeds', 'f2'), { label: 'Fake' }));
       await assertFails(setDoc(doc(db, 'households', H1, 'wallTravel', 'e1'), { minutes: 1 }));
@@ -2694,12 +2698,23 @@ describe('wall display identity', () => {
       await assertSucceeds(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), {
         voice: 'device',
         wakeWord: true,
-        picovoice: { accessKey: 'k', keyword: 'custom', ppn: 'AAAA', label: 'Hey Home', sensitivity: 0.5 },
+        wakeModel: { keyword: 'custom', file: { id: 'f1', chunks: 2, bytes: 900000 }, label: 'Hey Home', threshold: 0.5 },
       }));
       await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { wakeWord: 'yes' }));
-      await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { picovoice: 'k' }));
-      await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { picovoice: { accessKey: 'k', extra: 1 } }));
-      await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { picovoice: { accessKey: 'k', ppn: 'x'.repeat(200001) } }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { wakeModel: 'hey_jarvis' }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { wakeModel: { keyword: 'hey_jarvis', extra: 1 } }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { wakeModel: { keyword: 'custom', file: 'AAAA' } }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { wakeModel: { keyword: 'custom', file: { id: 'f1', url: 'x' } } }));
+      // The file's chunks: bytes, ≤ 700 KB, only wake-0…wake-3.
+      await assertSucceeds(setDoc(doc(db, 'households', H1, 'wallSettings', 'wake-0'), { id: 'f1', data: Bytes.fromUint8Array(new Uint8Array(700000)) }));
+      await assertSucceeds(setDoc(doc(db, 'households', H1, 'wallSettings', 'wake-3'), { id: 'f1', data: Bytes.fromUint8Array(new Uint8Array(3)) }));
+      await assertFails(setDoc(doc(db, 'households', H1, 'wallSettings', 'wake-0'), { id: 'f1', data: Bytes.fromUint8Array(new Uint8Array(700001)) }));
+      await assertFails(setDoc(doc(db, 'households', H1, 'wallSettings', 'wake-4'), { id: 'f1', data: Bytes.fromUint8Array(new Uint8Array(3)) }));
+      await assertFails(setDoc(doc(db, 'households', H1, 'wallSettings', 'wake-1'), { id: 'f1', data: 'AAAA' }));
+      await assertFails(setDoc(doc(db, 'households', H1, 'wallSettings', 'wake-1'), { id: 'f1', data: Bytes.fromUint8Array(new Uint8Array(3)), x: 1 }));
+      await assertFails(deleteDoc(doc(db, 'households', H1, 'wallSettings', 'wake-0')));
+      // The retired Picovoice setup is no longer writable.
+      await assertFails(updateDoc(doc(db, 'households', H1, 'wallSettings', 'config'), { picovoice: { accessKey: 'k' } }));
       await assertSucceeds(getDocs(collection(db, 'households', H1, 'wallTravel')));
       await assertSucceeds(getDocs(collection(db, 'households', H1, 'mealPlan')));
       await assertSucceeds(setDoc(doc(db, 'households', H1, 'mealPlan', 'p3'), { date: '2026-10-05', mealId: 'm1' }));

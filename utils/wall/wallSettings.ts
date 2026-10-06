@@ -1,4 +1,4 @@
-import type { WallLayout, WallModuleKey, WallPicovoice, WallSettings, WallSoundStyle, WallVoiceEngine } from '@/types/schema';
+import type { WallLayout, WallModuleKey, WallSettings, WallSoundStyle, WallVoiceEngine, WallWakeFile, WallWakeModel } from '@/types/schema';
 
 /**
  * Defaults and normalization for `wallSettings/config`
@@ -17,6 +17,49 @@ export const WALL_SOUND_STYLES: readonly WallSoundStyle[] = ['speak', 'chime'];
 export const WALL_VOLUMES: readonly number[] = [0.4, 0.7, 1];
 export const WALL_ALERT_LEADS: readonly number[] = [5, 10, 15, 30];
 
+/** openWakeWord's pre-trained English wake words the wall ships (public/voice/openwakeword-*). */
+export const WAKE_BUILT_INS: readonly { keyword: string; label: string }[] = [
+  { keyword: 'hey_jarvis', label: 'Hey Jarvis' },
+  { keyword: 'hey_mycroft', label: 'Hey Mycroft' },
+  { keyword: 'hey_rhasspy', label: 'Hey Rhasspy' },
+];
+/** Settings' Low / Medium / High sensitivity, as detection thresholds (higher sensitivity = lower threshold). */
+export const WAKE_THRESHOLDS: readonly { label: string; threshold: number }[] = [
+  { label: 'Low', threshold: 0.7 },
+  { label: 'Medium', threshold: 0.5 },
+  { label: 'High', threshold: 0.3 },
+];
+/** A custom .onnx is stored in chunk docs (`wallSettings/wake-N`), each under Firestore's 1 MB. */
+export const WAKE_CHUNK_BYTES = 700_000;
+export const WAKE_MAX_CHUNKS = 4;
+/** openWakeWord's notebook makes ~0.9 MB; the stock models are ≤ 1.3 MB. */
+export const WAKE_CUSTOM_MAX_BYTES = WAKE_CHUNK_BYTES * WAKE_MAX_CHUNKS;
+export const wakeChunkDocId = (i: number): string => `wake-${i}`;
+
+/** A file's bytes as the chunks it's stored in. */
+export function splitWakeFile(bytes: Uint8Array): Uint8Array[] {
+  const out: Uint8Array[] = [];
+  for (let at = 0; at < bytes.length; at += WAKE_CHUNK_BYTES) out.push(bytes.subarray(at, at + WAKE_CHUNK_BYTES));
+  return out;
+}
+
+/** The chunks back into the file, checking each belongs to it. */
+export function joinWakeFile(file: WallWakeFile, chunks: readonly ({ id?: unknown; data?: Uint8Array } | undefined)[]): Uint8Array {
+  const out = new Uint8Array(file.bytes);
+  let at = 0;
+  for (let i = 0; i < file.chunks; i++) {
+    const c = chunks[i];
+    if (!c || c.id !== file.id || !(c.data instanceof Uint8Array)) throw new Error('The wake word file is incomplete. Upload it again.');
+    if (at + c.data.length > out.length) throw new Error('The wake word file is the wrong size. Upload it again.');
+    out.set(c.data, at);
+    at += c.data.length;
+  }
+  if (at !== file.bytes) throw new Error('The wake word file is the wrong size. Upload it again.');
+  return out;
+}
+
+export const DEFAULT_WAKE_MODEL: WallWakeModel = { keyword: 'hey_jarvis', label: 'Hey Jarvis', threshold: 0.5 };
+
 export const DEFAULT_WALL_SETTINGS: WallSettings = {
   defaultModules: ['coming'],
   rotation: { enabled: false, intervalSec: 60 },
@@ -28,6 +71,7 @@ export const DEFAULT_WALL_SETTINGS: WallSettings = {
   holidaysEnabled: true,
   voice: 'auto',
   wakeWord: true,
+  wakeModel: DEFAULT_WAKE_MODEL,
   sound: { confirm: 'speak', alerts: 'speak', volume: 0.7 },
   alerts: { leadMin: 10 },
 };
@@ -63,22 +107,28 @@ function isValidTimeZone(zone: string): boolean {
   }
 }
 
-/** A usable Picovoice setup, or undefined (no key, or a custom word with no file). */
-export function normalizePicovoice(raw: unknown): WallPicovoice | undefined {
+function normalizeWakeFile(raw: unknown): WallWakeFile | undefined {
   if (!isRecord(raw)) return undefined;
-  const accessKey = typeof raw['accessKey'] === 'string' ? raw['accessKey'].trim() : '';
-  if (!accessKey) return undefined;
-  const keyword = typeof raw['keyword'] === 'string' && raw['keyword'] ? raw['keyword'] : 'Computer';
-  const ppn = typeof raw['ppn'] === 'string' && raw['ppn'] ? raw['ppn'] : undefined;
-  const sensitivity = Number(raw['sensitivity']);
-  const label = typeof raw['label'] === 'string' && raw['label'].trim() ? raw['label'].trim() : keyword === 'custom' ? 'Hey Home' : keyword;
-  return {
-    accessKey,
-    keyword: keyword === 'custom' && !ppn ? 'Computer' : keyword,
-    ...(ppn && keyword === 'custom' ? { ppn } : {}),
-    label: keyword === 'custom' && !ppn ? 'Computer' : label,
-    sensitivity: Number.isFinite(sensitivity) && sensitivity >= 0 && sensitivity <= 1 ? sensitivity : 0.5,
-  };
+  const { id, chunks, bytes } = raw;
+  if (typeof id !== 'string' || !id) return undefined;
+  if (typeof chunks !== 'number' || !Number.isInteger(chunks) || chunks < 1 || chunks > WAKE_MAX_CHUNKS) return undefined;
+  if (typeof bytes !== 'number' || !Number.isInteger(bytes) || bytes < 1 || bytes > chunks * WAKE_CHUNK_BYTES) return undefined;
+  return { id, chunks, bytes };
+}
+
+/** The wake word to use: a known built-in, or a custom model that has its file; anything else is the default. */
+export function normalizeWakeModel(raw: unknown): WallWakeModel {
+  if (!isRecord(raw)) return DEFAULT_WAKE_MODEL;
+  const t = Number(raw['threshold']);
+  const threshold = Number.isFinite(t) && t >= 0.05 && t <= 0.95 ? t : DEFAULT_WAKE_MODEL.threshold;
+  const builtIn = WAKE_BUILT_INS.find(b => b.keyword === raw['keyword']);
+  if (builtIn) return { keyword: builtIn.keyword, label: builtIn.label, threshold };
+  const file = normalizeWakeFile(raw['file']);
+  if (raw['keyword'] === 'custom' && file) {
+    const label = typeof raw['label'] === 'string' && raw['label'].trim() ? raw['label'].trim() : 'Hey Home';
+    return { keyword: 'custom', file, label, threshold };
+  }
+  return { ...DEFAULT_WAKE_MODEL, threshold };
 }
 
 export function resolveWallSettings(raw: unknown): WallSettings {
@@ -112,6 +162,7 @@ export function resolveWallSettings(raw: unknown): WallSettings {
     holidaysEnabled: typeof d['holidaysEnabled'] === 'boolean' ? d['holidaysEnabled'] : def.holidaysEnabled,
     voice: WALL_VOICE_ENGINES.find(v => v === d['voice']) ?? def.voice,
     wakeWord: typeof d['wakeWord'] === 'boolean' ? d['wakeWord'] : def.wakeWord,
+    wakeModel: normalizeWakeModel(d['wakeModel']),
     sound: {
       confirm: WALL_SOUND_STYLES.find(v => v === sound['confirm']) ?? def.sound.confirm,
       alerts: WALL_SOUND_STYLES.find(v => v === sound['alerts']) ?? def.sound.alerts,
@@ -129,8 +180,6 @@ export function resolveWallSettings(raw: unknown): WallSettings {
   ) {
     settings.weather = { lat: weather['lat'], lon: weather['lon'], label: weather['label'] };
   }
-  const picovoice = normalizePicovoice(d['picovoice']);
-  if (picovoice) settings.picovoice = picovoice;
   if (typeof d['timeZone'] === 'string' && isValidTimeZone(d['timeZone'])) settings.timeZone = d['timeZone'];
   if (typeof d['lastManualSyncAt'] === 'string') settings.lastManualSyncAt = d['lastManualSyncAt'];
   if (d['homeAddressSet'] === true) settings.homeAddressSet = true;

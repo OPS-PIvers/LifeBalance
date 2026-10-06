@@ -27,6 +27,7 @@ import {
   wallTravelConverter,
 } from '@/utils/firestoreConverters';
 import { DEFAULT_WALL_SETTINGS, effectiveLayout } from '@/utils/wall/wallSettings';
+import { readWakeFile } from './wakeFile';
 import type {
   GroceryCatalogItem,
   HouseholdMember,
@@ -248,6 +249,7 @@ const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked
       },
       syncCalendarsNow: () => syncWallCalendarsNow(householdId ?? ''),
       synthesizeSpeech: text => synthesizeWallSpeech(householdId ?? '', text),
+      loadWakeFile: file => readWakeFile(db, householdId ?? '', file),
     };
   }, [householdId, displayId, actor, shoppingList, groceryCatalog, completeToDo, uncompleteToDo]);
 

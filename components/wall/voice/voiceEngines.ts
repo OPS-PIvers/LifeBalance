@@ -8,7 +8,11 @@ import { bytesToBase64, downmix, encodeWav, resample, rmsFromBytes } from '@/uti
  * Both are proven out by the Phase 0 lab (components/wall/lab).
  */
 
-export type VoiceCapture = { kind: 'text'; transcript: string } | { kind: 'audio'; data: string; mimeType: string };
+/**
+ * What a command was. `alternative` (on-device engine) is what the
+ * command-only recognizer heard, for when the free transcript can't be read.
+ */
+export type VoiceCapture = { kind: 'text'; transcript: string; alternative?: string } | { kind: 'audio'; data: string; mimeType: string };
 
 /** `unsupported`: the recognizer started but never ran (Safari in a Home Screen app). */
 export type VoiceErrorCode = 'no-speech' | 'not-allowed' | 'unavailable' | 'unsupported' | 'aborted' | 'failed';

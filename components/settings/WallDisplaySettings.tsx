@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { Bytes, collection, doc, onSnapshot, setDoc, writeBatch } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 import { db, getFunctionsInstance } from '@/firebase.config';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
@@ -19,6 +19,8 @@ import {
   WALL_ROTATION_INTERVALS,
   WALL_VOLUMES,
   normalizeModules,
+  splitWakeFile,
+  wakeChunkDocId,
 } from '@/utils/wall/wallSettings';
 import {
   countdownText,
@@ -112,6 +114,28 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
       console.error('[wallSettings] save failed:', e);
       toast.error("Couldn't save the wall settings.");
     }
+  };
+
+  /**
+   * A custom wake word: its bytes into the wake-N chunk docs and the settings
+   * pointing at them, in one batch, so the wall never sees half a file.
+   */
+  const uploadWakeFile = async (bytes: Uint8Array, label: string) => {
+    const chunks = splitWakeFile(bytes);
+    const id = crypto.randomUUID();
+    const batch = writeBatch(db);
+    chunks.forEach((data, i) => {
+      batch.set(doc(db, `households/${householdId}/wallSettings/${wakeChunkDocId(i)}`), { id, data: Bytes.fromUint8Array(data) });
+    });
+    batch.set(
+      doc(db, `households/${householdId}/wallSettings/config`),
+      {
+        wakeModel: { keyword: 'custom', file: { id, chunks: chunks.length, bytes: bytes.length }, label, threshold: settings.wakeModel.threshold },
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      },
+      { merge: true }
+    );
+    await batch.commit();
   };
 
   const addDisplay = async () => {
@@ -415,7 +439,7 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
         </SurfaceList>
       </Section>
 
-      <WallVoiceSettings settings={settings} save={save} aiUsage={aiUsage} />
+      <WallVoiceSettings settings={settings} save={save} uploadWakeFile={uploadWakeFile} aiUsage={aiUsage} />
 
       <Section title="Starting-soon alerts">
         <SurfaceList>

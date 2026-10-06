@@ -7,6 +7,7 @@ import { DEFAULT_WALL_SETTINGS, effectiveLayout, normalizeLayout } from '@/utils
 import type { Meal, MealPlanItem, WallCalendarFeed, WallEvent, WallLayout, WallSettings, WallTravel } from '@/types/schema';
 import { syncWallCalendarsNow, synthesizeWallSpeech } from '@/components/wall/wallCalendarService';
 import { WallDataContext, type WallData, type WallDataActions } from './wallData';
+import { readWakeFile } from './wakeFile';
 import { wallEventWindow } from './wallWindows';
 
 const LAYOUT_KEY = 'LB_WALL_LAYOUT';
@@ -138,6 +139,10 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Test Mode has no backend: the iPad's own voice speaks instead.
         if (!householdId || sessionStorage.getItem('LIFEBALANCE_TEST_MODE') === 'true') throw new Error('No cloud voice in Test Mode');
         return synthesizeWallSpeech(householdId, text);
+      },
+      loadWakeFile: async file => {
+        if (!householdId || sessionStorage.getItem('LIFEBALANCE_TEST_MODE') === 'true') throw new Error('No wake word files in Test Mode');
+        return readWakeFile(db, householdId, file);
       },
     }),
     [shopping, todoSlice, householdId]

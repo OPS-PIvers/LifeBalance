@@ -2,76 +2,62 @@ import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
-import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
-import { fileToBase64 } from '@/utils/wall/wallSettingsView';
-import type { WallPicovoice, WallSettings, WallVoiceEngine } from '@/types/schema';
-
-/** Porcupine's built-in words (any of them works with just an AccessKey). */
-const WAKE_BUILT_INS = ['Computer', 'Jarvis', 'Porcupine', 'Bumblebee', 'Terminator', 'Picovoice', 'Grapefruit', 'Blueberry'];
-const SENSITIVITIES = [
-  { value: '0.35', label: 'Low' },
-  { value: '0.5', label: 'Medium' },
-  { value: '0.65', label: 'High' },
-];
-/** A .ppn is a few KB; anything this big isn't one. */
-const MAX_PPN_BYTES = 100_000;
+import { WAKE_BUILT_INS, WAKE_CUSTOM_MAX_BYTES, WAKE_THRESHOLDS } from '@/utils/wall/wallSettings';
+import type { WallSettings, WallVoiceEngine, WallWakeModel } from '@/types/schema';
 
 interface WallVoiceSettingsProps {
   settings: WallSettings;
   save: (patch: Partial<WallSettings>) => Promise<void>;
+  /** Stores a custom wake word's .onnx and switches to it. */
+  uploadWakeFile: (bytes: Uint8Array, label: string) => Promise<void>;
   aiUsage: { used: number; cap: number } | null;
 }
 
 const ENGINE_NOTES: Record<Exclude<WallVoiceEngine, 'off'>, string> = {
-  auto: 'On-device once an AccessKey is saved; otherwise Safari, then Recording',
-  device: 'Picovoice on the iPad: free, private, no AI allowance',
+  auto: 'On the iPad itself: free, private, no AI allowance',
+  device: 'On the iPad itself: free, private, no AI allowance',
   speech: 'Safari’s recognizer. It doesn’t run in a Home Screen app',
   audio: 'Records and sends each command to Gemini (AI allowance)',
 };
 
+/** The Low / Medium / High step closest to a stored threshold. */
+const nearestThreshold = (t: number) =>
+  WAKE_THRESHOLDS.reduce((best, o) => (Math.abs(o.threshold - t) < Math.abs(best.threshold - t) ? o : best), WAKE_THRESHOLDS[1] ?? { label: 'Medium', threshold: 0.5 });
+
 /**
  * Settings → Wall display → Voice (docs/plans/wall-display-kiosk.md §12
- * "Wake word"): voice on/off, how the wall listens, and the Picovoice setup
- * for the on-device engine and the hands-free wake word.
+ * "Wake word"): voice on/off, how the wall listens, and the hands-free wake
+ * word (openWakeWord: a built-in word, or a custom "Hey Home" model).
  */
-const WallVoiceSettings: React.FC<WallVoiceSettingsProps> = ({ settings, save, aiUsage }) => {
-  const pv = settings.picovoice;
-  const [key, setKey] = useState('');
-  // The custom word's name (a built-in word is called by its own name); an edit in progress wins.
-  const customLabel = pv?.keyword === 'custom' ? pv.label : undefined;
+const WallVoiceSettings: React.FC<WallVoiceSettingsProps> = ({ settings, save, uploadWakeFile, aiUsage }) => {
+  const wake = settings.wakeModel;
+  // The custom word's name; an edit in progress wins.
   const [editedLabel, setLabel] = useState<string | null>(null);
-  const label = editedLabel ?? customLabel ?? 'Hey Home';
+  const label = editedLabel ?? (wake.keyword === 'custom' ? wake.label : 'Hey Home');
 
-  const usesDevice = settings.voice === 'device' || (settings.voice === 'auto' && Boolean(pv));
-  const savePv = (patch: Partial<WallPicovoice>) => {
-    if (!pv) return Promise.resolve();
-    return save({ picovoice: { ...pv, ...patch } });
-  };
+  const usesDevice = settings.voice === 'auto' || settings.voice === 'device';
+  const saveWake = (patch: Partial<WallWakeModel>) => save({ wakeModel: { ...wake, ...patch } });
 
-  const saveKey = async () => {
-    const accessKey = key.trim();
-    if (!accessKey) return;
-    await save({
-      picovoice: pv ? { ...pv, accessKey } : { accessKey, keyword: 'Computer', label: 'Computer', sensitivity: 0.5 },
-    });
-    setKey('');
-    toast.success('AccessKey saved. The wall picks it up in a few seconds.');
-  };
-
-  const pickPpn = async (file: File | undefined) => {
-    if (!file || !pv) return;
-    if (file.size > MAX_PPN_BYTES || !/\.ppn$/i.test(file.name)) {
-      toast.error('Choose the .ppn file Picovoice Console made for “Web (WASM)”.');
+  const pickModel = async (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > WAKE_CUSTOM_MAX_BYTES || file.size === 0 || !/\.onnx$/i.test(file.name)) {
+      toast.error('Choose the .onnx file the wake word notebook made.');
       return;
     }
-    const ppn = await fileToBase64(file);
-    await savePv({ keyword: 'custom', ppn, label: label.trim() || 'Hey Home' });
+    try {
+      await uploadWakeFile(new Uint8Array(await file.arrayBuffer()), label.trim() || 'Hey Home');
+      setLabel(null);
+      toast.success('Wake word saved. The wall switches to it in a few seconds.');
+    } catch (e) {
+      console.error('[wallSettings] wake word upload failed:', e);
+      toast.error("Couldn't save the wake word file.");
+    }
   };
 
   const allowance = usesDevice
-    ? 'On-device voice runs on the iPad and never uses the AI allowance'
+    ? 'Voice runs on the iPad and never uses the AI allowance'
     : aiUsage
       ? `Adds it can’t read itself use your daily AI allowance (${Math.max(0, aiUsage.cap - aiUsage.used)} left today)`
       : 'Adds it can’t read itself use your daily AI allowance. “Show”, “undo” and “add milk” don’t.';
@@ -116,46 +102,13 @@ const WallVoiceSettings: React.FC<WallVoiceSettingsProps> = ({ settings, save, a
               />
             </Row>
 
-            <Row className="flex-col items-stretch gap-2">
-              <div>
-                <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Picovoice AccessKey</p>
-                <p className="text-xs text-brand-500 dark:text-brand-400">
-                  {pv
-                    ? `Saved (…${pv.accessKey.slice(-4)}). Paste a new one to replace it.`
-                    : 'Free: sign up at console.picovoice.ai and copy your AccessKey. It turns on on-device voice and the wake word.'}
-                </p>
-              </div>
-              <form
-                className="flex gap-2 items-end"
-                onSubmit={e => {
-                  e.preventDefault();
-                  void saveKey();
-                }}
-              >
-                <div className="flex-1 min-w-0">
-                  <Input
-                    aria-label="Picovoice AccessKey"
-                    type="password"
-                    autoComplete="off"
-                    maxLength={200}
-                    placeholder={pv ? 'New AccessKey' : 'AccessKey'}
-                    value={key}
-                    onChange={e => setKey(e.target.value)}
-                  />
-                </div>
-                <Button type="submit" variant="secondary" disabled={!key.trim()}>
-                  Save key
-                </Button>
-              </form>
-            </Row>
-
-            {pv && (
+            {usesDevice && (
               <>
                 <Row className="flex-wrap">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Hands-free</p>
                     <p className="text-xs text-brand-500 dark:text-brand-400">
-                      Say “{pv.label}” instead of tapping the mic. Off during night hours; starts after the first touch
+                      Say “{wake.label}” instead of tapping the mic. Off during night hours; starts after the first touch
                     </p>
                   </div>
                   <SegmentedControl
@@ -175,33 +128,29 @@ const WallVoiceSettings: React.FC<WallVoiceSettingsProps> = ({ settings, save, a
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Wake word</p>
                         <p className="text-xs text-brand-500 dark:text-brand-400">
-                          A built-in word works now. For “Hey Home”, train it in Picovoice Console (platform Web (WASM)) and add the .ppn file
+                          A built-in word works now. For “Hey Home”, train it with openWakeWord’s free notebook and add the .onnx file below
                         </p>
                       </div>
                       <div className="w-48">
                         <Select
                           aria-label="Wake word"
-                          value={pv.keyword}
+                          value={wake.keyword}
                           onChange={e => {
-                            const keyword = e.target.value;
-                            if (keyword === 'custom') {
-                              if (pv.ppn) void savePv({ keyword, label: label.trim() || 'Hey Home' });
-                            } else {
-                              void savePv({ keyword, label: keyword });
-                            }
+                            const builtIn = WAKE_BUILT_INS.find(b => b.keyword === e.target.value);
+                            if (builtIn) void saveWake({ keyword: builtIn.keyword, label: builtIn.label });
                           }}
                         >
-                          {WAKE_BUILT_INS.map(k => (
-                            <option key={k} value={k}>
-                              {k}
+                          {WAKE_BUILT_INS.map(b => (
+                            <option key={b.keyword} value={b.keyword}>
+                              {b.label}
                             </option>
                           ))}
-                          {pv.ppn && <option value="custom">{pv.keyword === 'custom' ? pv.label : label || 'My word'} (.ppn)</option>}
+                          {wake.keyword === 'custom' && <option value="custom">{wake.label} (my file)</option>}
                         </Select>
                       </div>
                     </Row>
                     <Row className="flex-col items-stretch gap-2">
-                      <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">My own word (.ppn)</p>
+                      <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">My own word (.onnx)</p>
                       <div className="flex gap-2 items-end flex-wrap">
                         <div className="w-40">
                           <Input
@@ -210,8 +159,9 @@ const WallVoiceSettings: React.FC<WallVoiceSettingsProps> = ({ settings, save, a
                             value={label}
                             onChange={e => setLabel(e.target.value)}
                             onBlur={() => {
-                              if (pv.keyword === 'custom' && label.trim() && label.trim() !== pv.label) {
-                                void savePv({ label: label.trim() }).then(() => setLabel(null));
+                              const next = label.trim();
+                              if (wake.keyword === 'custom' && next && next !== wake.label) {
+                                void saveWake({ label: next }).then(() => setLabel(null));
                               }
                             }}
                           />
@@ -219,9 +169,9 @@ const WallVoiceSettings: React.FC<WallVoiceSettingsProps> = ({ settings, save, a
                         <input
                           aria-label="Wake word file"
                           type="file"
-                          accept=".ppn"
+                          accept=".onnx"
                           className="text-sm text-brand-700 dark:text-brand-300"
-                          onChange={e => void pickPpn(e.target.files?.[0])}
+                          onChange={e => void pickModel(e.target.files?.[0])}
                         />
                       </div>
                     </Row>
@@ -233,9 +183,12 @@ const WallVoiceSettings: React.FC<WallVoiceSettingsProps> = ({ settings, save, a
                       <SegmentedControl
                         name="Wake word sensitivity"
                         size="sm"
-                        options={SENSITIVITIES}
-                        value={SENSITIVITIES.find(o => Number(o.value) === pv.sensitivity)?.value ?? '0.5'}
-                        onChange={v => void savePv({ sensitivity: Number(v) })}
+                        options={WAKE_THRESHOLDS.map(o => ({ value: o.label, label: o.label }))}
+                        value={nearestThreshold(wake.threshold).label}
+                        onChange={v => {
+                          const step = WAKE_THRESHOLDS.find(o => o.label === v);
+                          if (step) void saveWake({ threshold: step.threshold });
+                        }}
                       />
                     </Row>
                   </>

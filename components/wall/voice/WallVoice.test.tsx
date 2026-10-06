@@ -1,12 +1,13 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import type { ShoppingItem, WallPicovoice, WallVoiceEngine } from '@/types/schema';
+import type { ShoppingItem, WallVoiceEngine, WallWakeModel } from '@/types/schema';
 import type { WallVoiceCommand } from '@/services/geminiService.types';
 import { WallDataContext, type WallData } from '@/components/wall/data/wallData';
 import { makeWallData } from '@/components/wall/data/wallTestData';
 import { VoiceCaptureError, type VoiceCapture, type VoiceEngine } from './voiceEngines';
-import type { DeviceVoiceEngine } from './deviceEngine';
+import type { DeviceListenOptions, DeviceVoiceEngine } from './deviceEngine';
+import { DEFAULT_WAKE_MODEL } from '@/utils/wall/wallSettings';
 import { WALL_VOICE_BANNER_MS, WALL_VOICE_BIG_MS, useWallVoice, type WallVoiceDeps, type WallVoiceFeedback } from './useWallVoice';
 import WallVoiceBanner from './WallVoiceBanner';
 
@@ -40,15 +41,17 @@ function fakeEngines() {
     })
   );
   let onWake: () => void = () => undefined;
+  const listenOptions: DeviceListenOptions[] = [];
   const setWake = vi.fn(async (_on: boolean) => undefined);
   const createDeviceEngine = vi.fn(
-    (_config: WallPicovoice, wake: () => void): DeviceVoiceEngine => {
+    (_model: WallWakeModel, wake: () => void): DeviceVoiceEngine => {
       onWake = wake;
       return {
         kind: 'device',
         dispose: vi.fn(),
         setWake,
-        listen: () => {
+        listen: (options: DeviceListenOptions) => {
+          listenOptions.push(options);
           let session!: FakeSession;
           const result = new Promise<VoiceCapture>((resolve, reject) => {
             session = { kind: 'device', resolve, reject };
@@ -59,22 +62,21 @@ function fakeEngines() {
       };
     }
   );
-  return { sessions, createEngine, createDeviceEngine, setWake, wake: () => onWake() };
+  return { sessions, createEngine, createDeviceEngine, setWake, listenOptions, wake: () => onWake() };
 }
 
-const PICOVOICE: WallPicovoice = { accessKey: 'k', keyword: 'Computer', label: 'Computer', sensitivity: 0.5 };
 
 const Harness: React.FC<{
   setting?: WallVoiceEngine;
-  picovoice?: WallPicovoice | undefined;
+  wakeModel?: WallWakeModel;
   wake?: boolean;
   onWake?: () => void;
   deps: WallVoiceDeps;
   onShow: (t: string) => void;
   onRotate: (on: boolean) => void;
   onFeedback: (f: WallVoiceFeedback) => void;
-}> = ({ setting = 'auto', picovoice, wake, onWake, deps, onShow, onRotate, onFeedback }) => {
-  const voice = useWallVoice({ setting, picovoice, wake, onWake, today: TODAY, timeZone: 'America/Chicago', onShow, onRotate, onFeedback, deps });
+}> = ({ setting = 'auto', wakeModel = DEFAULT_WAKE_MODEL, wake, onWake, deps, onShow, onRotate, onFeedback }) => {
+  const voice = useWallVoice({ setting, wakeModel, wake, onWake, today: TODAY, timeZone: 'America/Chicago', onShow, onRotate, onFeedback, deps });
   return (
     <>
       <button type="button" onClick={voice.start}>
@@ -102,7 +104,7 @@ function setup(
     command?: WallVoiceCommand;
     parseError?: Error;
     support?: { speech: boolean; audio: boolean; device?: boolean };
-    picovoice?: WallPicovoice;
+    wakeModel?: WallWakeModel;
     wake?: boolean;
   } = {}
 ) {
@@ -125,11 +127,12 @@ function setup(
   const onFeedback = vi.fn();
   const onWake = vi.fn();
   let wake = opts.wake ?? false;
+  let wakeModel = opts.wakeModel;
   const ui = () => (
     <WallDataContext.Provider value={data}>
       <Harness
         setting={opts.setting}
-        picovoice={opts.picovoice}
+        {...(wakeModel ? { wakeModel } : {})}
         wake={wake}
         onWake={onWake}
         deps={deps}
@@ -148,13 +151,17 @@ function setup(
     wake = on;
     utils.rerender(ui());
   };
+  const rerenderWake = (model: WallWakeModel) => {
+    wakeModel = model;
+    utils.rerender(ui());
+  };
   const say = async (capture: VoiceCapture) => {
     fireEvent.click(screen.getByRole('button', { name: 'Mic' }));
     await act(async () => {
       engines.sessions.at(-1)!.resolve(capture);
     });
   };
-  return { engines, parse, data, onShow, onRotate, onFeedback, onWake, rerenderWith, setWake, say };
+  return { engines, parse, data, onShow, onRotate, onFeedback, onWake, rerenderWith, setWake, rerenderWake, say };
 }
 
 afterEach(() => {
@@ -331,11 +338,11 @@ describe('wall voice', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 
-  describe('on-device (Picovoice)', () => {
+  describe('on-device (openWakeWord + Vosk)', () => {
     const device = { speech: true, audio: true, device: true };
 
-    it('Auto uses it once an AccessKey is saved, and never calls Gemini', async () => {
-      const { engines, parse, say, data } = setup({ picovoice: PICOVOICE, support: device });
+    it('Auto uses it wherever it runs, and never calls Gemini', async () => {
+      const { engines, parse, say, data } = setup({ support: device });
       await say({ kind: 'text', transcript: 'add milk and two avocados' });
       expect(engines.sessions[0]?.kind).toBe('device');
       expect(data.actions.addShoppingItem).toHaveBeenCalledTimes(2);
@@ -345,15 +352,38 @@ describe('wall voice', () => {
       expect(screen.getByText(/isn’t a command I know\. Try “add milk”/)).toBeInTheDocument();
     });
 
-    it('without an AccessKey Auto stays on Safari', async () => {
-      const { engines } = setup({ support: device });
+    it('where it can’t run, Auto uses Safari', async () => {
+      const { engines } = setup({ support: { speech: true, audio: true, device: false } });
       fireEvent.click(screen.getByRole('button', { name: 'Mic' }));
       expect(engines.sessions[0]?.kind).toBe('speech');
-      expect(engines.createDeviceEngine).not.toHaveBeenCalled();
+    });
+
+    it('drops the wake word and a stray lead-in, then reads the command', async () => {
+      const { say, onShow } = setup({ support: device });
+      await say({ kind: 'text', transcript: 'hey jarvis this show the meals', alternative: '[unk] show the meals' });
+      expect(onShow).toHaveBeenCalledWith('meals');
+    });
+
+    it('rescues a misheard command with the command-only transcript', async () => {
+      const { say, onShow } = setup({ support: device });
+      await say({ kind: 'text', transcript: 'though the calendar', alternative: 'show the calendar' });
+      expect(onShow).toHaveBeenCalledWith('week');
+    });
+
+    it('a tap listens without the moments before; the wake word with them', async () => {
+      const { engines, onWake } = setup({ support: device, wake: true });
+      await act(async () => undefined);
+      fireEvent.click(screen.getByRole('button', { name: 'Mic' }));
+      expect(engines.listenOptions.at(-1)?.afterWake).toBe(false);
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      await act(async () => undefined);
+      act(() => engines.wake());
+      expect(onWake).toHaveBeenCalledTimes(1);
+      expect(engines.listenOptions.at(-1)?.afterWake).toBe(true);
     });
 
     it('the wake word opens a command, and follows `wake`', async () => {
-      const { engines, setWake, onWake } = setup({ picovoice: PICOVOICE, support: device, wake: true });
+      const { engines, setWake, onWake } = setup({ support: device, wake: true });
       await act(async () => undefined);
       expect(engines.setWake).toHaveBeenLastCalledWith(true);
       expect(screen.getByText('wake on')).toBeInTheDocument();
@@ -369,8 +399,8 @@ describe('wall voice', () => {
       expect(screen.queryByText('wake on')).toBeNull();
     });
 
-    it('says when the wake word can’t start, once per setup', async () => {
-      const { engines, setWake, onFeedback } = setup({ picovoice: PICOVOICE, support: device });
+    it('says when the wake word can’t start, once', async () => {
+      const { engines, setWake, onFeedback } = setup({ support: device });
       engines.setWake.mockRejectedValue(new VoiceCaptureError('not-allowed'));
       await act(async () => setWake(true));
       expect(screen.getByText('The wake word isn’t listening')).toBeInTheDocument();
@@ -380,13 +410,22 @@ describe('wall voice', () => {
       expect(onFeedback.mock.calls.filter(([f]) => f.speech === 'The wake word isn’t listening')).toHaveLength(1);
     });
 
-    it('a bad AccessKey says so', async () => {
-      const { engines } = setup({ picovoice: PICOVOICE, support: device });
+    it('speech files that don’t load say so', async () => {
+      const { engines } = setup({ support: device });
       fireEvent.click(screen.getByRole('button', { name: 'Mic' }));
       await act(async () => {
-        engines.sessions[0]!.reject(new VoiceCaptureError('unavailable', 'activation'));
+        engines.sessions[0]!.reject(new VoiceCaptureError('unavailable', 'Voice model /voice/x is missing from this deploy.'));
       });
-      expect(screen.getByText('Voice can’t start')).toBeInTheDocument();
+      expect(screen.getByText('Voice couldn’t start')).toBeInTheDocument();
+    });
+
+    it('a new wake word rebuilds the engine', async () => {
+      const { engines, rerenderWake } = setup({ support: device, wake: true });
+      await act(async () => undefined);
+      expect(engines.createDeviceEngine).toHaveBeenCalledTimes(1);
+      await act(async () => rerenderWake({ keyword: 'hey_mycroft', label: 'Hey Mycroft', threshold: 0.5 }));
+      expect(engines.createDeviceEngine).toHaveBeenCalledTimes(2);
+      expect(engines.createDeviceEngine.mock.calls[1]?.[0]).toMatchObject({ keyword: 'hey_mycroft' });
     });
   });
 

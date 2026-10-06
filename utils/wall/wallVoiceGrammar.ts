@@ -6,7 +6,7 @@ import { addDaysTo, weekdayOf } from './wallCalendar';
  * word"): the common ways a family asks the wall to add groceries or a
  * to-do, turned into the same `WallVoiceCommand` the Gemini path returns, so
  * `resolveVoiceCommand` makes the writes either way. On the on-device engine
- * (Picovoice) this is the only parser: anything it can't read is "Didn't
+ * (openWakeWord + Vosk) this is the only parser: anything it can't read is "Didn't
  * catch that", never a Gemini call.
  */
 
@@ -198,7 +198,8 @@ function splitDue(text: string, today: string): { text: string; due?: string } {
   return { text: rest, due: addDaysTo(today, ahead) };
 }
 
-const SELF = /^(me|us|we|everyone|everybody|the family|family|the kids|all of us)$/;
+/** Nobody in particular: the to-do goes to Family. Pronouns too, since a recognizer often hears "him" for a short name. */
+const SELF = /^(me|us|we|everyone|everybody|the family|family|the kids|all of us|him|her|them)$/;
 
 function memberNamed(name: string, members: readonly string[]): string | undefined {
   const n = name.trim();
@@ -249,7 +250,8 @@ export function parseLocalAdd(transcript: string, ctx: LocalAddContext): WallVoi
   }
   m = new RegExp(`^(?:add|put) (.+?) (?:to|on|in) ${TODO_LIST} for (.+)$`).exec(t);
   if (m) return stamp(todo(m[1] ?? '', ctx, memberNamed(m[2] ?? '', ctx.memberNames)));
-  m = /^remind (.+?) (?:to|that|about) (.+)$/.exec(t);
+  // "reminds": recognizers often add the s.
+  m = /^reminds? (.+?) (?:to|that|about) (.+)$/.exec(t);
   if (m) {
     const who = m[1] ?? '';
     const assignee = memberNamed(who, ctx.memberNames);

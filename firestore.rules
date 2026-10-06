@@ -1339,18 +1339,19 @@ service cloud.firestore {
                                  request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys().hasOnly([
                                    'defaultModules', 'rotation', 'idleReturnSec', 'night', 'theme', 'textSize',
                                    'showBills', 'holidaysEnabled', 'weather', 'timeZone', 'voice', 'sound', 'alerts',
-                                   'wakeWord', 'picovoice'
+                                   'wakeWord', 'wakeModel'
                                  ]) &&
                                  (request.resource.data.get('wakeWord', null) == null || request.resource.data.wakeWord is bool) &&
-                                 // A custom .ppn is a few KB; the cap keeps the doc small.
-                                 (request.resource.data.get('picovoice', null) == null ||
-                                   (request.resource.data.picovoice is map &&
-                                    request.resource.data.picovoice.keys().hasOnly(['accessKey', 'keyword', 'ppn', 'label', 'sensitivity']) &&
-                                    isValidOptionalString(request.resource.data.picovoice.get('accessKey', null), 200) &&
-                                    isValidOptionalString(request.resource.data.picovoice.get('keyword', null), 40) &&
-                                    isValidOptionalString(request.resource.data.picovoice.get('label', null), 40) &&
-                                    isValidOptionalString(request.resource.data.picovoice.get('ppn', null), 200000) &&
-                                    isValidOptionalNumber(request.resource.data.picovoice.get('sensitivity', null)))) &&
+                                 // A custom wake word's file lives in the wake-N docs below; this only points at it.
+                                 (request.resource.data.get('wakeModel', null) == null ||
+                                   (request.resource.data.wakeModel is map &&
+                                    request.resource.data.wakeModel.keys().hasOnly(['keyword', 'file', 'label', 'threshold']) &&
+                                    isValidOptionalString(request.resource.data.wakeModel.get('keyword', null), 40) &&
+                                    isValidOptionalString(request.resource.data.wakeModel.get('label', null), 40) &&
+                                    (request.resource.data.wakeModel.get('file', null) == null ||
+                                      (request.resource.data.wakeModel.file is map &&
+                                       request.resource.data.wakeModel.file.keys().hasOnly(['id', 'chunks', 'bytes']))) &&
+                                    isValidOptionalNumber(request.resource.data.wakeModel.get('threshold', null)))) &&
                                  (request.resource.data.get('sound', null) == null || request.resource.data.sound is map) &&
                                  (request.resource.data.get('alerts', null) == null || request.resource.data.alerts is map) &&
                                  (request.resource.data.get('defaultModules', null) == null ||
@@ -1365,6 +1366,12 @@ service cloud.firestore {
                                  isValidOptionalString(request.resource.data.get('voice', null), 10) &&
                                  (request.resource.data.get('showBills', null) == null || request.resource.data.showBills is bool) &&
                                  (request.resource.data.get('holidaysEnabled', null) == null || request.resource.data.holidaysEnabled is bool);
+        // A custom wake word's .onnx, in up to 4 chunks (any member, like the settings).
+        allow create, update: if isMemberOf(householdId) &&
+                                 docId in ['wake-0', 'wake-1', 'wake-2', 'wake-3'] &&
+                                 request.resource.data.keys().hasOnly(['id', 'data']) &&
+                                 request.resource.data.id is string && request.resource.data.id.size() <= 64 &&
+                                 request.resource.data.data is bytes && request.resource.data.data.size() <= 700000;
         allow delete: if false;
       }
 
