@@ -56,7 +56,8 @@ export const voicemisses = onRequest({ cors: false, region: "us-central1" }, asy
   const keyPrefix = apiKey.substring(0, 16);
   try {
     if (req.method === "GET") {
-      const snap = await misses.limit(VOICE_MISS_PAGE).get();
+      // Oldest first, so a backlog over one page drains in order (single-field index: automatic).
+      const snap = await misses.orderBy("at").limit(VOICE_MISS_PAGE).get();
       const now = Date.now();
       const batch = db.batch();
       let expired = 0;
