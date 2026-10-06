@@ -1,5 +1,6 @@
 import type { WallVoiceCommand } from '@/services/geminiService.types';
 import { addDaysTo, weekdayOf } from './wallCalendar';
+import { soundAlike, soundAlikeIndex } from './wallVoiceSounds';
 
 /**
  * The no-AI grammar for ADDS (docs/plans/wall-display-kiosk.md §12 "Wake
@@ -235,8 +236,11 @@ export function parseLocalAdd(transcript: string, ctx: LocalAddContext): WallVoi
   if (!t) return null;
   const catalog = catalogIndex(ctx.catalogNames);
   const stamp = (c: WallVoiceCommand | null): WallVoiceCommand | null => (c ? { ...c, transcript } : null);
+  const sounds = soundAlikeIndex(ctx.catalogNames);
   const shopping = (list: string): WallVoiceCommand | null => {
-    const items = shoppingItems(list, catalog);
+    // "add rights" is "add rice": the recognizer wrote the nearest word it knows.
+    const heard = list.replace(/[a-z]+/g, w => soundAlike(w, sounds) ?? w);
+    const items = shoppingItems(heard, catalog);
     return items.length > 0 ? { transcript, intent: 'add_shopping', items } : null;
   };
 

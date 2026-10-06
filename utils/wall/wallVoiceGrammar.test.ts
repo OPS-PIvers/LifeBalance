@@ -40,6 +40,35 @@ describe('parseLocalAdd: shopping', () => {
     expect(shop(text)).toEqual(items);
   });
 
+  // Vosk writes the nearest common word it knows; a short unfamiliar word that
+  // sounds like exactly one grocery becomes it (the wall heard "rice" as "rights").
+  it.each([
+    ['add rice', [{ name: 'rice' }]],
+    ['add rights', [{ name: 'rice' }]],
+    ['add race', [{ name: 'rice' }]],
+    ['add rise to the shopping list', [{ name: 'rice' }]],
+    ['we need rights', [{ name: 'rice' }]],
+    ['add milk rights and eggs', [{ name: 'Milk' }, { name: 'rice' }, { name: 'Eggs' }]],
+    ['add two bags of rights', [{ name: 'rice', quantity: '2 bags' }]],
+    // Items that are already known, or longer than a syllable, are left alone.
+    ['add soap', [{ name: 'soap' }]],
+    ['add paper', [{ name: 'paper' }]],
+    ['add sponges', [{ name: 'sponges' }]],
+  ])('%s (sound-alike repair)', (text, items) => {
+    expect(shop(text)).toEqual(items);
+  });
+
+  it('spells a repaired item the way the catalog does', () => {
+    const ctx = { ...CTX, catalogNames: [...CTX.catalogNames, 'Rice'] };
+    expect(parseLocalAdd('add rights', ctx)?.items).toEqual([{ name: 'Rice' }]);
+  });
+
+  it('never repairs a word that two items sound like', () => {
+    // "hawk" could be ham or hock; with both in the catalog it stays as heard.
+    const ctx = { ...CTX, catalogNames: [...CTX.catalogNames, 'Hock', 'Hake'] };
+    expect(parseLocalAdd('add hawk', ctx)?.items).toEqual([{ name: 'hawk' }]);
+  });
+
   it('keeps the transcript as spoken', () => {
     expect(parseLocalAdd('Add milk.', CTX)?.transcript).toBe('Add milk.');
   });
