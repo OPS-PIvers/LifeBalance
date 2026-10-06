@@ -23,11 +23,19 @@ const PRE_WAKE_SAMPLES = 16000 / 10;
 /** Audio kept for that, from the detection until the recognizers take over. */
 const RING_SAMPLES = 16000 * 8;
 
-/** Fetches a model file. Hosting answers an unknown path with the app's page, so HTML is a missing file. */
+/**
+ * Fetches a model file. Hosting answers an unknown path with the app's page (200, HTML), and
+ * voice/** is cached for a year, so a device that once got that page can keep it: anything that
+ * isn't a model is fetched once more past the cache before giving up.
+ */
 async function fetchModel(url: string): Promise<ArrayBuffer> {
-  const res = await fetch(url, { cache: 'force-cache' });
-  const type = res.headers.get('content-type') ?? '';
-  if (!res.ok || type.includes('text/html')) throw new Error(`Voice model ${url} is missing from this deploy.`);
+  const notModel = (res: Response) => !res.ok || (res.headers.get('content-type') ?? '').includes('text/html');
+  let res = await fetch(url);
+  if (notModel(res)) res = await fetch(url, { cache: 'reload' });
+  if (notModel(res)) {
+    const type = res.headers.get('content-type') || 'no type';
+    throw new Error(`Voice model ${url} didn't load (${res.status}, ${type}).`);
+  }
   return res.arrayBuffer();
 }
 
