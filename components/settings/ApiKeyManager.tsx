@@ -51,6 +51,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
     todos: true,  // Create a to-do via the quickAddTodo endpoint (F-TODO-07)
     read: true,  // Read/export data via GET endpoints (e.g. getTodos)
     bankSync: false,  // Nightly Wells Fargo bank-email sync scope; defaults off (endpoint not yet built)
+    voiceLearning: false,  // Read + clear the wall's voice misses (nightly voice-learning routine); defaults off
     receiptScanning: false,  // Hidden until implemented
   });
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
@@ -376,6 +377,11 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                         Bank Sync
                       </Badge>
                     )}
+                    {key.permissions.voiceLearning && (
+                      <Badge variant="outline" size="md">
+                        Voice Learning
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </Row>
@@ -580,6 +586,17 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                     setPermissions({ ...permissions, bankSync: checked })
                   }
                   aria-label="Bank Sync (nightly bank-email import)"
+                />
+              </Row>
+              <Row>
+                <label htmlFor="perm-voice-learning" className="flex-1 text-sm text-brand-700 dark:text-brand-200 cursor-pointer">Voice learning (read and clear the wall&rsquo;s missed voice commands)</label>
+                <Switch
+                  id="perm-voice-learning"
+                  checked={permissions.voiceLearning ?? false}
+                  onCheckedChange={(checked) =>
+                    setPermissions({ ...permissions, voiceLearning: checked })
+                  }
+                  aria-label="Voice learning (read and clear the wall's missed voice commands)"
                 />
               </Row>
             </SurfaceList>

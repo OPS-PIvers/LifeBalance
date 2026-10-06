@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { WallVoiceEngine, WallWakeFile, WallWakeModel } from '@/types/schema';
+import type { WallVoiceEngine, WallVoiceMissKind, WallWakeFile, WallWakeModel } from '@/types/schema';
 import type { WallVoiceCommand, WallVoiceContext } from '@/services/geminiService.types';
 import { parseWallVoiceAudio, parseWallVoiceText } from '@/services/geminiService';
 import {
@@ -16,6 +16,8 @@ import {
   type VoiceTarget,
 } from '@/utils/wall/wallVoice';
 import { parseLocalAdd } from '@/utils/wall/wallVoiceGrammar';
+import type { WallQuestion } from '@/utils/wall/wallAnswers';
+import { MISS_UNDO_WINDOW_MS } from '@/utils/wall/wallVoiceMiss';
 import { useWallData } from '@/components/wall/data/wallData';
 import { useWallListActions } from '@/components/wall/lists/useWallListActions';
 import type { WallToaster } from '@/components/wall/wallToast';
@@ -44,6 +46,16 @@ export type WallVoiceState =
 export const WALL_VOICE_BANNER_MS = 10_000;
 /** Results and errors open as the big centered card, then shrink to the banner. */
 export const WALL_VOICE_BIG_MS = 5_000;
+
+/** A command the wall got wrong, for the voice miss log (utils/wall/wallVoiceMiss.ts). */
+export interface WallVoiceMissReport {
+  kind: WallVoiceMissKind;
+  heard: string;
+  free: string;
+  alternative: string;
+  engine: EngineKind;
+  did?: string;
+}
 
 /** What the wall plays when a command lands: a chime, and maybe these words. */
 export interface WallVoiceFeedback {
@@ -74,6 +86,10 @@ interface UseWallVoiceOptions {
   onRotate: (on: boolean) => void;
   /** "What's my day": the wall shows and reads the brief itself. */
   onBrief?: (day: 'today' | 'tomorrow' | 'auto') => void;
+  /** "What's for dinner": the wall shows and reads the answer itself. */
+  onAsk?: (question: WallQuestion) => void;
+  /** A command went wrong (unread, undone, cancelled, or silent): log it. */
+  onMiss?: (miss: WallVoiceMissReport) => void;
   /** Called once per result or error, for the chime and spoken reply. */
   onFeedback?: (feedback: WallVoiceFeedback) => void;
   /** The wake word was heard (before listening starts), for a short chime. */
@@ -128,7 +144,7 @@ function parseErrorState(error: unknown): { title: string; text: string; retry: 
  * the same list writes as a tap, with Undo. Writes go through
  * useWallListActions, whose toast is captured into the voice banner instead.
  */
-export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone, onShow, onRotate, onBrief, onFeedback, onWake, deps }: UseWallVoiceOptions) {
+export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone, onShow, onRotate, onBrief, onAsk, onMiss, onFeedback, onWake, deps }: UseWallVoiceOptions) {
   const { householdId, members, groceryCatalog, actions } = useWallData();
   const loadWakeFile = actions.loadWakeFile;
   const [state, setState] = useState<WallVoiceState | null>(null);
@@ -168,10 +184,27 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
   );
   const act = useWallListActions(voiceToaster);
 
-  const latest = useRef({ members, groceryCatalog, today, timeZone, onShow, onRotate, onBrief, onFeedback, onWake, act, parseText, parseAudio, householdId, loadWakeFile });
+  const latest = useRef({ members, groceryCatalog, today, timeZone, onShow, onRotate, onBrief, onAsk, onMiss, onFeedback, onWake, act, parseText, parseAudio, householdId, loadWakeFile });
   useEffect(() => {
-    latest.current = { members, groceryCatalog, today, timeZone, onShow, onRotate, onBrief, onFeedback, onWake, act, parseText, parseAudio, householdId, loadWakeFile };
+    latest.current = { members, groceryCatalog, today, timeZone, onShow, onRotate, onBrief, onAsk, onMiss, onFeedback, onWake, act, parseText, parseAudio, householdId, loadWakeFile };
   });
+  /** What the command being handled sounded like, for the miss log. */
+  const heardRef = useRef<{ heard: string; free: string; alternative: string; engine: EngineKind }>({ heard: '', free: '', alternative: '', engine: 'device' });
+  /** The last command the wall acted on, so an "undo" right after can flag it. */
+  const lastRun = useRef<{ at: number; did: string; heard: string; free: string; alternative: string; engine: EngineKind } | null>(null);
+  const miss = useCallback((kind: WallVoiceMissKind, over: Partial<WallVoiceMissReport> = {}) => {
+    latest.current.onMiss?.({ kind, ...heardRef.current, ...over });
+  }, []);
+  const ran = useCallback((did: string) => {
+    lastRun.current = { at: Date.now(), did, ...heardRef.current };
+  }, []);
+  /** An undo within the window means the last command was the wrong one. */
+  const noteUndo = useCallback(() => {
+    const last = lastRun.current;
+    lastRun.current = null;
+    if (!last || Date.now() - last.at > MISS_UNDO_WINDOW_MS) return;
+    latest.current.onMiss?.({ kind: 'undo', heard: last.heard, free: last.free, alternative: last.alternative, engine: last.engine, did: last.did });
+  }, []);
 
   const available = pickVoiceEngine(setting, support, false) !== null;
   const usesDevice = pickVoiceEngine(setting, support, false) === 'device';
@@ -232,38 +265,50 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
   const runUndo = useCallback(
     (undo: () => Promise<void>, text: string) => {
       lastUndo.current = null;
+      noteUndo();
       result({ title: 'Undone', text }, 'Undone.');
       undo().catch(error => {
         console.error('[wall] voice undo failed:', error);
         fail("Couldn't undo that", 'Remove it from the list instead.', false);
       });
     },
-    [fail, result]
+    [fail, noteUndo, result]
   );
 
   const runLocal = useCallback(
     (command: LocalCommand) => {
       const l = latest.current;
       if (command.kind === 'show') {
+        ran(`Showed ${command.target}`);
         l.onShow(command.target);
         setState(null);
+      } else if (command.kind === 'ask') {
+        ran(`Answered ${JSON.stringify(command.question)}`);
+        setState(null);
+        l.onAsk?.(command.question);
       } else if (command.kind === 'rotate') {
+        ran(command.on ? 'Started rotating' : 'Stopped rotating');
         l.onRotate(command.on);
         result(
           { title: command.on ? 'Rotating the panel' : 'Stopped rotating', text: command.on ? 'Say “stop rotating” to keep one module.' : 'The panel stays as it is.' },
           command.on ? 'Rotating the panel.' : 'Stopped rotating.'
         );
       } else if (command.kind === 'brief') {
+        ran(`Read the ${command.day} brief`);
         setState(null);
         l.onBrief?.(command.day);
       } else if (command.kind === 'undo') {
         if (lastUndo.current) runUndo(lastUndo.current.undo, lastUndo.current.text);
-        else fail('Nothing to undo', 'Voice can undo the last thing it added.', false);
+        else {
+          noteUndo();
+          fail('Nothing to undo', 'Voice can undo the last thing it added.', false);
+        }
       } else {
+        miss('cancel');
         setState(null);
       }
     },
-    [fail, result, runUndo]
+    [fail, miss, noteUndo, ran, result, runUndo]
   );
 
   const runAction = useCallback(
@@ -271,6 +316,7 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
       const l = latest.current;
       const action = resolveVoiceCommand(command, { members: l.members, catalog: l.groceryCatalog, today: l.today });
       if (action.kind === 'unknown') {
+        miss('unparsed', command.transcript ? { heard: command.transcript } : {});
         fail('Didn’t catch that', command.transcript ? `${quote(command.transcript)} isn’t a command I know.` : 'Try again a little closer to the iPad.');
         return;
       }
@@ -285,6 +331,7 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
       const undo = done?.undo;
       if (undo) lastUndo.current = { undo, text: action.summary };
       const id = seq.current + 1;
+      ran(`${action.kind === 'shopping' ? 'Added to Shopping' : 'Added to To-dos'}: ${action.summary}`);
       result({
         title: action.kind === 'shopping' ? 'Added to Shopping' : 'Added to To-dos',
         text: action.summary,
@@ -295,7 +342,7 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
         setState(cur => (cur?.phase === 'result' && cur.id === id ? { phase: 'error', id, big: cur.big, title: "Couldn't save that", text: 'Try again.', retry: true } : cur));
       });
     },
-    [fail, result]
+    [fail, miss, ran, result]
   );
 
   const handleCapture = useCallback(
@@ -307,6 +354,12 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
         today: l.today,
       };
       let transcript = cap.kind === 'text' ? cap.transcript : '';
+      heardRef.current = {
+        heard: transcript,
+        free: cap.kind === 'text' ? cap.transcript : '',
+        alternative: cap.kind === 'text' ? (cap.alternative ?? '') : '',
+        engine,
+      };
       if (cap.kind === 'text') {
         if (engine === 'device') {
           const label = wakeModelRef.current.label;
@@ -315,9 +368,11 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
           const clean = (text: string) => trimLeadIn(stripWakeWord(text, label), readable);
           transcript = pickTranscript(clean(cap.transcript), cap.alternative === undefined ? undefined : clean(cap.alternative), readsAsAdd);
           if (!transcript) {
+            miss('unparsed');
             fail('Didn’t catch that', 'Say the command right after the wake word.');
             return;
           }
+          heardRef.current = { ...heardRef.current, heard: transcript };
         }
         const local = parseLocalCommand(transcript);
         if (local) {
@@ -332,6 +387,7 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
         }
         // The on-device engine is the no-AI engine: what the grammar can't read stops here.
         if (engine === 'device') {
+          miss('unparsed');
           fail('Didn’t catch that', `${quote(transcript)} isn’t a command I know. Try “add milk” or “remind Sam to feed the cat”.`);
           return;
         }
@@ -358,11 +414,12 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
       if (mine !== epoch.current) return;
       // The audio path only learns the words now; the grammar still wins, so
       // "show meals" never becomes an add.
+      if (cap.kind === 'audio') heardRef.current = { ...heardRef.current, heard: command.transcript, free: command.transcript };
       const local = cap.kind === 'audio' ? parseLocalCommand(command.transcript) : null;
       if (local) runLocal(local);
       else runAction(command);
     },
-    [fail, runAction, runLocal]
+    [fail, miss, runAction, runLocal]
   );
 
   /** `afterWake`: the wake word opened it, so the moments before count. */
@@ -412,7 +469,10 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
             return;
           }
           if (code === 'aborted') setState(null);
-          else if (code === 'no-speech') fail('Didn’t catch that', 'Try again a little closer to the iPad.');
+          else if (code === 'no-speech') {
+            latest.current.onMiss?.({ kind: 'no-speech', heard: '', free: '', alternative: '', engine: kind });
+            fail('Didn’t catch that', 'Try again a little closer to the iPad.');
+          }
           else if (code === 'not-allowed') fail('The microphone is blocked', 'Allow it in iPad Settings → Safari → Microphone, then try again.', false);
           else if (code === 'unsupported')
             fail('The iPad’s speech recognition doesn’t work here', 'It doesn’t run in a Home Screen app. Set up on-device voice in Settings → Wall display → Voice.', false);

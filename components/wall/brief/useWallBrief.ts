@@ -15,7 +15,7 @@ export interface BriefState {
 const wait = (ms: number) => new Promise<void>(resolve => window.setTimeout(resolve, ms));
 
 /**
- * Plays a day brief (plan §12): a chime, then each line read in turn while
+ * Plays a day brief or a spoken answer (plan §12): a chime, then each line read in turn while
  * the card highlights it. With sound locked or set to chime only, the card
  * just shows.
  */
@@ -35,12 +35,17 @@ export function useWallBrief(sound: WallSound, speak: boolean) {
         return;
       }
       void (async () => {
-        brief.lines.forEach(l => sound.prepare(l.speech));
+        brief.lines.forEach(l => {
+          if (l.speech) sound.prepare(l.speech);
+        });
         await wait(sound.chime('brief'));
         for (let i = 0; i < brief.lines.length; i++) {
           if (mine !== token.current) return;
+          const speech = brief.lines[i]?.speech ?? '';
+          // An answer's list rows are shown, not read: its headline already said them.
+          if (!speech) continue;
           setState(s => (s ? { ...s, line: i } : s));
-          await sound.speak(brief.lines[i]?.speech ?? '');
+          await sound.speak(speech);
         }
         if (mine === token.current) setState(s => (s ? { ...s, line: -1, speaking: false } : s));
       })();

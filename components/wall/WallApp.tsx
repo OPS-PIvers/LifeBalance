@@ -6,7 +6,7 @@ import { nextRotation } from '@/utils/wall/wallModules';
 import { makeWallPeople } from '@/utils/wall/wallPeople';
 import { zonedDateString, zonedParts } from '@/utils/wall/wallTime';
 import { useWallData } from './data/wallData';
-import { useWallRuntime } from './runtime/useWallRuntime';
+import { APP_VERSION, useWallRuntime } from './runtime/useWallRuntime';
 import { WallToastContext, useWallToastController, type WallToaster } from './wallToast';
 import WallDay from './calendar/WallDay';
 import WallMonth from './calendar/WallMonth';
@@ -23,7 +23,7 @@ import WallRail, { type WallView } from './WallRail';
 import WallToast from './WallToast';
 import WallTopBar from './WallTopBar';
 import WallVoiceBanner from './voice/WallVoiceBanner';
-import { useWallVoice, type WallVoiceFeedback } from './voice/useWallVoice';
+import { useWallVoice, type WallVoiceFeedback, type WallVoiceMissReport } from './voice/useWallVoice';
 import WallSoundChip from './sound/WallSoundChip';
 import WallAlertCard from './alerts/WallAlertCard';
 import { useWallAlerts } from './alerts/useWallAlerts';
@@ -32,7 +32,9 @@ import { briefDayFor, composeBrief } from '@/utils/wall/wallBrief';
 import WallBriefCard from './brief/WallBriefCard';
 import { useWallBrief } from './brief/useWallBrief';
 import { WallSoundContext, useSoundState, useWallSoundEngine } from './sound/useWallSound';
-import type { VoiceTarget } from '@/utils/wall/wallVoice';
+import { memberForName, type VoiceTarget } from '@/utils/wall/wallVoice';
+import { composeAnswer, type WallQuestion } from '@/utils/wall/wallAnswers';
+import { buildVoiceMiss, takeMissSlot } from '@/utils/wall/wallVoiceMiss';
 import './wall.css';
 
 type Overlay = 'none' | 'weather' | 'gear';
@@ -183,10 +185,13 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   const openBrief = (asked: 'today' | 'tomorrow' | 'auto') => {
     alerts.dismiss();
     const day = briefDayFor(asked, zonedParts(runtime.now, runtime.timeZone).hour);
+    const date = day === 'today' ? today : tomorrow;
     brief.open(
       composeBrief({
         day,
-        date: day === 'today' ? today : tomorrow,
+        date,
+        dinner: data.mealPlan.find(m => m.date === date && m.type === 'dinner')?.mealName ?? null,
+        todosDue: day === 'today' ? badge : data.todos.filter(t => !t.isCompleted && t.completeByDate === date).length,
         events: data.wallEvents,
         travel: data.travel,
         weather: runtime.weather,
@@ -195,6 +200,43 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
         person: people.firstName,
       })
     );
+  };
+
+  const openAnswer = (question: WallQuestion) => {
+    alerts.dismiss();
+    brief.open(
+      composeAnswer(question, {
+        today,
+        now: runtime.now.getTime(),
+        timeZone: runtime.timeZone,
+        weather: runtime.weather,
+        events: data.wallEvents,
+        mealPlan: data.mealPlan,
+        shoppingList: data.shoppingList,
+        todos: data.todos,
+        members: data.members,
+        person: people.firstName,
+        memberFor: name => memberForName(data.members, name),
+      })
+    );
+  };
+  // What the wall showed when a command went wrong, for the miss log.
+  const viewRef = useRef('');
+  useEffect(() => {
+    viewRef.current = view === 'calendar' ? `calendar:${calView}` : view;
+  });
+  const logMiss = (m: WallVoiceMissReport) => {
+    const storage = (() => {
+      try {
+        return window.localStorage;
+      } catch {
+        return null;
+      }
+    })();
+    if (!takeMissSlot(storage, today)) return;
+    data.actions
+      .logVoiceMiss(buildVoiceMiss({ ...m, view: viewRef.current, appVersion: APP_VERSION, now: new Date() }))
+      .catch(error => console.error('[wall] voice miss log failed:', error));
   };
 
   // Hands-free only on a paired display (never a member's phone preview), never
@@ -216,6 +258,8 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     onShow: showTarget,
     onRotate: setRotation,
     onBrief: openBrief,
+    onAsk: openAnswer,
+    onMiss: logMiss,
     onFeedback: (f: WallVoiceFeedback) => playFeedback(f.tone, f.speech, data.settings.sound.confirm),
   });
   useEffect(() => {

@@ -29,6 +29,12 @@ export interface ApiKeyPermissions {
   // enabled. Optional so keys minted before it existed keep validating
   // (bankSync defaults off).
   bankSync?: boolean;
+  // Wall voice learning: read + delete the household's voice misses through
+  // GET/POST voicemisses (functions/src/wall/voiceMisses.ts), for the nightly
+  // voice-learning routine. Its own scope because those rows are what the
+  // household said out loud: no capture or export key reaches them unless it
+  // is explicitly enabled. Optional; defaults off.
+  voiceLearning?: boolean;
   receiptScanning: boolean;
 }
 
@@ -63,6 +69,7 @@ const RATE_LIMITS = {
   todo: { limit: 100, windowMs: 60 * 60 * 1000 }, // 100/hour
   read: { limit: 100, windowMs: 60 * 60 * 1000 }, // 100/hour (GET export endpoints)
   bankSync: { limit: 50, windowMs: 60 * 60 * 1000 }, // 50/hour (nightly bank-email sync)
+  voiceLearning: { limit: 60, windowMs: 60 * 60 * 1000 }, // 60/hour (nightly voice-learning routine)
 };
 
 /**
@@ -180,7 +187,7 @@ export function hasScope(
  */
 export async function checkRateLimit(
   householdId: string,
-  endpointType: "habit" | "expense" | "shopping" | "bill" | "todo" | "read" | "bankSync"
+  endpointType: "habit" | "expense" | "shopping" | "bill" | "todo" | "read" | "bankSync" | "voiceLearning"
 ): Promise<{ allowed: boolean; retryAfterMs?: number }> {
   const config = RATE_LIMITS[endpointType];
   const now = Date.now();

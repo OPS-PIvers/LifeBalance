@@ -2,6 +2,7 @@ import type { GroceryCatalogItem, HouseholdMember, ShoppingItem, ToDo, WallVoice
 import type { WallVoiceCommand } from '@/services/geminiService.types';
 import { dueDateFor, newShoppingItem } from './wallLists';
 import { spokenDay, spokenList } from './wallSpeech';
+import { QUESTION_PHRASES, parseQuestion, type WallQuestion } from './wallAnswers';
 
 /**
  * Pure logic for the wall's tap-to-talk commands
@@ -18,7 +19,9 @@ export type LocalCommand =
   | { kind: 'undo' }
   | { kind: 'cancel' }
   /** The day brief; "auto" = today, or tomorrow in the evening. */
-  | { kind: 'brief'; day: 'today' | 'tomorrow' | 'auto' };
+  | { kind: 'brief'; day: 'today' | 'tomorrow' | 'auto' }
+  /** A question the wall answers out loud (utils/wall/wallAnswers.ts). */
+  | { kind: 'ask'; question: WallQuestion };
 
 const TARGETS: [RegExp, VoiceTarget][] = [
   [/^(the )?(calendar|week|this week|week view)$/, 'week'],
@@ -63,7 +66,8 @@ function briefOf(t: string): LocalCommand | null {
 }
 
 /**
- * The no-AI grammar: navigation, rotation, undo, cancel and the day brief.
+ * The no-AI grammar: navigation, rotation, undo, cancel, the day brief and
+ * spoken questions.
  * Adds have their own no-AI grammar (`parseLocalAdd` in wallVoiceGrammar.ts);
  * what neither reads goes to Gemini, except on the on-device engine.
  */
@@ -78,7 +82,12 @@ export function parseLocalCommand(text: string): LocalCommand | null {
   if (/^(stop|pause|turn off) (the )?rotat(e|ing|ion)( the panel| modules?)?$/.test(t)) return { kind: 'rotate', on: false };
   const show = /^(show|open|go to|switch to|display)( me)? (.+)$/.exec(t);
   const target = targetOf(show?.[3] ?? t);
-  return target ? { kind: 'show', target } : null;
+  if (target) return { kind: 'show', target };
+  const question = parseQuestion(t);
+  if (!question) return null;
+  // "What do we have going on today" is the day brief.
+  if (question.topic === 'schedule' && (question.when === 'today' || question.when === 'tomorrow')) return { kind: 'brief', day: question.when };
+  return { kind: 'ask', question };
 }
 
 /**
@@ -97,6 +106,7 @@ export const COMMAND_PHRASES: readonly string[] = [
   'cancel', 'never mind', 'forget it',
   'good morning', "what's my day", "what's on today", "what's on my calendar", "what's tomorrow", "what's on tomorrow",
   'brief me', 'how does my day look', 'how does tomorrow look',
+  ...QUESTION_PHRASES,
 ];
 
 /**

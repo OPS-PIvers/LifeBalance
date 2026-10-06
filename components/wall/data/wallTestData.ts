@@ -48,6 +48,7 @@ export function makeWallData(spy: Spy, overrides: Partial<WallData> = {}): WallD
         throw new Error('No cloud voice in tests');
       }),
       loadWakeFile: spy(async () => new Uint8Array([1, 2, 3])),
+      logVoiceMiss: spy(async () => undefined),
     },
     ...overrides,
   };
