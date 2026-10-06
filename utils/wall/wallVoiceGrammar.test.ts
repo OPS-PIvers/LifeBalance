@@ -58,6 +58,20 @@ describe('parseLocalAdd: shopping', () => {
     expect(shop(text)).toEqual(items);
   });
 
+  // The wall's own log: "add" came out as "an" / "the an" and "list" as "east".
+  it.each([
+    ['the an iced coffee to the shopping list', [{ name: 'iced coffee' }]],
+    ['an iced coffee to the shopping east', [{ name: 'iced coffee' }]],
+    ['and iced coffee to the shopping list', [{ name: 'iced coffee' }]],
+    ['at milk to the grocery list', [{ name: 'Milk' }]],
+    ['milk eggs to the shopping list', [{ name: 'Milk' }, { name: 'Eggs' }]],
+    ['ad milk', [{ name: 'Milk' }]],
+    ['adds eggs to the list', [{ name: 'Eggs' }]],
+    ['add iced coffee to the shopping least', [{ name: 'iced coffee' }]],
+  ])('%s (misheard add or list)', (text, items) => {
+    expect(shop(text)).toEqual(items);
+  });
+
   it('spells a repaired item the way the catalog does', () => {
     const ctx = { ...CTX, catalogNames: [...CTX.catalogNames, 'Rice'] };
     expect(parseLocalAdd('add rights', ctx)?.items).toEqual([{ name: 'Rice' }]);
@@ -97,7 +111,7 @@ describe('parseLocalAdd: to-dos', () => {
 });
 
 describe('parseLocalAdd: not an add', () => {
-  it.each(['show the calendar', 'what is the weather', 'the car needs to be washed', 'add soccer to the calendar', '', 'hello'])(
+  it.each(['show the calendar', 'what is the weather', 'the car needs to be washed', 'add soccer to the calendar', '', 'hello', 'go to the shopping list', 'show me the shopping list', 'switch to the grocery list'])(
     '%s',
     text => {
       expect(parseLocalAdd(text, CTX)).toBeNull();

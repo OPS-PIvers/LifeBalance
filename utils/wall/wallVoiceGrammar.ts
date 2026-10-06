@@ -224,7 +224,16 @@ function todo(text: string, ctx: LocalAddContext, assignee?: string): WallVoiceC
 }
 
 const TODO_LIST = '(?:the |my |our )?(?:to ?dos?|to do list|todo list|tasks?|task list|chores?|chore list|reminders?)';
-const SHOP_LIST = '(?:the |my |our )?(?:shopping|grocery|groceries)(?: list)?|(?:the |my |our )?list';
+// "list" comes out of the recognizer as "east", "least", "lest" after "shopping".
+const LIST_WORD = '(?:list|lists|least|lest|east)';
+const SHOP_NAMED = `(?:the |my |our )?(?:shopping|grocery|groceries)(?: ${LIST_WORD})?`;
+const SHOP_LIST = `${SHOP_NAMED}|(?:the |my |our )?list`;
+/** "add" as a recognizer writes it; "at", "had", "and", "an" are only trusted when the list is named (below). */
+const ADD_VERB = '(?:add|adds|ad|put)';
+/** What "add" turns into in front of a named list: "the an iced coffee to the shopping list". */
+const MISHEARD_ADD = /^(?:(?:the|and|ad|at|had|ed|add) )+/;
+/** Commands that name the list as a destination, not an add. */
+const NAVIGATION_WORD = /^(?:go|show|open|switch|take|bring|display|jump|navigate|back|return|scroll|move)\b/;
 
 /**
  * An add, read without AI. Returns null when the words aren't one of the
@@ -270,11 +279,17 @@ export function parseLocalAdd(transcript: string, ctx: LocalAddContext): WallVoi
   }
 
   // Shopping.
-  m = new RegExp(`^(?:add|put) (.+?) (?:to|on|onto) (?:${SHOP_LIST})$`).exec(t);
+  m = new RegExp(`^${ADD_VERB} (.+?) (?:to|on|onto) (?:${SHOP_LIST})$`).exec(t);
   if (m) return shopping(m[1] ?? '');
+  // No readable verb, but the shopping list is named: "an iced coffee to the shopping list".
+  m = new RegExp(`^(.+?) (?:to|on|onto) (?:${SHOP_NAMED})$`).exec(t);
+  if (m && !NAVIGATION_WORD.test(t)) {
+    const item = (m[1] ?? '').replace(MISHEARD_ADD, '').trim();
+    if (item) return shopping(item);
+  }
   m = /^(?:we need|we need some|we need more|we(?:re| are) (?:out of|low on|almost out of)|i need|buy|pick up|get some) (.+)$/.exec(t);
   if (m) return shopping(m[1] ?? '');
-  m = /^(?:add|put) (.+)$/.exec(t);
+  m = new RegExp(`^${ADD_VERB} (.+)$`).exec(t);
   // "Add soccer to the calendar" isn't a grocery.
   if (m && !/ (to|on|onto|in|into) (the |my |our )?(calendar|schedule|meal plan|menu|meals)$/.test(t)) return shopping(m[1] ?? '');
   return null;
