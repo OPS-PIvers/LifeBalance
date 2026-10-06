@@ -137,7 +137,7 @@ export async function loadLocalVoice(): Promise<LocalVoiceLib> {
       };
       worker.onerror = event => {
         window.clearTimeout(timer);
-        reject(new Error(`The wake word failed to load: ${event.message}`));
+        reject(new Error(`The wake word failed to load: ${event.message || 'its worker didn’t start'}`));
       };
       const init: WakeWorkerIn = {
         type: 'init',

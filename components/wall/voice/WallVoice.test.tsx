@@ -410,6 +410,13 @@ describe('wall voice', () => {
       expect(onFeedback.mock.calls.filter(([f]) => f.speech === 'The wake word isn’t listening')).toHaveLength(1);
     });
 
+    it('shows why the wake word didn’t start, since the wall has no console', async () => {
+      const { engines, setWake } = setup({ support: device });
+      engines.setWake.mockRejectedValue(new VoiceCaptureError('unavailable', 'The wake word failed to load: no wasm'));
+      await act(async () => setWake(true));
+      expect(screen.getByText(/\(The wake word failed to load: no wasm\)/)).toBeInTheDocument();
+    });
+
     it('speech files that don’t load say so', async () => {
       const { engines } = setup({ support: device });
       fireEvent.click(screen.getByRole('button', { name: 'Mic' }));
