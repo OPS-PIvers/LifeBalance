@@ -1,5 +1,5 @@
 import { StrictMode } from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { MonthlyMoneyRecap } from '@/types/schema';
 import { track } from '@/services/analytics';
@@ -196,7 +196,8 @@ describe('MoneyRecapCard', () => {
 
     expect(await screen.findByTestId('recap-drawer')).toHaveTextContent('2026-05');
     expect(track).toHaveBeenCalledWith('money_recap_push_opened');
-    expect(track).toHaveBeenCalledWith('money_recap_viewed', { month: '2026-05', source: 'push' });
+    // Fired from an effect that can land after the drawer first renders.
+    await waitFor(() => expect(track).toHaveBeenCalledWith('money_recap_viewed', { month: '2026-05', source: 'push' }));
     // The param is stripped from the address bar.
     expect(window.location.search).toBe('');
   });
