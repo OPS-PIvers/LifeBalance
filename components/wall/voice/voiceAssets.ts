@@ -1,7 +1,9 @@
 /**
  * Where the wall's on-device voice files are served from (same origin, put in
  * public/voice/ at deploy time by scripts/fetch-voice-assets.mjs; change both
- * together). Paths carry their versions, so Hosting can cache them forever.
+ * together). Paths carry their versions, so Hosting caches them forever and
+ * Vosk keeps its unpacked model by URL: a file whose SHA-256 changes needs a
+ * new path here, or walls keep the old one (docs/DECISIONS.md).
  */
 
 const BASE = '/voice/';

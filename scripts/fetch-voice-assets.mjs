@@ -5,6 +5,8 @@
  * Every download is pinned by SHA-256; a mismatch fails loudly instead of
  * shipping a broken wall. Run by the deploy and wall-lab workflows, and by
  * `pnpm voice:assets` locally. Already-correct files are left alone.
+ * Hosting caches voice/** forever, so changing a pin means changing the
+ * file's path too (here and in voiceAssets.ts).
  *
  *   openwakeword-0.5.1/   wake word models (github.com/dscripka/openWakeWord, release v0.5.1)
  *   vosk-model-small-en-us-0.15.tar.gz   speech model (alphacephei.com/vosk/models), repacked
