@@ -40,6 +40,49 @@ describe('parseLocalAdd: shopping', () => {
     expect(shop(text)).toEqual(items);
   });
 
+  // Vosk writes the nearest common word it knows; a short unfamiliar word that
+  // sounds like exactly one grocery becomes it (the wall heard "rice" as "rights").
+  it.each([
+    ['add rice', [{ name: 'rice' }]],
+    ['add rights', [{ name: 'rice' }]],
+    ['add race', [{ name: 'rice' }]],
+    ['add rise to the shopping list', [{ name: 'rice' }]],
+    ['we need rights', [{ name: 'rice' }]],
+    ['add milk rights and eggs', [{ name: 'Milk' }, { name: 'rice' }, { name: 'Eggs' }]],
+    ['add two bags of rights', [{ name: 'rice', quantity: '2 bags' }]],
+    // Items that are already known, or longer than a syllable, are left alone.
+    ['add soap', [{ name: 'soap' }]],
+    ['add paper', [{ name: 'paper' }]],
+    ['add sponges', [{ name: 'sponges' }]],
+  ])('%s (sound-alike repair)', (text, items) => {
+    expect(shop(text)).toEqual(items);
+  });
+
+  // The wall's own log: "add" came out as "an" / "the an" and "list" as "east".
+  it.each([
+    ['the an iced coffee to the shopping list', [{ name: 'iced coffee' }]],
+    ['an iced coffee to the shopping east', [{ name: 'iced coffee' }]],
+    ['and iced coffee to the shopping list', [{ name: 'iced coffee' }]],
+    ['at milk to the grocery list', [{ name: 'Milk' }]],
+    ['milk eggs to the shopping list', [{ name: 'Milk' }, { name: 'Eggs' }]],
+    ['ad milk', [{ name: 'Milk' }]],
+    ['adds eggs to the list', [{ name: 'Eggs' }]],
+    ['add iced coffee to the shopping least', [{ name: 'iced coffee' }]],
+  ])('%s (misheard add or list)', (text, items) => {
+    expect(shop(text)).toEqual(items);
+  });
+
+  it('spells a repaired item the way the catalog does', () => {
+    const ctx = { ...CTX, catalogNames: [...CTX.catalogNames, 'Rice'] };
+    expect(parseLocalAdd('add rights', ctx)?.items).toEqual([{ name: 'Rice' }]);
+  });
+
+  it('never repairs a word that two items sound like', () => {
+    // "hawk" could be ham or hock; with both in the catalog it stays as heard.
+    const ctx = { ...CTX, catalogNames: [...CTX.catalogNames, 'Hock', 'Hake'] };
+    expect(parseLocalAdd('add hawk', ctx)?.items).toEqual([{ name: 'hawk' }]);
+  });
+
   it('keeps the transcript as spoken', () => {
     expect(parseLocalAdd('Add milk.', CTX)?.transcript).toBe('Add milk.');
   });
@@ -68,7 +111,7 @@ describe('parseLocalAdd: to-dos', () => {
 });
 
 describe('parseLocalAdd: not an add', () => {
-  it.each(['show the calendar', 'what is the weather', 'the car needs to be washed', 'add soccer to the calendar', '', 'hello'])(
+  it.each(['show the calendar', 'what is the weather', 'the car needs to be washed', 'add soccer to the calendar', '', 'hello', 'go to the shopping list', 'show me the shopping list', 'switch to the grocery list'])(
     '%s',
     text => {
       expect(parseLocalAdd(text, CTX)).toBeNull();
