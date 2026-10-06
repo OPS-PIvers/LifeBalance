@@ -21,3 +21,13 @@ export const VOSK_MODEL_URL = `${BASE}vosk-model-small-en-us-0.15.tar.gz`;
 
 /** ONNX Runtime looks up ort-wasm-simd.wasm / ort-wasm.wasm under this prefix. */
 export const ORT_WASM_PREFIX = `${BASE}ort-1.17.3/`;
+
+/**
+ * Whether a downloaded "model" is really a web page: Hosting answers a missing path with the app's
+ * page. Judged by the bytes, not the Content-Type, which Hosting reports as text/html for a
+ * compressed .onnx (a type it doesn't know).
+ */
+export function looksLikeHtml(bytes: ArrayBuffer): boolean {
+  const head = new TextDecoder().decode(new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 64)));
+  return /^\s*</.test(head);
+}

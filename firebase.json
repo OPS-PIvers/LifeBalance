@@ -79,6 +79,15 @@
         ]
       },
       {
+        "source": "voice/**/*.onnx",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/octet-stream"
+          }
+        ]
+      },
+      {
         "source": "**/*.@(js|css|woff2|woff|ttf)",
         "headers": [
           {

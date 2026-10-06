@@ -1,7 +1,7 @@
 import type { WallWakeFile, WallWakeModel } from '@/types/schema';
 import type { LocalVoiceLib, MicListener, Recognizer, RecognizerEvents, WakeListener } from './deviceEngine';
 import type { WakeWorkerIn, WakeWorkerOut } from './wakeWorker';
-import { ORT_WASM_PREFIX, VOSK_MODEL_URL, WAKE_FEATURE_URLS, builtInWakeUrl } from './voiceAssets';
+import { ORT_WASM_PREFIX, VOSK_MODEL_URL, WAKE_FEATURE_URLS, builtInWakeUrl, looksLikeHtml } from './voiceAssets';
 
 /**
  * deviceEngine's seam to the real libraries: openWakeWord (in wakeWorker.ts),
@@ -24,19 +24,23 @@ const PRE_WAKE_SAMPLES = 16000 / 10;
 const RING_SAMPLES = 16000 * 8;
 
 /**
- * Fetches a model file. Hosting answers an unknown path with the app's page (200, HTML), and
- * voice/** is cached for a year, so a device that once got that page can keep it: anything that
- * isn't a model is fetched once more past the cache before giving up.
+ * Fetches a model file. Hosting answers an unknown path with the app's page (200), and voice/**
+ * is cached for a year, so anything that isn't a model is fetched once more past the cache before
+ * giving up. Judged by the bytes: Hosting labels a compressed .onnx text/html.
  */
 async function fetchModel(url: string): Promise<ArrayBuffer> {
-  const notModel = (res: Response) => !res.ok || (res.headers.get('content-type') ?? '').includes('text/html');
-  let res = await fetch(url);
-  if (notModel(res)) res = await fetch(url, { cache: 'reload' });
-  if (notModel(res)) {
-    const type = res.headers.get('content-type') || 'no type';
-    throw new Error(`Voice model ${url} didn't load (${res.status}, ${type}).`);
+  const get = async (init?: RequestInit) => {
+    const res = await fetch(url, init);
+    const bytes = res.ok ? await res.arrayBuffer() : null;
+    return { res, bytes: bytes && !looksLikeHtml(bytes) ? bytes : null };
+  };
+  let got = await get();
+  if (!got.bytes) got = await get({ cache: 'reload' });
+  if (!got.bytes) {
+    const type = got.res.headers.get('content-type') || 'no type';
+    throw new Error(`Voice model ${url} didn't load (${got.res.status}, ${type}).`);
   }
-  return res.arrayBuffer();
+  return got.bytes;
 }
 
 type VoskModule = typeof import('vosk-browser');
