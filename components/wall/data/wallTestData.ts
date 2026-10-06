@@ -47,6 +47,7 @@ export function makeWallData(spy: Spy, overrides: Partial<WallData> = {}): WallD
       synthesizeSpeech: spy(async () => {
         throw new Error('No cloud voice in tests');
       }),
+      loadWakeFile: spy(async () => new Uint8Array([1, 2, 3])),
     },
     ...overrides,
   };

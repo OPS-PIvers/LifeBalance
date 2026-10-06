@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { GroceryCatalogItem, HouseholdMember } from '@/types/schema';
-import { memberForName, normalizeSpeech, parseLocalCommand, pickVoiceEngine, resolveVoiceCommand, voiceContextFrom } from './wallVoice';
+import {
+  COMMAND_PHRASES,
+  memberForName,
+  normalizeSpeech,
+  parseLocalCommand,
+  pickTranscript,
+  pickVoiceEngine,
+  resolveVoiceCommand,
+  stripWakeWord,
+  trimLeadIn,
+  voiceContextFrom,
+} from './wallVoice';
 
 const member = (uid: string, displayName: string) => ({ uid, displayName, role: 'member' }) as HouseholdMember;
 const MEMBERS = [member('u1', 'Sam Rivera'), member('u2', 'Alex Rivera'), member('u3', 'Sam Lee')];
@@ -78,7 +89,7 @@ describe('pickVoiceEngine', () => {
     expect(pickVoiceEngine('audio', { speech: true, audio: false }, false)).toBeNull();
     expect(pickVoiceEngine('audio', both, false)).toBe('audio');
   });
-  it('auto uses the on-device engine once Picovoice is set up', () => {
+  it('auto uses the on-device engine wherever it runs', () => {
     expect(pickVoiceEngine('auto', { ...both, device: true }, false)).toBe('device');
     expect(pickVoiceEngine('device', { ...both, device: true }, false)).toBe('device');
     expect(pickVoiceEngine('device', both, false)).toBeNull();
@@ -165,5 +176,54 @@ describe('voiceContextFrom', () => {
       today: TODAY,
       timeZone: 'America/Chicago',
     });
+  });
+});
+
+describe('COMMAND_PHRASES (the on-device command-only recognizer)', () => {
+  it.each(COMMAND_PHRASES.map(p => [p]))('“%s” parses', phrase => {
+    expect(parseLocalCommand(phrase)).not.toBeNull();
+  });
+});
+
+describe('pickTranscript', () => {
+  const readsAsAdd = (t: string) => t.startsWith('add ') || t.startsWith('remind ');
+  it('rescues an unreadable free transcript with the command one', () => {
+    expect(pickTranscript('though the calendar', 'show the calendar', readsAsAdd)).toBe('show the calendar');
+  });
+  it('keeps a free transcript that reads, as a command or an add', () => {
+    expect(pickTranscript('show meals', 'show the calendar', readsAsAdd)).toBe('show meals');
+    expect(pickTranscript('add milk', 'undo', readsAsAdd)).toBe('add milk');
+  });
+  it('never takes a command transcript that heard something outside its phrases', () => {
+    expect(pickTranscript('feed the fish', '[unk] the calendar', readsAsAdd)).toBe('feed the fish');
+    expect(pickTranscript('feed the fish', undefined, readsAsAdd)).toBe('feed the fish');
+  });
+});
+
+describe('stripWakeWord', () => {
+  it.each([
+    ['hey jarvis add milk', 'Hey Jarvis', 'add milk'],
+    ['Jarvis, show the calendar', 'Hey Jarvis', 'show the calendar'],
+    ['hey home add milk', 'Hey Home', 'add milk'],
+    ['add milk', 'Hey Jarvis', 'add milk'],
+    ['hey jarvis', 'Hey Jarvis', ''],
+  ])('%s', (text, label, expected) => {
+    expect(stripWakeWord(text, label)).toBe(expected);
+  });
+});
+
+describe('trimLeadIn', () => {
+  const readable = (t: string) => parseLocalCommand(t) !== null || t.startsWith('remind ');
+  it.each([
+    ['this show the calendar', 'show the calendar'],
+    ['the remind sam to feed the cat', 'remind sam to feed the cat'],
+    ['uh the show meals', 'show meals'],
+  ])('%s', (text, expected) => {
+    expect(trimLeadIn(text, readable)).toBe(expected);
+  });
+  it('leaves a command that already reads, and words that aren’t lead-ins', () => {
+    expect(trimLeadIn('the shopping list', readable)).toBe('the shopping list');
+    expect(trimLeadIn('dont show the calendar', readable)).toBe('dont show the calendar');
+    expect(trimLeadIn('this that and the other', readable)).toBe('this that and the other');
   });
 });

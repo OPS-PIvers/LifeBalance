@@ -9,6 +9,8 @@ lerna-debug.log*
 
 node_modules
 dist
+# Wall voice models, fetched by `pnpm voice:assets` (scripts/fetch-voice-assets.mjs)
+public/voice/
 dist-ssr
 *.local
 

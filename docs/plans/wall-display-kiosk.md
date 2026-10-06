@@ -637,9 +637,10 @@ Record the results in `docs/plans/wall-display-phase0-results.md`. Delete the la
 - [ ] "What's my day?" and "What's tomorrow?" show the brief and read it line by line; Stop works.
 - [ ] The next morning, sound works without a tap when no update was deployed overnight (no reload happened).
 
-**Wake word** (lab only for now; see `wall-display-phase0-results.md`)
-- [ ] Picovoice account, AccessKey, "Hey Home" trained for Web (WASM).
-- [ ] A day of listening in the lab's Wake word tab; results pasted; pass/fail decided.
+**Wake word** (on the wall; see `wall-display-phase0-results.md` and runbook §6 Voice)
+- [ ] "Hey Jarvis" wakes the wall from 3 m and the command after it works; 10 commands scored.
+- [ ] "Hey Home" trained (Colab notebook), uploaded in Settings, and working.
+- [ ] A day of hands-free: false wakes and misses noted, sensitivity settled, the iPad warm at most.
 
 **Soak**
 - [ ] 72 h soak: no crash, no memory growth over 30%.
@@ -696,7 +697,7 @@ the wall.
 | Home address | Entered in Settings → Wall display, stored **server-only** (like feed URLs). Only the minutes reach the wall. |
 | Alert on screen | A big centered card with a chime for **1 minute**. A setting chooses chime + spoken (default) or chime only. **Night window:** shown on the dimmed screen with no sound. |
 | Day brief | **On voice request** ("what's my day", "what's tomorrow"; after 6 pm "my day" means tomorrow). **Weather + events** with leave-by times. A big card lists the lines and highlights each as it's read. |
-| Wake word | "**Hey Home**", Picovoice Porcupine on-device, **not during the night window**, a mic icon whenever it listens. Proven in `#/wall-lab` on the iPad **before** it goes live. |
+| Wake word | "**Hey Home**", on-device, **not during the night window**, the word under the mic whenever it listens. **As built:** openWakeWord + Vosk (Picovoice went enterprise-only); "Hey Jarvis" until the custom "Hey Home" model is trained. |
 | Reloads | No blind 3 am reload. The wall reloads **only when a new version is deployed, and only during the night window** (a reload re-locks audio and mic until the next touch). A "Tap to turn on sound" chip shows whenever audio is locked. |
 
 ### Phases
@@ -706,7 +707,7 @@ the wall.
 | **B Sound** | `walltts` (+ 500/day cap in `apiUsage/wallTts`), `components/wall/sound/` (Web Audio chimes, cloud voice with cache and fallback, unlock on touch, chip), big card (`WallSpotlight`), spoken confirmations (`VoiceAction.spoken`), Settings → Sound (volume, confirm style), gear **Test sound**, version-gated night reload (`utils/wall/wallVersion.ts`) | Built |
 | **C Alerts** | Per-feed `alerts` + `travelMode` (feed callables), `wallSettings.alerts.leadMin`, `setwallhomeaddress` (address in `calendarFeedSecrets/_home`; `homeAddressSet` / `travelError` server-written), `functions/src/wall/calendar/travel.ts` writing `wallTravel/{eventId}` (minutes only) every 15 min and on sync now, `utils/wall/wallAlerts.ts` (plan, due, words, seen-across-reloads), `WallAlertCard` (over the night screen, silent, at night) | Built |
 | **D Brief** | `parseLocalCommand` → `{kind:'brief', day}` ("what's my day", "good morning", "what's tomorrow", "what's on my calendar"; no AI), `utils/wall/wallBrief.ts` (weather + what's left + bills/holidays + leave-by, capped at 8 events), `useWallBrief` (chime, then line by line, prefetching each line's audio), `WallBriefCard` (lights the line being read; lingers 30 s; closes on idle or a new voice command) | Built |
-| **A Wake word** | Lab tab **Wake word** (`components/wall/lab/LabWake.tsx`, `labWake.ts`): AccessKey + uploaded `.ppn` or a built-in word, sensitivity, detections marked real/false, misses, ready time per launch (mic prompts), summary to paste into the Phase 0 results. `@picovoice/porcupine-web` + `web-voice-processor` load only from the lab; the model file comes from Picovoice's repo on jsDelivr | **Wired into the wall** (Oct 2026, ahead of the lab run, because Safari's recognizer turned out dead in Home Screen apps): `components/wall/voice/deviceEngine.ts` runs Porcupine + Cheetah on one mic, `parseLocalAdd` reads adds without AI, Settings → Wall display → Voice holds the AccessKey, word, sensitivity and Hands-free. The lab tab stays for tuning sensitivity and measuring false triggers |
+| **A Wake word** | `components/wall/voice/`: openWakeWord (`wakeWordModel.ts`, a port of the Python pipeline, in `wakeWorker.ts`) + Vosk (two recognizers per command) on one mic, `parseLocalAdd` for adds, no AI. Models fetched at deploy (`scripts/fetch-voice-assets.mjs`). Settings → Wall display → Voice: Hands-free, built-in or custom word (chunked in `wallSettings/wake-N`), sensitivity. Details and the reasons in `docs/DECISIONS.md` "Wall voice" | Built (#1257 shipped Picovoice; replaced when Picovoice dropped its free plan). The lab's Picovoice tab is gone; the wall itself is the test |
 
 ### iPadOS 16 constraints this design works around
 

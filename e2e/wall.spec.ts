@@ -50,7 +50,10 @@ async function openWall(page: Page, time: string) {
 
 /**
  * A scripted stand-in for Safari's webkitSpeechRecognition: each start()
- * "hears" the next phrase from window.__wallPhrases.
+ * "hears" the next phrase from window.__wallPhrases. It also hides the mic
+ * API, so the wall sees a browser that can only use Safari's recognizer:
+ * otherwise Auto would pick the on-device engine (openWakeWord + Vosk),
+ * whose model files the dev server doesn't have.
  */
 async function fakeSpeech(page: Page, phrases: string[]) {
   await page.addInitScript(list => {
@@ -81,6 +84,7 @@ async function fakeSpeech(page: Page, phrases: string[]) {
     }
     w.webkitSpeechRecognition = FakeRecognition;
     w.SpeechRecognition = FakeRecognition;
+    Object.defineProperty(navigator, 'mediaDevices', { value: undefined, configurable: true });
   }, phrases);
 }
 

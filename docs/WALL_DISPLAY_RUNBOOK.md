@@ -139,24 +139,21 @@ The wall still switches to its dim night clock on its own.
 
 ### Voice
 
-**Set it up once (free, no AI cost):** voice runs on the iPad itself with
-Picovoice. Nothing you say is sent anywhere and it never uses the AI allowance.
+Voice runs entirely on the iPad: **openWakeWord** listens for the wake word
+and **Vosk** turns the command into text. There's no account or key, nothing
+you say is sent anywhere, and it never uses the AI allowance. The models are
+served with the app (the deploy downloads them; see `pnpm voice:assets`).
 
-1. Sign up at **console.picovoice.ai** (free plan) and copy your **AccessKey**.
-2. On a phone: Settings → Wall display → Voice → **Picovoice AccessKey** →
-   paste it → **Save key**. "How it listens" can stay on **Auto**.
-3. Hands-free is on by default with the built-in word **"Computer"**. For
-   **"Hey Home"**: Picovoice Console → Porcupine → type "Hey Home" → platform
-   **Web (WASM)** → download the `.ppn`. Then Settings → Wall display → Voice →
-   **My own word (.ppn)**: name it "Hey Home" and choose the file.
-4. On the wall, tap the screen once after it starts (iPadOS needs a touch
+1. On the wall, tap the screen once after it starts (iPadOS needs a touch
    before it plays sound or listens), and allow the microphone when asked.
-   The first start downloads the speech model (about 36 MB, once).
+2. The first time, the wall downloads its speech model (41 MB, once; the
+   banner says "Getting voice ready"). After that it's stored on the iPad.
+3. Hands-free is on by default with the built-in word **"Hey Jarvis"**
+   (also: "Hey Mycroft", "Hey Rhasspy"). The rail shows the word under the
+   mic while it's listening. It doesn't listen during night hours.
 
 Say the wake word, wait for the short chime, then the command. Or tap the
-**mic** at the bottom of the rail (or in the Add sheet). The rail shows the
-wake word under the mic while it's listening for it. It doesn't listen during
-night hours.
+**mic** at the bottom of the rail (or in the Add sheet).
 
 | Say | What happens |
 |---|---|
@@ -172,15 +169,12 @@ night hours.
   and eggs to shopping."). After 5 seconds it shrinks to the bottom banner;
   **Undo** and **Show list** stay for 10 seconds in all.
 - Wording the wall can't read shows **Didn't catch that** with what it heard.
-  Say it more plainly ("add …", "remind … to …").
-- Picovoice's free plan: the wake word is unlimited; turning speech into text
-  is 5 hours of audio a month, and only the few seconds after the wake word or
-  a tap count.
+  Say it more plainly ("add …", "remind … to …"). Names are the hardest part
+  for the small speech model; a to-do whose name it misses goes to Family.
 - iPadOS asks for the microphone once per launch. If you tapped Don't Allow,
   go to iPad Settings → Safari → Microphone and choose Ask or Allow.
 - **How it listens** (Settings → Wall display → Voice):
-  - **Auto**: on-device once an AccessKey is saved.
-  - **On-device**: Picovoice only.
+  - **Auto** / **On-device**: openWakeWord + Vosk on the iPad.
   - **Safari**: Safari's own recognizer. It **doesn't work in a Home Screen
     app** (it never hears anything), so the wall says so after a few seconds.
   - **Recording**: sends each command to Gemini and uses the daily AI
@@ -189,6 +183,21 @@ night hours.
 - **Hands-free** and the **sensitivity** are in the same section. Raise the
   sensitivity if it misses you from across the room; lower it if it wakes
   by mistake.
+
+**Your own wake word ("Hey Home")** — free, about 2½ hours of waiting:
+
+1. Open the notebook at
+   [github.com/alfiedennen/openwakeword-colab-2026](https://github.com/alfiedennen/openwakeword-colab-2026)
+   (**Open in Colab**). It's a maintained fix of openWakeWord's own training
+   notebook, which no longer runs.
+2. Runtime → Change runtime type → **T4 GPU** (free).
+3. In the cell that sets them, change the two lines to
+   `TARGET_PHRASE = ['hey home']` and `MODEL_NAME = 'hey_home'`.
+4. Runtime → **Run all**. Keep the tab open in front (the free tier
+   disconnects a background tab). At the end it downloads `hey_home.onnx`
+   (about 0.9 MB).
+5. On a phone: Settings → Wall display → Voice → **My own word (.onnx)**: name
+   it "Hey Home" and choose the file. The wall switches within seconds.
 
 ## 7. Calendars
 

@@ -13,9 +13,10 @@
     "preview": "vite preview",
     "lint": "tsc --noEmit && eslint .",
     "lint:fix": "eslint . --fix",
-    "deploy": "pnpm run build && firebase deploy --only hosting",
+    "deploy": "pnpm voice:assets && pnpm run build && firebase deploy --only hosting",
     "deploy:rules": "firebase deploy --only firestore:rules",
-    "deploy:all": "pnpm run build && firebase deploy",
+    "deploy:all": "pnpm voice:assets && pnpm run build && firebase deploy",
+    "voice:assets": "node scripts/fetch-voice-assets.mjs",
     "migrate:submissions": "tsx --env-file=.env.local scripts/migrateHabitSubmissions.ts",
     "generate-icons": "node generate-icons.mjs",
     "lint:all": "pnpm -r run lint",
@@ -33,8 +34,6 @@
   },
   "dependencies": {
     "@google/genai": "^2.8.0",
-    "@picovoice/cheetah-web": "4.2.0",
-    "@picovoice/porcupine-web": "4.0.1",
     "@picovoice/web-voice-processor": "4.0.10",
     "@sentry/react": "^10.64.0",
     "@tanstack/react-virtual": "^3.14.3",
@@ -43,13 +42,15 @@
     "firebase": "^12.15.0",
     "framer-motion": "^12.40.0",
     "lucide-react": "^1.21.0",
+    "onnxruntime-web": "1.17.3",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-hot-toast": "^2.6.0",
     "react-plaid-link": "^4.1.1",
     "react-router-dom": "^7.18.0",
     "recharts": "^3.8.1",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "vosk-browser": "0.0.8"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",

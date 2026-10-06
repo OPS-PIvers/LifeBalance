@@ -52,6 +52,7 @@ describe('parseLocalAdd: to-dos', () => {
     ['remind us to pay the water bill on friday', { text: 'pay the water bill', due: '2026-10-09' }],
     ['remind jo to practice piano today', { text: 'practice piano', assigneeName: 'Jo', due: 'today' }],
     ['remind grandma to call', { text: 'grandma to call' }],
+    ['reminds him to feed the cat tomorrow', { text: 'feed the cat', due: 'tomorrow' }],
     ['add a to do to call the plumber', { text: 'call the plumber' }],
     ['add a reminder for alex to mow the lawn this weekend', { text: 'mow the lawn', assigneeName: 'Alex Rivera', due: '2026-10-10' }],
     ['add take out the trash to the to do list', { text: 'take out the trash' }],

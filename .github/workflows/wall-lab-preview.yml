@@ -38,6 +38,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Fetch wall voice models
+        run: pnpm voice:assets
+
       - name: Build application (lab route on)
         run: pnpm run build
         env:

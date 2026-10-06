@@ -66,6 +66,11 @@ jobs:
           # Verify the replacement worked
           grep "CACHE_VERSION = '$BUILD_VERSION'" public/sw.js || echo "WARNING: Version injection may have failed"
 
+      - name: Fetch wall voice models
+        # Wake word + speech models and ONNX Runtime's WebAssembly, pinned by
+        # SHA-256, into public/voice/ (git-ignored) so the build ships them.
+        run: pnpm voice:assets
+
       - name: Build application
         run: pnpm run build
         env:

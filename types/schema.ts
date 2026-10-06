@@ -2135,29 +2135,35 @@ export interface WallDisplay {
 
 /** `households/{hid}/wallSettings/config`: one doc, any member may edit. */
 /**
- * How the wall listens. `device` is Picovoice on the iPad (wake word +
- * speech-to-text, no Gemini); `speech` is Safari's recognizer, `audio` is
- * recorded audio sent to Gemini. `auto` uses `device` once a Picovoice
- * AccessKey is saved, otherwise `speech` falling back to `audio`. `off`
- * hides the mic.
+ * How the wall listens. `device` is on the iPad itself (openWakeWord for the
+ * wake word, Vosk for the command; no AI); `speech` is Safari's recognizer,
+ * `audio` is recorded audio sent to Gemini. `auto` uses `device` wherever the
+ * browser can run it. `off` hides the mic.
  */
 export type WallVoiceEngine = 'auto' | 'device' | 'speech' | 'audio' | 'off';
 
 /**
- * Picovoice setup for the on-device engine (`wallSettings/config.picovoice`).
- * The AccessKey is a client key by design (Picovoice runs in the browser);
- * members and the household's displays can read it.
+ * A custom wake word's .onnx (~0.9 MB from openWakeWord's notebook): too big
+ * for one Firestore doc, so its bytes sit in `wallSettings/wake-0…wake-3`
+ * (≤ 700 KB each), each stamped with `id` so an interrupted upload can't
+ * mix two files.
  */
-export interface WallPicovoice {
-  accessKey: string;
-  /** A Porcupine built-in keyword name, or 'custom' for `ppn`. */
+export interface WallWakeFile {
+  id: string;
+  chunks: number;
+  bytes: number;
+}
+
+/** The wake word the on-device engine listens for (`wallSettings/config.wakeModel`). */
+export interface WallWakeModel {
+  /** A built-in openWakeWord model ('hey_jarvis' | 'hey_mycroft' | 'hey_rhasspy'), or 'custom' for `file`. */
   keyword: string;
-  /** Base64 of a custom wake word trained for "Web (WASM)". */
-  ppn?: string;
-  /** What the wake word is called on screen, e.g. "Hey Home". */
+  /** A custom openWakeWord .onnx model, e.g. one trained for "Hey Home". */
+  file?: WallWakeFile;
+  /** What it's called on screen, and what's dropped from the start of a command, e.g. "Hey Home". */
   label: string;
-  /** 0–1; higher hears more and false-triggers more. */
-  sensitivity: number;
+  /** The score (0–1) a detection must reach: lower hears more, and wakes by mistake more. */
+  threshold: number;
 }
 
 /** What the wall plays: a chime alone, or a chime and a spoken line. */
@@ -2184,7 +2190,7 @@ export interface WallSettings {
   voice: WallVoiceEngine;
   /** Hands-free: listen for the wake word (on-device engine only; never at night). */
   wakeWord: boolean;
-  picovoice?: WallPicovoice;
+  wakeModel: WallWakeModel;
   sound: WallSoundSettings;
   /** Starting-soon alerts: minutes ahead for an event with no travel time. */
   alerts: { leadMin: number };

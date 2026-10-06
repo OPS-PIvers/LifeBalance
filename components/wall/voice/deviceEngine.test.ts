@@ -1,65 +1,102 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { WallPicovoice } from '@/types/schema';
+import type { WallWakeModel } from '@/types/schema';
 import { VoiceCaptureError } from './voiceEngines';
-import { DEVICE_MAX_MS, DEVICE_NO_SPEECH_MS, createDeviceEngine, deviceErrorCode, type PicovoiceEngine, type PicovoiceLib } from './deviceEngine';
+import {
+  DEVICE_FINAL_MS,
+  DEVICE_MAX_MS,
+  DEVICE_NO_SPEECH_MS,
+  createDeviceEngine,
+  deviceErrorCode,
+  type LocalVoiceLib,
+  type MicListener,
+  type Recognizer,
+  type RecognizerEvents,
+} from './deviceEngine';
 
-const CONFIG: WallPicovoice = { accessKey: 'k', keyword: 'Computer', label: 'Computer', sensitivity: 0.5 };
+const MODEL: WallWakeModel = { keyword: 'hey_jarvis', label: 'Hey Jarvis', threshold: 0.5 };
+const PHRASES = ['show the calendar', 'undo'];
 
-type Transcript = { transcript: string; isEndpoint?: boolean; isFlushed?: boolean };
+interface FakeRecognizer extends Recognizer {
+  name: string;
+  phrases: readonly string[] | undefined;
+  events: RecognizerEvents;
+  fed: Int16Array[];
+  released: boolean;
+  finishes: number;
+}
 
-/** A fake Picovoice: records every mic change and lets the test speak. */
-function fakeLib(opts: { cheetahError?: Error; subscribeError?: Error } = {}) {
+/** A fake openWakeWord + Vosk: records every mic change and lets the test speak. */
+function fakeLib(opts: { recognizerError?: Error; subscribeError?: Error } = {}) {
   const log: string[] = [];
-  const live = new Set<string>();
-  /** The fewest subscribers the mic ever had after first opening. */
+  const live = new Set<MicListener>();
   let opened = false;
   let dippedToZero = false;
-  let onTranscript: (t: Transcript) => void = () => undefined;
   let onWake: () => void = () => undefined;
-  const flushes: (() => void)[] = [];
-  const cheetah = {
-    name: 'cheetah',
-    worker: {} as Worker,
-    flush: vi.fn(() => {
-      log.push('flush');
-      flushes.push(() => onTranscript({ transcript: '', isFlushed: true }));
+  const recognizers: FakeRecognizer[] = [];
+  const wake = {
+    onmessage: () => undefined,
+    sinceWake: vi.fn(() => new Int16Array([1, 2, 3])),
+    reset: vi.fn(async () => {
+      log.push('wake-reset');
     }),
-    release: vi.fn(async () => undefined),
-    terminate: vi.fn(),
+    release: vi.fn(),
   };
-  const porcupine = { name: 'porcupine', worker: {} as Worker, release: vi.fn(async () => undefined), terminate: vi.fn() };
-  const nameOf = (e: PicovoiceEngine) => (e === cheetah ? 'cheetah' : 'porcupine');
-  const lib: PicovoiceLib = {
-    createCheetah: async (_key, t) => {
-      if (opts.cheetahError) throw opts.cheetahError;
-      onTranscript = t;
-      return cheetah;
+  const nameOf = (l: MicListener) => (l === wake ? 'wake' : ((l as FakeRecognizer).name ?? '?'));
+  const lib: LocalVoiceLib = {
+    prepare: vi.fn(async () => undefined),
+    createWake: async (model, w, loadFile) => {
+      onWake = w;
+      if (model.keyword === 'custom' && model.file) log.push(`custom:${(await loadFile(model.file)).length}`);
+      return wake;
     },
-    createPorcupine: async (_config, wake) => {
-      onWake = wake;
-      return porcupine;
+    createRecognizer: async (events, phrases) => {
+      if (opts.recognizerError) throw opts.recognizerError;
+      const r: FakeRecognizer = {
+        name: phrases ? 'command' : 'free',
+        phrases,
+        events,
+        fed: [],
+        released: false,
+        finishes: 0,
+        onmessage: () => undefined,
+        feed: pcm => r.fed.push(pcm),
+        finish: () => {
+          r.finishes += 1;
+        },
+        release: () => {
+          r.released = true;
+        },
+      };
+      recognizers.push(r);
+      return r;
     },
-    subscribe: async e => {
+    subscribe: async ls => {
       if (opts.subscribeError) throw opts.subscribeError;
-      log.push(`sub:${nameOf(e)}`);
-      live.add(nameOf(e));
+      ls.forEach(l => {
+        log.push(`sub:${nameOf(l)}`);
+        live.add(l);
+      });
       opened = true;
     },
-    unsubscribe: async e => {
-      log.push(`unsub:${nameOf(e)}`);
-      live.delete(nameOf(e));
+    unsubscribe: async ls => {
+      ls.forEach(l => {
+        log.push(`unsub:${nameOf(l)}`);
+        live.delete(l);
+      });
       if (opened && live.size === 0) dippedToZero = true;
     },
   };
+  const named = (n: string) => recognizers.filter(r => r.name === n).at(-1);
   return {
     lib,
     log,
     live,
-    cheetah,
+    wake,
+    recognizers,
+    free: () => named('free'),
+    command: () => named('command'),
     dippedToZero: () => dippedToZero,
-    say: (t: Transcript) => onTranscript(t),
-    wake: () => onWake(),
-    answerFlushes: () => flushes.splice(0).forEach(f => f()),
+    heardWake: () => onWake(),
   };
 }
 
@@ -88,133 +125,197 @@ function fakeTimers() {
 
 const settle = () => new Promise(r => setTimeout(r, 0));
 
+function setup(opts: Parameters<typeof fakeLib>[0] = {}) {
+  const f = fakeLib(opts);
+  const timers = fakeTimers();
+  const onWake = vi.fn();
+  const engine = createDeviceEngine(MODEL, onWake, { lib: async () => f.lib, commandPhrases: PHRASES, timers });
+  return { f, timers, onWake, engine };
+}
+
 describe('createDeviceEngine', () => {
-  it('listens for the wake word, then hands the mic to Cheetah and back without ever releasing it', async () => {
-    const f = fakeLib();
-    const timers = fakeTimers();
-    const onWake = vi.fn();
-    const engine = createDeviceEngine(CONFIG, onWake, async () => f.lib, timers);
+  it('hands the mic from the wake word to both recognizers and back, never releasing it', async () => {
+    const { f, onWake, engine } = setup();
     await engine.setWake(true);
-    expect([...f.live]).toEqual(['porcupine']);
-    f.wake();
+    expect(f.log).toEqual(['sub:wake']);
+    expect(f.lib.prepare).toHaveBeenCalled();
+    f.heardWake();
     expect(onWake).toHaveBeenCalledTimes(1);
 
     const interim: string[] = [];
-    const session = engine.listen({ onInterim: t => interim.push(t) });
+    const session = engine.listen({ afterWake: true, onInterim: t => interim.push(t) });
     await settle();
-    expect(f.log).toEqual(['sub:porcupine', 'sub:cheetah', 'unsub:porcupine']);
-    // A wake word said mid-command doesn't open another one.
-    f.wake();
+    // Both recognizers start on the same frame, before the wake word steps off.
+    expect(f.log).toEqual(['sub:wake', 'sub:free', 'sub:command', 'unsub:wake']);
+    expect(f.command()?.phrases).toEqual(PHRASES);
+    // The moments around the wake word are replayed into both.
+    expect(f.free()?.fed).toEqual([new Int16Array([1, 2, 3])]);
+    expect(f.command()?.fed).toEqual([new Int16Array([1, 2, 3])]);
+    // A wake word heard mid-command doesn't open another one.
+    f.heardWake();
     expect(onWake).toHaveBeenCalledTimes(1);
 
-    f.say({ transcript: 'Add milk' });
-    f.say({ transcript: ' and eggs.', isEndpoint: true });
-    expect(interim).toEqual(['Add milk', 'Add milk and eggs.']);
-    expect(f.cheetah.flush).toHaveBeenCalledTimes(1);
-    f.answerFlushes();
-    await expect(session.result).resolves.toEqual({ kind: 'text', transcript: 'Add milk and eggs.' });
+    f.free()?.events.onPartial('add milk');
+    f.free()?.events.onPartial('add milk');
+    f.free()?.events.onPartial('add milk and eggs');
+    expect(interim).toEqual(['add milk', 'add milk and eggs']);
+    f.free()?.events.onResult('add milk and eggs');
+    expect(f.command()?.finishes).toBe(1);
+    f.command()?.events.onResult('[unk]');
+    await expect(session.result).resolves.toEqual({ kind: 'text', transcript: 'add milk and eggs', alternative: '[unk]' });
     await settle();
-    expect(f.log.slice(-2)).toEqual(['sub:porcupine', 'unsub:cheetah']);
-    expect([...f.live]).toEqual(['porcupine']);
+    // The wake word is reset and back on the mic before the recognizers let go.
+    expect(f.log.slice(-4)).toEqual(['wake-reset', 'sub:wake', 'unsub:free', 'unsub:command']);
+    expect(f.recognizers.every(r => r.released)).toBe(true);
+    expect([...f.live]).toEqual([f.wake]);
     expect(f.dippedToZero()).toBe(false);
   });
 
-  it('gives up with no-speech when nobody talks, and the cleanup flush never ends the next command', async () => {
-    const f = fakeLib();
-    const timers = fakeTimers();
-    const engine = createDeviceEngine(CONFIG, vi.fn(), async () => f.lib, timers);
-    const first = engine.listen({});
+  it('a tap (no wake word) replays nothing', async () => {
+    const { f, engine } = setup();
+    await engine.setWake(true);
+    engine.listen({});
     await settle();
+    expect(f.free()?.fed).toEqual([]);
+    expect(f.wake.sinceWake).not.toHaveBeenCalled();
+  });
+
+  it('ignores the empty results Vosk sends on silence, and gives up with no-speech', async () => {
+    const { f, timers, engine } = setup();
+    const session = engine.listen({});
+    await settle();
+    f.free()?.events.onResult('');
     timers.fire(DEVICE_NO_SPEECH_MS);
-    await expect(first.result).rejects.toMatchObject({ code: 'no-speech' });
-    await settle();
-    expect(f.cheetah.flush).toHaveBeenCalledTimes(1);
-
-    const second = engine.listen({});
-    await settle();
-    // The first command's flush answers late: it must not end this one.
-    f.answerFlushes();
-    f.say({ transcript: 'show meals', isEndpoint: true });
-    f.answerFlushes();
-    await expect(second.result).resolves.toEqual({ kind: 'text', transcript: 'show meals' });
-  });
-
-  it('Done flushes what was heard so far', async () => {
-    const f = fakeLib();
-    const timers = fakeTimers();
-    const engine = createDeviceEngine(CONFIG, vi.fn(), async () => f.lib, timers);
-    const session = engine.listen({});
-    await settle();
-    f.say({ transcript: 'show the' });
-    session.finish();
-    f.say({ transcript: ' calendar' });
-    f.answerFlushes();
-    await expect(session.result).resolves.toEqual({ kind: 'text', transcript: 'show the calendar' });
-  });
-
-  it('Done before the engine is ready still ends the command', async () => {
-    const f = fakeLib();
-    const timers = fakeTimers();
-    const engine = createDeviceEngine(CONFIG, vi.fn(), async () => f.lib, timers);
-    const session = engine.listen({});
-    session.finish();
-    await settle();
-    f.answerFlushes();
     await expect(session.result).rejects.toMatchObject({ code: 'no-speech' });
   });
 
-  it('stops at the max length with what it heard', async () => {
-    const f = fakeLib();
-    const timers = fakeTimers();
-    const engine = createDeviceEngine(CONFIG, vi.fn(), async () => f.lib, timers);
+  it('does not give up while someone is talking', async () => {
+    const { f, timers, engine } = setup();
     const session = engine.listen({});
     await settle();
-    f.say({ transcript: 'add milk and' });
+    f.free()?.events.onPartial('remind sam');
+    timers.fire(DEVICE_NO_SPEECH_MS);
+    f.free()?.events.onResult('remind sam to feed the cat');
+    f.command()?.events.onResult('[unk]');
+    await expect(session.result).resolves.toMatchObject({ transcript: 'remind sam to feed the cat' });
+  });
+
+  it('Done asks both recognizers for their last words', async () => {
+    const { f, engine } = setup();
+    const session = engine.listen({});
+    await settle();
+    f.free()?.events.onPartial('show the');
+    session.finish();
+    expect(f.free()?.finishes).toBe(1);
+    expect(f.command()?.finishes).toBe(1);
+    f.free()?.events.onResult('though the calendar');
+    f.command()?.events.onResult('show the calendar');
+    await expect(session.result).resolves.toEqual({ kind: 'text', transcript: 'though the calendar', alternative: 'show the calendar' });
+  });
+
+  it('Done before the recognizers exist still ends the command', async () => {
+    const { timers, engine } = setup();
+    const session = engine.listen({});
+    session.finish();
+    await settle();
+    timers.fire(DEVICE_FINAL_MS);
+    await expect(session.result).rejects.toMatchObject({ code: 'no-speech' });
+  });
+
+  it('stops at the max length with what it heard, even if the recognizers never answer', async () => {
+    const { f, timers, engine } = setup();
+    const session = engine.listen({});
+    await settle();
+    f.free()?.events.onPartial('add milk and');
     timers.fire(DEVICE_MAX_MS);
-    f.answerFlushes();
+    timers.fire(DEVICE_FINAL_MS);
     await expect(session.result).resolves.toEqual({ kind: 'text', transcript: 'add milk and' });
   });
 
-  it('a flush that never answers still settles', async () => {
-    const f = fakeLib();
-    const timers = fakeTimers();
-    const engine = createDeviceEngine(CONFIG, vi.fn(), async () => f.lib, timers);
+  it('a silent command-only recognizer never holds the answer', async () => {
+    const { f, timers, engine } = setup();
     const session = engine.listen({});
     await settle();
-    f.say({ transcript: 'undo', isEndpoint: true });
-    timers.fire(1500);
-    await expect(session.result).resolves.toEqual({ kind: 'text', transcript: 'undo' });
+    f.free()?.events.onResult('add bread');
+    timers.fire(DEVICE_FINAL_MS);
+    await expect(session.result).resolves.toEqual({ kind: 'text', transcript: 'add bread' });
   });
 
-  it('Cancel rejects as aborted and releases Cheetah', async () => {
-    const f = fakeLib();
-    const timers = fakeTimers();
-    const engine = createDeviceEngine(CONFIG, vi.fn(), async () => f.lib, timers);
+  it('Cancel rejects as aborted and releases the recognizers', async () => {
+    const { f, engine } = setup();
     const session = engine.listen({});
     await settle();
     session.cancel();
     await expect(session.result).rejects.toMatchObject({ code: 'aborted' });
     await settle();
     expect(f.live.size).toBe(0);
+    expect(f.recognizers.every(r => r.released)).toBe(true);
   });
 
-  it('reports a bad AccessKey and a blocked mic in the banner’s terms', async () => {
-    const bad = fakeLib({ cheetahError: Object.assign(new Error('AccessKey is invalid'), { name: 'CheetahActivationRefusedError' }) });
-    const s1 = createDeviceEngine(CONFIG, vi.fn(), async () => bad.lib, fakeTimers()).listen({});
-    await expect(s1.result).rejects.toMatchObject({ code: 'unavailable', message: 'activation' });
+  it('a recognizer that arrives after Cancel is released at once', async () => {
+    const { f, engine } = setup();
+    const session = engine.listen({});
+    session.cancel();
+    await expect(session.result).rejects.toMatchObject({ code: 'aborted' });
+    await settle();
+    await settle();
+    expect(f.recognizers.every(r => r.released)).toBe(true);
+    expect(f.live.size).toBe(0);
+  });
 
-    const blocked = fakeLib({ subscribeError: Object.assign(new Error('microphone permissions denied'), { name: 'PermissionError' }) });
-    await expect(createDeviceEngine(CONFIG, vi.fn(), async () => blocked.lib, fakeTimers()).setWake(true)).rejects.toMatchObject({
-      code: 'not-allowed',
+  it('says it is loading only when starting takes a while', async () => {
+    const { f, timers, engine } = setup();
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>(r => {
+      open = r;
     });
+    const create = f.lib.createRecognizer;
+    f.lib.createRecognizer = async (events, phrases) => {
+      await gate;
+      return create(events, phrases);
+    };
+    const loading = vi.fn();
+    engine.listen({ onLoading: loading });
+    await settle();
+    timers.fire(400);
+    expect(loading.mock.calls.map(c => c[0])).toEqual([true]);
+    open();
+    await settle();
+    expect(loading.mock.calls.map(c => c[0])).toEqual([true, false]);
+  });
+
+  it('stays quiet about loading when the recognizers are ready at once', async () => {
+    const { timers, engine } = setup();
+    const loading = vi.fn();
+    engine.listen({ onLoading: loading });
+    await settle();
+    timers.fire(400);
+    expect(loading).not.toHaveBeenCalledWith(true);
+  });
+
+  it('reports a model that will not load and a blocked mic in the banner’s terms', async () => {
+    const bad = setup({ recognizerError: new Error('The speech model failed to load.') });
+    await expect(bad.engine.listen({}).result).rejects.toMatchObject({ code: 'unavailable' });
+
+    const blocked = setup({ subscribeError: Object.assign(new Error('microphone permissions denied'), { name: 'PermissionError' }) });
+    await expect(blocked.engine.setWake(true)).rejects.toMatchObject({ code: 'not-allowed' });
+  });
+
+  it('hands a custom wake word its file', async () => {
+    const f = fakeLib();
+    const loadFile = vi.fn(async () => new Uint8Array(5));
+    const custom: WallWakeModel = { keyword: 'custom', file: { id: 'f1', chunks: 1, bytes: 5 }, label: 'Hey Home', threshold: 0.5 };
+    const engine = createDeviceEngine(custom, vi.fn(), { lib: async () => f.lib, loadFile, timers: fakeTimers() });
+    await engine.setWake(true);
+    expect(loadFile).toHaveBeenCalledWith({ id: 'f1', chunks: 1, bytes: 5 });
+    expect(f.log).toEqual(['custom:5', 'sub:wake']);
   });
 
   it('turning the wake word off releases the mic', async () => {
-    const f = fakeLib();
-    const engine = createDeviceEngine(CONFIG, vi.fn(), async () => f.lib, fakeTimers());
+    const { f, engine } = setup();
     await engine.setWake(true);
     await engine.setWake(false);
-    expect(f.log).toEqual(['sub:porcupine', 'unsub:porcupine']);
+    expect(f.log).toEqual(['sub:wake', 'unsub:wake']);
   });
 });
 

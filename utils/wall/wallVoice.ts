@@ -81,16 +81,79 @@ export function parseLocalCommand(text: string): LocalCommand | null {
   return target ? { kind: 'show', target } : null;
 }
 
+/**
+ * Everything the no-AI command grammar reads, as plain phrases, for the
+ * on-device engine's command-only recognizer (Vosk hears these far more
+ * reliably than free speech: "show the calendar", not "though the calendar").
+ * wallVoice.test.ts checks each one parses.
+ */
+export const COMMAND_PHRASES: readonly string[] = [
+  ...['the calendar', 'the week', 'this week', 'the day', 'today', 'the month', 'this month', 'the shopping list', 'the grocery list',
+    'shopping', 'groceries', 'the list', 'to dos', 'the to do list', 'tasks', 'chores', 'meals', 'the meal plan', 'dinner', 'the menu',
+  ].flatMap(target => [`show ${target}`, `open ${target}`, `go to ${target}`]),
+  'calendar', 'month', 'today', 'shopping list', 'to dos', 'meals',
+  'start rotating', 'stop rotating',
+  'undo', 'undo that', 'take that back',
+  'cancel', 'never mind', 'forget it',
+  'good morning', "what's my day", "what's on today", "what's on my calendar", "what's tomorrow", "what's on tomorrow",
+  'brief me', 'how does my day look', 'how does tomorrow look',
+];
+
+/**
+ * The on-device engine hears each command twice: freely, and through the
+ * command-only recognizer. The free transcript wins unless it reads as
+ * nothing at all while the command one reads cleanly ("[unk]" means it heard
+ * something outside its phrases) — so a misheard "show the calendar" is
+ * rescued, and an add can never turn into a command.
+ */
+export function pickTranscript(transcript: string, alternative: string | undefined, readsAsAdd: (text: string) => boolean): string {
+  if (!alternative || alternative.includes('[unk]')) return transcript;
+  if (parseLocalCommand(transcript) || readsAsAdd(transcript)) return transcript;
+  return parseLocalCommand(alternative) ? alternative : transcript;
+}
+
+/**
+ * What the tail of a wake word tends to come out as when the recognizer hears
+ * its last syllable ("Jarvis" → "this", "the"), plus fillers.
+ */
+const LEAD_IN = new Set(['this', 'the', 'these', 'his', 'is', 'its', 'it', 'us', 'a', 'of', 'so', 'and', 'uh', 'um', 'er']);
+
+/**
+ * Drops one or two such words from the start, but only when that turns an
+ * unreadable command into a readable one ("this show the calendar" → "show
+ * the calendar"); a command that already reads is never touched.
+ */
+export function trimLeadIn(text: string, readable: (text: string) => boolean): string {
+  if (readable(text)) return text;
+  const words = text.trim().split(/\s+/);
+  for (let drop = 1; drop <= 2 && drop < words.length; drop++) {
+    if (!LEAD_IN.has(normalizeSpeech(words[drop - 1] ?? ''))) break;
+    const rest = words.slice(drop).join(' ');
+    if (readable(rest)) return rest;
+  }
+  return text;
+}
+
+/** Drops the wake word from the start of a command ("hey jarvis add milk" → "add milk"). */
+export function stripWakeWord(text: string, label: string): string {
+  const wake = new Set(normalizeSpeech(label).split(' ').filter(Boolean));
+  wake.add('hey');
+  const words = text.trim().split(/\s+/);
+  let i = 0;
+  while (i < words.length && wake.has(normalizeSpeech(words[i] ?? ''))) i++;
+  return words.slice(i).join(' ');
+}
+
 export interface VoiceSupport {
   speech: boolean;
   audio: boolean;
-  /** Picovoice is set up (an AccessKey is saved) and this browser can run it. */
+  /** This browser can run the on-device engine (WebAssembly workers and a mic). */
   device?: boolean;
 }
 
 /**
- * Which engine a tap uses. `auto` uses the on-device Picovoice engine once
- * it's set up; otherwise Safari's speech recognition, falling back to
+ * Which engine a tap uses. `auto` uses the on-device engine wherever it
+ * runs; otherwise Safari's speech recognition, falling back to
  * recorded audio once speech has been refused on this launch (plan §6
  * decision rule). Null = voice is unavailable here.
  */

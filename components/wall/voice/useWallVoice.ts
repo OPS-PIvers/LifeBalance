@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { WallPicovoice, WallVoiceEngine } from '@/types/schema';
+import type { WallVoiceEngine, WallWakeFile, WallWakeModel } from '@/types/schema';
 import type { WallVoiceCommand, WallVoiceContext } from '@/services/geminiService.types';
 import { parseWallVoiceAudio, parseWallVoiceText } from '@/services/geminiService';
 import {
+  COMMAND_PHRASES,
   parseLocalCommand,
+  pickTranscript,
   pickVoiceEngine,
+  stripWakeWord,
+  trimLeadIn,
   resolveVoiceCommand,
   voiceContextFrom,
   type LocalCommand,
@@ -31,7 +35,8 @@ type EngineKind = 'device' | 'speech' | 'audio';
 
 /** The banner's states (plan §3 "Voice"). */
 export type WallVoiceState =
-  | { phase: 'listening'; interim: string }
+  /** `loading`: the on-device speech model is still starting (the first run downloads it). */
+  | { phase: 'listening'; interim: string; loading?: boolean }
   | { phase: 'working'; heard: string | null }
   | { phase: 'result'; id: number; big: boolean; title: string; text: string; undo?: () => Promise<void>; show?: VoiceTarget }
   | { phase: 'error'; id: number; big: boolean; title: string; text: string; retry: boolean };
@@ -49,15 +54,15 @@ export interface WallVoiceFeedback {
 export interface WallVoiceDeps {
   support?: VoiceSupport;
   createEngine?: (kind: 'speech' | 'audio') => VoiceEngine;
-  createDeviceEngine?: (config: WallPicovoice, onWake: () => void) => DeviceVoiceEngine;
+  createDeviceEngine?: (model: WallWakeModel, onWake: () => void, loadFile: (file: WallWakeFile) => Promise<Uint8Array>) => DeviceVoiceEngine;
   parseText?: (householdId: string, transcript: string, ctx: WallVoiceContext) => Promise<WallVoiceCommand>;
   parseAudio?: (householdId: string, data: string, mimeType: string, ctx: WallVoiceContext) => Promise<WallVoiceCommand>;
 }
 
 interface UseWallVoiceOptions {
   setting: WallVoiceEngine;
-  /** Picovoice setup; the on-device engine is available only with it. */
-  picovoice?: WallPicovoice | undefined;
+  /** The wake word the on-device engine listens for. */
+  wakeModel: WallWakeModel;
   /**
    * Listen for the wake word now (on-device engine only). The caller turns
    * this off at night, while the sound is locked, and on a member preview.
@@ -81,9 +86,20 @@ interface Captured {
   undo?: () => Promise<void>;
 }
 
-/** Picovoice runs in WebAssembly off the shared mic. */
+/** The on-device engine runs in WebAssembly workers off the shared mic. */
 function deviceSupported(): boolean {
-  return typeof WebAssembly !== 'undefined' && typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia);
+  return (
+    typeof WebAssembly !== 'undefined' &&
+    typeof Worker !== 'undefined' &&
+    typeof window !== 'undefined' &&
+    Boolean((window as unknown as { AudioContext?: unknown; webkitAudioContext?: unknown }).AudioContext ?? (window as unknown as { webkitAudioContext?: unknown }).webkitAudioContext) &&
+    typeof navigator !== 'undefined' &&
+    Boolean(navigator.mediaDevices?.getUserMedia)
+  );
+}
+
+function defaultCreateDeviceEngine(model: WallWakeModel, onWake: () => void, loadFile: (file: WallWakeFile) => Promise<Uint8Array>): DeviceVoiceEngine {
+  return createDeviceEngine(model, onWake, { commandPhrases: COMMAND_PHRASES, loadFile });
 }
 
 function defaultCreateEngine(kind: 'speech' | 'audio'): VoiceEngine {
@@ -93,8 +109,8 @@ function defaultCreateEngine(kind: 'speech' | 'audio'): VoiceEngine {
 
 const quote = (text: string) => `“${text}”`;
 
-/** Which Picovoice setup an engine was built for; a change rebuilds it. */
-const configKey = (c: WallPicovoice | undefined) => (c ? [c.accessKey, c.keyword, c.label, c.sensitivity, c.ppn?.length ?? 0, c.ppn?.slice(-32) ?? ''].join('|') : '');
+/** Which wake word an engine was built for; a change rebuilds it. */
+const configKey = (m: WallWakeModel) => [m.keyword, m.label, m.threshold, m.file?.id ?? ''].join('|');
 
 function parseErrorState(error: unknown): { title: string; text: string; retry: boolean } {
   const message = error instanceof Error ? error.message : '';
@@ -112,18 +128,18 @@ function parseErrorState(error: unknown): { title: string; text: string; retry: 
  * the same list writes as a tap, with Undo. Writes go through
  * useWallListActions, whose toast is captured into the voice banner instead.
  */
-export function useWallVoice({ setting, picovoice, wake = false, today, timeZone, onShow, onRotate, onBrief, onFeedback, onWake, deps }: UseWallVoiceOptions) {
-  const { householdId, members, groceryCatalog } = useWallData();
+export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone, onShow, onRotate, onBrief, onFeedback, onWake, deps }: UseWallVoiceOptions) {
+  const { householdId, members, groceryCatalog, actions } = useWallData();
+  const loadWakeFile = actions.loadWakeFile;
   const [state, setState] = useState<WallVoiceState | null>(null);
   /** The wake setup that's confirmed listening ('' = none). */
   const [wakeOnKey, setWakeOnKey] = useState('');
-  const hasPicovoice = Boolean(picovoice);
-  const support = useMemo<VoiceSupport>(() => {
-    const base = deps?.support ?? { speech: Boolean(getSpeechRecognition()), audio: audioSupported(), device: deviceSupported() };
-    return { ...base, device: hasPicovoice && (base.device ?? deviceSupported()) };
-  }, [deps?.support, hasPicovoice]);
+  const support = useMemo<VoiceSupport>(
+    () => deps?.support ?? { speech: Boolean(getSpeechRecognition()), audio: audioSupported(), device: deviceSupported() },
+    [deps?.support]
+  );
   const createEngine = deps?.createEngine ?? defaultCreateEngine;
-  const makeDeviceEngine = deps?.createDeviceEngine ?? createDeviceEngine;
+  const makeDeviceEngine = deps?.createDeviceEngine ?? defaultCreateDeviceEngine;
   const parseText = deps?.parseText ?? parseWallVoiceText;
   const parseAudio = deps?.parseAudio ?? parseWallVoiceAudio;
 
@@ -152,24 +168,31 @@ export function useWallVoice({ setting, picovoice, wake = false, today, timeZone
   );
   const act = useWallListActions(voiceToaster);
 
-  const latest = useRef({ members, groceryCatalog, today, timeZone, onShow, onRotate, onBrief, onFeedback, onWake, act, parseText, parseAudio, householdId });
+  const latest = useRef({ members, groceryCatalog, today, timeZone, onShow, onRotate, onBrief, onFeedback, onWake, act, parseText, parseAudio, householdId, loadWakeFile });
   useEffect(() => {
-    latest.current = { members, groceryCatalog, today, timeZone, onShow, onRotate, onBrief, onFeedback, onWake, act, parseText, parseAudio, householdId };
+    latest.current = { members, groceryCatalog, today, timeZone, onShow, onRotate, onBrief, onFeedback, onWake, act, parseText, parseAudio, householdId, loadWakeFile };
   });
 
   const available = pickVoiceEngine(setting, support, false) !== null;
   const usesDevice = pickVoiceEngine(setting, support, false) === 'device';
 
-  /** The on-device engine for the current Picovoice setup (rebuilt when it changes). */
-  const deviceEngine = useCallback((): DeviceVoiceEngine | null => {
-    if (!picovoice) return null;
-    const key = configKey(picovoice);
-    if (device.current?.key === key) return device.current.engine;
+  /** The on-device engine for the current wake word (rebuilt when it changes). */
+  const wakeKey = configKey(wakeModel);
+  const wakeModelRef = useRef(wakeModel);
+  useEffect(() => {
+    wakeModelRef.current = wakeModel;
+  });
+  const deviceEngine = useCallback((): DeviceVoiceEngine => {
+    if (device.current?.key === wakeKey) return device.current.engine;
     device.current?.engine.dispose();
-    const engine = makeDeviceEngine(picovoice, () => onWakeRef.current());
-    device.current = { key, engine };
+    const engine = makeDeviceEngine(
+      wakeModelRef.current,
+      () => onWakeRef.current(),
+      file => latest.current.loadWakeFile(file)
+    );
+    device.current = { key: wakeKey, engine };
     return engine;
-  }, [picovoice, makeDeviceEngine]);
+  }, [wakeKey, makeDeviceEngine]);
 
   useEffect(
     () => () => {
@@ -278,29 +301,42 @@ export function useWallVoice({ setting, picovoice, wake = false, today, timeZone
   const handleCapture = useCallback(
     async (cap: VoiceCapture, mine: number, engine: EngineKind) => {
       const l = latest.current;
+      const addCtx = {
+        memberNames: l.members.map(m => m.displayName).filter((n): n is string => Boolean(n)),
+        catalogNames: l.groceryCatalog.map(i => i.name),
+        today: l.today,
+      };
+      let transcript = cap.kind === 'text' ? cap.transcript : '';
       if (cap.kind === 'text') {
-        const local = parseLocalCommand(cap.transcript);
+        if (engine === 'device') {
+          const label = wakeModelRef.current.label;
+          const readsAsAdd = (text: string) => parseLocalAdd(text, addCtx) !== null;
+          const readable = (text: string) => parseLocalCommand(text) !== null || readsAsAdd(text);
+          const clean = (text: string) => trimLeadIn(stripWakeWord(text, label), readable);
+          transcript = pickTranscript(clean(cap.transcript), cap.alternative === undefined ? undefined : clean(cap.alternative), readsAsAdd);
+          if (!transcript) {
+            fail('Didn’t catch that', 'Say the command right after the wake word.');
+            return;
+          }
+        }
+        const local = parseLocalCommand(transcript);
         if (local) {
           runLocal(local);
           return;
         }
         // Adds the grammar can read never reach Gemini.
-        const add = parseLocalAdd(cap.transcript, {
-          memberNames: l.members.map(m => m.displayName).filter((n): n is string => Boolean(n)),
-          catalogNames: l.groceryCatalog.map(i => i.name),
-          today: l.today,
-        });
+        const add = parseLocalAdd(transcript, addCtx);
         if (add) {
           runAction(add);
           return;
         }
         // The on-device engine is the no-AI engine: what the grammar can't read stops here.
         if (engine === 'device') {
-          fail('Didn’t catch that', `${quote(cap.transcript)} isn’t a command I know. Try “add milk” or “remind Sam to feed the cat”.`);
+          fail('Didn’t catch that', `${quote(transcript)} isn’t a command I know. Try “add milk” or “remind Sam to feed the cat”.`);
           return;
         }
       }
-      setState({ phase: 'working', heard: cap.kind === 'text' ? cap.transcript : null });
+      setState({ phase: 'working', heard: cap.kind === 'text' ? transcript : null });
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         fail('Voice needs the internet', 'Use Add instead. It saves offline.', false);
         return;
@@ -310,7 +346,7 @@ export function useWallVoice({ setting, picovoice, wake = false, today, timeZone
       try {
         command =
           cap.kind === 'text'
-            ? await l.parseText(l.householdId, cap.transcript, ctx)
+            ? await l.parseText(l.householdId, transcript, ctx)
             : await l.parseAudio(l.householdId, cap.data, cap.mimeType, ctx);
       } catch (error) {
         if (mine !== epoch.current) return;
@@ -329,7 +365,8 @@ export function useWallVoice({ setting, picovoice, wake = false, today, timeZone
     [fail, runAction, runLocal]
   );
 
-  const start = useCallback(() => {
+  /** `afterWake`: the wake word opened it, so the moments before count. */
+  const begin = useCallback((afterWake: boolean) => {
     session.current?.cancel();
     epoch.current += 1;
     const mine = epoch.current;
@@ -339,23 +376,24 @@ export function useWallVoice({ setting, picovoice, wake = false, today, timeZone
         fail('Voice isn’t available', 'This browser can’t use the microphone.', false);
         return;
       }
-      let engine: VoiceEngine | null;
-      if (kind === 'device') {
-        engine = deviceEngine();
-      } else {
-        engine = engines.current[kind] ?? createEngine(kind);
-        engines.current[kind] = engine;
-      }
-      if (!engine) {
-        fail('Voice isn’t set up', 'Add a Picovoice AccessKey in Settings → Wall display → Voice.', false);
-        return;
-      }
       setState({ phase: 'listening', interim: '' });
-      const s = engine.listen({
-        onInterim: text => {
-          if (mine === epoch.current) setState(cur => (cur?.phase === 'listening' ? { phase: 'listening', interim: text } : cur));
-        },
-      });
+      const onInterim = (text: string) => {
+        if (mine === epoch.current) setState(cur => (cur?.phase === 'listening' ? { phase: 'listening', interim: text } : cur));
+      };
+      let s: VoiceSession;
+      if (kind === 'device') {
+        s = deviceEngine().listen({
+          onInterim,
+          afterWake,
+          onLoading: loading => {
+            if (mine === epoch.current) setState(cur => (cur?.phase === 'listening' ? { ...cur, loading } : cur));
+          },
+        });
+      } else {
+        const engine = engines.current[kind] ?? createEngine(kind);
+        engines.current[kind] = engine;
+        s = engine.listen({ onInterim });
+      }
       session.current = s;
       s.result.then(
         cap => {
@@ -373,32 +411,35 @@ export function useWallVoice({ setting, picovoice, wake = false, today, timeZone
             listen();
             return;
           }
-          const activation = error instanceof VoiceCaptureError && error.message === 'activation';
           if (code === 'aborted') setState(null);
           else if (code === 'no-speech') fail('Didn’t catch that', 'Try again a little closer to the iPad.');
           else if (code === 'not-allowed') fail('The microphone is blocked', 'Allow it in iPad Settings → Safari → Microphone, then try again.', false);
           else if (code === 'unsupported')
             fail('The iPad’s speech recognition doesn’t work here', 'It doesn’t run in a Home Screen app. Set up on-device voice in Settings → Wall display → Voice.', false);
-          else if (activation) fail('Voice can’t start', 'Check the Picovoice AccessKey in Settings → Wall display → Voice.', false);
-          else fail('Voice isn’t working', 'The microphone couldn’t start. Try again.');
+          else if (kind === 'device' && code === 'unavailable') {
+            console.error('[wall] on-device voice failed:', error);
+            fail('Voice couldn’t start', 'Its speech files didn’t load. Check the wall’s internet connection, then try again.');
+          } else fail('Voice isn’t working', 'The microphone couldn’t start. Try again.');
         }
       );
     };
     listen();
   }, [createEngine, deviceEngine, fail, handleCapture, setting, support]);
+  // Public, and used as a click handler: never forward the event as `afterWake`.
+  const start = useCallback(() => begin(false), [begin]);
 
-  // "Hey Home": a detection opens a command unless one is already running.
+  // The wake word: a detection opens a command unless one is already running.
   useEffect(() => {
     onWakeRef.current = () => {
       const cur = stateRef.current;
       if (cur?.phase === 'listening' || cur?.phase === 'working') return;
       latest.current.onWake?.();
-      start();
+      begin(true);
     };
-  }, [start]);
+  }, [begin]);
 
-  // Wake-word listening follows `wake`; a failure to start is reported once per setup.
-  const wakeKey = usesDevice && wake ? configKey(picovoice) : '';
+  // Wake-word listening follows `wake`; a failure to start is reported once per wake word.
+  const listenKey = usesDevice && wake ? wakeKey : '';
   const reportedWake = useRef('');
   useEffect(() => {
     if (!usesDevice) {
@@ -406,28 +447,24 @@ export function useWallVoice({ setting, picovoice, wake = false, today, timeZone
       return undefined;
     }
     const engine = deviceEngine();
-    if (!engine) return undefined;
-    const on = wakeKey !== '';
+    const on = listenKey !== '';
     let live = true;
     engine.setWake(on).then(
       () => {
-        if (live) setWakeOnKey(wakeKey);
+        if (live) setWakeOnKey(listenKey);
       },
       (error: unknown) => {
         if (!live) return;
         setWakeOnKey('');
         console.error(`[wall] wake word failed to ${on ? 'start' : 'stop'}:`, error);
-        if (!on || reportedWake.current === wakeKey) return;
-        reportedWake.current = wakeKey;
-        const activation = error instanceof VoiceCaptureError && error.message === 'activation';
+        if (!on || reportedWake.current === listenKey) return;
+        reportedWake.current = listenKey;
         const blocked = error instanceof VoiceCaptureError && error.code === 'not-allowed';
         fail(
           'The wake word isn’t listening',
           blocked
             ? 'Allow the microphone in iPad Settings → Safari → Microphone.'
-            : activation
-              ? 'Check the Picovoice AccessKey in Settings → Wall display → Voice.'
-              : 'Tap the mic to talk instead.',
+            : 'Its files didn’t load. Check the wall’s internet connection. Tap the mic to talk meanwhile.',
           false
         );
       }
@@ -435,7 +472,7 @@ export function useWallVoice({ setting, picovoice, wake = false, today, timeZone
     return () => {
       live = false;
     };
-  }, [usesDevice, wakeKey, deviceEngine, fail]);
+  }, [usesDevice, listenKey, deviceEngine, fail]);
 
   const finish = useCallback(() => session.current?.finish(), []);
   const cancel = useCallback(() => {
@@ -448,6 +485,6 @@ export function useWallVoice({ setting, picovoice, wake = false, today, timeZone
     if (state?.phase === 'result' && state.undo) runUndo(state.undo, state.text);
   }, [runUndo, state]);
 
-  const wakeListening = wakeKey !== '' && wakeOnKey === wakeKey;
+  const wakeListening = listenKey !== '' && wakeOnKey === listenKey;
   return { state, available, start, finish, cancel, undo, wakeListening };
 }

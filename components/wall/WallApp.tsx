@@ -202,7 +202,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   const wakeWanted = data.settings.wakeWord && data.isDisplay && !runtime.nightShowing && soundState !== 'locked';
   const voice = useWallVoice({
     setting: data.settings.voice,
-    picovoice: data.settings.picovoice,
+    wakeModel: data.settings.wakeModel,
     wake: wakeWanted,
     onWake: () => {
       brief.close();
@@ -376,7 +376,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
             onOfflineInfo={() => toaster.show(NOTES.offline)}
             {...(voice.available ? { onMic: listening ? voice.finish : startVoice } : {})}
             micLive={listening}
-            wakeLabel={voice.wakeListening ? data.settings.picovoice?.label : undefined}
+            wakeLabel={voice.wakeListening ? data.settings.wakeModel.label : undefined}
             onGear={() => setOverlay('gear')}
           />
           <div className="main">

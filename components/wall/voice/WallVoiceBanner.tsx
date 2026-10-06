@@ -77,7 +77,15 @@ const WallVoiceBanner: React.FC<WallVoiceBannerProps> = ({ state, onFinish, onCa
     kicker = 'Listening';
     body = (
       <>
-        <div className="h">{state.interim ? <q>{state.interim}</q> : 'Say a command, like “add milk to the list”'}</div>
+        <div className="h">
+          {state.interim ? (
+            <q>{state.interim}</q>
+          ) : state.loading ? (
+            'Getting voice ready… the first time takes a minute'
+          ) : (
+            'Say a command, like “add milk to the list”'
+          )}
+        </div>
         <div className="lv" aria-hidden="true">
           {BARS.map(d => (
             <i key={d} style={{ animationDelay: `${d}s` }} />
