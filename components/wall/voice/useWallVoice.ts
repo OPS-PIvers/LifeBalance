@@ -460,11 +460,13 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
         if (!on || reportedWake.current === listenKey) return;
         reportedWake.current = listenKey;
         const blocked = error instanceof VoiceCaptureError && error.code === 'not-allowed';
+        // The wall has no console to read, so the reason goes on screen.
+        const reason = error instanceof Error && error.message ? ` (${error.message.slice(0, 160)})` : '';
         fail(
           'The wake word isn’t listening',
           blocked
             ? 'Allow the microphone in iPad Settings → Safari → Microphone.'
-            : 'Its files didn’t load. Check the wall’s internet connection. Tap the mic to talk meanwhile.',
+            : `Tap the mic to talk meanwhile.${reason}`,
           false
         );
       }
