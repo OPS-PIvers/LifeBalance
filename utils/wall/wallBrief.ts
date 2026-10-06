@@ -1,4 +1,5 @@
 import type { WallEvent, WallTravel } from '@/types/schema';
+import { longDateText } from './wallCalendar';
 import { eventsOn } from './wallSelectors';
 import { spokenTime } from './wallSpeech';
 import type { WallWeather, WeatherIcon } from './wallWeather';
@@ -11,18 +12,32 @@ import type { WallWeather, WeatherIcon } from './wallWeather';
 export type BriefDay = 'today' | 'tomorrow';
 
 export interface BriefLine {
-  kind: 'weather' | 'count' | 'event' | 'allday' | 'more';
+  /** `answer`: a spoken answer's headline line; `item`: a plain list line. */
+  kind: 'weather' | 'count' | 'event' | 'allday' | 'more' | 'answer' | 'item';
   /** What the card shows. */
   text: string;
-  /** What the wall says. */
+  /** What the wall says; empty = shown, not read (an answer's list rows). */
   speech: string;
   /** The event's owner color key, for the dot. */
   ownerKey?: string;
 }
 
+export type BriefIcon = 'calendar' | 'weather' | 'meal' | 'list' | 'clock';
+
+/**
+ * A card the wall shows and reads aloud line by line: the day brief, and every
+ * spoken answer (utils/wall/wallAnswers.ts) — one frame for both.
+ */
 export interface WallBrief {
-  day: BriefDay;
+  /** The day a day brief is about; absent on other answers. */
+  day?: BriefDay;
   date: string;
+  /** Small caps line above the title. */
+  kicker: string;
+  title: string;
+  /** The card's accessible name. */
+  label: string;
+  icon: BriefIcon;
   lines: BriefLine[];
 }
 
@@ -82,9 +97,13 @@ export interface BriefInput {
   timeZone: string;
   /** A first name for a member key, or null for Family / unknown. */
   person: (ownerKey: string) => string | null;
+  /** That day's planned dinner; null = nothing planned; absent = no line. */
+  dinner?: string | null;
+  /** Open to-dos due that day (today: overdue too); absent = no line. */
+  todosDue?: number;
 }
 
-export function composeBrief({ day, date, events, travel, weather, now, timeZone, person }: BriefInput): WallBrief {
+export function composeBrief({ day, date, events, travel, weather, now, timeZone, person, dinner, todosDue }: BriefInput): WallBrief {
   const lines: BriefLine[] = [];
   const w = weatherLine(day, date, weather);
   if (w) lines.push(w);
@@ -128,5 +147,30 @@ export function composeBrief({ day, date, events, travel, weather, now, timeZone
     const rest = timed.length - MAX_EVENTS;
     lines.push({ kind: 'more', text: `and ${rest} more`, speech: `And ${rest} more. The calendar has the rest.` });
   }
-  return { day, date, lines };
+  if (dinner !== undefined) {
+    const when = day === 'today' ? 'tonight' : 'tomorrow';
+    lines.push(
+      dinner
+        ? { kind: 'item', text: `Dinner · ${dinner}`, speech: `Dinner ${when} is ${dinner}.` }
+        : { kind: 'item', text: 'No dinner planned', speech: `Nothing's planned for dinner ${when}.` }
+    );
+  }
+  if (todosDue !== undefined) {
+    const when = day === 'today' ? 'today' : 'tomorrow';
+    const n = todosDue;
+    lines.push({
+      kind: 'item',
+      text: n === 0 ? `No to-dos due ${when}` : `${n} ${n === 1 ? 'to-do' : 'to-dos'} due ${when}`,
+      speech: n === 0 ? `No to-dos are due ${when}.` : `There ${n === 1 ? 'is 1 to-do' : `are ${n} to-dos`} due ${when}.`,
+    });
+  }
+  return {
+    day,
+    date,
+    kicker: longDateText(date),
+    title: day === 'today' ? 'Today' : 'Tomorrow',
+    label: day === 'today' ? 'Your day' : 'Tomorrow',
+    icon: 'calendar',
+    lines,
+  };
 }

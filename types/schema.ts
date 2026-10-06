@@ -2082,6 +2082,7 @@ export interface ApiKeyPermissions {
   bills?: boolean;  // Pay/mark a calendar bill via the quickAddBillPay endpoint (F-MONEY-11). Optional for backward-compat with keys minted before it existed.
   todos?: boolean;  // Create a to-do via the quickAddTodo endpoint (F-TODO-07). Optional for backward-compat with keys minted before it existed.
   read?: boolean;  // Generic read/export scope for GET endpoints (e.g. getTodos). Separate from the write-only scopes so a capture-only key can't exfiltrate data. Optional for backward-compat with keys minted before it existed.
+  voiceLearning?: boolean;  // Read + delete the wall's voice misses via GET/POST voicemisses (the nightly voice-learning routine). Separate scope so no other key can read household speech. Optional for backward-compat (defaults off).
   bankSync?: boolean;  // Nightly Wells Fargo bank-email sync scope, gating the (not-yet-built) bankEmailSync endpoint. Separate scope so a capture-only key can't ingest bank data unless explicitly enabled. Optional for backward-compat with keys minted before it existed.
   receiptScanning: boolean;  // Unused — receipt endpoint removed; kept for stored-doc shape
 }
@@ -2141,6 +2142,42 @@ export interface WallDisplay {
  * browser can run it. `off` hides the mic.
  */
 export type WallVoiceEngine = 'auto' | 'device' | 'speech' | 'audio' | 'off';
+
+/**
+ * Why a voice command went into the miss log: the grammar couldn't read it,
+ * "undo" came right after a command ran, "cancel" was the command, or the
+ * wake word fired and nothing was heard.
+ */
+export type WallVoiceMissKind = 'unparsed' | 'undo' | 'cancel' | 'no-speech';
+
+/**
+ * One voice command the wall got wrong, at
+ * households/{id}/voiceMisses/{autoId}. Text only, never audio. Written ONLY
+ * by the household's active display (create-only); read and deleted only by
+ * the nightly voice-learning routine through the `voicemisses` endpoint
+ * (functions/src/wall/voiceMisses.ts). A Firestore TTL policy on `expireAt`
+ * deletes anything older than 30 days. See docs/DECISIONS.md "Voice misses".
+ */
+export interface WallVoiceMiss {
+  kind: WallVoiceMissKind;
+  /** The transcript the wall acted on (after wake-word and lead-in trimming). */
+  heard: string;
+  /** The free recognizer's raw text. */
+  free: string;
+  /** The command-only recognizer's raw text ('' when it had none). */
+  alternative: string;
+  engine: 'device' | 'speech' | 'audio';
+  /** What the wall showed, e.g. "calendar:week". */
+  view: string;
+  /** For `undo`: what the undone command did ("Added to Shopping: milk"). */
+  did?: string;
+  displayId: string;
+  appVersion: string;
+  /** ISO time it happened. */
+  at: string;
+  /** Firestore Timestamp, 30 days after `at` (the TTL field). */
+  expireAt: unknown;
+}
 
 /**
  * A custom wake word's .onnx (~0.9 MB from openWakeWord's notebook): too big

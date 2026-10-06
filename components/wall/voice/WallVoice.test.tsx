@@ -8,7 +8,8 @@ import { makeWallData } from '@/components/wall/data/wallTestData';
 import { VoiceCaptureError, type VoiceCapture, type VoiceEngine } from './voiceEngines';
 import type { DeviceListenOptions, DeviceVoiceEngine } from './deviceEngine';
 import { DEFAULT_WAKE_MODEL } from '@/utils/wall/wallSettings';
-import { WALL_VOICE_BANNER_MS, WALL_VOICE_BIG_MS, useWallVoice, type WallVoiceDeps, type WallVoiceFeedback } from './useWallVoice';
+import type { WallQuestion } from '@/utils/wall/wallAnswers';
+import { WALL_VOICE_BANNER_MS, WALL_VOICE_BIG_MS, useWallVoice, type WallVoiceDeps, type WallVoiceFeedback, type WallVoiceMissReport } from './useWallVoice';
 import WallVoiceBanner from './WallVoiceBanner';
 
 vi.mock('@/services/geminiService', () => ({
@@ -75,8 +76,10 @@ const Harness: React.FC<{
   onShow: (t: string) => void;
   onRotate: (on: boolean) => void;
   onFeedback: (f: WallVoiceFeedback) => void;
-}> = ({ setting = 'auto', wakeModel = DEFAULT_WAKE_MODEL, wake, onWake, deps, onShow, onRotate, onFeedback }) => {
-  const voice = useWallVoice({ setting, wakeModel, wake, onWake, today: TODAY, timeZone: 'America/Chicago', onShow, onRotate, onFeedback, deps });
+  onAsk: (q: WallQuestion) => void;
+  onMiss: (m: WallVoiceMissReport) => void;
+}> = ({ setting = 'auto', wakeModel = DEFAULT_WAKE_MODEL, wake, onWake, deps, onShow, onRotate, onFeedback, onAsk, onMiss }) => {
+  const voice = useWallVoice({ setting, wakeModel, wake, onWake, today: TODAY, timeZone: 'America/Chicago', onShow, onRotate, onFeedback, onAsk, onMiss, deps });
   return (
     <>
       <button type="button" onClick={voice.start}>
@@ -126,6 +129,8 @@ function setup(
   const onRotate = vi.fn();
   const onFeedback = vi.fn();
   const onWake = vi.fn();
+  const onAsk = vi.fn();
+  const onMiss = vi.fn();
   let wake = opts.wake ?? false;
   let wakeModel = opts.wakeModel;
   const ui = () => (
@@ -139,6 +144,8 @@ function setup(
         onShow={onShow}
         onRotate={onRotate}
         onFeedback={onFeedback}
+        onAsk={onAsk}
+        onMiss={onMiss}
       />
     </WallDataContext.Provider>
   );
@@ -161,7 +168,7 @@ function setup(
       engines.sessions.at(-1)!.resolve(capture);
     });
   };
-  return { engines, parse, data, onShow, onRotate, onFeedback, onWake, rerenderWith, setWake, rerenderWake, say };
+  return { engines, parse, data, onShow, onRotate, onFeedback, onWake, onAsk, onMiss, rerenderWith, setWake, rerenderWake, say };
 }
 
 afterEach(() => {
@@ -313,10 +320,46 @@ describe('wall voice', () => {
   });
 
   it('an unknown command quotes what it heard', async () => {
-    const { say, data } = setup({ command: { transcript: 'what is the weather', intent: 'unknown' } });
-    await say({ kind: 'text', transcript: 'what is the weather' });
-    expect(screen.getByText('“what is the weather” isn’t a command I know.')).toBeInTheDocument();
+    const { say, data, onMiss } = setup({ command: { transcript: 'play some jazz', intent: 'unknown' } });
+    await say({ kind: 'text', transcript: 'play some jazz' });
+    expect(screen.getByText('“play some jazz” isn’t a command I know.')).toBeInTheDocument();
     expect(data.actions.addShoppingItem).not.toHaveBeenCalled();
+    expect(onMiss).toHaveBeenCalledWith({ kind: 'unparsed', heard: 'play some jazz', free: 'play some jazz', alternative: '', engine: 'speech' });
+  });
+
+  it('answers a question out loud through the wall, with no AI call', async () => {
+    const { say, parse, onAsk, onMiss } = setup();
+    await say({ kind: 'text', transcript: "What's for dinner?" });
+    expect(onAsk).toHaveBeenCalledWith({ topic: 'meal', meal: 'dinner', when: 'today' });
+    expect(parse).not.toHaveBeenCalled();
+    expect(onMiss).not.toHaveBeenCalled();
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('logs "cancel" as the command, and silence after the wake word', async () => {
+    const { say, engines, onMiss } = setup();
+    await say({ kind: 'text', transcript: 'never mind' });
+    expect(onMiss).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'cancel', heard: 'never mind' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mic' }));
+    await act(async () => {
+      engines.sessions.at(-1)!.reject(new VoiceCaptureError('no-speech'));
+    });
+    expect(onMiss).toHaveBeenLastCalledWith({ kind: 'no-speech', heard: '', free: '', alternative: '', engine: 'speech' });
+  });
+
+  it('an undo right after a command logs what that command heard and did', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { say, onMiss } = setup();
+    await say({ kind: 'text', transcript: 'show the meals' });
+    await say({ kind: 'text', transcript: 'undo' });
+    expect(onMiss).toHaveBeenCalledWith({ kind: 'undo', heard: 'show the meals', free: 'show the meals', alternative: '', engine: 'speech', did: 'Showed meals' });
+    onMiss.mockClear();
+    await say({ kind: 'text', transcript: 'show the meals' });
+    act(() => {
+      vi.advanceTimersByTime(11_000);
+    });
+    await say({ kind: 'text', transcript: 'undo' });
+    expect(onMiss).not.toHaveBeenCalled();
   });
 
   it('rotation commands reach the wall', async () => {
@@ -350,6 +393,18 @@ describe('wall voice', () => {
       expect(parse).not.toHaveBeenCalled();
       expect(screen.getByText('Didn’t catch that')).toBeInTheDocument();
       expect(screen.getByText(/isn’t a command I know\. Try “add milk”/)).toBeInTheDocument();
+    });
+
+    it('logs what both recognizers heard when nothing reads', async () => {
+      const { say, onMiss } = setup({ support: device });
+      await say({ kind: 'text', transcript: 'hey jarvis grab what we need for breakfast', alternative: '[unk]' });
+      expect(onMiss).toHaveBeenCalledWith({
+        kind: 'unparsed',
+        heard: 'grab what we need for breakfast',
+        free: 'hey jarvis grab what we need for breakfast',
+        alternative: '[unk]',
+        engine: 'device',
+      });
     });
 
     it('where it can’t run, Auto uses Safari', async () => {

@@ -144,6 +144,8 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (!householdId || sessionStorage.getItem('LIFEBALANCE_TEST_MODE') === 'true') throw new Error('No wake word files in Test Mode');
         return readWakeFile(db, householdId, file);
       },
+      // Only a paired display logs misses (firestore.rules): a member's preview is not the kitchen wall.
+      logVoiceMiss: async () => undefined,
     }),
     [shopping, todoSlice, householdId]
   );

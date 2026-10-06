@@ -76,6 +76,9 @@ export {
 // Wall sound (docs/plans/wall-display-kiosk.md §12): spoken replies via Google
 // Cloud Text-to-Speech, authed by the runtime service account (no secret).
 export { walltts } from "./wall/tts";
+// Wall voice learning (.claude/skills/voice-learning/SKILL.md): the voice miss log, read and
+// cleared by the nightly routine with a voiceLearning-scoped household API key.
+export { voicemisses } from "./wall/voiceMisses";
 
 // Stripe billing functions (Plan 050a) live in ./stripe and are fully implemented
 // and unit-tested, but are intentionally NOT exported here yet. Exporting a function

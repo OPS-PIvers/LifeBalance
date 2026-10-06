@@ -15,6 +15,7 @@ import type {
   WallTravel,
   WallWakeFile,
 } from '@/types/schema';
+import type { VoiceMissDraft } from '@/utils/wall/wallVoiceMiss';
 
 /**
  * The one data contract every wall component reads
@@ -42,6 +43,11 @@ export interface WallDataActions {
   synthesizeSpeech: (text: string) => Promise<string>;
   /** A custom wake word's .onnx (`settings.wakeModel.file`). Rejects where there's none (Test Mode). */
   loadWakeFile: (file: WallWakeFile) => Promise<Uint8Array>;
+  /**
+   * Logs a voice command the wall got wrong (households/{id}/voiceMisses).
+   * Only a paired display writes; a member preview and Test Mode skip it.
+   */
+  logVoiceMiss: (miss: VoiceMissDraft) => Promise<void>;
 }
 
 export interface WallData {

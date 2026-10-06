@@ -36,6 +36,7 @@ import {
   deleteField,
   serverTimestamp,
   setLogLevel,
+  Timestamp,
   type Firestore,
 } from 'firebase/firestore';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, it } from 'vitest';
@@ -2486,6 +2487,15 @@ describe('wall display identity', () => {
     return asFirestore(testEnv.authenticatedContext(uid, claims).firestore());
   }
 
+  function voiceMiss(over: Record<string, unknown> = {}) {
+    return {
+      kind: 'unparsed', heard: 'whats for supper', free: 'jarvis whats for supper', alternative: '[unk]', engine: 'device',
+      view: 'calendar:week', displayId: DID, appVersion: 'wall-4', at: '2026-10-06T12:00:00.000Z',
+      expireAt: Timestamp.fromMillis(Date.now() + 30 * 86_400_000),
+      ...over,
+    };
+  }
+
   beforeEach(async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       const db = asFirestore(ctx.firestore());
@@ -2576,6 +2586,11 @@ describe('wall display identity', () => {
       );
     });
 
+    it('logs a voice miss as itself, text only, expiring within 31 days', async () => {
+      await assertSucceeds(setDoc(doc(displayDb(), 'households', H1, 'voiceMisses', 'vm1'), voiceMiss()));
+      await assertSucceeds(setDoc(doc(displayDb(), 'households', H1, 'voiceMisses', 'vm2'), voiceMiss({ kind: 'undo', did: 'Showed meals' })));
+    });
+
     it('heartbeats and saves its own layout', async () => {
       await assertSucceeds(
         updateDoc(doc(displayDb(), 'households', H1, 'displays', DID), {
@@ -2597,6 +2612,25 @@ describe('wall display identity', () => {
       await assertFails(getDoc(doc(db, 'households', H1, 'recaps', '2026-W40')));
       await assertFails(getDoc(doc(db, 'households', H1, 'activityLog', 'log1')));
       await assertFails(getDoc(doc(db, 'households', H1, 'lists', 'x')));
+    });
+
+    it('voice misses: no reading, editing or forging; members cannot touch them', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(asFirestore(ctx.firestore()), 'households', H1, 'voiceMisses', 'seed'), voiceMiss());
+      });
+      const db = displayDb();
+      await assertFails(getDoc(doc(db, 'households', H1, 'voiceMisses', 'seed')));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'voiceMisses', 'seed'), { heard: 'x' }));
+      await assertFails(deleteDoc(doc(db, 'households', H1, 'voiceMisses', 'seed')));
+      await assertFails(setDoc(doc(db, 'households', H1, 'voiceMisses', 'a'), voiceMiss({ displayId: 'd2' })));
+      await assertFails(setDoc(doc(db, 'households', H1, 'voiceMisses', 'b'), voiceMiss({ audio: 'base64…' })));
+      await assertFails(setDoc(doc(db, 'households', H1, 'voiceMisses', 'c'), voiceMiss({ heard: 'x'.repeat(301) })));
+      await assertFails(setDoc(doc(db, 'households', H1, 'voiceMisses', 'd'), voiceMiss({ kind: 'other' })));
+      await assertFails(setDoc(doc(db, 'households', H1, 'voiceMisses', 'e'), voiceMiss({ expireAt: Timestamp.fromMillis(Date.now() + 90 * 86_400_000) })));
+      await assertFails(setDoc(doc(db, 'households', H2, 'voiceMisses', 'f'), voiceMiss()));
+      await assertFails(getDoc(doc(dbFor(ALICE), 'households', H1, 'voiceMisses', 'seed')));
+      await assertFails(setDoc(doc(dbFor(ALICE), 'households', H1, 'voiceMisses', 'g'), voiceMiss()));
+      await assertFails(deleteDoc(doc(dbFor(ALICE), 'households', H1, 'voiceMisses', 'seed')));
     });
 
     it('cannot read calendar feed secrets (nor can members)', async () => {

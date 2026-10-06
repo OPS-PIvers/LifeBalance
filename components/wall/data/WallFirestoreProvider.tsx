@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { collection, doc, onSnapshot, query, updateDoc, where, type Unsubscribe } from 'firebase/firestore';
+import { Timestamp, addDoc, collection, doc, onSnapshot, query, updateDoc, where, type Unsubscribe } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import { useAuth } from '@/contexts/AuthContext';
 import { attachShoppingListeners } from '@/contexts/household/listeners/shoppingListeners';
@@ -28,6 +28,7 @@ import {
 } from '@/utils/firestoreConverters';
 import { DEFAULT_WALL_SETTINGS, effectiveLayout } from '@/utils/wall/wallSettings';
 import { readWakeFile } from './wakeFile';
+import { missExpiry } from '@/utils/wall/wallVoiceMiss';
 import type {
   GroceryCatalogItem,
   HouseholdMember,
@@ -250,6 +251,14 @@ const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked
       syncCalendarsNow: () => syncWallCalendarsNow(householdId ?? ''),
       synthesizeSpeech: text => synthesizeWallSpeech(householdId ?? '', text),
       loadWakeFile: file => readWakeFile(db, householdId ?? '', file),
+      logVoiceMiss: async miss => {
+        if (!householdId || !displayId) return;
+        await addDoc(collection(db, `households/${householdId}/voiceMisses`), {
+          ...miss,
+          displayId,
+          expireAt: Timestamp.fromMillis(missExpiry(miss.at)),
+        });
+      },
     };
   }, [householdId, displayId, actor, shoppingList, groceryCatalog, completeToDo, uncompleteToDo]);
 

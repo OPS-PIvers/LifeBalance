@@ -75,6 +75,24 @@ describe('composeBrief', () => {
     expect(brief.lines).toEqual([{ kind: 'count', text: 'Nothing else on the calendar today', speech: 'Nothing else is on the calendar today.' }]);
   });
 
+  it('ends with dinner and the to-dos when they are given', () => {
+    const base = { date: TODAY, events: [], travel: [], weather: null, now: NOW, timeZone: TZ, person };
+    expect(composeBrief({ ...base, day: 'today', dinner: 'Tacos', todosDue: 3 }).lines.slice(1).map(l => l.speech)).toEqual([
+      'Dinner tonight is Tacos.',
+      'There are 3 to-dos due today.',
+    ]);
+    expect(composeBrief({ ...base, day: 'tomorrow', date: TOMORROW, dinner: null, todosDue: 1 }).lines.slice(1).map(l => l.speech)).toEqual([
+      "Nothing's planned for dinner tomorrow.",
+      'There is 1 to-do due tomorrow.',
+    ]);
+    expect(composeBrief({ ...base, day: 'today', todosDue: 0 }).lines.at(-1)?.speech).toBe('No to-dos are due today.');
+  });
+
+  it('titles its card by the day', () => {
+    const brief = composeBrief({ day: 'tomorrow', date: TOMORROW, events: [], travel: [], weather: null, now: NOW, timeZone: TZ, person });
+    expect(brief).toMatchObject({ title: 'Tomorrow', label: 'Tomorrow', icon: 'calendar', kicker: 'Tuesday, October 6' });
+  });
+
   it('caps a busy day', () => {
     const many = Array.from({ length: 11 }, (_, i) => ev(`m${i}`, `Thing ${i}`, `2026-10-06T${String(8 + i).padStart(2, '0')}:00:00-05:00`));
     const brief = composeBrief({ day: 'tomorrow', date: TOMORROW, events: many, travel: [], weather: null, now: NOW, timeZone: TZ, person });

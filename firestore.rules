@@ -1223,6 +1223,31 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // Wall voice miss log (docs/DECISIONS.md "Voice misses"): what a voice
+      // command the wall got wrong sounded like, as TEXT. Create-only, and only
+      // by the household's own active display, as itself. Nobody reads,
+      // edits or deletes it from a client — not even members: only the
+      // `voicemisses` endpoint (Admin SDK, a voiceLearning-scoped API key)
+      // reads and deletes, and a TTL policy on `expireAt` purges at 30 days.
+      match /voiceMisses/{missId} {
+        allow read, update, delete: if false;
+        allow create: if isDisplayOf(householdId) &&
+          request.resource.data.keys().hasOnly(['kind', 'heard', 'free', 'alternative', 'engine', 'view', 'did', 'displayId', 'appVersion', 'at', 'expireAt']) &&
+          request.resource.data.keys().hasAll(['kind', 'heard', 'free', 'alternative', 'engine', 'view', 'displayId', 'appVersion', 'at', 'expireAt']) &&
+          request.resource.data.kind in ['unparsed', 'undo', 'cancel', 'no-speech'] &&
+          request.resource.data.engine in ['device', 'speech', 'audio'] &&
+          request.resource.data.displayId == request.auth.token.did &&
+          request.resource.data.heard is string && request.resource.data.heard.size() <= 300 &&
+          request.resource.data.free is string && request.resource.data.free.size() <= 300 &&
+          request.resource.data.alternative is string && request.resource.data.alternative.size() <= 300 &&
+          request.resource.data.view is string && request.resource.data.view.size() <= 300 &&
+          request.resource.data.get('did', '') is string && request.resource.data.get('did', '').size() <= 300 &&
+          request.resource.data.appVersion is string && request.resource.data.appVersion.size() <= 300 &&
+          request.resource.data.at is string && request.resource.data.at.size() <= 40 &&
+          request.resource.data.expireAt is timestamp &&
+          request.resource.data.expireAt <= request.time + duration.value(31, 'd');
+      }
+
       // Monthly money recaps — written ONLY by Cloud Functions (Admin SDK bypasses rules).
       match /moneyRecaps/{recapId} {
         allow read: if isMemberOf(householdId);
@@ -1401,7 +1426,7 @@ service cloud.firestore {
       match /{subcollection}/{document} {
         // 🛡️ CRITICAL: Exclude apiKeys + plaidItems from read to prevent bypass of admin-only / server-only access
         allow read: if isMemberOf(householdId) && subcollection != 'apiKeys' && subcollection != 'plaidItems' &&
-                       subcollection != 'calendarFeedSecrets';
+                       subcollection != 'calendarFeedSecrets' && subcollection != 'voiceMisses';
         allow write: if isMemberOf(householdId) &&
                      subcollection != 'members' &&
                      subcollection != 'habits' &&
@@ -1435,7 +1460,8 @@ service cloud.firestore {
                      subcollection != 'wallEvents' &&
                      subcollection != 'calendarFeeds' &&
                      subcollection != 'wallTravel' &&
-                     subcollection != 'calendarFeedSecrets';
+                     subcollection != 'calendarFeedSecrets' &&
+                     subcollection != 'voiceMisses';
       }
     }
 
