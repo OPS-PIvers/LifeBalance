@@ -87,7 +87,7 @@ Run `pnpm install --frozen-lockfile` if needed, then `pnpm lint` and `pnpm test`
 
 - Commit: `Wall voice learning: <n> phrasings, <m> answers (<date>)`, with the usual Co-Authored-By trailer.
 - `git push -u origin claude/voice-learning`. Retry network failures up to 4 times with backoff.
-- If no open PR exists, create a **draft** PR to `main` titled `Wall voice learning`.
+- If no open PR exists, create a **draft** PR to `main` titled `Wall voice learning`. Use the GitHub MCP tools (load them with ToolSearch). If this session has none, the push alone is enough: give `https://github.com/OPS-PIvers/LifeBalance/compare/main...claude/voice-learning` in your report, put tonight's log section in the commit message body instead, and say the PR still needs opening.
 - The PR body holds a running log. Add a section per night, newest on top:
   - `### <yyyy-mm-dd>: <N> misses`
   - a table: Heard (command wording) | Kind | Count | Outcome (taught `<intent>`, new answer, proposal, ignored)
