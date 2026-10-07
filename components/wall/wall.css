@@ -117,12 +117,23 @@ html:has(.wall.dark) body { background: #1b1a17; }
 
 /*
  * Settings' Side buttons. Hidden: no rail, the screens take the full width.
- * On tap: the same full-width layout, with the rail sliding in over the left
- * edge on a touch (useWallRail), so nothing under a finger moves.
+ * On tap: the same full-width layout, and a touch (useWallRail) brings the
+ * rail back as a compact floating toolbar, centred on the left edge, so it
+ * covers a short strip of the screen rather than its whole height, stays
+ * clear of the corners, and nothing under a finger moves.
  */
 .wall.no-rail, .wall.rail-float { grid-template-columns: minmax(0, 1fr); }
-.wall.rail-float .rail { position: absolute; z-index: 28; top: env(safe-area-inset-top, 0px); bottom: 0; left: 0; width: 104px; background: var(--card); border-right-color: var(--line-strong); box-shadow: 12px 0 32px rgba(22, 21, 18, 0.1); transform: translateX(-100%); visibility: hidden; transition: transform 0.22s ease-in, visibility 0s 0.22s; }
-.wall.rail-float.rail-open .rail { transform: none; visibility: visible; transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.wall.rail-float .rail { position: absolute; z-index: 28; top: 50%; left: 16px; gap: 6px; padding: 12px 8px; border: 1px solid var(--line-strong); border-radius: 28px; background: var(--card); box-shadow: var(--shadow); transform: translate(calc(-100% - 24px), -50%); visibility: hidden; transition: transform 0.22s ease-in, visibility 0s 0.22s; }
+.wall.rail-float.rail-open .rail { transform: translate(0, -50%); visibility: visible; transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.wall.rail-float .rail .sp { flex: none; width: 52px; height: 1px; margin: 6px 0; background: var(--line); }
+.wall.rail-float .rail .gear { margin-top: 0; }
+/*
+ * Safari's full screen (display menu → Full screen) floats its own close
+ * button over the top-left corner. Keep the rail's first button and, with no
+ * rail, the clock and headers out from under it.
+ */
+.wall:is(:fullscreen, :-webkit-full-screen):not(.rail-float) .rail { padding-top: 84px; }
+.wall:is(:fullscreen, :-webkit-full-screen):is(.no-rail, .rail-float) .main { padding-left: 56px; }
 /* The clock is held to open the display menu: no iPadOS callout or magnifier. */
 .wall .mast .clock, .wall .hdr .hclk > b { -webkit-touch-callout: none; }
 @media (prefers-reduced-motion: reduce) {
