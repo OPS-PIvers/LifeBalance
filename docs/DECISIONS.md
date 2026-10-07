@@ -314,11 +314,25 @@ later): the live scorer additionally consults `Habit.count` for whichever period
 
 ## Wall layout: portrait and landscape, sized for across the room
 
-- **Orientation is read from the screen, not a setting.** `@media (orientation: portrait)` in `components/wall/wall.css` restacks every screen (top bar on two rows, Today above the modules with the modules side by side, Day's side panel along the bottom); `useWallPortrait()` covers the few places JS needs it (module-menu wording, whether Today is stacked). Rotating the iPad or its stand is the switch.
-- **Today fills its panel.** `useWallFit` grows Today's type (`--fit`, multiplied into `--k`) to the largest size that still fits, and shrinks it on a busy day rather than clipping. It only runs where Today has a height of its own (solo, or the landscape column); stacked above the modules in portrait it is sized by its content, so fitting would just grow it to its cap.
-- **The night clock is sized in viewport units** (`min(30vw, 38vh)`), so it is as big as fits whichever way the iPad stands.
+- **Orientation is read from the screen, not a setting.** `@media (orientation: portrait)` in `components/wall/wall.css` narrows the same structure (rail, day column, panel) rather than restacking it; Day's side panel still moves along the bottom. Rotating the iPad or its stand is the switch.
+- **The day column fills its height.** `useWallFit` grows its type (`--fit`, multiplied into `--k`) to the largest size that still fits, and shrinks it on a busy day rather than clipping.
+- **The night clock is sized in viewport units** (`min(24vw, 30vh)`), so it is as big as fits whichever way the iPad stands.
 - **The bottom strip is an iPadOS viewport bug, not missing paint.** In a Home Screen app with the translucent status bar, the viewport (100vh, 100dvh, `innerHeight`) comes up a status bar short while the page is drawn under the bar, so a light strip of the web view shows below the page — painting `html` can't reach it. `useWallViewport` sets the wall's height to the screen's when the shortfall is a status bar or less (`utils/wall/wallViewport.ts`), and leaves browser tabs, Split View and a correct viewport alone.
 - **Tabular figures only on numbers.** Schibsted Grotesk's tabular set widens the comma and period too, so `tabular-nums` on the whole wall printed "Monday , October 5". It is applied to the clock, times, temperatures and day numbers only.
+
+## Wall redesign (October 2026): a quieter day, one voice, both orientations
+
+Settled through a prototyped review (`docs/plans/wall-redesign-review.html`, every option drawn at 1366×1024 in both themes). The old Week screen stacked four big-number units in a top bar, named the owner under every event, kept module controls on screen all day, and used 15 type sizes. Choices that look like they could be "simplified" back:
+
+- **No top bar on Week.** The clock and date are a masthead at the top of the day column (`WallMasthead`), weather is one line, and the daypart forecast is a tap away. Every other screen gets a slim header (`WallHeader`): title, then time, temperature and its actions.
+- **The day column leads with one hero.** `todayFocus` picks the event running now, else the next one ("Next · in 1 hr 45 min", amber like the old now-line). Finished events fold into one faint "Earlier:" line. Later rows cap at five, then "+N more today" opens Day view, after `useWallFit` has already shrunk them.
+- **Owners: avatars where there's room, dots where there isn't.** Initial avatars in the day column and Day view; 10 px dots in the panel and Month (an initial at panel size costs two words per title). Family stays gray: it can't be mistaken for a person.
+- **Untimed items never get a row.** All-day events, bills and holidays fold into one quiet line under the day heading (`splitComingUpDay`, `WallUntimedLine`). Every version that gave them a row with an icon in the time column read as broken.
+- **The panel is a picker, a top module and an optional bottom quarter.** Day · Week · Month is a full-size segmented control (`WallViewPicker`): the caption-sized version read as an error. Coming up shows only days that fit whole (`useWholeFill`), and Dinners shows as many nights as fit, starting tomorrow (tonight's is in the day column). The panel is one step lighter than the day in both themes.
+- **The panel is never empty.** `withTopModule` shows Coming up for a layout saved in the old Today-only mode; `removeModule` only removes the bottom slot; phone Settings has no "Nothing" for the top. One resting layout to design and maintain.
+- **Module controls live in Arrange mode**, opened from the display menu (behind the family PIN). The layout is set rarely, so Switch/Remove/Add don't cost space all day. Arrange edits the real panel in place; rotation pauses while it's open, and idle ends it.
+- **Night is the masthead at night**: the dim Besley clock beside the day, tomorrow's first two events with dim dots, tomorrow's weather and all-day line (`tomorrowPreview`; bills left out). It keeps the old near-black values.
+- **One five-step type scale** (`--t-hero`, `--t-display`, `--t-title`, `--t-item`, `--t-meta` on `.wall`). New wall CSS uses them, not one-off sizes.
 
 ## Wall updates: ask in the day, apply at night
 

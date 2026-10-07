@@ -322,7 +322,7 @@ See [LINT_SUPPRESSIONS.md](LINT_SUPPRESSIONS.md) for:
 
 ## Wall Display
 
-A wall-mounted iPad runs the app at `#/wall` (plan: [docs/plans/wall-display-kiosk.md](docs/plans/wall-display-kiosk.md); setup: [docs/WALL_DISPLAY_RUNBOOK.md](docs/WALL_DISPLAY_RUNBOOK.md)). Eight things to know before touching auth, rules, providers, the calendar sync, wall writes, voice or sound:
+A wall-mounted iPad runs the app at `#/wall` (plan: [docs/plans/wall-display-kiosk.md](docs/plans/wall-display-kiosk.md); setup: [docs/WALL_DISPLAY_RUNBOOK.md](docs/WALL_DISPLAY_RUNBOOK.md); look and layout: [DESIGN.md](DESIGN.md) §12, with the October 2026 redesign's reasons in docs/DECISIONS.md "Wall redesign"). Eight things to know before touching auth, rules, providers, the calendar sync, wall writes, voice or sound:
 
 - **A paired display is NOT a member.** It signs in with a custom token as uid `display_{did}`, claims `{display, hid, did}` (`functions/src/wall/pairing.ts`). It has no `members/{uid}` doc and never an `admin` claim. `AuthContext` exposes `isDisplay`/`displayId` and skips the household lookup and the Private Alpha guard for it.
 - **`firestore.rules` grants it a narrow allowlist** through `isDisplayOf(hid)` / `isMemberOrDisplayOf(hid)`, which also requires `displays/{did}.status == 'active'` (so revoking is immediate). Never add `isDisplayOf` to the catch-all subcollection rule, and add any new wall collection to the catch-all write-exclusion list. The allow/deny matrix is in `tests/rules/firestore.rules.test.ts` ("wall display identity").

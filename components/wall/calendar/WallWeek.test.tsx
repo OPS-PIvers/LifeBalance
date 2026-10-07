@@ -46,74 +46,111 @@ const ToastHost: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   );
 };
 
-function renderWeek(layout: WallLayout, data: Partial<WallData> = {}) {
+function renderWeek(layout: WallLayout, data: Partial<WallData> = {}, extra: { arranging?: boolean } = {}) {
   const value = makeWallData(vi.fn, { wallEvents: events, todos, mealPlan, shoppingList: shopping, ...data });
   const onLayout = vi.fn();
+  const onView = vi.fn();
+  const onOpenDay = vi.fn();
+  const onArrangeDone = vi.fn();
   const people = makeWallPeople(value.members, false);
   const utils = render(
     <WallDataContext.Provider value={value}>
       <ToastHost>
-        <WallWeek today={D} now={NOW} timeZone={TZ} people={people} layout={layout} onLayout={onLayout} onSeeMonth={vi.fn()} />
+        <WallWeek
+          today={D}
+          now={NOW}
+          timeZone={TZ}
+          people={people}
+          weather={null}
+          onWeather={vi.fn()}
+          layout={layout}
+          onLayout={onLayout}
+          onView={onView}
+          onOpenDay={onOpenDay}
+          arranging={extra.arranging ?? false}
+          onArrangeDone={onArrangeDone}
+        />
       </ToastHost>
     </WallDataContext.Provider>
   );
-  return { ...utils, value, onLayout };
+  return { ...utils, value, onLayout, onView, onOpenDay, onArrangeDone };
 }
 
 describe('WallWeek', () => {
-  it('shows Today with past events faded, the now line, due today and dinner', () => {
+  it('leads the day with what’s next, then the rest of today, Due today and dinner', () => {
     renderWeek({ modules: ['coming'] });
     const today = screen.getByRole('region', { name: 'Today' });
-    expect(within(today).getByText('Haircut')).toHaveClass('past');
-    expect(within(today).getByText('Dinner out')).not.toHaveClass('past');
-    expect(within(today).getByText('3:15')).toHaveClass('nowmark');
+    expect(within(today).getByText('3:15')).toHaveClass('clock');
+    expect(within(today).getByText('Saturday')).toBeInTheDocument();
+    // Haircut ran 2–3 pm: over, so it folds into the faint line.
+    expect(within(today).getByText('Earlier: Soccer game · Haircut')).toBeInTheDocument();
+    expect(within(today).getByText('Dinner out')).toHaveClass('nxt');
+    expect(within(today).getByText('Next · in 1 hr 45 min')).toBeInTheDocument();
     expect(within(today).getByText('Overdue')).toBeInTheDocument();
+    expect(within(today).getByText('0 of 2 done')).toBeInTheDocument();
     expect(within(today).getByText('Tacos')).toBeInTheDocument();
-    expect(within(today).getAllByText('Leo').length).toBeGreaterThan(0);
   });
 
-  it('lists the coming days with bills as muted lines', () => {
-    renderWeek({ modules: ['coming'] });
+  it('lists the coming days with untimed items on a quiet line, and opens a day', () => {
+    const { onOpenDay } = renderWeek({ modules: ['coming'] });
     const coming = screen.getByRole('region', { name: 'Coming up' });
     expect(within(coming).getByText('Tomorrow')).toBeInTheDocument();
     expect(within(coming).getByText('Farmers market')).toBeInTheDocument();
-    expect(within(coming).getByText('Water bill').closest('li')).toHaveClass('muted');
-    expect(within(coming).getByRole('button', { name: 'See the month →' })).toBeInTheDocument();
+    expect(within(coming).getByText('Water bill')).toHaveClass('bill');
+    fireEvent.click(within(coming).getByRole('button', { name: /Farmers market/ }));
+    expect(onOpenDay).toHaveBeenCalledWith('2026-10-04');
   });
 
-  it('switches, adds and removes modules through the menu', () => {
-    const { onLayout } = renderWeek({ modules: ['coming'] });
+  it('switches views from the picker and shows no editing controls at rest', () => {
+    const { onView } = renderWeek({ modules: ['coming'] });
+    const picker = screen.getByRole('group', { name: 'Calendar view' });
+    expect(within(picker).getByRole('button', { name: 'Week' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(picker).getByRole('button', { name: 'Month' }));
+    expect(onView).toHaveBeenCalledWith('month');
+    expect(screen.queryByRole('button', { name: /Switch/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Add a bottom module/ })).not.toBeInTheDocument();
+  });
+
+  it('switches, adds and removes modules in Arrange mode, never the top one', () => {
+    const { onLayout, onArrangeDone } = renderWeek({ modules: ['coming'] }, {}, { arranging: true });
     fireEvent.click(screen.getByRole('button', { name: /Switch/ }));
     const menu = screen.getByRole('dialog', { name: 'Panel shows' });
     expect(within(menu).getByRole('button', { name: /Coming up.*Showing/ })).toBeInTheDocument();
     fireEvent.click(within(menu).getByRole('button', { name: /Shopping/ }));
     expect(onLayout).toHaveBeenLastCalledWith({ modules: ['shopping'] });
+    expect(screen.queryByRole('button', { name: 'Remove Coming up' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add module' }));
-    const add = screen.getByRole('dialog', { name: 'Add a module' });
+    fireEvent.click(screen.getByRole('button', { name: /Add a bottom module/ }));
+    const add = screen.getByRole('dialog', { name: 'Add a bottom module' });
     expect(within(add).getByRole('button', { name: /Coming up.*Already showing/ })).toBeDisabled();
-    fireEvent.click(within(add).getByRole('button', { name: /To-dos/ }));
-    expect(onLayout).toHaveBeenLastCalledWith({ modules: ['coming', 'todos'] });
+    fireEvent.click(within(add).getByRole('button', { name: /Dinners/ }));
+    expect(onLayout).toHaveBeenLastCalledWith({ modules: ['coming', 'meals'] });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Coming up' }));
-    expect(onLayout).toHaveBeenLastCalledWith({ modules: [] });
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(onArrangeDone).toHaveBeenCalled();
   });
 
-  it('drops Today’s checklist and dinner when the panel shows To-dos and Meals', () => {
-    renderWeek({ modules: ['todos', 'meals'] });
+  it('removes the bottom module in Arrange mode', () => {
+    const { onLayout } = renderWeek({ modules: ['coming', 'meals'] }, {}, { arranging: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Dinners' }));
+    expect(onLayout).toHaveBeenLastCalledWith({ modules: ['coming'] });
+  });
+
+  it('keeps dinner tonight with Dinners in the panel, which starts tomorrow; To-dos takes over Due today', () => {
+    const plan = [...mealPlan, { id: 'm2', date: '2026-10-04', type: 'dinner', mealName: 'Chili', isCooked: false }] as MealPlanItem[];
+    renderWeek({ modules: ['todos', 'meals'] }, { mealPlan: plan });
     const today = screen.getByRole('region', { name: 'Today' });
     expect(within(today).queryByText('Due today')).not.toBeInTheDocument();
-    expect(within(today).queryByText('Tacos')).not.toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: 'Meals this week' })).getByText('Tacos')).toBeInTheDocument();
+    expect(within(today).getByText('Tacos')).toBeInTheDocument();
+    const dinners = screen.getByRole('region', { name: 'Dinners' });
+    expect(within(dinners).getByText('Chili')).toBeInTheDocument();
+    expect(within(dinners).queryByText('Tacos')).not.toBeInTheDocument();
     expect(within(screen.getByRole('region', { name: 'To-dos' })).getByText('Feed the fish')).toBeInTheDocument();
   });
 
-  it('goes Today-only with no modules and offers Add module', () => {
-    const { container } = renderWeek({ modules: [] });
-    expect(container.querySelector('.wk')).toHaveClass('solo');
-    expect(screen.queryByRole('region', { name: 'Coming up' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Add module' }));
-    expect(screen.getByRole('dialog', { name: 'Add a module' })).toBeInTheDocument();
+  it('shows Coming up when the saved panel is empty (the old Today-only mode)', () => {
+    renderWeek({ modules: [] });
+    expect(screen.getByRole('region', { name: 'Coming up' })).toBeInTheDocument();
   });
 
   it('completes a due to-do with an Undo toast', () => {

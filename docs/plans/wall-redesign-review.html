@@ -1,0 +1,1854 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wall Redesign Review</title>
+<style>
+@font-face{font-family:'Besley';font-weight:400 900;font-display:swap;src:url(../../public/fonts/besley-latin.woff2) format('woff2');}
+@font-face{font-family:'Schibsted Grotesk';font-weight:400 700;font-display:swap;src:url(../../public/fonts/schibsted-grotesk-latin.woff2) format('woff2');}
+@font-face{font-family:'Spline Sans Mono';font-weight:300 700;font-display:swap;src:url(../../public/fonts/spline-sans-mono-latin.woff2) format('woff2');}
+
+/* Layout: a review document; each prototype is a true 1366×1024 wall artboard scaled into a frame. */
+:root {
+  --font-display: 'Besley', Georgia, serif;
+  --font-sans: 'Schibsted Grotesk', system-ui, sans-serif;
+  --font-mono: 'Spline Sans Mono', ui-monospace, monospace;
+  /* Page chrome (follows the viewer's theme) — brand-* tokens */
+  --pg-bg: #f0eee9; --pg-fg: #161512; --pg-fg2: #3a3731; --pg-muted: #655f55; --pg-line: #e3e0d8; --pg-card: #f8f7f4;
+  --pg-accent: #285742; --pg-warm: #97611f; --pg-neg: #b93830;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --pg-bg: #161512; --pg-fg: #ece9e2; --pg-fg2: #cfcac0; --pg-muted: #a8a399; --pg-line: #3a3731; --pg-card: #242220;
+  --pg-accent: #8fbfa5; --pg-warm: #d9a75c; --pg-neg: #e2857d; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --pg-bg: #161512; --pg-fg: #ece9e2; --pg-fg2: #cfcac0; --pg-muted: #a8a399; --pg-line: #3a3731; --pg-card: #242220;
+  --pg-accent: #8fbfa5; --pg-warm: #d9a75c; --pg-neg: #e2857d; color-scheme: dark; }
+body { background: var(--pg-bg); color: var(--pg-fg); font-family: var(--font-sans); font-size: 16px; line-height: 1.5; }
+.doc { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 80px; display: grid; gap: 56px; }
+h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.015em; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(30px, 5vw, 44px); font-weight: 600; }
+h2 { font-size: 28px; font-weight: 600; }
+h3 { font-size: 20px; font-weight: 600; }
+p { margin: 0; max-width: 68ch; color: var(--pg-fg2); }
+.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--pg-muted); }
+header.top { display: grid; gap: 12px; }
+section.blk { display: grid; gap: 20px; }
+.frame { position: relative; width: 100%; overflow: hidden; border-radius: 14px; border: 1px solid var(--pg-line); background: #f8f7f4; }
+.frame > .art { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+.cap { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
+.cap b { font-family: var(--font-display); font-size: 22px; font-weight: 600; }
+.cap .tag { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--pg-line); color: var(--pg-muted); }
+.cap .tag.rec { border-color: var(--pg-accent); color: var(--pg-accent); }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px 40px; }
+ul.notes { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+ul.notes li { display: grid; grid-template-columns: 30px 1fr; gap: 10px; color: var(--pg-fg2); min-width: 0; }
+ul.notes li .n { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; background: var(--pg-neg); color: #fff; }
+ul.notes.good li .n { background: var(--pg-accent); color: var(--pg-bg); }
+ul.notes li strong { color: var(--pg-fg); }
+.opt { display: grid; gap: 12px; padding-block: 8px; min-width: 0; }
+.opt p { font-size: 15px; }
+.scale { display: grid; gap: 4px; border-top: 1px solid var(--pg-line); padding-top: 12px; }
+.qlist { display: grid; gap: 14px; counter-reset: q; padding: 0; margin: 0; list-style: none; }
+.qlist li { counter-increment: q; display: grid; grid-template-columns: 34px 1fr; gap: 8px; }
+.qlist li::before { content: counter(q); font-family: var(--font-display); font-size: 22px; font-weight: 600; color: var(--pg-accent); }
+.qlist li span { color: var(--pg-muted); display: block; font-size: 14px; }
+.minis { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+
+/* ===== Wall artboards: the wall's own light palette from components/wall/wall.css ===== */
+.art {
+  --bg: #f8f7f4; --surface: #f0eee9; --card: #ffffff; --line: #e8e5de; --line-strong: #d6d2c8;
+  --fg: #161512; --fg2: #3a3731; --muted: #655f55; --faint: #8a8478;
+  --accent: #285742; --on-accent: #fff; --warm: #97611f; --warm-fill: #b87a29; --rain: #386695; --warm-bg: #faf4ea;
+  --paul: #285742; --jess: #b87a29; --leo: #386695; --mia: #95525d; --fam: #6e685d;
+  width: 1366px; height: 1024px; background: var(--bg); color: var(--fg); font-family: var(--font-sans);
+  font-size: 22px; line-height: 1.3; overflow: hidden; position: relative; box-sizing: border-box;
+}
+.art * { box-sizing: border-box; }
+.art svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: none; vertical-align: -0.125em; }
+.art .tn { font-variant-numeric: tabular-nums; }
+.art .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.art .bx { width: 30px; height: 30px; border-radius: 50%; border: 2.5px solid var(--faint); display: grid; place-items: center; flex: none; }
+.art .bx.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.art .bx.on svg { font-size: 20px; stroke-width: 3; }
+.co { position: absolute; z-index: 5; width: 46px; height: 46px; border-radius: 50%; background: #b93830; color: #fff; font: 700 24px/46px var(--font-sans); text-align: center; box-shadow: 0 0 0 5px rgba(185,56,48,.22); }
+
+/* --- NOW (faithful to wall.css) --- */
+.now { display: grid; grid-template-columns: 104px 1fr; }
+.now .rail { border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 20px 0 16px; gap: 4px; }
+.now .nav { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 0; color: var(--muted); font-size: 16px; font-weight: 500; }
+.now .nav svg { font-size: 34px; }
+.now .nav.on { color: var(--fg); }
+.now .nav.on::before { content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 4px; border-radius: 0 3px 3px 0; background: var(--accent); }
+.now .badge { position: absolute; top: 8px; left: 58px; min-width: 24px; height: 24px; border-radius: 12px; background: var(--warm-fill); color: #fff; font-size: 14px; font-weight: 700; display: grid; place-items: center; }
+.now .sp { flex: 1; }
+.now .mic { margin: 0 auto; width: 76px; height: 76px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 34px; }
+.now .gear { margin: 14px auto 0; color: var(--faint); font-size: 26px; height: 56px; display: grid; place-items: center; }
+.now .main { display: flex; flex-direction: column; min-width: 0; }
+.now .top { display: flex; align-items: center; gap: 22px; padding: 16px 32px 16px 40px; border-bottom: 1px solid var(--line); min-height: 128px; }
+.now .hero { display: flex; align-items: center; gap: 14px; }
+.now .big { font-family: var(--font-display); font-size: 72px; font-weight: 500; line-height: .9; letter-spacing: -0.025em; }
+.now .sub { display: grid; gap: 2px; font-size: 21px; line-height: 1.15; color: var(--fg2); white-space: nowrap; }
+.now .hero > svg { font-size: 46px; color: var(--warm); }
+.now .vr { width: 1px; align-self: stretch; background: var(--line); margin: 6px 0; }
+.now .blocks { display: flex; gap: 16px; }
+.now .blocks .b { display: grid; justify-items: center; gap: 3px; font-size: 17px; color: var(--muted); }
+.now .blocks .b b { font-family: var(--font-display); font-size: 30px; font-weight: 500; line-height: 1; color: var(--fg); }
+.now .blocks svg { font-size: 28px; color: var(--warm); }
+.now .blocks svg.r { color: var(--rain); }
+.now .rainnote { font-size: 18px; font-weight: 600; color: var(--rain); margin-top: 6px; text-align: center; }
+.now .seg { margin-left: auto; display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; border: 1px solid var(--line-strong); }
+.now .seg span { font-size: 18px; font-weight: 600; padding: 0 18px; height: 50px; line-height: 50px; border-radius: 7px; color: var(--muted); }
+.now .seg span.on { background: var(--card); color: var(--fg); box-shadow: 0 0 0 1px var(--line-strong); }
+.now .wk { flex: 1; display: grid; grid-template-columns: .92fr 1fr; min-height: 0; }
+.now .today { padding: 24px 40px 22px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 16px; }
+.now .th { display: flex; align-items: baseline; gap: 14px; }
+.now .th b { font-family: var(--font-display); font-size: 40px; font-weight: 600; color: var(--accent); }
+.now .th span { font-size: 20px; color: var(--muted); }
+.now .tev { display: grid; grid-template-columns: 78px 1fr; gap: 14px 16px; align-items: baseline; }
+.now .tev .tm { font-size: 23px; color: var(--muted); text-align: right; }
+.now .tev .tt { font-size: 29px; line-height: 1.18; }
+.now .tev small { display: flex; align-items: center; gap: 7px; font-size: 18px; color: var(--muted); margin-top: 2px; }
+.now .tev .past, .now .tev .past small { color: var(--faint); }
+.now .nowmark { grid-column: 1/3; display: flex; align-items: center; gap: 10px; color: var(--warm); font-size: 16px; font-weight: 700; margin: -4px 0; }
+.now .nowmark::after { content: ''; flex: 1; border-top: 2px solid var(--warm); }
+.now .due { border-top: 1px solid var(--line); padding-top: 10px; }
+.now .lab { font-size: 18px; color: var(--muted); margin-bottom: 2px; }
+.now .ck { display: flex; align-items: center; gap: 14px; min-height: 50px; font-size: 23px; }
+.now .ck .nm { color: var(--muted); font-size: 17px; margin-left: 8px; }
+.now .ck .late { color: var(--warm); font-weight: 600; font-size: 16px; margin-left: 8px; }
+.now .ck.done .tx { color: var(--faint); text-decoration: line-through; }
+.now .foot { margin-top: auto; font-size: 18px; color: var(--muted); }
+.now .foot b { display: block; font-family: var(--font-display); font-size: 26px; font-weight: 500; color: var(--fg); }
+.now .panel { display: flex; flex-direction: column; min-height: 0; }
+.now .mh { display: flex; align-items: center; gap: 12px; padding: 14px 26px 4px 32px; }
+.now .mh b { font-family: var(--font-display); font-size: 25px; font-weight: 600; }
+.now .mh .sw { display: inline-flex; align-items: center; gap: 6px; font-size: 16px; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 9px; padding: 0 12px; height: 42px; }
+.now .mh .x { margin-left: auto; width: 48px; height: 48px; display: grid; place-items: center; color: var(--muted); font-size: 24px; }
+.now .mb { flex: 1; overflow: hidden; padding: 0 30px 14px 32px; }
+.now .gh { padding: 10px 0 6px; display: flex; gap: 8px; align-items: baseline; border-bottom: 1px solid var(--line); }
+.now .gh .wd { font-size: 18px; color: var(--muted); font-weight: 500; }
+.now .gh .dn { font-family: var(--font-display); font-size: 25px; font-weight: 500; }
+.now .gh .rel { font-size: 15px; color: var(--muted); }
+.now .grp ul { list-style: none; margin: 0; padding: 8px 0 14px; display: grid; gap: 7px; }
+.now .grp li { display: grid; grid-template-columns: 66px 1fr; gap: 12px; align-items: baseline; font-size: 22px; }
+.now .grp li .tm { font-size: 18px; color: var(--muted); text-align: right; }
+.now .grp li .dot { width: 10px; height: 10px; margin-right: 8px; transform: translateY(-2px); }
+.now .grp li .nm { color: var(--muted); font-size: 17px; margin-left: 8px; }
+.now .grp li.mut { font-size: 18px; color: var(--muted); }
+.now .grp li.mut svg { margin-right: 8px; }
+.now .addmod { margin: 4px 32px 18px; height: 56px; border: 1px dashed var(--line-strong); border-radius: 10px; color: var(--muted); font-size: 18px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
+
+/* --- A: Quiet refine --- */
+.qa { display: grid; grid-template-columns: 96px 1fr; }
+.qa .rail { border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; padding: 28px 0 22px; gap: 10px; }
+.qa .nav { position: relative; display: grid; justify-items: center; gap: 4px; width: 100%; padding: 12px 0; color: var(--faint); font-size: 14px; font-weight: 600; }
+.qa .nav svg { font-size: 30px; }
+.qa .nav.on { color: var(--accent); }
+.qa .nav .badge { position: absolute; top: 6px; left: 56px; width: 12px; height: 12px; border-radius: 50%; background: var(--warm-fill); }
+.qa .sp { flex: 1; }
+.qa .mic { width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--accent); color: var(--accent); display: grid; place-items: center; font-size: 28px; }
+.qa .main { display: flex; flex-direction: column; min-width: 0; }
+.qa .top { display: flex; align-items: center; gap: 36px; padding: 0 44px; height: 116px; border-bottom: 1px solid var(--line); }
+.qa .clock { font-family: var(--font-display); font-size: 72px; font-weight: 500; letter-spacing: -0.025em; line-height: 1; }
+.qa .date { font-size: 22px; color: var(--fg2); }
+.qa .wx { display: flex; align-items: center; gap: 12px; }
+.qa .wx svg { font-size: 40px; color: var(--warm); }
+.qa .wx b { font-family: var(--font-display); font-size: 44px; font-weight: 500; }
+.qa .wx span { font-size: 19px; color: var(--muted); line-height: 1.25; }
+.qa .wx span em { font-style: normal; color: var(--rain); font-weight: 600; }
+.qa .tabs { margin-left: auto; display: flex; gap: 28px; font-size: 19px; font-weight: 600; color: var(--muted); }
+.qa .tabs .on { color: var(--fg); box-shadow: inset 0 -3px 0 var(--accent); padding-bottom: 6px; }
+.qa .wk { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
+.qa .today { padding: 30px 44px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 22px; }
+.qa h4 { margin: 0; font-family: var(--font-display); font-size: 32px; font-weight: 600; }
+.qa .earlier { font-size: 19px; color: var(--faint); }
+.qa .ev { display: grid; grid-template-columns: 84px 1fr; gap: 14px; align-items: baseline; }
+.qa .ev .tm { font-size: 24px; color: var(--muted); text-align: right; }
+.qa .ev .tt { font-size: 32px; display: flex; align-items: center; gap: 12px; }
+.qa .ev .tt .dot { width: 13px; height: 13px; }
+.qa .nowmark { display: flex; align-items: center; gap: 10px; color: var(--warm); font-size: 17px; font-weight: 700; }
+.qa .nowmark::after { content: ''; flex: 1; border-top: 2px solid var(--warm); }
+.qa .sec { border-top: 1px solid var(--line); padding-top: 16px; display: grid; gap: 4px; }
+.qa .sec .hd { font-family: var(--font-display); font-size: 24px; font-weight: 600; margin-bottom: 4px; }
+.qa .ck { display: flex; align-items: center; gap: 14px; min-height: 50px; font-size: 23px; }
+.qa .ck .dot { margin-left: auto; }
+.qa .ck.done .tx { color: var(--faint); text-decoration: line-through; }
+.qa .ck .late { color: var(--warm); font-size: 17px; font-weight: 600; }
+.qa .dinner { margin-top: auto; display: flex; align-items: baseline; gap: 14px; font-size: 19px; color: var(--muted); }
+.qa .dinner b { font-family: var(--font-display); font-size: 26px; font-weight: 500; color: var(--fg); }
+.qa .panel { padding: 30px 40px; display: flex; flex-direction: column; gap: 6px; }
+.qa .day { display: grid; grid-template-columns: 110px 1fr; gap: 16px; padding: 14px 0; border-top: 1px solid var(--line); }
+.qa .day:first-of-type { border-top: 0; }
+.qa .day .dl { font-size: 19px; color: var(--muted); }
+.qa .day .dl b { display: block; font-family: var(--font-display); font-size: 26px; font-weight: 500; color: var(--fg); }
+.qa .day ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.qa .day li { display: grid; grid-template-columns: 66px 1fr; gap: 10px; align-items: baseline; font-size: 22px; }
+.qa .day li .tm { font-size: 18px; color: var(--muted); text-align: right; }
+.qa .day li .dot { margin-right: 10px; transform: translateY(-2px); }
+.qa .day li.mut { color: var(--muted); font-size: 18px; }
+
+/* --- B: Today-first masthead --- */
+.mb2 { display: grid; grid-template-columns: 88px 1fr 470px; }
+.mb2 .rail { display: flex; flex-direction: column; align-items: center; padding: 34px 0 26px; gap: 14px; border-right: 1px solid var(--line); }
+.mb2 .nav { position: relative; width: 56px; height: 56px; display: grid; place-items: center; border-radius: 12px; color: var(--faint); font-size: 30px; }
+.mb2 .nav.on { background: var(--surface); color: var(--fg); }
+.mb2 .nav .badge { position: absolute; top: 4px; right: 2px; min-width: 22px; height: 22px; border-radius: 11px; background: var(--warm-fill); color: #fff; font-size: 13px; font-weight: 700; display: grid; place-items: center; }
+.mb2 .sp { flex: 1; }
+.mb2 .mic { width: 64px; height: 64px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 28px; }
+.mb2 .lead { padding: 40px 56px 36px; display: flex; flex-direction: column; min-width: 0; }
+.mb2 .mast { display: flex; align-items: flex-end; gap: 26px; }
+.mb2 .clock { font-family: var(--font-display); font-size: 148px; font-weight: 500; line-height: .8; letter-spacing: -0.035em; }
+.mb2 .dd { display: grid; gap: 2px; padding-bottom: 4px; }
+.mb2 .dd b { font-family: var(--font-display); font-size: 40px; font-weight: 600; line-height: 1; }
+.mb2 .dd span { font-size: 22px; color: var(--muted); }
+.mb2 .wxl { display: flex; align-items: center; gap: 14px; margin-top: 26px; padding-bottom: 26px; border-bottom: 1px solid var(--line); font-size: 22px; color: var(--fg2); }
+.mb2 .wxl svg { font-size: 34px; color: var(--warm); }
+.mb2 .wxl b { font-family: var(--font-display); font-size: 36px; font-weight: 500; color: var(--fg); }
+.mb2 .wxl em { font-style: normal; color: var(--rain); font-weight: 600; }
+.mb2 .wxl i { width: 1px; height: 26px; background: var(--line-strong); }
+.mb2 .next { padding: 30px 0 8px; display: grid; gap: 6px; }
+.mb2 .next .lbl { font-size: 17px; font-weight: 700; color: var(--warm); letter-spacing: .04em; }
+.mb2 .next .hl { display: flex; align-items: baseline; gap: 22px; }
+.mb2 .next .hl .tm { font-size: 34px; color: var(--muted); }
+.mb2 .next .hl b { font-family: var(--font-display); font-size: 50px; font-weight: 500; line-height: 1.05; }
+.mb2 .next .who { display: flex; align-items: center; gap: 10px; font-size: 20px; color: var(--muted); padding-left: 2px; }
+.mb2 .later { display: grid; grid-template-columns: 86px 1fr; gap: 12px 18px; align-items: baseline; padding: 18px 0; }
+.mb2 .later .tm { font-size: 24px; color: var(--muted); }
+.mb2 .later .tt { font-size: 30px; display: flex; gap: 12px; align-items: center; }
+.mb2 .later .past { color: var(--faint); font-size: 20px; }
+.mb2 .due { margin-top: auto; border-top: 1px solid var(--line); padding-top: 20px; }
+.mb2 .due .hd { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.mb2 .due .hd b { font-family: var(--font-display); font-size: 26px; font-weight: 600; }
+.mb2 .due .hd span { font-size: 18px; color: var(--muted); }
+.mb2 .due .g { display: grid; grid-template-columns: 1fr 1fr; gap: 0 30px; }
+.mb2 .ck { display: flex; align-items: center; gap: 14px; min-height: 56px; font-size: 22px; border-bottom: 1px solid var(--line); }
+.mb2 .ck .dot { margin-left: auto; }
+.mb2 .ck.done .tx { color: var(--faint); text-decoration: line-through; }
+.mb2 .ck .late { color: var(--warm); font-weight: 600; }
+.mb2 .side { background: var(--surface); padding: 40px 40px 32px; display: flex; flex-direction: column; min-height: 0; }
+.mb2 .side .sh { display: flex; align-items: baseline; justify-content: space-between; }
+.mb2 .side .sh b { font-family: var(--font-display); font-size: 30px; font-weight: 600; }
+.mb2 .side .sh span { font-size: 17px; font-weight: 600; color: var(--muted); }
+.mb2 .side .sh span u { text-decoration: none; color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
+.mb2 .dayb { padding: 18px 0 14px; border-bottom: 1px solid var(--line-strong); display: grid; gap: 6px; }
+.mb2 .dayb .dh { font-size: 18px; font-weight: 600; color: var(--muted); }
+.mb2 .dayb .dh b { font-family: var(--font-display); font-weight: 500; font-size: 24px; color: var(--fg); margin-right: 6px; }
+.mb2 .dayb .r { display: grid; grid-template-columns: 62px 1fr; gap: 10px; align-items: baseline; font-size: 21px; }
+.mb2 .dayb .r .tm { font-size: 17px; color: var(--muted); text-align: right; }
+.mb2 .dayb .r .dot { margin-right: 10px; transform: translateY(-2px); }
+.mb2 .dayb .r.mut { font-size: 17px; color: var(--muted); }
+.mb2 .dayb .more { font-size: 17px; color: var(--accent); font-weight: 600; padding-left: 72px; }
+.mb2 .dinner { margin-top: auto; padding-top: 20px; display: grid; gap: 2px; }
+.mb2 .dinner span { font-size: 17px; font-weight: 600; color: var(--muted); }
+.mb2 .dinner b { font-family: var(--font-display); font-size: 30px; font-weight: 500; }
+
+/* --- C: Glance + week strip --- */
+.gc { display: flex; flex-direction: column; padding: 36px 48px 0; }
+.gc .band { display: flex; align-items: flex-end; gap: 28px; }
+.gc .clock { font-family: var(--font-display); font-size: 128px; font-weight: 500; line-height: .8; letter-spacing: -0.035em; }
+.gc .dd b { display: block; font-family: var(--font-display); font-size: 36px; font-weight: 600; line-height: 1.05; }
+.gc .dd span { font-size: 21px; color: var(--muted); }
+.gc .wx { margin-left: auto; display: flex; align-items: flex-end; gap: 30px; }
+.gc .wx .cur { display: flex; align-items: center; gap: 10px; }
+.gc .wx .cur svg { font-size: 52px; color: var(--warm); }
+.gc .wx .cur b { font-family: var(--font-display); font-size: 72px; font-weight: 500; line-height: .85; }
+.gc .wx .parts { display: flex; gap: 22px; font-size: 17px; color: var(--muted); }
+.gc .wx .parts > div { display: grid; justify-items: center; gap: 2px; }
+.gc .wx .parts b { font-family: var(--font-display); font-size: 28px; font-weight: 500; color: var(--fg); }
+.gc .wx .parts svg { font-size: 26px; color: var(--warm); }
+.gc .wx .parts svg.r { color: var(--rain); }
+.gc .nextc { margin-top: 34px; display: grid; grid-template-columns: 1.25fr 1fr; gap: 0; border-top: 2px solid var(--fg); border-bottom: 1px solid var(--line-strong); }
+.gc .nextc > div { padding: 22px 0; }
+.gc .nextc .n1 { padding-right: 36px; border-right: 1px solid var(--line); }
+.gc .nextc .n2 { padding-left: 36px; display: grid; gap: 4px; align-content: start; }
+.gc .k { font-size: 16px; font-weight: 700; color: var(--warm); letter-spacing: .05em; }
+.gc .k.m { color: var(--muted); }
+.gc .n1 .t { display: flex; align-items: baseline; gap: 18px; margin-top: 4px; }
+.gc .n1 .t .tm { font-size: 30px; color: var(--muted); }
+.gc .n1 .t b { font-family: var(--font-display); font-size: 46px; font-weight: 500; line-height: 1.05; }
+.gc .n1 .then { margin-top: 10px; font-size: 22px; color: var(--fg2); display: flex; align-items: center; gap: 10px; }
+.gc .n2 .ck { display: flex; align-items: center; gap: 12px; min-height: 46px; font-size: 21px; }
+.gc .n2 .ck .dot { margin-left: auto; }
+.gc .n2 .ck.done .tx { color: var(--faint); text-decoration: line-through; }
+.gc .n2 .ck .late { color: var(--warm); font-weight: 600; font-size: 17px; }
+.gc .n2 .din { margin-top: 8px; font-size: 18px; color: var(--muted); }
+.gc .n2 .din b { font-family: var(--font-display); font-weight: 500; font-size: 24px; color: var(--fg); margin-left: 8px; }
+.gc .strip { flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); min-height: 0; }
+.gc .col { padding: 16px 12px 0; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.gc .col:first-child { border-left: 0; padding-left: 0; }
+.gc .col .h { font-size: 17px; color: var(--muted); font-weight: 600; }
+.gc .col .h b { font-family: var(--font-display); font-size: 30px; font-weight: 500; color: var(--fg); margin-left: 6px; }
+.gc .col.td .h, .gc .col.td .h b { color: var(--accent); }
+.gc .col .e { border-left: 4px solid var(--c); padding: 2px 0 2px 9px; font-size: 18px; line-height: 1.2; }
+.gc .col .e small { display: block; font-size: 15px; color: var(--muted); }
+.gc .col .e.past { opacity: .5; }
+.gc .col .b { font-size: 15px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.gc .dock { height: 96px; display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--line); margin: 0 -48px; padding: 0 48px; }
+.gc .dock .nav { height: 60px; padding: 0 18px; display: flex; align-items: center; gap: 10px; border-radius: 12px; color: var(--muted); font-size: 19px; font-weight: 600; }
+.gc .dock .nav svg { font-size: 26px; }
+.gc .dock .nav.on { background: var(--surface); color: var(--fg); }
+.gc .dock .nav .badge { min-width: 24px; height: 24px; border-radius: 12px; background: var(--warm-fill); color: #fff; font-size: 13px; font-weight: 700; display: grid; place-items: center; padding: 0 6px; }
+.gc .dock .sp { flex: 1; }
+.gc .dock .mic { width: 64px; height: 64px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 28px; }
+
+/* --- Owner-label minis (640×330) --- */
+.mini { width: 640px; height: 330px; padding: 26px 34px; display: grid; align-content: start; gap: 10px; }
+.mini .r { display: grid; grid-template-columns: 78px 1fr; gap: 14px; align-items: baseline; }
+.mini .r .tm { font-size: 23px; color: var(--muted); text-align: right; }
+.mini .r .tt { font-size: 29px; line-height: 1.18; }
+.mini .r .tt small { display: flex; align-items: center; gap: 7px; font-size: 18px; color: var(--muted); }
+.mini.o2 .r .tt { display: flex; align-items: center; gap: 12px; }
+.mini.o2 .r .tt .dot { width: 14px; height: 14px; }
+.mini.o2 .legend { display: flex; gap: 18px; font-size: 16px; color: var(--muted); margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.mini.o2 .legend span { display: inline-flex; gap: 6px; align-items: center; }
+.mini.o3 .r .tt { display: flex; align-items: center; gap: 12px; }
+.mini.o3 .av { width: 34px; height: 34px; border-radius: 50%; background: var(--c); color: #fff; font-size: 16px; font-weight: 700; display: grid; place-items: center; flex: none; }
+.mini.o4 .r { grid-template-columns: 6px 78px 1fr; gap: 14px; align-items: stretch; }
+.mini.o4 .r .bar { background: var(--c); border-radius: 3px; }
+.mini.o4 .r .tm { align-self: baseline; }
+
+/* ===== Round 2 ===== */
+.settled { display: grid; gap: 8px; padding: 18px 20px; border: 1px solid var(--pg-line); border-radius: 12px; background: var(--pg-card); }
+.settled ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; color: var(--pg-fg2); }
+details.archive > summary { cursor: pointer; font-family: var(--font-display); font-size: 22px; font-weight: 600; padding: 8px 0; }
+details.archive[open] > summary { margin-bottom: 24px; }
+details.archive > .inner { display: grid; gap: 56px; }
+.art.dk { --bg: #1b1a17; --surface: #24221f; --card: #2a2825; --line: #2a2825; --line-strong: #3a3732; --fg: #ece9e2; --fg2: #cfcac0; --muted: #a29d92; --faint: #7d786e; --accent: #8fbfa5; --on-accent: #12201a; --warm: #d9a75c; --warm-fill: #d9a75c; --rain: #8eaed6; --warm-bg: #33291b;
+  --paul: #86b89c; --jess: #d6a55e; --leo: #8eaed6; --mia: #d29aa5; --fam: #a8a399; }
+.art .av { width: 34px; height: 34px; border-radius: 50%; background: var(--c); color: #fff; font-size: 16px; font-weight: 700; display: inline-grid; place-items: center; flex: none; font-family: var(--font-sans); }
+.art.dk .av { color: #1b1a17; }
+.art .av.s { width: 28px; height: 28px; font-size: 13px; }
+.art.dk .bx.on { color: var(--on-accent); }
+.mb2 .later { grid-template-columns: 86px 1fr; }
+.mb2 .later .tt .av, .mb2 .dayb .r .av { margin-right: 2px; }
+.mb2 .dayb .r > span:last-child { display: flex; align-items: center; gap: 10px; }
+.mb2 .ck .av { margin-left: auto; }
+.mb2.busy .later { gap: 8px 18px; padding: 12px 0; }
+.mb2.busy .later .tt { font-size: 26px; }
+.mb2.busy .later .tm { font-size: 21px; }
+.mb2.busy .next .hl b { font-size: 44px; }
+.mb2 .more2 { grid-column: 2; font-size: 19px; font-weight: 600; color: var(--accent); }
+.mb2 .nx-b { background: var(--warm-bg); border-left: 5px solid var(--warm-fill); border-radius: 0 12px 12px 0; padding: 20px 26px; margin-top: 26px; }
+.mb2 .nx-c .cd { font-family: var(--font-display); font-size: 64px; font-weight: 500; color: var(--warm); line-height: 1; }
+.mb2 .nx-c .cd small { font-family: var(--font-sans); font-size: 22px; color: var(--muted); font-weight: 500; margin-left: 10px; }
+.mb2 .nx-c .hl b { font-size: 40px; }
+/* rail with labels (option) */
+.mb2.lab { grid-template-columns: 104px 1fr 470px; }
+.mb2.lab .nav { width: 84px; height: auto; padding: 10px 0 8px; display: grid; justify-items: center; gap: 4px; font-size: 14px; font-weight: 600; }
+.mb2.lab .nav svg { font-size: 28px; }
+.mb2.lab .nav .badge { right: 12px; }
+/* slim header screens */
+.sl { display: grid; grid-template-columns: 88px 1fr; }
+.sl .rail { display: flex; flex-direction: column; align-items: center; padding: 34px 0 26px; gap: 14px; border-right: 1px solid var(--line); }
+.sl .nav { position: relative; width: 56px; height: 56px; display: grid; place-items: center; border-radius: 12px; color: var(--faint); font-size: 30px; }
+.sl .nav.on { background: var(--surface); color: var(--fg); }
+.sl .nav .badge { position: absolute; top: 4px; right: 2px; min-width: 22px; height: 22px; border-radius: 11px; background: var(--warm-fill); color: #fff; font-size: 13px; font-weight: 700; display: grid; place-items: center; }
+.sl .sp { flex: 1; }
+.sl .mic { width: 64px; height: 64px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 28px; }
+.sl .rclock { display: grid; justify-items: center; gap: 2px; padding-bottom: 18px; margin-bottom: 6px; border-bottom: 1px solid var(--line); width: 64px; }
+.sl .rclock b { font-family: var(--font-display); font-size: 26px; font-weight: 500; }
+.sl .rclock span { font-size: 15px; color: var(--muted); display: flex; gap: 4px; align-items: center; }
+.sl .rclock svg { color: var(--warm); }
+.sl .main { display: flex; flex-direction: column; min-width: 0; }
+.sl .hd { display: flex; align-items: center; gap: 24px; height: 104px; padding: 0 44px 0 56px; border-bottom: 1px solid var(--line); }
+.sl .hd h5 { margin: 0; font-family: var(--font-display); font-size: 40px; font-weight: 600; }
+.sl .hd .ct { font-size: 19px; color: var(--muted); }
+.sl .hd .tw { margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 22px; color: var(--muted); }
+.sl .hd .tw b { font-family: var(--font-display); font-size: 34px; font-weight: 500; color: var(--fg); }
+.sl .hd .tw svg { color: var(--warm); font-size: 28px; }
+.sl .hd .tw i { width: 1px; height: 30px; background: var(--line-strong); margin: 0 6px; }
+.sl .hd .btn { height: 58px; padding: 0 22px; border-radius: 10px; font-size: 19px; font-weight: 600; display: inline-flex; align-items: center; gap: 10px; border: 1px solid var(--line-strong); color: var(--fg2); }
+.sl .hd .btn.pri { background: var(--accent); color: #fff; border-color: transparent; }
+.sl .hd .acts { display: flex; gap: 10px; }
+.sl .hd .acts.solo { margin-left: auto; }
+.sl .lists { padding: 10px 56px; column-count: 2; column-gap: 56px; }
+.sl .sec { break-inside: avoid; padding-top: 18px; }
+.sl .sec h3 { margin: 0 0 4px; display: flex; justify-content: space-between; align-items: baseline; font-family: var(--font-display); font-size: 28px; font-weight: 600; }
+.sl .sec h3 span { font-family: var(--font-sans); font-size: 17px; color: var(--muted); font-weight: 500; }
+.sl .row { display: flex; align-items: center; gap: 14px; min-height: 60px; border-bottom: 1px solid var(--line); font-size: 25px; }
+.sl .row .q { margin-left: auto; font-size: 17px; color: var(--muted); }
+.sl .row.done span:nth-child(2) { color: var(--faint); text-decoration: line-through; }
+/* week panel density minis */
+.wp { width: 470px; height: 1024px; display: block; }
+/* spacing variants (round 3) */
+.sv .side { padding: 40px 40px 32px; }
+.sv .sh { margin-bottom: 20px; }
+.sv .sh b { font-size: 30px; }
+.sv .ds { padding: 0 0 26px; display: grid; gap: 12px; }
+.sv .ds .dh { display: flex; align-items: baseline; gap: 10px; }
+.sv .ds .dh b { font-family: var(--font-display); font-size: 25px; font-weight: 600; }
+.sv .ds .dh span { font-size: 17px; color: var(--muted); font-weight: 500; }
+.sv .ds .r { display: grid; grid-template-columns: 60px 1fr; column-gap: 14px; align-items: center; font-size: 21px; line-height: 1.2; }
+.sv .ds .r .tm { font-size: 17px; color: var(--muted); text-align: right; }
+.sv .ds .r .t { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.sv .ds .r.bill { color: var(--muted); font-size: 17px; }
+.sv .ds .r.bill .tm svg { font-size: 19px; }
+.sv .ds .more { padding-left: 74px; font-size: 17px; font-weight: 600; color: var(--accent); }
+.sv.hair .ds { padding: 20px 0; border-top: 1px solid var(--line-strong); }
+.sv.hair .ds:first-of-type { border-top: 0; padding-top: 0; }
+.sv.air .ds + .ds { padding-top: 0; }
+.sv .side .dinner { border-top: 1px solid var(--line-strong); padding-top: 18px; }
+.sv .ds .rows { display: grid; gap: 12px; }
+.sv.ledger .ds { grid-template-columns: 128px 1fr; column-gap: 4px; align-items: start; padding: 18px 0; border-top: 1px solid var(--line-strong); }
+.sv.ledger .ds:first-of-type { border-top: 0; padding-top: 0; }
+.sv.ledger .ds .dh { flex-direction: column; gap: 0; }
+.sv.ledger .ds .dh b { font-size: 22px; line-height: 1.15; }
+.sv.ledger .ds .r { grid-template-columns: 52px 1fr; column-gap: 10px; font-size: 20px; }
+.sv.ledger .ds .more { padding-left: 62px; }
+
+.wp .side { height: 100%; }
+/* hero minis */
+.hm { width: 820px; height: 330px; padding: 0 56px; display: block; }
+.mb2 .ck .tx small { display: block; font-size: 16px; line-height: 1.1; }
+.hm .lead { padding: 0; }
+
+/* month rows */
+.mrow7 { width: 1230px; height: 230px; display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); grid-template-rows: auto 1fr; padding: 0 20px; }
+.mrow7 .wh { font-size: 16px; font-weight: 600; color: var(--muted); padding: 10px 10px 8px; border-bottom: 1px solid var(--line-strong); }
+.mrow7 .cell { padding: 8px 10px; border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 5px; min-width: 0; overflow: hidden; }
+.mrow7 .cell:nth-child(8) { border-left: 0; }
+.mrow7 .n { font-family: var(--font-display); font-size: 24px; font-weight: 500; line-height: 1.1; margin-bottom: 2px; }
+.mrow7 .cell.now .n { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 600; }
+.mrow7 .ml { display: flex; align-items: center; gap: 6px; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--fg2); min-width: 0; }
+.mrow7 .ml > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.mrow7 .ml .t { color: var(--muted); font-size: 14px; flex: none; }
+.mrow7 .ml.mut { color: var(--muted); font-size: 15px; }
+.mrow7 .av { width: 20px; height: 20px; font-size: 11px; }
+.mrow7 .dot { width: 9px; height: 9px; }
+.mrow7.bar .ml { border-left: 3px solid var(--c); padding-left: 6px; }
+.mrow7 .more { font-size: 14px; font-weight: 600; color: var(--accent); }
+/* portrait */
+.pt { width: 1024px; height: 1366px; display: grid; grid-template-columns: 104px 1fr; }
+.pt .rail { display: flex; flex-direction: column; align-items: center; padding: 34px 0 26px; gap: 10px; border-right: 1px solid var(--line); }
+.pt .nav { position: relative; width: 84px; padding: 10px 0 8px; display: grid; justify-items: center; gap: 4px; border-radius: 12px; color: var(--faint); font-size: 14px; font-weight: 600; }
+.pt .nav svg { font-size: 28px; }
+.pt .nav.on { background: var(--surface); color: var(--fg); }
+.pt .nav .badge { position: absolute; top: 4px; right: 12px; min-width: 22px; height: 22px; border-radius: 11px; background: var(--warm-fill); color: #fff; font-size: 13px; font-weight: 700; display: grid; place-items: center; }
+.pt .sp { flex: 1; }
+.pt .mic { width: 64px; height: 64px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 28px; }
+.pt .col { display: grid; grid-template-rows: auto 1fr; min-width: 0; }
+.pt .lead { padding: 40px 48px 28px; display: flex; flex-direction: column; }
+.pt .side { padding: 30px 48px 30px; background: var(--surface); }
+.pt .side .grid2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 40px; }
+.pt .side .dinner { margin-top: 18px; }
+.pt .due { margin-top: 18px; }
+
+/* bills (round 4) */
+.sv .ds .r.bill2 { color: var(--muted); font-size: 18px; }
+.sv .ds .r.bill2 .tm { font-size: 15px; font-weight: 600; letter-spacing: .02em; }
+.art .rc { width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--line-strong); background: var(--bg); color: var(--muted); display: inline-grid; place-items: center; flex: none; font-size: 15px; }
+.sv .ds .dh .bd { display: inline-flex; align-items: center; gap: 6px; font-size: 16px; color: var(--muted); margin-left: auto; font-weight: 500; }
+.sv .ds .dh .bd svg { font-size: 17px; }
+.sv .billsf { display: grid; gap: 6px; padding: 16px 0 0; border-top: 1px solid var(--line-strong); margin-top: auto; }
+.sv .billsf + .dinner { margin-top: 18px; }
+.sv .billsf span:first-child { font-size: 17px; font-weight: 600; color: var(--muted); }
+.sv .billsf .bl { display: flex; gap: 20px; flex-wrap: wrap; font-size: 19px; color: var(--fg2); }
+.sv .billsf .bl span { display: inline-flex; align-items: center; gap: 8px; }
+.sv .billsf .bl svg { color: var(--muted); }
+/* portrait options */
+.po { width: 1024px; height: 1366px; }
+.po .lead .clock { font-size: 120px; }
+.po .dock { position: absolute; left: 0; right: 0; bottom: 0; height: 104px; display: flex; align-items: center; gap: 6px; padding: 0 32px; border-top: 1px solid var(--line); background: var(--bg); }
+.po .dock .nav { position: relative; height: 72px; padding: 0 22px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 3px; border-radius: 12px; color: var(--faint); font-size: 14px; font-weight: 600; width: auto; }
+.po .dock .nav svg { font-size: 28px; }
+.po .dock .nav.on { background: var(--surface); color: var(--fg); }
+.po .dock .nav .badge { position: absolute; top: 4px; right: 14px; min-width: 22px; height: 22px; border-radius: 11px; background: var(--warm-fill); color: #fff; font-size: 13px; font-weight: 700; display: grid; place-items: center; }
+.po .dock .sp { flex: 1; }
+.po .dock .mic { width: 68px; height: 68px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 30px; }
+/* P1: two tall columns, rail kept */
+.p1 { display: grid; grid-template-columns: 96px 1fr 392px; }
+.p1 .rail { display: flex; flex-direction: column; align-items: center; padding: 34px 0 26px; gap: 10px; border-right: 1px solid var(--line); }
+.p1 .rail .nav { position: relative; width: 80px; padding: 10px 0 8px; display: grid; justify-items: center; gap: 4px; border-radius: 12px; color: var(--faint); font-size: 14px; font-weight: 600; }
+.p1 .rail .nav svg { font-size: 28px; }
+.p1 .rail .nav.on { background: var(--surface); color: var(--fg); }
+.p1 .rail .nav .badge { position: absolute; top: 4px; right: 10px; min-width: 22px; height: 22px; border-radius: 11px; background: var(--warm-fill); color: #fff; font-size: 13px; font-weight: 700; display: grid; place-items: center; }
+.p1 .rail .sp { flex: 1; }
+.p1 .rail .mic { width: 64px; height: 64px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 28px; }
+.p1 .lead { padding: 44px 40px 32px; }
+.p1 .mast { flex-direction: column; align-items: flex-start; gap: 10px; }
+.p1 .mast .clock { font-size: 132px; }
+.p1 .wxl { flex-wrap: wrap; row-gap: 6px; }
+.p1 .wxl i { display: none; }
+.p1 .wxl em { flex-basis: 100%; }
+.p1 .next .hl { flex-direction: column; gap: 2px; }
+.p1 .next .hl b { font-size: 46px; }
+.p1 .due .g { grid-template-columns: 1fr; }
+.p1 .lead .dinner2 { margin-top: 22px; display: grid; gap: 2px; }
+.p1 .lead .dinner2 span { font-size: 17px; font-weight: 600; color: var(--muted); }
+.p1 .lead .dinner2 b { font-family: var(--font-display); font-size: 28px; font-weight: 500; }
+.p1 .side { padding: 44px 32px 32px; }
+.p1 .side .sh { flex-direction: column; align-items: flex-start; gap: 6px; }
+/* P2: masthead band + two columns + dock */
+.art.p2 { display: flex; flex-direction: column; }
+.p2 .band { padding: 44px 48px 0; }
+.p2 .band .row1 { display: flex; align-items: flex-end; gap: 26px; }
+.p2 .band .clock { font-family: var(--font-display); font-size: 156px; font-weight: 500; line-height: .8; letter-spacing: -0.035em; }
+.p2 .band .dd { display: grid; gap: 2px; padding-bottom: 6px; }
+.p2 .band .dd b { font-family: var(--font-display); font-size: 42px; font-weight: 600; line-height: 1; }
+.p2 .band .dd span { font-size: 22px; color: var(--muted); }
+.p2 .band .wxc { margin-left: auto; display: grid; justify-items: end; gap: 4px; padding-bottom: 6px; }
+.p2 .band .wxc .t { display: flex; align-items: center; gap: 10px; }
+.p2 .band .wxc svg { font-size: 44px; color: var(--warm); }
+.p2 .band .wxc b { font-family: var(--font-display); font-size: 60px; font-weight: 500; line-height: .9; }
+.p2 .band .wxc span { font-size: 19px; color: var(--muted); }
+.p2 .band .wxc em { font-style: normal; font-size: 19px; color: var(--rain); font-weight: 600; }
+.p2 .nextbar { margin: 30px 48px 0; padding: 24px 0 26px; border-top: 2px solid var(--fg); border-bottom: 1px solid var(--line-strong); display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 20px; }
+.p2 .nextbar .lbl { font-size: 17px; font-weight: 700; color: var(--warm); letter-spacing: .04em; }
+.p2 .nextbar .hl { display: flex; align-items: baseline; gap: 20px; margin-top: 4px; }
+.p2 .nextbar .hl .tm { font-size: 34px; color: var(--muted); }
+.p2 .nextbar .hl b { font-family: var(--font-display); font-size: 52px; font-weight: 500; line-height: 1.05; }
+.p2 .nextbar .then { text-align: right; font-size: 21px; color: var(--fg2); display: grid; gap: 6px; justify-items: end; }
+.p2 .nextbar .then div { display: flex; align-items: center; gap: 10px; }
+.p2 .nextbar .then small { font-size: 17px; color: var(--faint); }
+.p2 .cols { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; margin-bottom: 104px; }
+.p2 .cols .left { padding: 30px 32px 28px 48px; display: flex; flex-direction: column; gap: 6px; }
+.p2 .cols .left .hd { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.p2 .cols .left .hd b { font-family: var(--font-display); font-size: 30px; font-weight: 600; }
+.p2 .cols .left .hd span { font-size: 17px; color: var(--muted); }
+.p2 .cols .left .dinner2 { margin-top: auto; display: grid; gap: 2px; border-top: 1px solid var(--line); padding-top: 18px; }
+.p2 .cols .left .dinner2 span { font-size: 17px; font-weight: 600; color: var(--muted); }
+.p2 .cols .left .dinner2 b { font-family: var(--font-display); font-size: 30px; font-weight: 500; }
+.p2 .cols .side { padding: 30px 40px 28px; }
+.p2 .ck { display: flex; align-items: center; gap: 14px; min-height: 64px; font-size: 23px; border-bottom: 1px solid var(--line); }
+.p2 .ck .av { margin-left: auto; }
+.p2 .ck.done .tx { color: var(--faint); text-decoration: line-through; }
+.p2 .ck .tx small { display: block; font-size: 16px; color: var(--warm); font-weight: 600; }
+/* P3: today | tomorrow, then the week, then a due tray */
+.p3 { display: flex; flex-direction: column; }
+.p3 .bar { display: flex; align-items: center; gap: 26px; height: 132px; padding: 0 48px; border-bottom: 1px solid var(--line); }
+.p3 .bar .clock { font-family: var(--font-display); font-size: 88px; font-weight: 500; letter-spacing: -0.03em; line-height: 1; }
+.p3 .bar .dd b { display: block; font-family: var(--font-display); font-size: 32px; font-weight: 600; line-height: 1.05; }
+.p3 .bar .dd span { font-size: 20px; color: var(--muted); }
+.p3 .bar .wx { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.p3 .bar .wx svg { font-size: 40px; color: var(--warm); }
+.p3 .bar .wx b { font-family: var(--font-display); font-size: 48px; font-weight: 500; }
+.p3 .bar .wx span { font-size: 18px; color: var(--muted); line-height: 1.25; }
+.p3 .bar .wx em { font-style: normal; color: var(--rain); font-weight: 600; }
+.p3 .two { display: grid; grid-template-columns: 1.15fr 1fr; border-bottom: 1px solid var(--line); }
+.p3 .two > section { padding: 28px 40px 30px 48px; display: grid; gap: 14px; align-content: start; }
+.p3 .two > section + section { border-left: 1px solid var(--line); padding-left: 36px; padding-right: 48px; }
+.p3 .dh2 { display: flex; align-items: baseline; gap: 10px; }
+.p3 .dh2 b { font-family: var(--font-display); font-size: 34px; font-weight: 600; }
+.p3 .dh2 span { font-size: 18px; color: var(--muted); }
+.p3 .nx { display: grid; gap: 4px; padding: 6px 0 4px; }
+.p3 .nx .lbl { font-size: 16px; font-weight: 700; color: var(--warm); letter-spacing: .04em; }
+.p3 .nx b { font-family: var(--font-display); font-size: 40px; font-weight: 500; line-height: 1.08; }
+.p3 .nx .who { display: flex; align-items: center; gap: 10px; font-size: 20px; color: var(--muted); }
+.p3 .er { display: grid; grid-template-columns: 70px 1fr; column-gap: 14px; align-items: center; font-size: 25px; }
+.p3 .er .tm { font-size: 20px; color: var(--muted); text-align: right; }
+.p3 .er .t { display: flex; align-items: center; gap: 12px; }
+.p3 .er.past { color: var(--faint); font-size: 20px; }
+.p3 .er.past .tm { color: var(--faint); font-size: 17px; }
+.p3 .er.bill { color: var(--muted); font-size: 19px; }
+.p3 .er.bill .tm { font-size: 15px; font-weight: 600; }
+.p3 .week { flex: 1; background: var(--surface); padding: 26px 48px 20px; display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); column-gap: 22px; align-content: start; }
+.p3 .week .sh { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
+.p3 .week .sh b { font-family: var(--font-display); font-size: 28px; font-weight: 600; }
+.p3 .week .sh span { font-size: 17px; font-weight: 600; color: var(--muted); }
+.p3 .week .sh span u { text-decoration: none; color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
+.p3 .wd { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.p3 .wd .h { font-size: 17px; font-weight: 600; color: var(--muted); padding-bottom: 8px; border-bottom: 1px solid var(--line-strong); }
+.p3 .wd .h b { font-family: var(--font-display); font-weight: 600; font-size: 24px; color: var(--fg); margin-right: 6px; }
+.p3 .wd .e { display: grid; gap: 4px; font-size: 19px; line-height: 1.2; }
+.p3 .wd .e .m { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--muted); }
+.p3 .wd .e.bill { color: var(--muted); font-size: 17px; }
+.p3 .tray { display: grid; grid-template-columns: 1fr 1fr 0.8fr; column-gap: 28px; padding: 18px 48px 0; height: 300px; margin-bottom: 104px; align-content: start; }
+.p3 .tray .hd { grid-column: 1 / 3; display: flex; justify-content: space-between; align-items: baseline; }
+.p3 .tray .hd b { font-family: var(--font-display); font-size: 26px; font-weight: 600; }
+.p3 .tray .hd span { font-size: 17px; color: var(--muted); }
+.p3 .tray .ck { display: flex; align-items: center; gap: 12px; min-height: 56px; font-size: 21px; border-bottom: 1px solid var(--line); }
+.p3 .tray .ck .av { margin-left: auto; }
+.p3 .tray .ck.done .tx { color: var(--faint); text-decoration: line-through; }
+.p3 .tray .ck .tx small { display: block; font-size: 15px; color: var(--warm); font-weight: 600; }
+.p3 .tray .din { grid-column: 3; grid-row: 1 / span 4; border-left: 1px solid var(--line); padding-left: 26px; display: grid; gap: 4px; align-content: start; }
+.p3 .tray .din span { font-size: 17px; font-weight: 600; color: var(--muted); }
+.p3 .tray .din b { font-family: var(--font-display); font-size: 30px; font-weight: 500; line-height: 1.1; }
+/* ===== Portrait v2 ===== */
+.pv { width: 1024px; height: 1366px; display: grid; grid-template-columns: 104px 1fr; }
+.pv .rail { display: flex; flex-direction: column; align-items: center; padding: 34px 0 28px; gap: 10px; border-right: 1px solid var(--line); background: var(--bg); position: relative; z-index: 2; }
+.pv .rail .nav { position: relative; width: 84px; padding: 10px 0 8px; display: grid; justify-items: center; gap: 4px; border-radius: 12px; color: var(--faint); font-size: 14px; font-weight: 600; }
+.pv .rail .nav svg { font-size: 28px; }
+.pv .rail .nav.on { background: var(--surface); color: var(--fg); }
+.pv .rail .nav .badge { position: absolute; top: 4px; right: 12px; min-width: 22px; height: 22px; border-radius: 11px; background: var(--warm-fill); color: #fff; font-size: 13px; font-weight: 700; display: grid; place-items: center; }
+.pv .rail .sp { flex: 1; }
+.pv .rail .mic { width: 64px; height: 64px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 28px; }
+.pv .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.pv .ck { display: flex; align-items: center; gap: 14px; min-height: 58px; font-size: 22px; line-height: 1.2; border-bottom: 1px solid var(--line); }
+.pv .ck .av { margin-left: auto; }
+.pv .ck.done .tx { color: var(--faint); text-decoration: line-through; }
+.pv .ck .tx small { display: block; font-size: 15px; color: var(--warm); font-weight: 600; text-decoration: none; }
+.pv .shd { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.pv .shd b { font-family: var(--font-display); font-size: 28px; font-weight: 600; }
+.pv .shd span { font-size: 17px; color: var(--muted); font-weight: 500; }
+.pv .shd span u { text-decoration: none; color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
+.pv .meta { font-size: 17px; color: var(--muted); }
+.pv .lbl { font-size: 16px; font-weight: 700; letter-spacing: .05em; color: var(--warm); }
+/* week columns (module slot, portrait) */
+.pv .wkc { display: grid; gap: 22px; }
+.pv .wkc .days { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); column-gap: 26px; }
+.pv .wkc .d { display: grid; gap: 14px; align-content: start; min-width: 0; }
+.pv .wkc .d .h { display: flex; align-items: baseline; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--line-strong); }
+.pv .wkc .d .h b { font-family: var(--font-display); font-size: 24px; font-weight: 600; }
+.pv .wkc .d .h span { font-size: 16px; color: var(--muted); }
+.pv .wkc .e { display: grid; grid-template-columns: 28px 1fr; column-gap: 10px; align-items: start; }
+.pv .wkc .e .av, .pv .wkc .e .rc { grid-row: span 2; margin-top: 2px; }
+.pv .wkc .e .tm { font-size: 15px; color: var(--muted); line-height: 1.2; }
+.pv .wkc .e .tt { font-size: 19px; line-height: 1.2; }
+.pv .wkc .e.bill .tm { font-weight: 600; }
+.pv .wkc .e.bill .tt { color: var(--muted); font-size: 17px; }
+.pv .wkc .more { font-size: 15px; font-weight: 600; color: var(--accent); padding-left: 38px; }
+
+/* --- A: Planner page --- */
+.pa .hdr { display: flex; align-items: center; gap: 26px; padding: 34px 48px 28px; border-bottom: 1px solid var(--line); }
+.pa .hdr .clock { font-family: var(--font-display); font-size: 104px; font-weight: 500; line-height: .82; letter-spacing: -0.035em; }
+.pa .hdr .dd b { display: block; font-family: var(--font-display); font-size: 36px; font-weight: 600; line-height: 1.05; }
+.pa .hdr .dd span { font-size: 20px; color: var(--muted); }
+.pa .hdr .wx { margin-left: auto; display: grid; justify-items: end; gap: 2px; }
+.pa .hdr .wx .t { display: flex; align-items: center; gap: 10px; }
+.pa .hdr .wx svg { font-size: 38px; color: var(--warm); }
+.pa .hdr .wx b { font-family: var(--font-display); font-size: 46px; font-weight: 500; line-height: 1; }
+.pa .hdr .wx span { font-size: 17px; color: var(--muted); }
+.pa .hdr .wx em { font-style: normal; font-size: 17px; color: var(--rain); font-weight: 600; }
+.pa .day { flex: 1; display: grid; grid-template-columns: 1fr 304px; column-gap: 32px; padding: 26px 48px 26px; min-height: 0; }
+.pa .tl { display: grid; grid-template-rows: auto 1fr; gap: 14px; min-height: 0; }
+.pa .tl .top { display: grid; gap: 2px; }
+.pa .tl .top b { font-family: var(--font-display); font-size: 34px; font-weight: 600; }
+.pa .grid { position: relative; margin-left: 58px; border-left: 1px solid var(--line-strong); }
+.pa .grid .hr { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); }
+.pa .grid .hl { position: absolute; left: -58px; width: 48px; text-align: right; transform: translateY(-50%); font-size: 15px; color: var(--faint); }
+.pa .grid .now { position: absolute; left: -8px; right: 0; border-top: 2px solid var(--warm); z-index: 3; }
+.pa .grid .now::before { content: ''; position: absolute; left: 0; top: -7px; width: 12px; height: 12px; border-radius: 50%; background: var(--warm); }
+.pa .grid .now span { position: absolute; left: -58px; top: -12px; width: 50px; text-align: right; font-size: 16px; font-weight: 700; color: var(--warm); background: var(--bg); }
+.pa .blk { position: absolute; left: 10px; right: 0; border-left: 5px solid var(--c); border-radius: 0 12px 12px 0; background: color-mix(in srgb, var(--c) 13%, var(--bg)); padding: 14px 20px; display: grid; gap: 4px; align-content: start; overflow: hidden; }
+.pa .blk.past { opacity: .5; }
+.pa .blk .tt { font-family: var(--font-display); font-size: 34px; font-weight: 500; line-height: 1.05; }
+.pa .blk .m { display: flex; align-items: center; gap: 10px; font-size: 18px; color: var(--muted); }
+.pa .blk.one { padding: 0 18px; flex-direction: row; display: flex; align-items: center; gap: 12px; }
+.pa .blk.one .tt { font-family: var(--font-sans); font-size: 21px; }
+.pa .blk.one .m { margin-left: auto; font-size: 16px; }
+.pa .blk.half { left: auto; width: 46%; z-index: 2; box-shadow: 0 0 0 3px var(--bg); }
+.pa .grid .hl.hide { visibility: hidden; }
+.pa .side { display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+.pa .side .shd { margin-bottom: 6px; }
+.pa .side .ck { font-size: 21px; min-height: 64px; }
+.pa .side .din { margin-top: auto; display: grid; gap: 2px; padding-top: 16px; border-top: 1px solid var(--line-strong); }
+.pa .side .din b { font-family: var(--font-display); font-size: 28px; font-weight: 500; line-height: 1.1; }
+.pa .band { background: var(--surface); padding: 28px 48px 36px; }
+
+/* --- B: Dial --- */
+.pb .top { position: relative; height: 680px; display: grid; grid-template-columns: 600px 1fr; column-gap: 8px; padding: 40px 40px 0 36px; }
+.pb .dial { position: relative; width: 600px; height: 600px; }
+.pb .dial svg.face { width: 600px; height: 600px; stroke: none; }
+.pb .dial .ctr { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; pointer-events: none; }
+.pb .dial .ctr div { display: grid; gap: 2px; justify-items: center; }
+.pb .dial .ctr b { font-family: var(--font-display); font-size: 112px; font-weight: 500; line-height: .85; letter-spacing: -0.035em; }
+.pb .dial .ctr span { font-size: 21px; color: var(--muted); }
+.pb .dial .pin { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; box-shadow: 0 0 0 3px var(--bg); }
+.pb .dial .lab { position: absolute; display: flex; align-items: center; gap: 8px; font-size: 19px; font-weight: 600; white-space: nowrap; transform: translate(-50%, -50%); background: var(--bg); padding: 2px 6px; border-radius: 6px; }
+.pb .dial .lab.past { color: var(--faint); font-weight: 500; }
+.pb .info { display: flex; flex-direction: column; gap: 26px; padding-top: 18px; }
+.pb .info .dd b { display: block; font-family: var(--font-display); font-size: 44px; font-weight: 600; line-height: 1; }
+.pb .info .dd span { font-size: 21px; color: var(--muted); }
+.pb .info .wx { display: grid; gap: 4px; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+.pb .info .wx .t { display: flex; align-items: center; gap: 10px; }
+.pb .info .wx svg { font-size: 38px; color: var(--warm); }
+.pb .info .wx b { font-family: var(--font-display); font-size: 48px; font-weight: 500; line-height: 1; }
+.pb .info .wx span { font-size: 18px; color: var(--muted); }
+.pb .info .wx em { font-style: normal; font-size: 18px; color: var(--rain); font-weight: 600; }
+.pb .info .nx { display: grid; gap: 6px; }
+.pb .info .nx b { font-family: var(--font-display); font-size: 34px; font-weight: 500; line-height: 1.08; }
+.pb .info .nx .m { display: flex; align-items: center; gap: 10px; font-size: 19px; color: var(--muted); }
+.pb .info .then { display: grid; gap: 4px; font-size: 19px; color: var(--fg2); }
+.pb .info .then div { display: flex; align-items: center; gap: 10px; }
+.pb .bot { flex: 1; display: grid; grid-template-columns: 380px 1fr; min-height: 0; border-top: 1px solid var(--line); }
+.pb .bot .due { padding: 28px 32px 32px 40px; display: flex; flex-direction: column; gap: 4px; }
+.pb .bot .due .shd { margin-bottom: 6px; }
+.pb .bot .due .din { margin-top: auto; display: grid; gap: 2px; padding-top: 16px; border-top: 1px solid var(--line-strong); }
+.pb .bot .due .din b { font-family: var(--font-display); font-size: 28px; font-weight: 500; }
+.pb .bot .panel { background: var(--surface); padding: 28px 36px 30px; display: grid; gap: 18px; align-content: start; }
+.pb .bot .panel .days { display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px; row-gap: 22px; }
+
+/* --- C: Front page --- */
+.pc .np { padding: 34px 48px 0; }
+.pc .np .rule { border-top: 4px solid var(--fg); }
+.pc .np .row { display: flex; align-items: flex-end; justify-content: space-between; padding: 18px 0 34px; }
+.pc .np .day { font-family: var(--font-display); font-size: 132px; font-weight: 600; line-height: .82; letter-spacing: -0.03em; }
+.pc .np .clock { font-family: var(--font-display); font-size: 80px; font-weight: 500; line-height: .82; letter-spacing: -0.03em; text-align: right; }
+.pc .np .clock small { display: block; font-family: var(--font-sans); font-size: 17px; color: var(--muted); letter-spacing: 0; text-align: right; margin-top: 10px; }
+.pc .np .dateline { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-top: 1px solid var(--fg); border-bottom: 1px solid var(--fg); font-size: 18px; color: var(--fg2); }
+.pc .np .dateline svg { font-size: 26px; color: var(--warm); }
+.pc .np .dateline b { font-family: var(--font-display); font-size: 26px; font-weight: 500; color: var(--fg); }
+.pc .np .dateline em { font-style: normal; color: var(--rain); font-weight: 600; }
+.pc .np .dateline i { width: 1px; height: 22px; background: var(--line-strong); }
+.pc .lead { padding: 30px 48px 30px; display: grid; gap: 10px; border-bottom: 1px solid var(--line-strong); }
+.pc .lead h6 { margin: 0; font-family: var(--font-display); font-size: 68px; font-weight: 500; line-height: 1.0; letter-spacing: -0.02em; }
+.pc .lead .deck { font-size: 23px; color: var(--fg2); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pc .lead .deck .tm { font-family: var(--font-display); font-size: 30px; color: var(--fg); }
+.pc .lead .deck i { width: 1px; height: 24px; background: var(--line-strong); }
+.pc .lead .earl { font-size: 17px; color: var(--faint); }
+.pc .cols { flex: 1; display: grid; grid-template-columns: 372px 1fr; min-height: 0; }
+.pc .cols .c1 { padding: 26px 30px 30px 48px; border-right: 1px solid var(--line-strong); display: flex; flex-direction: column; gap: 4px; }
+.pc .cols .c1 .shd { margin-bottom: 6px; }
+.pc .cols .c1 .ck { font-size: 21px; }
+.pc .cols .c1 .din { margin-top: auto; display: grid; gap: 2px; padding-top: 16px; border-top: 1px solid var(--line-strong); }
+.pc .cols .c1 .din b { font-family: var(--font-display); font-size: 28px; font-weight: 500; }
+.pc .cols .c2 { background: var(--surface); padding: 26px 40px 30px 34px; display: grid; gap: 18px; align-content: start; }
+.pc .cols .c2 .days { display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px; row-gap: 22px; }
+/* ===== Front page riffs ===== */
+.fr .main { padding: 0; }
+.fr .av.l { width: 44px; height: 44px; font-size: 20px; }
+.fr .av.m { width: 36px; height: 36px; font-size: 17px; }
+.fr .k { font-size: 22px; font-weight: 700; letter-spacing: .06em; color: var(--warm); }
+.fr .k.n { color: var(--muted); }
+/* R1: pared front page */
+.r1 .np { padding: 44px 48px 0; display: grid; grid-template-columns: auto 1fr; align-items: end; column-gap: 34px; }
+.r1 .np .clock { font-family: var(--font-display); font-size: 210px; font-weight: 500; line-height: .74; letter-spacing: -0.045em; }
+.r1 .np .st { display: grid; gap: 6px; justify-items: end; padding-bottom: 4px; }
+.r1 .np .st b { font-family: var(--font-display); font-size: 60px; font-weight: 600; line-height: .95; }
+.r1 .np .st .wx { display: flex; align-items: center; gap: 10px; font-size: 30px; color: var(--fg2); }
+.r1 .np .st .wx svg { font-size: 40px; color: var(--warm); }
+.r1 .np .st .wx em { font-style: normal; color: var(--rain); font-weight: 600; }
+.r1 .rule { margin: 34px 48px 0; border-top: 3px solid var(--fg); }
+.r1 .lead { padding: 30px 48px 0; display: grid; gap: 14px; }
+.r1 .lead h6 { margin: 0; font-family: var(--font-display); font-size: 88px; font-weight: 500; line-height: 1; letter-spacing: -0.02em; }
+.r1 .lead .when { display: flex; align-items: center; gap: 16px; font-size: 38px; color: var(--fg2); }
+.r1 .lead .when b { font-family: var(--font-display); font-weight: 500; color: var(--fg); }
+.r1 .then { margin: 34px 48px 0; padding-top: 22px; border-top: 1px solid var(--line-strong); display: grid; gap: 14px; }
+.r1 .then .row { display: flex; align-items: center; gap: 16px; font-size: 34px; }
+.r1 .then .row .tm { font-family: var(--font-display); color: var(--muted); width: 104px; text-align: right; }
+.r1 .bottom { position: absolute; left: 104px; right: 0; bottom: 0; height: 430px; display: grid; grid-template-columns: 1fr 1fr; }
+.r1 .bottom > div { padding: 30px 40px 34px 48px; display: grid; gap: 6px; align-content: start; }
+.r1 .bottom .due { border-top: 1px solid var(--line-strong); }
+.r1 .bottom .wk { background: var(--surface); padding-left: 40px; }
+.r1 .bottom .hd { display: flex; align-items: baseline; gap: 14px; margin-bottom: 8px; }
+.r1 .bottom .hd b { font-family: var(--font-display); font-size: 40px; font-weight: 600; }
+.r1 .bottom .hd span { font-size: 22px; color: var(--muted); }
+.r1 .bottom .ck { display: flex; align-items: center; gap: 16px; min-height: 68px; font-size: 28px; border-bottom: 1px solid var(--line); }
+.r1 .bottom .ck .bx { width: 38px; height: 38px; }
+.r1 .bottom .ck small { font-size: 18px; color: var(--warm); font-weight: 700; margin-left: auto; }
+.r1 .bottom .ev { display: flex; align-items: center; gap: 14px; min-height: 68px; font-size: 28px; }
+.r1 .bottom .ev .tm { font-family: var(--font-display); color: var(--muted); width: 84px; }
+.r1 .bottom .more { font-size: 22px; color: var(--accent); font-weight: 600; margin-top: 10px; }
+
+/* R2: poster stack, one column of bands */
+.r2 .bands { display: grid; grid-template-rows: auto auto auto 1fr; height: 100%; }
+.r2 .b1 { padding: 48px 48px 30px; display: flex; align-items: baseline; gap: 30px; flex-wrap: wrap; }
+.r2 .b1 .day { font-family: var(--font-display); font-size: 120px; font-weight: 600; line-height: .9; letter-spacing: -0.03em; }
+.r2 .b1 .clock { font-family: var(--font-display); font-size: 120px; font-weight: 400; line-height: .9; letter-spacing: -0.03em; color: var(--muted); }
+.r2 .b1 .wx { flex-basis: 100%; display: flex; align-items: center; gap: 14px; font-size: 32px; color: var(--fg2); padding-top: 8px; }
+.r2 .b1 .wx svg { font-size: 42px; color: var(--warm); }
+.r2 .b1 .wx b { font-family: var(--font-display); font-size: 44px; font-weight: 500; color: var(--fg); }
+.r2 .b1 .wx em { font-style: normal; color: var(--rain); font-weight: 600; }
+.r2 .band { margin: 0 48px; padding: 28px 0 30px; border-top: 3px solid var(--fg); display: grid; grid-template-columns: 170px 1fr; column-gap: 24px; align-items: baseline; }
+.r2 .band + .band { border-top-width: 1px; border-color: var(--line-strong); }
+.r2 .band .k { padding-top: 10px; }
+.r2 .band h6 { margin: 0; font-family: var(--font-display); font-size: 72px; font-weight: 500; line-height: 1.02; letter-spacing: -0.02em; }
+.r2 .band .sub { grid-column: 2; font-size: 34px; color: var(--fg2); display: flex; align-items: center; gap: 14px; margin-top: 10px; }
+.r2 .band .sub b { font-family: var(--font-display); font-weight: 500; color: var(--fg); }
+.r2 .band .lst { display: grid; gap: 12px; }
+.r2 .band .lst .row { display: flex; align-items: center; gap: 16px; font-size: 36px; }
+.r2 .band .lst .row .tm, .r2 .tail .lst .row .tm { font-family: var(--font-display); color: var(--muted); width: 112px; flex: none; }
+.r2 .tail .lst { display: grid; gap: 12px; }
+.r2 .tail .lst .row { display: flex; align-items: center; gap: 16px; }
+.r2 .tail .k { padding-top: 10px; }
+.r2 .dues { grid-column: 2; display: flex; flex-wrap: wrap; gap: 14px; }
+.r2 .chip { display: inline-flex; align-items: center; gap: 12px; height: 64px; padding: 0 22px 0 14px; border-radius: 999px; border: 1.5px solid var(--line-strong); font-size: 27px; background: var(--bg); }
+.r2 .chip .bx { width: 34px; height: 34px; }
+.r2 .chip.late { border-color: var(--warm-fill); }
+.r2 .tail { background: var(--surface); margin-top: 0; padding: 26px 48px 34px; display: grid; grid-template-columns: 170px 1fr; column-gap: 24px; align-content: start; }
+.r2 .tail .lst .row { font-size: 32px; }
+
+/* R3: room tier above, counter tier below */
+.r3 { --room: 1; }
+.r3 .room { height: 836px; padding: 46px 48px 0; display: grid; grid-template-rows: auto auto 1fr; }
+.r3 .room .np { display: flex; align-items: flex-end; gap: 30px; }
+.r3 .room .np .clock { font-family: var(--font-display); font-size: 172px; font-weight: 500; line-height: .74; letter-spacing: -0.045em; }
+.r3 .room .np .st { display: grid; gap: 4px; padding-bottom: 2px; }
+.r3 .room .np .st b { font-family: var(--font-display); font-size: 50px; font-weight: 600; line-height: .95; }
+.r3 .room .np .st span { font-size: 30px; color: var(--muted); }
+.r3 .room .np .wx { margin-left: auto; display: grid; justify-items: end; gap: 2px; padding-bottom: 2px; }
+.r3 .room .np .wx .t { display: flex; align-items: center; gap: 10px; }
+.r3 .room .np .wx svg { font-size: 42px; color: var(--warm); }
+.r3 .room .np .wx b { font-family: var(--font-display); font-size: 60px; font-weight: 500; line-height: .9; }
+.r3 .room .np .wx em { font-style: normal; font-size: 28px; color: var(--rain); font-weight: 600; }
+.r3 .room .nx { margin-top: 44px; padding-top: 30px; border-top: 3px solid var(--fg); display: grid; gap: 14px; }
+.r3 .room .nx h6 { margin: 0; font-family: var(--font-display); font-size: 84px; font-weight: 500; line-height: 1; letter-spacing: -0.02em; }
+.r3 .room .nx .when { display: flex; align-items: center; gap: 16px; font-size: 38px; color: var(--fg2); }
+.r3 .room .nx .when b { font-family: var(--font-display); font-weight: 500; color: var(--fg); }
+.r3 .room .later { align-self: end; padding-bottom: 34px; display: flex; gap: 40px; font-size: 34px; }
+.r3 .room .later div { display: flex; align-items: center; gap: 14px; }
+.r3 .room .later .tm { font-family: var(--font-display); color: var(--muted); }
+.r3 .counter { position: absolute; left: 104px; right: 0; bottom: 0; top: 836px; background: var(--surface); display: grid; grid-template-columns: 1fr 1fr; column-gap: 40px; padding: 26px 48px 30px; }
+.r3 .counter .shd b { font-size: 24px; }
+.r3 .counter .shd { margin-bottom: 6px; }
+.r3 .counter .ck { min-height: 52px; font-size: 20px; }
+.r3 .counter .ck .bx { width: 28px; height: 28px; }
+.r3 .counter .ds { padding: 0 0 14px; gap: 8px; display: grid; }
+.r3 .counter .ds .dh b { font-family: var(--font-display); font-size: 21px; font-weight: 600; }
+.r3 .counter .ds .dh span { font-size: 15px; color: var(--muted); margin-left: 8px; }
+.r3 .counter .ds .r { display: grid; grid-template-columns: 52px 1fr; column-gap: 12px; align-items: center; font-size: 19px; }
+.r3 .counter .ds .r .tm { font-size: 15px; color: var(--muted); text-align: right; }
+.r3 .counter .ds .r .t { display: flex; align-items: center; gap: 10px; }
+.r3 .counter .ds .r.bill2 .tm { font-weight: 600; }
+.r3 .counter .ds .r.bill2 { color: var(--muted); font-size: 17px; }
+/* ===== Untimed items (round 6) ===== */
+.ut { width: 470px; height: 900px; display: block; }
+.ut .side { height: 100%; padding: 36px 36px 28px; background: var(--surface); }
+.ut .sh { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 20px; }
+.ut .sh b { font-family: var(--font-display); font-size: 30px; font-weight: 600; }
+.ut .sh span { font-size: 17px; font-weight: 600; color: var(--muted); }
+.ut .ds { display: grid; gap: 10px; padding-bottom: 26px; }
+.ut .dh { display: flex; align-items: baseline; gap: 10px; }
+.ut .dh b { font-family: var(--font-display); font-size: 25px; font-weight: 600; }
+.ut .dh span { font-size: 17px; color: var(--muted); font-weight: 500; }
+.ut .r { display: grid; grid-template-columns: 60px 1fr; column-gap: 14px; align-items: center; font-size: 21px; line-height: 1.2; }
+.ut .r .tm { font-size: 17px; color: var(--muted); text-align: right; }
+.ut .r .t { display: flex; align-items: center; gap: 12px; }
+.ut .more { padding-left: 74px; font-size: 17px; font-weight: 600; color: var(--accent); }
+/* A: banners */
+.ut .ban { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 12px 0 10px; border-radius: 8px; font-size: 18px; background: color-mix(in srgb, var(--c) 16%, var(--surface)); color: var(--fg); }
+.ut .ban .av { width: 24px; height: 24px; font-size: 12px; }
+.ut .ban.bill { background: transparent; box-shadow: inset 0 0 0 1.5px var(--line-strong); color: var(--muted); }
+.ut .ban.bill svg { font-size: 17px; }
+.ut .ban.bill .amt { margin-left: auto; font-size: 15px; font-weight: 600; letter-spacing: .03em; }
+/* B: subtitle line */
+.ut .sub { font-size: 17px; color: var(--muted); margin-top: -4px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.ut .sub span { display: inline-flex; align-items: center; gap: 6px; }
+.ut .sub .pip { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.ut .sub .bl { color: var(--muted); }
+.ut .sub .bl::before { content: '$'; font-weight: 700; font-size: 14px; margin-right: 2px; }
+/* portrait strip of the same */
+.utp { width: 1024px; height: 330px; display: block; }
+.utp .ds { align-content: start; }
+.utp .side { height: 100%; padding: 30px 48px; background: var(--surface); }
+.utp .cols { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); column-gap: 32px; }
+/* ===== Portrait final candidates ===== */
+.pf .lead { --k: 1; padding: calc(var(--k)*36px) 40px calc(var(--k)*30px); display: flex; flex-direction: column; gap: calc(var(--k)*22px); min-width: 0; min-height: 0; overflow: hidden; }
+.pf .mast { display: flex; align-items: flex-end; gap: 18px; }
+.pf .mast .clock { font-family: var(--font-display); font-size: 92px; font-weight: 500; line-height: .8; letter-spacing: -0.035em; }
+.pf .mast .dd b { display: block; font-family: var(--font-display); font-size: 34px; font-weight: 600; line-height: 1; }
+.pf .mast .dd span { font-size: 20px; color: var(--muted); }
+.pf .wxl { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: calc(var(--k)*21px); color: var(--fg2); padding-bottom: calc(var(--k)*20px); border-bottom: 1px solid var(--line); }
+.pf .wxl svg { font-size: calc(var(--k)*30px); color: var(--warm); }
+.pf .wxl b { font-family: var(--font-display); font-size: calc(var(--k)*32px); font-weight: 500; color: var(--fg); }
+.pf .wxl em { font-style: normal; color: var(--rain); font-weight: 600; }
+.pf .nx { display: grid; gap: calc(var(--k)*6px); }
+.pf .nx .lbl { font-size: calc(var(--k)*16px); }
+.pf .nx b { font-family: var(--font-display); font-size: calc(var(--k)*46px); font-weight: 500; line-height: 1.05; }
+.pf .nx .who { display: flex; align-items: center; gap: 10px; font-size: calc(var(--k)*21px); color: var(--muted); }
+.pf .nx .who .tm { font-family: var(--font-display); font-size: calc(var(--k)*28px); color: var(--fg); }
+.pf .lt { display: grid; grid-template-columns: auto 1fr; column-gap: 16px; row-gap: calc(var(--k)*12px); align-items: center; }
+.pf .lt .tm { font-size: calc(var(--k)*22px); color: var(--muted); text-align: right; }
+.pf .lt .t { display: flex; align-items: center; gap: 12px; font-size: calc(var(--k)*26px); }
+.pf .lt .earl { grid-column: 2; font-size: calc(var(--k)*17px); color: var(--faint); }
+.pf .due { border-top: 1px solid var(--line); padding-top: calc(var(--k)*16px); }
+.pf .due .shd b { font-size: calc(var(--k)*26px); }
+.pf .due .ck { min-height: calc(var(--k)*58px); font-size: calc(var(--k)*21px); }
+.pf .due .g { display: grid; }
+.pf .due .g.two { grid-template-columns: 1fr 1fr; column-gap: 28px; }
+.pf .din { margin-top: auto; display: grid; gap: 2px; padding-top: calc(var(--k)*14px); border-top: 1px solid var(--line-strong); }
+.pf .din span { font-size: calc(var(--k)*16px); font-weight: 600; color: var(--muted); }
+.pf .din b { font-family: var(--font-display); font-size: calc(var(--k)*28px); font-weight: 500; }
+.pf .panel { background: var(--surface); padding: 36px 30px 28px; display: flex; flex-direction: column; gap: 18px; min-height: 0; overflow: hidden; }
+.pf .panel .sh { display: grid; gap: 4px; }
+.pf .panel .sh b { font-family: var(--font-display); font-size: 28px; font-weight: 600; }
+.pf .panel .sh span { font-size: 16px; font-weight: 600; color: var(--muted); }
+.pf .panel .sh span u { text-decoration: none; color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
+.pf .panel .ds { display: grid; gap: 9px; align-content: start; }
+.pf .panel .dh { display: flex; align-items: baseline; gap: 8px; }
+.pf .panel .dh b { font-family: var(--font-display); font-size: 23px; font-weight: 600; }
+.pf .panel .dh span { font-size: 15px; color: var(--muted); }
+.pf .panel .sub { font-size: 16px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: -2px; }
+.pf .panel .sub span { display: inline-flex; align-items: center; gap: 6px; }
+.pf .panel .sub .pip { width: 8px; height: 8px; border-radius: 50%; background: var(--c); display: inline-block; }
+.pf .panel .sub .bl::before { content: '$'; font-weight: 700; font-size: 13px; margin-right: 2px; }
+.pf .panel .r { display: grid; grid-template-columns: 50px 1fr; column-gap: 10px; align-items: start; font-size: 19px; line-height: 1.2; }
+.pf .panel .r .tm { font-size: 15px; color: var(--muted); text-align: right; padding-top: 4px; }
+.pf .panel .r .t { display: flex; align-items: flex-start; gap: 10px; }
+.pf .panel .r .t .av { margin-top: -2px; }
+.pf .panel .more { padding-left: 60px; font-size: 15px; font-weight: 600; color: var(--accent); }
+/* right-panel portrait */
+.pfr { width: 1024px; height: 1366px; display: grid; grid-template-columns: 104px 1fr 372px; }
+.pfr .lead { height: 1366px; }
+.pfr .panel { height: 1366px; }
+/* bottom-panel portrait */
+.pfb { width: 1024px; height: 1366px; display: grid; grid-template-columns: 104px 1fr; }
+.pfb .col { display: grid; grid-template-rows: 1fr 430px; min-height: 0; height: 1366px; }
+.pfb .lead .row2 { display: grid; grid-template-columns: 1.1fr 1fr; column-gap: 34px; align-items: start; }
+.pfb .lead .mast { justify-content: space-between; }
+.pfb .lead .wxr { white-space: nowrap; display: grid; justify-items: end; gap: 2px; padding-bottom: 2px; font-size: calc(var(--k)*19px); color: var(--muted); }
+.pfb .lead .wxr .t { display: flex; align-items: center; gap: 10px; }
+.pfb .lead .wxr svg { font-size: calc(var(--k)*34px); color: var(--warm); }
+.pfb .lead .wxr b { font-family: var(--font-display); font-size: calc(var(--k)*44px); font-weight: 500; color: var(--fg); line-height: 1; }
+.pfb .lead .wxr em { font-style: normal; color: var(--rain); font-weight: 600; }
+.pfb .lead .ruled { border-top: 1px solid var(--line); padding-top: calc(var(--k)*20px); }
+.pfb .panel { padding: 28px 44px 24px; }
+.pfb .panel .sh { display: flex; justify-content: space-between; align-items: baseline; }
+.pfb .panel .days { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); column-gap: 28px; }
+/* ===== Portrait: panel variants (round 8) ===== */
+[hidden] { display: none !important; }
+.pf .panel .wkfill { position: relative; flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 18px; }
+.pf.dots .panel .r { grid-template-columns: 50px 1fr; }
+.pf.dots .panel .r .t { gap: 10px; align-items: baseline; }
+.pf.dots .panel .r .t .dot { width: 10px; height: 10px; transform: translateY(-1px); flex: none; }
+.pf.dots .panel .r .tm { padding-top: 2px; }
+.pf .meals { flex: none; border-top: 1px solid var(--line-strong); padding-top: 16px; display: grid; gap: 4px; }
+.pf .meals .mh { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
+.pf .meals .mh b { font-family: var(--font-display); font-size: 23px; font-weight: 600; }
+.pf .meals .mh span { font-size: 15px; color: var(--muted); }
+.pf .meals .m { display: grid; grid-template-columns: 50px 1fr; column-gap: 10px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.pf .meals .m:last-child { border-bottom: 0; }
+.pf .meals .m .d { font-size: 15px; font-weight: 600; color: var(--muted); text-align: right; }
+.pf .meals .m .n { font-family: var(--font-display); font-size: 20px; font-weight: 500; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf .meals .m .n.none { font-family: var(--font-sans); font-size: 16px; color: var(--faint); }
+/* ===== View picker + landscape (round 9) ===== */
+.vseg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 14px; background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--line-strong); }
+.pf .panel .vseg span, .vseg span { height: 52px; display: grid; place-items: center; border-radius: 10px; font-size: 19px; font-weight: 600; color: var(--fg2); }
+.pf .panel .vseg span.on, .vseg span.on { background: var(--accent); color: var(--on-accent); }
+.vpills { display: flex; gap: 8px; }
+.vpills span { height: 48px; padding: 0 18px; display: grid; place-items: center; border-radius: 999px; font-size: 18px; font-weight: 600; color: var(--fg2); box-shadow: inset 0 0 0 1.5px var(--line-strong); background: var(--bg); }
+.vpills span.on { background: var(--fg); color: var(--bg); box-shadow: none; }
+.pf .panel .sh.plain { display: block; }
+.rsub { display: grid; gap: 4px; width: 84px; margin: -2px 0 6px; }
+.rsub span { height: 44px; display: grid; place-items: center; border-radius: 10px; font-size: 15px; font-weight: 600; color: var(--muted); }
+.rsub span.on { background: var(--accent); color: var(--on-accent); }
+/* dinners: a quarter of the panel, as many nights as fit */
+.pf .meals.q { height: 25%; display: flex; flex-direction: column; min-height: 0; }
+.pf .meals.q .mfill { flex: 1; gap: 0; }
+.pf .meals.c2 .grid2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 22px; }
+.pf .meals.c2 .m { grid-template-columns: 38px 1fr; padding: 4px 0; }
+.pf .meals.c2 .m .n { font-size: 18px; }
+/* landscape */
+.pfl { width: 1366px; height: 1024px; display: grid; grid-template-columns: 104px 1fr 470px; }
+.pfl .lead { height: 1024px; }
+.pfl .panel { height: 1024px; padding: 32px 36px 26px; }
+.pfl .mast .clock { font-size: 132px; }
+.pfl .mast .dd b { font-size: 40px; }
+.pfl .mast .dd span { font-size: 22px; }
+/* ===== Night + Arrange (round 10) ===== */
+.nt { --n1: #5a554c; --n2: #45413a; --n3: #36332d; --nl: #24221e; background: #000; color: var(--n1); display: flex; flex-direction: column; }
+.nt.l { width: 1366px; height: 1024px; } .nt.p { width: 1024px; height: 1366px; }
+.nt .dotn { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--c); opacity: .45; flex: none; }
+/* N1 masthead at night */
+.nt.n1 { padding: 0 96px; justify-content: center; gap: 28px; }
+.nt.n1 .mast { display: flex; align-items: flex-end; gap: 34px; }
+.nt.n1 .c { font-family: var(--font-display); font-size: 300px; font-weight: 400; line-height: .78; letter-spacing: -0.04em; color: var(--n1); }
+.nt.p.n1 .c { font-size: 250px; }
+.nt.p.n1 .mast { flex-direction: column; align-items: flex-start; gap: 30px; }
+.nt.n1 .dd b { display: block; font-family: var(--font-display); font-size: 52px; font-weight: 500; color: var(--n2); line-height: 1; }
+.nt.n1 .dd span { font-size: 28px; color: var(--n3); }
+.nt.n1 .tm { border-top: 1px solid var(--nl); padding-top: 28px; display: grid; gap: 14px; }
+.nt.n1 .tm .k { font-size: 20px; font-weight: 700; letter-spacing: .08em; color: var(--n3); }
+.nt.n1 .tm .row { display: flex; align-items: center; gap: 16px; font-size: 32px; color: var(--n2); }
+.nt.n1 .tm .row .t { font-family: var(--font-display); width: 100px; color: var(--n3); }
+.nt.n1 .tm .wx { font-size: 24px; color: var(--n3); display: flex; gap: 10px; align-items: center; }
+.nt.n1 .tm .wx svg { font-size: 30px; }
+/* N2 centered refined */
+.nt.n2 { align-items: center; justify-content: center; text-align: center; gap: 10px; }
+.nt.n2 .c { font-family: var(--font-display); font-size: 340px; font-weight: 400; line-height: .9; letter-spacing: -0.04em; }
+.nt.p.n2 .c { font-size: 260px; }
+.nt.n2 .d { font-family: var(--font-display); font-size: 40px; color: var(--n2); }
+.nt.n2 .nx { margin-top: 40px; display: inline-flex; align-items: center; gap: 14px; font-size: 30px; color: var(--n2); padding: 14px 26px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--nl); }
+.nt.n2 .nx b { font-family: var(--font-display); font-weight: 500; color: var(--n1); }
+/* N3 tomorrow preview */
+.nt.n3 { padding: 64px 96px; gap: 0; }
+.nt.n3 .top { display: flex; align-items: baseline; justify-content: space-between; color: var(--n3); font-size: 26px; }
+.nt.n3 .top b { font-family: var(--font-display); font-size: 72px; font-weight: 400; color: var(--n2); }
+.nt.n3 h6 { margin: 60px 0 6px; font-family: var(--font-display); font-size: 120px; font-weight: 500; line-height: 1; color: var(--n1); letter-spacing: -0.02em; }
+.nt.n3 .sub { font-size: 28px; color: var(--n3); margin-bottom: 40px; display: flex; gap: 16px; align-items: center; }
+.nt.n3 .row { display: flex; align-items: center; gap: 18px; font-size: 38px; color: var(--n2); padding: 14px 0; border-bottom: 1px solid var(--nl); }
+.nt.n3 .row .t { font-family: var(--font-display); width: 120px; color: var(--n3); }
+.nt.n3 .din { margin-top: auto; font-size: 26px; color: var(--n3); }
+.nt.n3 .din b { font-family: var(--font-display); font-weight: 500; font-size: 36px; color: var(--n2); margin-left: 12px; }
+/* Arrange */
+.ar { position: relative; }
+.ar .dim { position: absolute; top: 0; bottom: 0; left: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 72%, transparent); }
+.ar .apanel { position: absolute; top: 0; bottom: 0; right: 0; z-index: 6; background: var(--surface); padding: 26px 30px; display: flex; flex-direction: column; gap: 16px; box-shadow: -1px 0 0 var(--line-strong); }
+.ar .abar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ar .abar b { font-family: var(--font-display); font-size: 28px; font-weight: 600; }
+.ar .btnp { height: 58px; padding: 0 26px; border-radius: 12px; background: var(--accent); color: var(--on-accent); font-size: 20px; font-weight: 700; display: inline-flex; align-items: center; }
+.ar .btns { height: 52px; padding: 0 18px; border-radius: 10px; box-shadow: inset 0 0 0 1.5px var(--line-strong); background: var(--bg); color: var(--fg2); font-size: 18px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
+.ar .btns svg { font-size: 20px; }
+.ar .slot { border: 2px dashed var(--line-strong); border-radius: 14px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; min-height: 0; background: color-mix(in srgb, var(--bg) 55%, transparent); }
+.ar .slot.big { flex: 3; } .ar .slot.small { flex: 1; }
+.ar .slot .sh2 { display: flex; align-items: center; gap: 10px; }
+.ar .slot .sh2 b { font-family: var(--font-display); font-size: 24px; font-weight: 600; margin-right: auto; }
+.ar .slot .ghost { color: var(--faint); font-size: 18px; line-height: 1.6; overflow: hidden; flex: 1; }
+.ar .note { font-size: 16px; color: var(--muted); }
+/* Arrange sheet */
+.ar .sheet { position: absolute; z-index: 7; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 760px; max-width: 92%; background: var(--card); border-radius: 18px; box-shadow: 0 18px 48px rgba(0,0,0,.25), 0 0 0 1px var(--line-strong); padding: 28px 32px 30px; display: grid; gap: 18px; }
+.ar.dk .sheet, .dk .ar .sheet { box-shadow: 0 18px 48px rgba(0,0,0,.6), 0 0 0 1px var(--line-strong); }
+.ar .sheet .abar b { font-size: 32px; }
+.ar .sheet .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+.ar .sheet .col h5 { margin: 0 0 6px; font-size: 16px; font-weight: 700; letter-spacing: .06em; color: var(--muted); }
+.ar .sheet .col h5 small { font-weight: 500; letter-spacing: 0; text-transform: none; }
+.ar .sheet .opt2 { display: flex; align-items: center; gap: 14px; height: 64px; padding: 0 16px; border-bottom: 1px solid var(--line); font-size: 22px; }
+.ar .sheet .opt2 svg { font-size: 24px; color: var(--muted); }
+.ar .sheet .opt2.on { color: var(--accent); font-weight: 600; }
+.ar .sheet .opt2.on svg { color: var(--accent); }
+.ar .sheet .opt2 .ck2 { margin-left: auto; font-size: 22px; }
+.ar .sheet .opt2.off { color: var(--faint); }
+.ar .sheet .opt2.off small { margin-left: auto; font-size: 15px; }
+.ar .sheet .mini3 { display: flex; gap: 8px; align-items: stretch; height: 90px; }
+.ar .sheet .mini3 .lt { flex: 2; border-radius: 8px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); }
+.ar .sheet .mini3 .rt { flex: 1; display: grid; grid-template-rows: 3fr 1fr; gap: 4px; }
+.ar .sheet .mini3 .rt i { border-radius: 6px; background: color-mix(in srgb, var(--accent) 22%, var(--surface)); display: grid; place-items: center; font-style: normal; font-size: 12px; font-weight: 700; color: var(--accent); }
+</style>
+</head>
+<body>
+
+
+<div class="doc">
+  <header class="top">
+    <div class="eyebrow">Wall display · design review · settled</div>
+    <h1>The wall, redesigned: a quieter day, one voice, both orientations</h1>
+    <p>Every board below is drawn at the iPad's real 1366×1024 size and scaled to fit, using the wall's own palette from <code>wall.css</code>, the app's Besley / Schibsted Grotesk / Spline Sans Mono files, and the real member colors. The sample day is the one from the approved prototype: Saturday, 3:15 pm.</p>
+  </header>
+
+
+  <div class="settled">
+    <div class="eyebrow">Settled in round 1</div>
+    <ul>
+      <li><strong>Direction B:</strong> a today-first masthead, with the module panel on a tinted right column.</li>
+      <li><strong>Module controls</strong> move to an Arrange mode in the display menu.</li>
+      <li><strong>Owners</strong> show as initial avatars everywhere (the boards below use them).</li>
+      <li><strong>Always on screen:</strong> next event (highlighted), Due today, dinner tonight. The daypart forecast moves one tap away.</li>
+    </ul>
+  </div>
+
+
+  <div class="settled">
+    <div class="eyebrow">Settled in round 2</div>
+    <ul>
+      <li><strong>Other screens</strong> get a slim header: the title on the left, then the time, temperature and actions on the right.</li>
+      <li><strong>The rail</strong> keeps icons with small labels.</li>
+      <li><strong>Next</strong> is an amber eyebrow over a serif time and title, with no box.</li>
+      <li><strong>A busy day</strong> shrinks to the fit floor, then caps with "+N more today".</li>
+      <li><strong>The week panel</strong> fills whole days, capped at 4 lines a day, with better spacing (Question 12 below).</li>
+      <li><strong>Dark:</strong> the panel is one step lighter than the day.</li>
+      <li><strong>Scope:</strong> every screen moves to the five-step scale and avatars.</li>
+    </ul>
+  </div>
+
+
+  <div class="settled">
+    <div class="eyebrow">Settled in round 3</div>
+    <ul>
+      <li><strong>Week panel:</strong> airy stack spacing. Bills get reworked (Question 16).</li>
+      <li><strong>Month</strong> keeps a colored dot as the one exception to avatars.</li>
+      <li><strong>Overlays in scope:</strong> Arrange mode (new), toasts and the voice banner, brief and alert cards, the add sheet and the display menu.</li>
+    </ul>
+  </div>
+
+
+
+  <div class="settled">
+    <div class="eyebrow">Settled in round 6</div>
+    <ul>
+      <li><strong>Bills and all-day events</strong> fold into one quiet line under the day heading: a color pip for an event, $ for a bill.</li>
+      <li><strong>Portrait</strong> should match landscape B, with a modest clock and no dead space.</li>
+    </ul>
+  </div>
+
+
+
+  <div class="settled">
+    <div class="eyebrow">Settled in round 8</div>
+    <ul><li><strong>Portrait panel:</strong> member dots, with the week’s dinners in the bottom quarter. The view picker gets fixed (Question 26).</li></ul>
+  </div>
+
+
+
+  <section class="blk" id="spec">
+    <div><div class="eyebrow">Settled design · all 31 questions</div><h2>The wall, redesigned</h2></div>
+    <div class="two">
+      <div class="opt"><h3>Resting screen (Week)</h3><ul class="notes good">
+        <li><span class="n">1</span><span><strong>Layout:</strong> labeled rail, then the day column on the bare ground, then a tinted module panel. Portrait is the same structure, narrower. Rotating changes how much shows, never how it looks.</span></li>
+        <li><span class="n">2</span><span><strong>Masthead:</strong> Besley clock beside the day and date (132 px landscape, 92 px portrait), with weather as one line: temperature, high/low, rain note. The daypart forecast is one tap away.</span></li>
+        <li><span class="n">3</span><span><strong>Next:</strong> an amber caps eyebrow with the countdown, over a serif title. Then later today, then one faint "Earlier:" line.</span></li>
+        <li><span class="n">4</span><span><strong>Due today</strong> (checkable, avatars, Overdue under the title) and <strong>Dinner tonight</strong> always show. The day column runs <code>useWallFit</code>: it grows to fill, shrinks to the floor on a busy day, then caps with "+N more today".</span></li>
+        <li><span class="n">5</span><span><strong>Panel:</strong> a full-width segmented Day · Week · Month picker on top. Coming up fills whole days, with member dots and at most three timed rows a day. Bills and all-day events fold into one quiet line under the day heading. Dinners take the bottom quarter and show as many nights as fit.</span></li>
+        <li><span class="n">6</span><span><strong>The panel always holds a module</strong> (solo mode goes away). The bottom slot is optional. Arrange mode edits it in place, opened from the display menu behind the PIN.</span></li>
+      </ul></div>
+      <div class="opt"><h3>Everywhere else</h3><ul class="notes good">
+        <li><span class="n">7</span><span><strong>One five-step type scale</strong> defined as wall tokens, used on every screen.</span></li>
+        <li><span class="n">8</span><span><strong>Owners:</strong> initial avatars in the day column and Day view, dots in the panel and in Month. Family stays gray.</span></li>
+        <li><span class="n">9</span><span><strong>Other screens</strong> (Shopping, To-dos, Meals, Day, Month) get a slim header: Besley title on the left, then the time, temperature and that screen's actions on the right.</span></li>
+        <li><span class="n">10</span><span><strong>Dark:</strong> the wall's own palette, with the panel one step lighter than the day.</span></li>
+        <li><span class="n">11</span><span><strong>Night:</strong> the masthead at night. A dim Besley clock beside the day, then tomorrow's first two events with dim dots, tomorrow's weather and its all-day line.</span></li>
+        <li><span class="n">12</span><span><strong>Overlays</strong> (toasts, voice banner, brief and alert cards, add sheet, display menu) move onto the same scale and voice. Day view, the lists and the overlays are reviewed in the PR's screenshots.</span></li>
+        <li><span class="n">13</span><span><strong>Ships as one PR</strong>, with screenshots of every screen in both orientations and both themes.</span></li>
+      </ul></div>
+    </div>
+  </section>
+  <details class="archive"><summary>Round 10 (night, arrange)</summary><div class="inner">
+  <div class="settled">
+    <div class="eyebrow">Settled in round 9</div>
+    <ul>
+      <li><strong>View picker:</strong> a full-width segmented control at the top of the panel.</li>
+      <li><strong>The panel in both orientations:</strong> Coming up fills whole days, and dinners take the bottom quarter, showing as many nights as fit.</li>
+      <li><strong>Remaining surfaces:</strong> Night and Arrange mode get prototypes below. Day view, the lists and the overlays take the settled system and are reviewed in the PR.</li>
+      <li><strong>Ships as one PR.</strong></li>
+    </ul>
+  </div>
+
+  <section class="blk">
+    <div><div class="eyebrow">Round 10 · Question 30</div><h2>The night screen</h2></div>
+    <p>Night stays near-black in every theme: it shows only in the night window, in a dark room, so there's no light version. All three keep today's dim values (brightest text about 3:1 on black) and wake on a tap. It's 11:42 pm Saturday, so "tomorrow" is Sunday.</p>
+    <div class="cap"><b>N1 · The masthead at night</b><span class="tag rec">Recommended</span></div>
+    <div class="minis">
+      <div class="opt"><div class="eyebrow">Landscape</div><div class="frame" data-w="1366" data-h="1024"><div class="art nt l n1" id="nl1"></div></div></div>
+      <div class="opt"><div class="eyebrow">Portrait</div><div class="frame" data-w="1024" data-h="1366"><div class="art nt p n1" id="np1"></div></div></div>
+    </div>
+    <p>The day screen’s masthead, dimmed: a big Besley clock beside the day, then a hairline and tomorrow’s first two events with dim member dots, plus tomorrow’s weather and all-day line. Same layout as daytime, so the wall looks like one product around the clock.</p>
+    <div class="cap"><b>N2 · Centered, refined</b></div>
+    <div class="minis">
+      <div class="opt"><div class="eyebrow">Landscape</div><div class="frame" data-w="1366" data-h="1024"><div class="art nt l n2" id="nl2"></div></div></div>
+      <div class="opt"><div class="eyebrow">Portrait</div><div class="frame" data-w="1024" data-h="1366"><div class="art nt p n2" id="np2"></div></div></div>
+    </div>
+    <p>Today’s night screen with the new type: a centered clock, the date in Besley, and tomorrow’s first event in a faint pill. The calmest and darkest, but it shows only one event.</p>
+    <div class="cap"><b>N3 · Tomorrow’s page</b></div>
+    <div class="minis">
+      <div class="opt"><div class="eyebrow">Landscape</div><div class="frame" data-w="1366" data-h="1024"><div class="art nt l n3" id="nl3"></div></div></div>
+      <div class="opt"><div class="eyebrow">Portrait</div><div class="frame" data-w="1024" data-h="1366"><div class="art nt p n3" id="np3"></div></div></div>
+    </div>
+    <p>A small clock at the top, and the screen previews tomorrow: its date, weather, all-day line, events and dinner. The most useful at bedtime, but it puts the most light in a dark room.</p>
+  </section>
+
+  <section class="blk">
+    <div><div class="eyebrow">Question 31</div><h2>Arrange mode</h2></div>
+    <p>Opened from the display menu (behind the family PIN, if one is set). The panel holds a top module and an optional bottom quarter, so arranging means choosing what goes in each slot.</p>
+    <div class="cap"><b>A · In place</b><span class="tag rec">Recommended</span></div>
+    <div class="minis">
+      <div class="opt"><div class="eyebrow">Landscape · light</div><div class="frame" data-w="1366" data-h="1024"><div class="art pv pf pfl dots ar " id="a1l"></div></div></div>
+      <div class="opt"><div class="eyebrow">Landscape · dark</div><div class="frame" data-w="1366" data-h="1024"><div class="art pv pf pfl dots ar dk " id="a1ld"></div></div></div>
+      <div class="opt"><div class="eyebrow">Portrait · light</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr dots ar " id="a1p"></div></div></div>
+      <div class="opt"><div class="eyebrow">Portrait · dark</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr dots ar dk " id="a1pd"></div></div></div>
+    </div>
+    <p>The rest of the wall dims, and the panel itself becomes editable: each slot gets a dashed outline with Switch (opens the existing module menu) and, for the bottom slot, Remove. Done sits where the picker was. You arrange the real panel at its real size, so there's nothing to translate in your head.</p>
+    <div class="cap"><b>B · A sheet</b></div>
+    <div class="minis">
+      <div class="opt"><div class="eyebrow">Landscape · light</div><div class="frame" data-w="1366" data-h="1024"><div class="art pv pf pfl dots ar " id="a2l"></div></div></div>
+      <div class="opt"><div class="eyebrow">Landscape · dark</div><div class="frame" data-w="1366" data-h="1024"><div class="art pv pf pfl dots ar dk " id="a2ld"></div></div></div>
+      <div class="opt"><div class="eyebrow">Portrait · light</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr dots ar " id="a2p"></div></div></div>
+      <div class="opt"><div class="eyebrow">Portrait · dark</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr dots ar dk " id="a2pd"></div></div></div>
+    </div>
+    <p>A centered card with a small layout diagram and two radio columns, Top and Bottom, listing every module. A module already in the other slot is grayed out. Everything is visible at once, but it's one more screen that describes the panel instead of showing it.</p>
+  </section>
+  </div></details>
+  <details class="archive"><summary>Round 9 (picker, landscape)</summary><div class="inner">
+  <section class="blk">
+    <div><div class="eyebrow">Round 9 · Question 26</div><h2>A view picker you can find at a glance</h2></div>
+    <p>“Day · Week · Month” in 16 px muted text read as a caption, not a control. All three fixes below are full-size touch targets with the current view filled.</p>
+    <div class="cap"><b>Segmented control on top of the panel</b><span class="tag rec">Recommended</span></div>
+    <div class="minis">
+      <div class="opt"><div class="eyebrow">Light</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr dots" id="vp1"></div></div></div>
+      <div class="opt"><div class="eyebrow">Dark</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr dots dk" id="vp1d"></div></div></div>
+    </div>
+    <p>A full-width, three-part control is the first thing in the panel: 60 px tall, with the active view filled evergreen (the primary-action color). It’s obvious, sits right above what it changes, and can be tapped without aiming.</p>
+    <div class="cap"><b>Pills under the heading</b></div>
+    <div class="minis">
+      <div class="opt"><div class="eyebrow">Light</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr dots" id="vp2"></div></div></div>
+      <div class="opt"><div class="eyebrow">Dark</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr dots dk" id="vp2d"></div></div></div>
+    </div>
+    <p>Three pill buttons below “Coming up”, the active one filled ink-dark. It’s lighter than the segmented control and still clearly a control, but it reads second, after the heading.</p>
+    <div class="cap"><b>In the rail, under Calendar</b></div>
+    <div class="minis">
+      <div class="opt"><div class="eyebrow">Light</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr dots" id="vp3"></div></div></div>
+      <div class="opt"><div class="eyebrow">Dark</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr dots dk" id="vp3d"></div></div></div>
+    </div>
+    <p>Day, Week and Month hang under the Calendar item in the rail, like sub-pages. The panel stays clean, but the control sits far from the content it changes.</p>
+  </section>
+
+  <section class="blk">
+    <div><div class="eyebrow">Question 27</div><h2>Landscape with the portrait panel, and the pair together</h2></div>
+    <div class="cap"><b>Landscape: dots, dinners, segmented picker</b></div>
+    <div class="minis">
+      <div class="opt"><div class="eyebrow">Light</div><div class="frame" data-w="1366" data-h="1024"><div class="art pv pf pfl dots" id="ls1"></div></div></div>
+      <div class="opt"><div class="eyebrow">Dark</div><div class="frame" data-w="1366" data-h="1024"><div class="art pv pf pfl dots dk" id="ls1d"></div></div></div>
+    </div>
+    <p>The landscape B board with the same panel: the segmented picker, the dotted week filling whole days, and dinners at the foot of a 470 px panel. The day column keeps its two-column Due today, and the fit rule fills its height. The cost: the landscape panel is 1024 px tall rather than 1366, so with seven dinners at the foot only three days of Coming up fit on this sample.</p>
+    <div class="cap"><b>Landscape: dinners take a quarter</b><span class="tag rec">Recommended</span></div>
+    <div class="minis">
+      <div class="opt"><div class="eyebrow">Light</div><div class="frame" data-w="1366" data-h="1024"><div class="art pv pf pfl dots" id="ls2"></div></div></div>
+      <div class="opt"><div class="eyebrow">Dark</div><div class="frame" data-w="1366" data-h="1024"><div class="art pv pf pfl dots dk" id="ls2d"></div></div></div>
+    </div>
+    <p>The rule you set for portrait, applied here: dinners get the bottom quarter of the panel and show as many nights as fit whole (five here, Sun–Thu), in the same one-line Besley rows. Coming up keeps the rest and fits four days, one more than with the full dinner list. In portrait the same quarter happens to hold all seven.</p>
+    <div class="cap"><b>The same design, portrait</b></div>
+    <div class="minis">
+      <div class="opt"><div class="eyebrow">Light</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr dots" id="pt2"></div></div></div>
+      <div class="opt"><div class="eyebrow">Dark</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr dots dk" id="pt2d"></div></div></div>
+    </div>
+    <p>The recommended landscape rules on the portrait board: segmented picker, dotted week filling whole days, and dinners in the bottom quarter showing as many nights as fit. The taller panel holds more of both. Rotating changes how much shows, never how it looks.</p>
+  </section>
+  </div></details>
+  <details class="archive"><summary>Round 8 (portrait panel)</summary><div class="inner">
+  <section class="blk">
+    <div><div class="eyebrow">Round 8 · Question 24</div><h2>Portrait, panel on the right: dots, and dinners</h2></div>
+    <p>All three are the round-7 recommendation with a different panel. The panel fills whole days and drops any day that won’t fit whole. When dinners are shown, they take the bottom of the panel and list the whole week. Tonight’s dinner already sits in the day column, so the list starts tomorrow.</p>
+    <div class="cap"><b>Dots</b></div>
+    <div class="minis">
+      <div class="opt"><div class="eyebrow">Light</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr dots" id="pm1"></div></div></div>
+      <div class="opt"><div class="eyebrow">Dark</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr dots dk" id="pm1d"></div></div></div>
+    </div>
+    <p>A 10 px member dot replaces the 28 px avatar. Titles get about 30 px more room, so “Early release pickup” stays on one line, and rows sit tighter, which fits more of the week.</p>
+    <div class="cap"><b>Dots + dinners</b><span class="tag rec">Recommended</span></div>
+    <div class="minis">
+      <div class="opt"><div class="eyebrow">Light</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr dots" id="pm2"></div></div></div>
+      <div class="opt"><div class="eyebrow">Dark</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr dots dk" id="pm2d"></div></div></div>
+    </div>
+    <p>Dots, plus the week’s dinners in the bottom quarter: all seven fit at 20 px Besley, one line each, with “Nothing planned” muted. Coming up keeps every whole day that fits above it: the rest of this week on the sample, about four days on a busy week. The panel now answers both “what’s coming” and “what’s for dinner”.</p>
+    <div class="cap"><b>Avatars + dinners</b></div>
+    <div class="minis">
+      <div class="opt"><div class="eyebrow">Light</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr" id="pm3"></div></div></div>
+      <div class="opt"><div class="eyebrow">Dark</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr dk" id="pm3d"></div></div></div>
+    </div>
+    <p>The same split with avatars kept. It’s more consistent with the day column, but the bigger rows cost Coming up roughly one day on a busy week.</p>
+  </section>
+  </div></details>
+  <details class="archive"><summary>Round 7 (portrait as B)</summary><div class="inner">
+  <section class="blk">
+    <div><div class="eyebrow">Round 7 · Question 23</div><h2>Portrait as landscape B, turned</h2></div>
+    <p>Same masthead, same Next, same Due today, same tinted Coming up with the quiet untimed line. The clock drops to about 90 px, beside the date as in landscape. The day column runs the shipped fit rule (<code>useWallFit</code>): its type grows until the column is full, so a quiet day reads bigger instead of leaving gaps, and a busy one shrinks down to the floor. The only difference between the two is where the panel goes.</p>
+    <div class="cap"><b>Panel on the right</b><span class="tag rec">Recommended</span></div>
+    <div class="minis">
+      <div class="opt"><div class="eyebrow">Light</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr" id="pfr"></div></div></div>
+      <div class="opt"><div class="eyebrow">Dark</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfr dk" id="pfrd"></div></div></div>
+    </div>
+    <p>Identical to landscape B, only narrower: rail, day, panel. A tall panel fits the whole week, so turning the iPad gives more of the week, not less.</p>
+    <div class="cap"><b>Panel along the bottom</b></div>
+    <div class="minis">
+      <div class="opt"><div class="eyebrow">Light</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfb" id="pfb"></div></div></div>
+      <div class="opt"><div class="eyebrow">Dark</div><div class="frame" data-w="1024" data-h="1366"><div class="art pv pf pfb dk" id="pfbd"></div></div></div>
+    </div>
+    <p>The day gets the full width (Next and Due today side by side), and the panel becomes a tinted band of three days across the bottom. Wider lines, but only three days instead of seven.</p>
+  </section>
+  </div></details>
+  <details class="archive"><summary>Rounds 5–6 (portrait riffs, untimed items)</summary><div class="inner">
+  <div class="settled">
+    <div class="eyebrow">Settled in round 4</div>
+    <ul>
+      <li><strong>Bills</strong> sit in the owner slot with "Due" in the time column.</li>
+      <li><strong>The panel always holds one module</strong>; solo mode goes away, and saved zero-module layouts get Coming up.</li>
+      <li><strong>The night screen</strong> takes on the masthead's voice.</li>
+      <li><strong>Family</strong> stays gray.</li>
+      <li><strong>Portrait</strong> follows the Front page direction, decluttered (Question 21).</li>
+    </ul>
+  </div>
+
+  <section class="blk">
+    <div><div class="eyebrow">Round 5 · Question 21</div><h2>Front page, readable from across the room</h2></div>
+    <p>The last Front page set about 45 pieces of text at counter size. These three follow one rule: anything meant to be read from across the kitchen is at least 34 px, Next is 72–84 px, and there are only a handful of such things. Detail is either cut or set apart at counter size. View each at the size you'd stand from the iPad: the small text is meant to disappear.</p>
+    <div class="cap"><b>R1 · Pared front page</b></div>
+    <div class="frame" data-w="1024" data-h="1366" style="max-width:620px"><div class="art pv fr r1" id="r1"></div></div>
+    <p>A 210 px clock, the day, and one weather phrase. Next as an 80 px headline, then tonight's two events at 34 px. The bottom shows only what's left to do (4 items at 28 px; done items drop off) and tomorrow. The rest of the week is one tap away. It holds 12 pieces of text, down from about 45.</p>
+    <div class="cap"><b>R2 · Poster bands</b></div>
+    <div class="frame" data-w="1024" data-h="1366" style="max-width:620px"><div class="art pv fr r2" id="r2"></div></div>
+    <p>No columns at all: one column of labeled bands (Next, Tonight, To do, Tomorrow), each a single idea in big type. To-dos become large tappable pills. Tomorrow sits in the tinted module slot at the foot. It reads like a poster, top to bottom.</p>
+    <div class="cap"><b>R3 · Room above, counter below</b></div>
+    <div class="frame" data-w="1024" data-h="1366" style="max-width:620px"><div class="art pv fr r3" id="r3"></div></div>
+    <p>The screen is split by reading distance. The top 60% holds only room-scale things: clock, day, weather, Next, tonight. The bottom 40% is a tinted counter zone at normal size for when you're standing at the wall: the full Due today checklist and the week. Nothing in the counter zone competes, because it's small and on a quieter ground.</p>
+  </section>
+
+  <section class="blk">
+    <div><div class="eyebrow">Round 6 · Question 22</div><h2>Untimed items: bills and all-day events</h2></div>
+    <p>Every earlier version forced untimed items into the time grid, with a receipt or "Due" standing in for a time, so they read as broken rows. These three stop pretending they have a time. The sample week now has all-day events too (Grandma visiting, Leo's picture day). Each option is shown in light, dark, and the portrait panel.</p>
+    <div class="cap"><b>A · All-day banners</b></div>
+    <div class="minis">
+      <div class="opt"><div class="eyebrow">Light</div><div class="frame" data-w="470" data-h="900"><div class="art ut" id="ua"></div></div></div>
+      <div class="opt"><div class="eyebrow">Dark</div><div class="frame" data-w="470" data-h="900"><div class="art ut dk" id="uad"></div></div></div>
+    </div>
+    <div class="eyebrow">Portrait, light and dark</div>
+    <div class="frame" data-w="1024" data-h="330"><div class="art ut utp" id="uap"></div></div>
+    <div class="frame" data-w="1024" data-h="330"><div class="art ut utp dk" id="uapd"></div></div>
+    <p>Untimed items become bars across the top of their day, the way every calendar shows all-day events. A member's event is tinted in their color with their avatar. A bill is an outlined bar marked DUE, so it reads as a reminder, not an event. Timed rows below keep their clean three tracks.</p>
+    <div class="cap"><b>B · A quiet line under the day</b></div>
+    <div class="minis">
+      <div class="opt"><div class="eyebrow">Light</div><div class="frame" data-w="470" data-h="900"><div class="art ut" id="ub"></div></div></div>
+      <div class="opt"><div class="eyebrow">Dark</div><div class="frame" data-w="470" data-h="900"><div class="art ut dk" id="ubd"></div></div></div>
+    </div>
+    <div class="eyebrow">Portrait, light and dark</div>
+    <div class="frame" data-w="1024" data-h="330"><div class="art ut utp" id="ubp"></div></div>
+    <div class="frame" data-w="1024" data-h="330"><div class="art ut utp dk" id="ubpd"></div></div>
+    <p>Untimed items fold into one muted line under the day heading: a color pip for an all-day event, a $ for a bill. Cheapest in height, but small text that won't carry across the room.</p>
+    <div class="cap"><b>C · Banners, bills off the wall</b><span class="tag rec">Recommended</span></div>
+    <div class="minis">
+      <div class="opt"><div class="eyebrow">Light</div><div class="frame" data-w="470" data-h="900"><div class="art ut" id="uc"></div></div></div>
+      <div class="opt"><div class="eyebrow">Dark</div><div class="frame" data-w="470" data-h="900"><div class="art ut dk" id="ucd"></div></div></div>
+    </div>
+    <div class="eyebrow">Portrait, light and dark</div>
+    <div class="frame" data-w="1024" data-h="330"><div class="art ut utp" id="ucp"></div></div>
+    <div class="frame" data-w="1024" data-h="330"><div class="art ut utp dk" id="ucpd"></div></div>
+    <p>All-day events get banners, as in A. Bills leave the wall's lists altogether: they stay in Month, in Day view, and on the phone, where the money lives. Bills are the item nobody acts on from the kitchen, and they were the source of most of the mess. The panel is left with people's plans only.</p>
+  </section>
+
+  <section class="blk">
+    <div><div class="eyebrow">Question 21, in dark</div><h2>The portrait riffs in the wall's dark palette</h2></div>
+    <div class="minis">
+      <div class="opt"><div class="cap"><b>R1 · dark</b></div><div class="frame" data-w="1024" data-h="1366"><div class="art pv fr r1 dk" id="r1d"></div></div></div>
+      <div class="opt"><div class="cap"><b>R2 · dark</b></div><div class="frame" data-w="1024" data-h="1366"><div class="art pv fr r2 dk" id="r2d"></div></div></div>
+      <div class="opt"><div class="cap"><b>R3 · dark</b></div><div class="frame" data-w="1024" data-h="1366"><div class="art pv fr r3 dk" id="r3d"></div></div></div>
+    </div>
+  </section>
+  </div></details>
+  <details class="archive"><summary>Round 4 (settled)</summary><div class="inner">
+  <section class="blk">
+    <div><div class="eyebrow">Round 4 · Question 16</div><h2>Bills that sit on the grid</h2></div>
+    <p>In round 3 the receipt icon sat right-aligned in the time column. It was narrower than the times around it, so it floated. All three fixes below put every line on the same three tracks: time, owner, title.</p>
+    <div class="minis">
+      <div class="opt"><div class="cap"><b>Bill in the owner slot</b><span class="tag rec">Recommended</span></div><div class="frame" data-w="470" data-h="1024"><div class="art mb2 sv air wp" id="bl1"></div></div><p>The time column says <em>Due</em>, set right-aligned like a time. The owner slot holds a receipt in a neutral ring, the same size as an avatar. The bill reads as one more row of the day and lines up exactly.</p></div>
+      <div class="opt"><div class="cap"><b>In the day heading</b></div><div class="frame" data-w="470" data-h="1024"><div class="art mb2 sv air wp" id="bl2"></div></div><p>No bill rows. The day heading carries "Water bill" at its right edge. Takes no height, but a day with two bills crowds the heading.</p></div>
+      <div class="opt"><div class="cap"><b>Bills footer</b></div><div class="frame" data-w="470" data-h="1024"><div class="art mb2 sv air wp" id="bl3"></div></div><p>Bills leave the days and gather in one line above Dinner. The days are cleanest, but you lose seeing a bill next to what else that day holds.</p></div>
+    </div>
+  </section>
+
+  <section class="blk">
+    <div><div class="eyebrow">Question 17, take two</div><h2>Portrait: three ideas, not three arrangements</h2></div>
+    <p>The first three portrait boards rearranged the same blocks and left dead space. These start from what a tall screen is good at. Each keeps the settled pieces: the labeled rail, avatars, amber for time, Due today, dinner, and a tinted module panel.</p>
+    <div class="cap"><b>Planner page</b><span class="tag">Today to scale</span></div>
+    <div class="frame" data-w="1024" data-h="1366" style="max-width:620px"><div class="art pv pa" id="pva"></div></div>
+    <p>The height becomes time: the rest of today runs from 3 pm to 11 pm at a fixed scale, with the now-line at the top. Long events look long, and a free evening looks free. Due today and dinner sit beside it, and the week runs across the bottom as four columns on the tinted ground.</p>
+    <div class="cap"><b>Dial</b><span class="tag">The clock is the schedule</span></div>
+    <div class="frame" data-w="1024" data-h="1366" style="max-width:620px"><div class="art pv pb" id="pvb"></div></div>
+    <p>The clock face shows the twelve hours you're in, with each event as an arc in its owner's color and the amber hand at now. The past is washed out. From across the kitchen, "how much of the evening is spoken for" reads before any words do. The date, weather and Next sit beside the dial, and Due today and the week share the lower half.</p>
+    <div class="cap"><b>Front page</b><span class="tag">Type as the hero</span></div>
+    <div class="frame" data-w="1024" data-h="1366" style="max-width:620px"><div class="art pv pc" id="pvc"></div></div>
+    <p>The day name as a nameplate, the clock in the corner, and weather on a ruled dateline. Next is the lead headline at 68 px, with the rest of today as its deck line. Below: Due today in a narrow column and the week in a wide tinted one. It's the most Besley, most LifeBalance of the three.</p>
+  </section>
+  </div></details>
+  <details class="archive"><summary>Round 3 (settled)</summary><div class="inner">
+  <section class="blk">
+    <div><div class="eyebrow">Round 3 · Question 12</div><h2>Spacing for the week panel</h2></div>
+    <p>The round-2 mini for this question was broken: it inherited the board's three-column grid, so it rendered in a strip about 200 px wide. Below are the fixed panel and two respaced versions. All three show the same quiet week on an 8 px rhythm, with times right-aligned in one column and bills moved into that column with a receipt icon so their text lines up with event titles.</p>
+    <div class="minis">
+      <div class="opt"><div class="cap"><b>As drawn in round 2</b></div><div class="frame" data-w="470" data-h="1024"><div class="art mb2 wp" id="wp2"></div></div><p>Repaired, unchanged otherwise. Day heads sit tight to the rule above them, and bill lines float in their own indent.</p></div>
+      <div class="opt"><div class="cap"><b>Airy stack</b><span class="tag rec">Recommended</span></div><div class="frame" data-w="470" data-h="1024"><div class="art sv air wp" id="sv1"></div></div><p>No rules between days. 26 px of space and the serif day heading do the separating. Rows 12 px apart. It's the calmest of the three and matches the Shopping columns.</p></div>
+      <div class="opt"><div class="cap"><b>Ruled stack</b></div><div class="frame" data-w="470" data-h="1024"><div class="art sv hair wp" id="sv2"></div></div><p>Same rhythm, with a hairline between days and 20 px on each side of it. Firmer edges, but more lines.</p></div>
+      <div class="opt"><div class="cap"><b>Ledger</b></div><div class="frame" data-w="470" data-h="1024"><div class="art sv ledger wp" id="sv3"></div></div><p>The day sits in a left column beside its events, like a diary page. Very scannable and the most compact, but titles get about 190 px, so "Early release pickup" or "Pick up Ava from party" wrap to two lines.</p></div>
+    </div>
+  </section>
+
+  <section class="blk">
+    <div><div class="eyebrow">Question 13</div><h2>Month cells: avatars are too big. What marks the owner?</h2></div>
+    <p>One week row of Month at true size. A cell is about 175 px wide, where a 28 px avatar would cost two words of every title.</p>
+    <div class="cap"><b>Tiny avatar (20 px)</b></div>
+    <div class="frame" data-w="1230" data-h="230"><div class="art mrow7" id="m1"></div></div>
+    <div class="cap"><b>Dot, as the Month exception</b><span class="tag rec">Recommended</span></div>
+    <div class="frame" data-w="1230" data-h="230"><div class="art mrow7" id="m2"></div></div>
+    <div class="cap"><b>Color bar</b></div>
+    <div class="frame" data-w="1230" data-h="230"><div class="art mrow7 bar" id="m3"></div></div>
+    <p>Why the dot here: Month is a density view you read up close, and a 20 px initial is near the edge of legible. The dot is the same color as the avatar, so the language still matches. Tap a day and Day view shows the full avatars.</p>
+  </section>
+
+  <section class="blk">
+    <div><div class="eyebrow">Question 14</div><h2>Portrait: how does the masthead layout stack?</h2></div>
+    <p>#1265 made the wall follow its orientation. In portrait, B stacks the day on top and the panel below, at full width in two columns of whole days.</p>
+    <div class="frame" data-w="1024" data-h="1366" style="max-width:560px"><div class="art pt" id="pt"></div></div>
+  </section>
+  </div></details>
+  <details class="archive"><summary>Round 2 (settled)</summary><div class="inner">
+  <section class="blk">
+    <div><div class="eyebrow">Round 2 · Question 5</div><h2>What replaces the top bar on the other screens?</h2></div>
+    <p>B drops the top bar from the resting screen. Shopping, To-dos, Meals, Day and Month still need a title, their actions, and the time. Both boards show Shopping.</p>
+    <div class="cap"><b>Slim header</b><span class="tag rec">Recommended</span></div>
+    <div class="frame" data-w="1366" data-h="1024"><div class="art sl" id="sl1"></div></div>
+    <p>The screen's name in Besley on the left. On the right: the time and temperature at a reading size, then that screen's actions. It's one row, and it matches the masthead's voice at a smaller size.</p>
+    <div class="cap"><b>Clock in the rail</b></div>
+    <div class="frame" data-w="1366" data-h="1024"><div class="art sl" id="sl2"></div></div>
+    <p>The time and temperature move to the top of the rail on every screen except Week, which leaves more room for the list. They're small there, though, and hard to read from across the room.</p>
+  </section>
+
+  <section class="blk">
+    <div><div class="eyebrow">Question 6</div><h2>Icon-only rail, or icons with labels?</h2></div>
+    <div class="cap"><b>With labels</b></div>
+    <div class="frame" data-w="1366" data-h="1024"><div class="art mb2 lab" id="b-lab"></div></div>
+    <p>Board B as chosen, but each rail icon keeps a 14 px label. It costs 16 px of width. Kids, guests, and anyone using voice-off would still see the words. Compare with the icon-only rail in the next board.</p>
+  </section>
+
+  <section class="blk">
+    <div><div class="eyebrow">Question 7</div><h2>How should "Next" stand out?</h2></div>
+    <div class="minis">
+      <div class="opt"><div class="cap"><b>Eyebrow + serif</b><span class="tag rec">Recommended</span></div><div class="frame" data-w="820" data-h="330"><div class="art mb2 hm" id="h1"></div></div><p>Warm caps label, big serif title. No box. It uses the same amber as the now-line, so "time" always reads amber.</p></div>
+      <div class="opt"><div class="cap"><b>Tinted block</b></div><div class="frame" data-w="820" data-h="330"><div class="art mb2 hm" id="h2"></div></div><p>The same, inside an amber-50 panel with an amber rule. Louder, and the only filled surface in the lead column.</p></div>
+      <div class="opt"><div class="cap"><b>Countdown first</b></div><div class="frame" data-w="820" data-h="330"><div class="art mb2 hm" id="h3"></div></div><p>Leads with "1 hr 45 min" in big amber type. Best for "do we need to leave?", but it ticks every minute, and two big numbers compete with the clock.</p></div>
+    </div>
+  </section>
+
+  <section class="blk">
+    <div><div class="eyebrow">Question 8</div><h2>A busy day: shrink to fit, or cap the list?</h2></div>
+    <p>The same Saturday with ten events, six of them still ahead.</p>
+    <div class="cap"><b>Shrink, then cap</b><span class="tag rec">Recommended</span></div>
+    <div class="frame" data-w="1366" data-h="1024"><div class="art mb2 busy" id="busy1"></div></div>
+    <p><code>useWallFit</code> shrinks Later today down to its floor (0.8). Only past that does it end in "+N more today", which opens Day view. "Next" and Due today never shrink. On a quiet day the same rule grows the type instead.</p>
+    <div class="cap"><b>Fixed cap at 3</b></div>
+    <div class="frame" data-w="1366" data-h="1024"><div class="art mb2" id="busy2"></div></div>
+    <p>Always show the next event plus three, at full size, and tap for the rest. Predictable, but it hides events on a day when there's room for them.</p>
+  </section>
+
+  <section class="blk">
+    <div><div class="eyebrow">Question 9</div><h2>How much of the week should the panel hold?</h2></div>
+    <p>A quieter week than the sample. Both use avatars and cap each day at four lines.</p>
+    <div class="minis">
+      <div class="opt"><div class="cap"><b>Next 4 days</b></div><div class="frame" data-w="470" data-h="1024"><div class="art mb2 wp" id="wp1"></div></div></div>
+      <div class="opt"><div class="cap"><b>Fill whole days</b><span class="tag rec">Chosen</span></div><p>See Question 12 above.</p></div>
+    </div>
+    <p>Fill whole days adds days until the next one wouldn't fit whole, so a quiet week shows six or seven days and a busy one shows three. The heading changes from "This week" to "Coming up" when it runs past Sunday.</p>
+  </section>
+
+  <section class="blk">
+    <div><div class="eyebrow">Question 10</div><h2>Dark: does the panel stay lighter than the day?</h2></div>
+    <div class="frame" data-w="1366" data-h="1024"><div class="art mb2 dk" id="bdark"></div></div>
+    <p>The wall's own dark palette. The panel is one step <em>lighter</em> than the lead column (the wall's dark surface on its dark ground), so the light board's ranking holds: the day is the ground, and the panel is secondary.</p>
+  </section>
+
+  </div></details>
+  <details class="archive"><summary>Round 1 (settled)</summary><div class="inner">
+  <section class="blk">
+    <div class="cap"><b>Today's Week screen</b><span class="tag">As shipped</span></div>
+    <div class="frame" data-w="1366" data-h="1024"><div class="art now" id="now"></div></div>
+    <div class="two">
+      <div class="opt">
+        <h3>What's cluttering it</h3>
+        <ul class="notes">
+          <li><span class="n">1</span><span><strong>Four big-number units fight in the top bar.</strong> Clock, current temp, H/L, and three daypart temps are all "big serif number + small caption", so the eye has no first stop. There are five temperatures on screen.</span></li>
+          <li><span class="n">2</span><span><strong>The date is said twice.</strong> "Saturday October 3" in the top bar, then "Today Saturday" as the column head.</span></li>
+          <li><span class="n">3</span><span><strong>A name under every event.</strong> 21 dots and 21 name labels on one screen. The dot already carries the person; the name doubles the line count in Today.</span></li>
+          <li><span class="n">4</span><span><strong>Editing chrome on the resting screen.</strong> Switch, ×, and the dashed Add module box are set up once and then visible all day.</span></li>
+          <li><span class="n">5</span><span><strong>Past events keep full size.</strong> Three finished events sit at the top of Today and push what's next halfway down.</span></li>
+          <li><span class="n">6</span><span><strong>Fourteen days at equal weight.</strong> Wednesday's six lines get as much room as tomorrow's two, so the panel reads as a wall of rows.</span></li>
+          <li><span class="n">7</span><span><strong>No type scale.</strong> This one screen uses 15 sizes (13–72 px). The steps are too close for a reader across the kitchen to tell what's primary.</span></li>
+        </ul>
+      </div>
+      <div class="opt">
+        <h3>What's worth keeping</h3>
+        <ul class="notes good">
+          <li><span class="n">✓</span><span><strong>The warm paper palette and Besley moments.</strong> It looks like LifeBalance, not a generic smart display.</span></li>
+          <li><span class="n">✓</span><span><strong>The now-line in Today.</strong> The best idea on the wall: it splits done from next without any chrome.</span></li>
+          <li><span class="n">✓</span><span><strong>Consistent member colors</strong> across Week, Day blocks, and Month.</span></li>
+          <li><span class="n">✓</span><span><strong>Tap-to-check rows with a 10 s Undo.</strong> Big circular targets, no confirmation dialogs.</span></li>
+          <li><span class="n">✓</span><span><strong>Shopping by store in two columns.</strong> Already uncluttered: one voice for headings, one for items, generous rows. It's the benchmark the other screens should match.</span></li>
+          <li><span class="n">✓</span><span><strong>Type that fits its box</strong> (<code>useWallFit</code>): a quiet day reads bigger, a busy one never clips.</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="blk">
+    <div><div class="eyebrow">Question 1</div><h2>Which direction should the resting screen take?</h2></div>
+    <p>Same data, same day, three levels of change. All three keep the now-line, member colors, tap-to-check, and the voice button, and use one five-step type scale (148/72 · 40–50 · 30 · 22 · 17).</p>
+
+    <div class="cap"><b>A · Quiet refine</b><span class="tag">Same layout, less noise</span></div>
+    <div class="frame" data-w="1366" data-h="1024"><div class="art qa" id="qa"></div></div>
+    <p>Keeps today's structure. Weather collapses to one unit with the rain note inline, the view switch becomes text tabs, finished events fold into one "Earlier" line, names become dots only, and module controls leave the screen.</p>
+
+    <div class="cap"><b>B · Today-first masthead</b><span class="tag rec">Recommended</span></div>
+    <div class="frame" data-w="1366" data-h="1024"><div class="art mb2" id="mb2"></div></div>
+    <p>The top bar goes away on the resting screen. The clock and date become a masthead over the day, with weather as one sentence. What's <em>next</em> gets the hero slot, and Due today becomes a two-column checklist at the foot. The right side stays a module panel (shown: This week), set on a tinted ground so it reads as secondary. It only lists the next four days at full size. The rail goes icon-only.</p>
+
+    <div class="cap"><b>C · Glance board + week strip</b><span class="tag">Biggest change</span></div>
+    <div class="frame" data-w="1366" data-h="1024"><div class="art gc" id="gc"></div></div>
+    <p>A smart-display layout: a big clock and weather band, a Next / Due today row, and a seven-day strip across the bottom. The nav moves to a bottom dock. It reads best from far away, but it drops the module panel. Shopping or Meals could no longer sit beside the calendar.</p>
+  </section>
+
+  <section class="blk">
+    <div><div class="eyebrow">Question 3</div><h2>How should an event say whose it is?</h2></div>
+    <p>Shown at true wall size. This choice carries over to Today, Coming up, Day, and Month.</p>
+    <div class="minis">
+      <div class="opt"><div class="cap"><b>Dot + name</b><span class="tag">Today</span></div><div class="frame" data-w="640" data-h="330"><div class="art mini o1" id="o1"></div></div></div>
+      <div class="opt"><div class="cap"><b>Dot only + one legend</b></div><div class="frame" data-w="640" data-h="330"><div class="art mini o2" id="o2"></div></div></div>
+      <div class="opt"><div class="cap"><b>Initial avatar</b><span class="tag rec">Recommended</span></div><div class="frame" data-w="640" data-h="330"><div class="art mini o3" id="o3"></div></div></div>
+      <div class="opt"><div class="cap"><b>Color bar</b></div><div class="frame" data-w="640" data-h="330"><div class="art mini o4" id="o4"></div></div></div>
+    </div>
+    <p>Why the avatar: it's one element instead of two, it can be read without telling five colors apart (Paul's evergreen and the Family gray are close from across a room), and the Day view already uses it, so the wall would speak one visual language.</p>
+  </section>
+
+  </div></details>
+
+  <section class="blk" hidden>
+    <div><div class="eyebrow">This round</div><h2>Questions</h2></div>
+    <ol class="qlist">
+      <li><div>Direction for the resting screen <span>A, B, or C above. Recommended: B.</span></div></li>
+      <li><div>Where module controls live <span>Recommended: an Arrange mode opened from the display menu, not on the resting screen.</span></div></li>
+      <li><div>How events show their owner <span>Recommended: initial avatar.</span></div></li>
+      <li><div>What earns a permanent place on the resting screen <span>Recommended: next event, rest of today, due today, dinner, next 3–4 days.</span></div></li>
+    </ol>
+  </section>
+</div>
+
+<script>
+const P = { cal:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>', cart:'<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>', todo:'<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8M13 12h8M13 18h8"/>', meal:'<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>', mic:'<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/>', gear:'<path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/>', sun:'<path d="M12 2v2M4.93 4.93l1.41 1.41M20 12h2M19.07 4.93l-1.41 1.41M15.947 12.65a4 4 0 0 0-5.925-4.128"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"/>', rain:'<path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M16 14v6M8 14v6M12 16v6"/>', cloud:'<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>', bill:'<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8M12 17.5v-11"/>', check:'<path d="M20 6 9 17l-5-5"/>', x:'<path d="M18 6 6 18M6 6l12 12"/>', ud:'<path d="m7 15 5 5 5-5M7 9l5-5 5 5"/>', plus:'<path d="M5 12h14M12 5v14"/>' };
+const ic = (k, c='') => `<svg viewBox="0 0 24 24" class="${c}">${P[k]}</svg>`;
+const C = { Paul:'var(--paul)', Jess:'var(--jess)', Leo:'var(--leo)', Mia:'var(--mia)', Family:'var(--fam)' };
+const dot = w => `<span class="dot" style="background:${C[w]}"></span>`;
+const av = w => `<span class="av" style="--c:${C[w]}">${w === 'Family' ? 'F' : w[0]}</span>`;
+const TODAY = [['9:00','Soccer game vs. Wayzata','Leo',1],['11:30',"Ava's birthday party",'Mia',1],['2:00','Haircut','Jess',1],['5:00',"Dinner at Grandma's",'Family',0],['8:15','Movie at home','Family',0]];
+const DUE = [['Return library books','Family',0,1],['Pack soccer bag','Leo',1,0],['Call about furnace filter','Paul',0,0],['Pick up dry cleaning','Jess',0,0],['Feed the fish','Mia',0,0]];
+const DAYS = [['Sun','4','Tomorrow',[['10:00','Farmers market','Family'],['2:00','Run club','Jess']]],['Mon','5','',[['bill','Water bill'],['3:30','Soccer practice','Leo'],['6:30','PTO meeting','Paul']]],['Tue','6','',[['8:00','Dentist','Mia'],['4:00','Piano','Leo']]],['Wed','7','',[['bill','Phone bill'],['12:45','Early release pickup','Mia'],['3:30','Soccer practice','Leo'],['4:00','Orthodontist','Jess'],['5:30','Swim lessons','Mia'],['7:00','Book club','Jess']]]];
+const nav = [['cal','Calendar'],['cart','Shopping'],['todo','To-dos'],['meal','Meals']];
+const co = (n, x, y) => `<span class="co" style="left:${x}px;top:${y}px">${n}</span>`;
+
+/* NOW */
+document.getElementById('now').innerHTML = `
+<nav class="rail">${nav.map(([k,l],i)=>`<div class="nav${i?'':' on'}">${ic(k)}<span>${l}</span>${k==='todo'?'<span class="badge">4</span>':''}</div>`).join('')}<div class="sp"></div><div class="mic">${ic('mic')}</div><div class="gear">${ic('gear')}</div></nav>
+<div class="main">
+ <header class="top">
+  <span class="hero"><span class="big tn">3:15</span><span class="sub"><span>Saturday</span><span>October 3</span></span></span>
+  <span class="vr"></span>
+  <span class="hero">${ic('sun')}<span class="big tn">54°</span><span class="sub tn"><span>H 61°</span><span>L 43°</span></span></span>
+  <span class="vr"></span>
+  <span><span class="blocks tn"><span class="b">Afternoon${ic('sun')}<b>56°</b></span><span class="b">Evening${ic('rain','r')}<b>49°</b></span><span class="b">Overnight${ic('cloud')}<b>43°</b></span></span><div class="rainnote">Rain likely 6–8 pm</div></span>
+  <span class="seg"><span>Day</span><span class="on">Week</span><span>Month</span></span>
+ </header>
+ <div class="wk">
+  <section class="today">
+   <div class="th"><b>Today</b><span>Saturday</span></div>
+   <div class="tev">${TODAY.map(([t,n,w,p],i)=>`${i===3?'<div class="nowmark tn">3:15</div>':''}<span class="tm tn${p?' past':''}">${t}</span><span class="tt${p?' past':''}">${n}<small>${dot(w)}${w}</small></span>`).join('')}</div>
+   <div class="due"><div class="lab">Due today</div>${DUE.map(([n,w,d,l])=>`<div class="ck${d?' done':''}"><span class="bx${d?' on':''}">${d?ic('check'):''}</span><span class="tx">${n}</span><span class="nm">${w}</span>${l?'<span class="late">Overdue</span>':''}</div>`).join('')}</div>
+   <div class="foot">Dinner<b>Dinner at Grandma's</b></div>
+  </section>
+  <section class="panel">
+   <div class="mh"><b>Coming up</b><span class="sw">Switch ${ic('ud')}</span><span class="x">${ic('x')}</span></div>
+   <div class="mb">${DAYS.map(([wd,dn,rel,ev])=>`<div class="grp"><div class="gh"><span class="wd">${wd}</span><span class="dn">${dn}</span>${rel?`<span class="rel">${rel}</span>`:''}</div><ul>${ev.map(e=>e[0]==='bill'?`<li class="mut"><span></span><span>${ic('bill')}${e[1]}</span></li>`:`<li><span class="tm tn">${e[0]}</span><span>${dot(e[2])}${e[1]}<span class="nm">${e[2]}</span></span></li>`).join('')}</ul></div>`).join('')}</div>
+   <div class="addmod">${ic('plus')} Add module</div>
+  </section>
+ </div>
+</div>
+${co(1,560,6)}${co(2,385,176)}${co(3,330,512)}${co(4,1000,170)}${co(5,610,250)}${co(6,1300,700)}${co(7,600,620)}`;
+
+/* A */
+document.getElementById('qa').innerHTML = `
+<nav class="rail">${nav.map(([k,l],i)=>`<div class="nav${i?'':' on'}">${ic(k)}<span>${l}</span>${k==='todo'?'<span class="badge"></span>':''}</div>`).join('')}<div class="sp"></div><div class="mic">${ic('mic')}</div></nav>
+<div class="main">
+ <header class="top">
+  <span class="clock tn">3:15</span><span class="date">Saturday, October 3</span>
+  <span class="wx">${ic('sun')}<b class="tn">54°</b><span class="tn">61° / 43°<br><em>Rain 6–8 pm</em></span></span>
+  <span class="tabs"><span>Day</span><span class="on">Week</span><span>Month</span></span>
+ </header>
+ <div class="wk">
+  <section class="today">
+   <h4>Today</h4>
+   <div class="earlier">Earlier: Soccer game · Ava's birthday party · Haircut</div>
+   <div class="nowmark tn">3:15</div>
+   ${TODAY.filter(e=>!e[3]).map(([t,n,w])=>`<div class="ev"><span class="tm tn">${t}</span><span class="tt">${dot(w)}${n}</span></div>`).join('')}
+   <div class="sec"><div class="hd">Due today</div>${DUE.map(([n,w,d,l])=>`<div class="ck${d?' done':''}"><span class="bx${d?' on':''}">${d?ic('check'):''}</span><span class="tx">${n}</span>${l?'<span class="late">Overdue</span>':''}${dot(w)}</div>`).join('')}</div>
+   <div class="dinner">Dinner <b>Dinner at Grandma's</b></div>
+  </section>
+  <section class="panel"><h4>Coming up</h4>
+   ${DAYS.map(([wd,dn,rel,ev])=>`<div class="day"><div class="dl">${rel}<b>${wd} ${dn}</b></div><ul>${ev.map(e=>e[0]==='bill'?`<li class="mut"><span></span><span>${e[1]}</span></li>`:`<li><span class="tm tn">${e[0]}</span><span>${dot(e[2])}${e[1]}</span></li>`).join('')}</ul></div>`).join('')}
+  </section>
+ </div>
+</div>`;
+
+/* B */
+document.getElementById('mb2').innerHTML = `
+<nav class="rail">${nav.map(([k],i)=>`<div class="nav${i?'':' on'}">${ic(k)}${k==='todo'?'<span class="badge">4</span>':''}</div>`).join('')}<div class="sp"></div><div class="mic">${ic('mic')}</div></nav>
+<section class="lead">
+ <div class="mast"><span class="clock tn">3:15</span><span class="dd"><b>Saturday</b><span>October 3</span></span></div>
+ <div class="wxl">${ic('sun')}<b class="tn">54°</b><span class="tn">High 61° · Low 43°</span><i></i><em>Rain likely 6–8 pm</em></div>
+ <div class="next"><span class="lbl">NEXT · IN 1 HR 45 MIN</span><div class="hl"><span class="tm tn">5:00</span><b>Dinner at Grandma's</b></div><div class="who"><span class="dot" style="background:var(--fam)"></span>Everyone</div></div>
+ <div class="later"><span class="tm tn">8:15</span><span class="tt">${dot('Family')}Movie at home</span><span></span><span class="past">Earlier: Soccer game · Ava's birthday party · Haircut</span></div>
+ <div class="due"><div class="hd"><b>Due today</b><span>1 of 5 done</span></div><div class="g">${DUE.map(([n,w,d,l])=>`<div class="ck${d?' done':''}"><span class="bx${d?' on':''}">${d?ic('check'):''}</span><span class="tx">${n}${l?' <span class="late">·&nbsp;late</span>':''}</span>${dot(w)}</div>`).join('')}</div></div>
+</section>
+<aside class="side">
+ <div class="sh"><b>This week</b><span>Day · <u>Week</u> · Month</span></div>
+ ${DAYS.map(([wd,dn,rel,ev])=>{const shown=ev.slice(0,4);const more=ev.length-shown.length;return `<div class="dayb"><div class="dh"><b>${rel||wd}</b>${rel?wd+' ':''}${dn}</div>${shown.map(e=>e[0]==='bill'?`<div class="r mut"><span></span><span>${e[1]}</span></div>`:`<div class="r"><span class="tm tn">${e[0]}</span><span>${dot(e[2])}${e[1]}</span></div>`).join('')}${more?`<div class="more">+${more} more</div>`:''}</div>`}).join('')}
+ <div class="dinner"><span>Dinner tonight</span><b>Dinner at Grandma's</b></div>
+</aside>`;
+
+/* C */
+const WEEK = [['Sat','3',1,[['9:00','Soccer game','Leo',1],['5:00',"Grandma's",'Family'],['8:15','Movie night','Family']]],['Sun','4',0,[['10:00','Farmers market','Family'],['2:00','Run club','Jess']]],['Mon','5',0,[['bill','Water bill'],['3:30','Soccer practice','Leo'],['6:30','PTO meeting','Paul']]],['Tue','6',0,[['8:00','Dentist','Mia'],['4:00','Piano','Leo']]],['Wed','7',0,[['bill','Phone bill'],['12:45','Early release','Mia'],['3:30','Soccer','Leo'],['+3 more']]],['Thu','8',0,[['4:00','Piano','Leo']]],['Fri','9',0,[['6:00','Pizza night','Family']]]];
+document.getElementById('gc').innerHTML = `
+<div class="band"><span class="clock tn">3:15</span><span class="dd"><b>Saturday</b><span>October 3</span></span>
+ <div class="wx"><div class="cur">${ic('sun')}<b class="tn">54°</b></div><div class="parts tn"><div>Afternoon${ic('sun')}<b>56°</b></div><div>Evening${ic('rain','r')}<b>49°</b></div><div>Overnight${ic('cloud')}<b>43°</b></div></div></div></div>
+<div class="nextc"><div class="n1"><span class="k">NEXT · IN 1 HR 45 MIN</span><div class="t"><span class="tm tn">5:00</span><b>Dinner at Grandma's</b></div><div class="then"><span class="tn" style="color:var(--muted)">8:15</span>${dot('Family')}Movie at home</div></div>
+<div class="n2"><span class="k m">DUE TODAY · 1 OF 5</span>${DUE.slice(0,4).map(([n,w,d,l])=>`<div class="ck${d?' done':''}"><span class="bx${d?' on':''}">${d?ic('check'):''}</span><span class="tx">${n}</span>${l?'<span class="late">late</span>':''}${dot(w)}</div>`).join('')}<div class="din">+1 more</div></div></div>
+<div class="strip">${WEEK.map(([wd,dn,td,ev])=>`<div class="col${td?' td':''}"><div class="h">${td?'Today':wd}<b>${dn}</b></div>${ev.map(e=>e[0]==='bill'?`<div class="b">${ic('bill')}${e[1]}</div>`:e[0].startsWith('+')?`<div class="b" style="color:var(--accent);font-weight:600">${e[0]}</div>`:`<div class="e${e[3]?' past':''}" style="--c:${C[e[2]]}"><small class="tn">${e[0]}</small>${e[1]}</div>`).join('')}</div>`).join('')}</div>
+<div class="dock">${nav.map(([k,l],i)=>`<div class="nav${i?'':' on'}">${ic(k)}${l}${k==='todo'?'<span class="badge">4</span>':''}</div>`).join('')}<div class="sp"></div><div class="mic">${ic('mic')}</div></div>`;
+
+/* Owner minis */
+const R = [['5:00',"Dinner at Grandma's",'Family'],['5:30','Swim lessons','Mia'],['6:30','PTO meeting','Paul']];
+document.getElementById('o1').innerHTML = R.map(([t,n,w])=>`<div class="r"><span class="tm tn">${t}</span><span class="tt">${n}<small>${dot(w)}${w}</small></span></div>`).join('');
+document.getElementById('o2').innerHTML = R.map(([t,n,w])=>`<div class="r"><span class="tm tn">${t}</span><span class="tt">${dot(w)}${n}</span></div>`).join('') + `<div class="legend">${Object.keys(C).map(w=>`<span>${dot(w)}${w}</span>`).join('')}</div>`;
+document.getElementById('o3').innerHTML = R.map(([t,n,w])=>`<div class="r"><span class="tm tn">${t}</span><span class="tt">${av(w)}${n}</span></div>`).join('');
+document.getElementById('o4').innerHTML = R.map(([t,n,w])=>`<div class="r" style="--c:${C[w]}"><span class="bar"></span><span class="tm tn">${t}</span><span class="tt">${n}</span></div>`).join('');
+
+
+/* ===== Round 2 renderers ===== */
+const AV = (w, cls='') => `<span class="av ${cls}" style="--c:${C[w]}">${w === 'Family' ? 'F' : w[0]}</span>`;
+const railB = (labels) => `<nav class="rail">${nav.map(([k,l],i)=>`<div class="nav${i?'':' on'}">${ic(k)}${labels?`<span>${l}</span>`:''}${k==='todo'?'<span class="badge">4</span>':''}</div>`).join('')}<div class="sp"></div><div class="mic">${ic('mic')}</div></nav>`;
+const nextBlock = (style='a') => style==='c'
+ ? `<div class="next nx-c"><span class="lbl">NEXT</span><div class="cd tn">1 hr 45 min<small>at 5:00</small></div><div class="hl"><b>Dinner at Grandma's</b></div><div class="who">${AV('Family','s')}Everyone</div></div>`
+ : `<div class="next${style==='b'?' nx-b':''}"><span class="lbl">NEXT · IN 1 HR 45 MIN</span><div class="hl"><span class="tm tn">5:00</span><b>Dinner at Grandma's</b></div><div class="who">${AV('Family','s')}Everyone</div></div>`;
+const dueB = () => `<div class="due"><div class="hd"><b>Due today</b><span>1 of 5 done</span></div><div class="g">${DUE.map(([n,w,d,l])=>`<div class="ck${d?' done':''}"><span class="bx${d?' on':''}">${d?ic('check'):''}</span><span class="tx">${n}${l?'<small class="late">Overdue</small>':''}</span>${AV(w,'s')}</div>`).join('')}</div></div>`;
+const sideB = (days, title='This week', cap=4) => `<aside class="side"><div class="sh"><b>${title}</b><span>Day · <u>Week</u> · Month</span></div>${days.map(([wd,dn,rel,ev])=>{const shown=ev.slice(0,cap);const more=ev.length-shown.length;return `<div class="dayb"><div class="dh"><b>${rel||wd}</b>${rel?wd+' ':''}${dn}</div>${shown.map(e=>e[0]==='bill'?`<div class="r mut"><span></span><span>${e[1]}</span></div>`:`<div class="r"><span class="tm tn">${e[0]}</span><span>${AV(e[2],'s')}${e[1]}</span></div>`).join('')}${more?`<div class="more">+${more} more</div>`:''}</div>`}).join('')}<div class="dinner"><span>Dinner tonight</span><b>Dinner at Grandma's</b></div></aside>`;
+const mastB = () => `<div class="mast"><span class="clock tn">3:15</span><span class="dd"><b>Saturday</b><span>October 3</span></span></div><div class="wxl">${ic('sun')}<b class="tn">54°</b><span class="tn">High 61° · Low 43°</span><i></i><em>Rain likely 6–8 pm</em></div>`;
+const laterB = (rows, past, more) => `<div class="later">${rows.map(([t,n,w])=>`<span class="tm tn">${t}</span><span class="tt">${AV(w)}${n}</span>`).join('')}${more?`<span></span><span class="more2">+${more} more today</span>`:''}<span></span><span class="past">Earlier: ${past}</span></div>`;
+const boardB = (o={}) => `${railB(o.labels)}<section class="lead">${mastB()}${nextBlock(o.next)}${laterB(o.rows||[['8:15','Movie at home','Family']], o.past||"Soccer game · Ava's birthday party · Haircut", o.more)}${dueB()}</section>${sideB(DAYS)}`;
+document.getElementById('b-lab').innerHTML = boardB({labels:true});
+document.getElementById('bdark').innerHTML = boardB();
+['a','b','c'].forEach((k,i)=>document.getElementById('h'+(i+1)).innerHTML = `<section class="lead">${nextBlock(k)}${laterB([['8:15','Movie at home','Family']],"Soccer game · Ava's birthday party · Haircut")}</section>`);
+const BUSY = [['5:30','Pick up Ava from party','Mia'],['6:15','Soccer team photos','Leo'],['7:00','Book club','Jess'],['8:15','Movie at home','Family'],['9:30','Call Grandpa','Paul']];
+const BPAST = "Swim · Soccer game · Ava's party · Haircut";
+document.getElementById('busy1').innerHTML = boardB({rows:BUSY, past:BPAST});
+document.getElementById('busy2').innerHTML = boardB({rows:BUSY.slice(0,3), past:BPAST, more:2});
+const QUIET = [['Sun','4','Tomorrow',[['10:00','Farmers market','Family']]],['Mon','5','',[['bill','Water bill'],['3:30','Soccer practice','Leo']]],['Tue','6','',[['4:00','Piano','Leo']]],['Wed','7','',[['5:30','Swim lessons','Mia'],['7:00','Book club','Jess']]],['Thu','8','',[['4:00','Piano','Leo']]],['Fri','9','',[['6:00','Pizza night','Family']]],['Sat','10','',[['9:00','Soccer game','Leo']]]];
+document.getElementById('wp1').innerHTML = sideB(QUIET.slice(0,4));
+document.getElementById('wp2').innerHTML = sideB(QUIET.slice(0,7), 'Coming up');
+/* Slim header screens */
+const SHOP = [['Cub Foods','5 left',[['Milk','2 gal'],['Bananas',''],['Avocados','×2'],['Shredded cheese',''],['Tortillas','']]],['Target','4 left',[['Paper towels',''],["Kids' toothpaste",''],['Birthday card',''],['AA batteries','']]],['Costco','3 left',[['Coffee beans',''],['Olive oil',''],['Frozen berries','']]]];
+const lists = () => `<div class="lists">${SHOP.map(([st,c,it])=>`<div class="sec"><h3>${st}<span>${c}</span></h3>${it.map(([n,q])=>`<div class="row"><span class="bx"></span><span>${n}</span>${q?`<span class="q">${q}</span>`:''}</div>`).join('')}</div>`).join('')}</div>`;
+const railS = (clock) => `<nav class="rail">${clock?`<div class="rclock"><b class="tn">3:15</b><span class="tn">${ic('sun')}54°</span></div>`:''}${nav.map(([k],i)=>`<div class="nav${i===1?' on':''}">${ic(k)}${k==='todo'?'<span class="badge">4</span>':''}</div>`).join('')}<div class="sp"></div><div class="mic">${ic('mic')}</div></nav>`;
+const acts = `<button class="btn pri">${ic('plus')} Add</button><button class="btn">Clear cart (2)</button>`;
+document.getElementById('sl1').innerHTML = `${railS(false)}<div class="main"><header class="hd"><h5>Shopping</h5><span class="ct">12 to buy</span><span class="tw"><b class="tn">3:15</b><i></i>${ic('sun')}<b class="tn">54°</b></span><span class="acts">${acts}</span></header>${lists()}</div>`;
+document.getElementById('sl2').innerHTML = `${railS(true)}<div class="main"><header class="hd"><h5>Shopping</h5><span class="ct">12 to buy</span><span class="acts solo">${acts}</span></header>${lists()}</div>`;
+
+
+const svPanel = (days) => `<aside class="side"><div class="sh"><b>Coming up</b><span>Day · <u>Week</u> · Month</span></div>${days.map(([wd,dn,rel,ev])=>{const shown=ev.slice(0,4);const more=ev.length-shown.length;return `<div class="ds"><div class="dh"><b>${rel||wd}</b><span>${rel?wd+' '+dn:'Oct '+dn}</span></div><div class="rows">${shown.map(e=>e[0]==='bill'?`<div class="r bill"><span class="tm">${ic('bill')}</span><span class="t">${e[1]}</span></div>`:`<div class="r"><span class="tm tn">${e[0]}</span><span class="t">${AV(e[2],'s')}${e[1]}</span></div>`).join('')}${more?`<div class="more">+${more} more</div>`:''}</div></div>`}).join('')}<div class="dinner"><span>Dinner tonight</span><b>Dinner at Grandma's</b></div></aside>`;
+['sv1','sv2','sv3'].forEach(id => { document.getElementById(id).innerHTML = svPanel(QUIET); document.getElementById(id).classList.add('mb2'); });
+
+
+const MW = [['Sun','4',0,[['10:00','Farmers market','Family'],['2:00','Run club','Jess']]],['Mon','5',0,[['bill','Water bill'],['3:30','Soccer practice','Leo'],['6:30','PTO meeting','Paul']]],['Tue','6',0,[['8:00','Dentist','Mia'],['4:00','Piano','Leo']]],['Wed','7',0,[['bill','Phone bill'],['12:45','Early release','Mia'],['3:30','Soccer practice','Leo'],['+3']]],['Thu','8',0,[['4:00','Piano','Leo']]],['Fri','9',0,[['6:00','Pizza night','Family']]],['Sat','10',1,[['9:00','Soccer game','Leo'],['1:00','Birthday party','Mia']]]];
+const mrow = (mark) => MW.map(([w])=>`<div class="wh">${w}</div>`).join('') + MW.map(([w,n,td,ev])=>`<div class="cell${td?' now':''}"><span class="n">${n}</span>${ev.map(e=>e[0]==='bill'?`<span class="ml mut">${ic('bill')}<span>${e[1]}</span></span>`:e[0].startsWith('+')?`<span class="more">+3 more</span>`:`<span class="ml" style="--c:${C[e[2]]}">${mark==='av'?AV(e[2]):mark==='dot'?dot(e[2]):''}<span class="t tn">${e[0]}</span><span>${e[1]}</span></span>`).join('')}</div>`).join('');
+document.getElementById('m1').innerHTML = mrow('av');
+document.getElementById('m2').innerHTML = mrow('dot');
+document.getElementById('m3').innerHTML = mrow('bar');
+const ptSide = () => { const days = QUIET.slice(0,6); const cell = ([wd,dn,rel,ev]) => `<div class="ds"><div class="dh"><b>${rel||wd}</b><span>${rel?wd+' '+dn:'Oct '+dn}</span></div><div class="rows">${ev.slice(0,4).map(e=>e[0]==='bill'?`<div class="r bill"><span class="tm">${ic('bill')}</span><span class="t">${e[1]}</span></div>`:`<div class="r"><span class="tm tn">${e[0]}</span><span class="t">${AV(e[2],'s')}${e[1]}</span></div>`).join('')}</div></div>`; return `<aside class="side"><div class="sh"><b>Coming up</b><span>Day · <u>Week</u> · Month</span></div><div class="grid2"><div>${days.filter((_,i)=>i%2===0).map(cell).join('')}</div><div>${days.filter((_,i)=>i%2===1).map(cell).join('')}</div></div></aside>`; };
+document.getElementById('pt').innerHTML = `<nav class="rail">${nav.map(([k,l],i)=>`<div class="nav${i?'':' on'}">${ic(k)}<span>${l}</span>${k==='todo'?'<span class="badge">4</span>':''}</div>`).join('')}<div class="sp"></div><div class="mic">${ic('mic')}</div></nav><div class="col"><section class="lead">${mastB()}${nextBlock('a')}${laterB([['8:15','Movie at home','Family']],"Soccer game · Ava's birthday party · Haircut")}${dueB()}<div class="dinner" style="margin-top:18px;font-size:17px;color:var(--muted);font-weight:600">Dinner tonight <b style="font-family:var(--font-display);font-size:26px;font-weight:500;color:var(--fg);margin-left:10px">Dinner at Grandma's</b></div></section>${ptSide()}</div>`;
+document.getElementById('pt').classList.add('mb2','sv','air');
+
+
+/* ===== Round 4 ===== */
+const RC = () => `<span class="rc">${ic('bill')}</span>`;
+const billRow = (e) => `<div class="r bill2"><span class="tm">Due</span><span class="t">${RC()}${e[1]}</span></div>`;
+const evRow = (e) => `<div class="r"><span class="tm tn">${e[0]}</span><span class="t">${AV(e[2],'s')}${e[1]}</span></div>`;
+const dayStack = ([wd,dn,rel,ev], mode='slot') => { const bills = ev.filter(e=>e[0]==='bill'); const evs = mode==='slot' ? ev : ev.filter(e=>e[0]!=='bill'); const shown = evs.slice(0,4); const more = evs.length-shown.length;
+  return `<div class="ds"><div class="dh"><b>${rel||wd}</b><span>${rel?wd+' '+dn:'Oct '+dn}</span>${mode==='head'&&bills.length?`<span class="bd">${ic('bill')}${bills.map(b=>b[1]).join(', ')}</span>`:''}</div><div class="rows">${shown.map(e=>e[0]==='bill'?billRow(e):evRow(e)).join('')}${more?`<div class="more">+${more} more</div>`:''}</div></div>`; };
+const panel4 = (days, mode='slot', title='Coming up', extra='') => `<aside class="side"><div class="sh"><b>${title}</b><span>Day · <u>Week</u> · Month</span></div>${days.map(d=>dayStack(d,mode)).join('')}${mode==='foot'?`<div class="billsf"><span>Bills due</span><div class="bl">${days.flatMap(([wd,,,ev])=>ev.filter(e=>e[0]==='bill').map(b=>`<span>${ic('bill')}${b[1].replace(' bill','')} · ${wd}</span>`)).join('')}</div></div>`:''}${extra}<div class="dinner"><span>Dinner tonight</span><b>Dinner at Grandma's</b></div></aside>`;
+const WEEKB = [DAYS[0], DAYS[1], DAYS[2], ['Wed','7','',[['bill','Phone bill'],['12:45','Early release pickup','Mia'],['3:30','Soccer practice','Leo'],['4:00','Orthodontist','Jess'],['5:30','Swim lessons','Mia'],['7:00','Book club','Jess']]], ['Thu','8','',[['4:00','Piano','Leo']]]];
+document.getElementById('bl1').innerHTML = panel4(WEEKB,'slot');
+document.getElementById('bl2').innerHTML = panel4(WEEKB,'head');
+document.getElementById('bl3').innerHTML = panel4(WEEKB,'foot');
+const dockP = () => `<div class="dock">${nav.map(([k,l],i)=>`<div class="nav${i?'':' on'}">${ic(k)}<span>${l}</span>${k==='todo'?'<span class="badge">4</span>':''}</div>`).join('')}<div class="sp"></div><div class="mic">${ic('mic')}</div></div>`;
+const WEEKP = [...WEEKB, ['Fri','9','',[['6:00','Pizza night','Family']]], ['Sat','10','',[['9:00','Soccer game','Leo']]]];
+/* ===== Portrait v2 ===== */
+const pvRail = () => `<nav class="rail">${nav.map(([k,l],i)=>`<div class="nav${i?'':' on'}">${ic(k)}<span>${l}</span>${k==='todo'?'<span class="badge">4</span>':''}</div>`).join('')}<div class="sp"></div><div class="mic">${ic('mic')}</div></nav>`;
+const pvDue = (n=5) => `<div class="shd"><b>Due today</b><span>1 of 5 done</span></div>${DUE.slice(0,n).map(([t,w,d,l])=>`<div class="ck${d?' done':''}"><span class="bx${d?' on':''}">${d?ic('check'):''}</span><span class="tx">${t}${l?'<small>Overdue</small>':''}</span>${AV(w,'s')}</div>`).join('')}`;
+const pvDay = ([wd,dn,rel,ev], cap=3) => `<div class="d"><div class="h"><b>${rel||wd}</b><span>${rel?wd+' '+dn:'Oct '+dn}</span></div>${ev.slice(0,cap).map(e=>e[0]==='bill'?`<div class="e bill">${RC()}<span class="tm">Due</span><span class="tt">${e[1]}</span></div>`:`<div class="e">${AV(e[2],'s')}<span class="tm tn">${e[0]}</span><span class="tt">${e[1]}</span></div>`).join('')}${ev.length>cap?`<div class="more">+${ev.length-cap} more</div>`:''}</div>`;
+const pvWeek = (days, cap) => `<div class="wkc"><div class="shd"><b>Coming up</b><span>Day · <u>Week</u> · Month</span></div><div class="days">${days.map(d=>pvDay(d,cap)).join('')}</div></div>`;
+
+/* A: Planner page — 3 pm to 11 pm to scale */
+(() => {
+  const H0 = 15, H1 = 23, PX = 74; // px per hour
+  const y = h => (h - H0) * PX;
+  const hours = Array.from({length: H1 - H0 + 1}, (_, i) => H0 + i);
+  const hl = h => `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? 'am' : 'pm'}`;
+  const blocks = [
+    { s: 17, e: 19.5, t: "Dinner at Grandma's", w: 'Family', next: 1, tm: '5:00 – 7:30' },
+    { s: 19.75, e: 20.25, t: 'Call Grandpa', w: 'Paul', one: 1, tm: '7:45' },
+    { s: 20.5, e: 22, t: 'Movie at home', w: 'Family', tm: '8:30 – 10:00' },
+  ];
+  document.getElementById('pva').innerHTML = `${pvRail()}<div class="main">
+  <header class="hdr"><span class="clock tn">3:15</span><span class="dd"><b>Saturday</b><span>October 3</span></span><span class="wx"><span class="t">${ic('sun')}<b class="tn">54°</b></span><span class="tn">High 61° · Low 43°</span><em>Rain likely 6–8 pm</em></span></header>
+  <section class="day">
+    <div class="tl"><div class="top"><b>Rest of today</b><span class="meta">Earlier: Soccer game · Ava's party · Haircut</span></div>
+      <div class="grid" style="height:${(H1-H0)*PX}px">${hours.map(h=>`<div class="hr" style="top:${y(h)}px"></div><span class="hl tn${h===15?' hide':''}" style="top:${y(h)}px">${hl(h)}</span>`).join('')}
+        ${blocks.map(b=>b.one?`<div class="blk one${b.half?' half':''}" style="--c:${C[b.w]};top:${y(b.s)+2}px;height:${(b.e-b.s)*PX-4}px">${AV(b.w,'s')}<span class="tt">${b.t}</span><span class="m tn">${b.tm}</span></div>`:`<div class="blk" style="--c:${C[b.w]};top:${y(b.s)+2}px;height:${(b.e-b.s)*PX-4}px">${b.next?'<span class="lbl">NEXT · IN 1 HR 45 MIN</span>':''}<span class="tt">${b.t}</span><span class="m tn">${AV(b.w,'s')}${b.tm}${b.w==='Family'?' · Everyone':''}</span></div>`).join('')}
+        <div class="now" style="top:${y(15.25)}px"><span class="tn">3:15</span></div>
+      </div></div>
+    <aside class="side">${pvDue()}<div class="din"><span class="meta">Dinner</span><b>Dinner at Grandma's</b></div></aside>
+  </section>
+  <section class="band">${pvWeek(WEEKB.slice(0,4), 3)}</section></div>`;
+})();
+
+/* B: Dial — the clock face is the afternoon/evening */
+(() => {
+  const cx = 300, cy = 300, R = 206, W = 42;
+  const ang = h => ((h % 12) / 12) * 2 * Math.PI - Math.PI / 2;
+  const pt = (h, r) => [cx + r * Math.cos(ang(h)), cy + r * Math.sin(ang(h))];
+  const arc = (s, e, r) => { const [x1,y1] = pt(s, r), [x2,y2] = pt(e, r); const large = (e - s) > 6 ? 1 : 0; return `M${x1.toFixed(1)} ${y1.toFixed(1)} A${r} ${r} 0 ${large} 1 ${x2.toFixed(1)} ${y2.toFixed(1)}`; };
+  const ev = [
+    { s: 14, e: 14.75, w: 'Jess', t: 'Haircut', past: 1 },
+    { s: 17, e: 19.5, w: 'Family', t: "Grandma's" },
+    { s: 19.75, e: 20.25, w: 'Paul', t: 'Call' },
+    { s: 20.5, e: 22, w: 'Family', t: 'Movie' },
+  ];
+  const now = 15.25;
+  const ticks = Array.from({length: 48}, (_, i) => { const h = 12 + i / 4; const major = i % 4 === 0; const [x1,y1] = pt(h, R + W/2 + 8); const [x2,y2] = pt(h, R + W/2 + (major ? 22 : 14)); return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--${major?'muted':'line-strong'})" stroke-width="${major?2.5:1.5}" stroke-linecap="round"/>`; }).join('');
+  const nums = [12,3,6,9].map(n => { const [x,y] = pt(n === 12 ? 24 : 12 + n, R + W/2 + 46); return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" font-family="Besley, Georgia, serif" font-size="30" font-weight="500" fill="var(--fg)">${n}</text>`; }).join('');
+  const [hx, hy] = pt(now, R + W/2 + 4);
+  const [hx0, hy0] = pt(now, R - W/2 - 6);
+  const labels = ev.filter(e=>!e.past).map(e => { const m = (e.s + e.e) / 2; const [x,y] = pt(m, R); return `<span class="pin" style="left:${x}px;top:${y}px">${AV(e.w,'s')}</span>`; }).join('');
+  const face = `<svg class="face" viewBox="0 0 600 600">
+    <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="var(--surface)" stroke-width="${W}"/>
+    <path d="${arc(12.001, now, R)}" fill="none" stroke="var(--line-strong)" stroke-width="${W}" opacity=".55"/>
+    ${ev.map(e => `<path d="${arc(e.s, e.e, R)}" fill="none" stroke="${C[e.w]}" stroke-width="${W - 8}" stroke-linecap="butt" opacity="${e.past ? .35 : 1}"/>`).join('')}
+    ${ticks}${nums}
+    <line x1="${hx0}" y1="${hy0}" x2="${hx}" y2="${hy}" stroke="var(--warm-fill)" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="${hx}" cy="${hy}" r="9" fill="var(--warm-fill)"/>
+  </svg>`;
+  document.getElementById('pvb').innerHTML = `${pvRail()}<div class="main">
+  <section class="top"><div class="dial">${face}<div class="ctr"><div><b class="tn">3:15</b><span>pm</span></div></div>${labels}</div>
+    <div class="info"><div class="dd"><b>Saturday</b><span>October 3</span></div>
+      <div class="wx"><span class="t">${ic('sun')}<b class="tn">54°</b></span><span class="tn">High 61° · Low 43°</span><em>Rain likely 6–8 pm</em></div>
+      <div class="nx"><span class="lbl">NEXT · IN 1 HR 45 MIN</span><b>Dinner at Grandma's</b><span class="m tn">${AV('Family','s')}5:00 · Everyone</span></div>
+      <div class="then"><span class="meta">Then</span><div><span class="tn" style="color:var(--muted)">7:45</span>${AV('Paul','s')}Call Grandpa</div><div><span class="tn" style="color:var(--muted)">8:30</span>${AV('Family','s')}Movie at home</div></div>
+    </div></section>
+  <section class="bot"><div class="due">${pvDue()}<div class="din"><span class="meta">Dinner</span><b>Dinner at Grandma's</b></div></div>
+    <div class="panel"><div class="shd"><b>Coming up</b><span>Day · <u>Week</u> · Month</span></div><div class="days wkc" style="display:grid">${WEEKP.slice(0,6).map(d=>pvDay(d,2)).join('')}</div></div></section></div>`;
+})();
+
+/* C: Front page */
+document.getElementById('pvc').innerHTML = `${pvRail()}<div class="main">
+  <header class="np"><div class="rule"></div><div class="row"><span class="day">Saturday</span><span class="clock tn">3:15<small>pm</small></span></div>
+   <div class="dateline">October 3<i></i>${ic('sun')}<b class="tn">54°</b><span class="tn">High 61° · Low 43°</span><i></i><em>Rain likely 6–8 pm</em></div></header>
+  <section class="lead"><span class="lbl">NEXT · IN 1 HR 45 MIN</span><h6>Dinner at Grandma's</h6>
+   <div class="deck"><span class="tm tn">5:00</span>${AV('Family','s')}Everyone<i></i>then ${AV('Paul','s')}Call Grandpa 7:45 · Movie 8:30</div>
+   <div class="earl">Earlier today: Soccer game · Ava's birthday party · Haircut</div></section>
+  <section class="cols"><div class="c1">${pvDue()}<div class="din"><span class="meta">Dinner</span><b>Dinner at Grandma's</b></div></div>
+   <div class="c2"><div class="shd"><b>Coming up</b><span>Day · <u>Week</u> · Month</span></div><div class="days wkc" style="display:grid">${WEEKP.slice(0,6).map(d=>pvDay(d,3)).join('')}</div></div></section></div>`;
+
+/* ===== Front page riffs ===== */
+const OPEN = DUE.filter(d => !d[2]);
+document.getElementById('r1').innerHTML = `${pvRail()}<div class="main">
+ <header class="np"><span class="clock tn">3:15</span><div class="st"><b>Saturday</b><span class="wx">${ic('sun')}54° <em>· rain at 6</em></span></div></header>
+ <div class="rule"></div>
+ <section class="lead"><span class="k">NEXT · IN 1 HR 45 MIN</span><h6>Dinner at Grandma's</h6><div class="when"><b class="tn">5:00</b>${AV('Family','m')}Everyone</div></section>
+ <section class="then"><div class="row"><span class="tm tn">7:45</span>${AV('Paul','m')}Call Grandpa</div><div class="row"><span class="tm tn">8:30</span>${AV('Family','m')}Movie at home</div></section>
+ <section class="bottom"><div class="due"><div class="hd"><b>4 to do</b><span>today</span></div>${OPEN.slice(0,4).map(([t,w,d,l])=>`<div class="ck"><span class="bx"></span><span>${t.replace('Call about furnace filter','Furnace filter').replace('Return library books','Library books').replace('Pick up dry cleaning','Dry cleaning')}</span>${l?'<small>LATE</small>':''}</div>`).join('')}</div>
+  <div class="wk"><div class="hd"><b>Tomorrow</b><span>Sunday</span></div><div class="ev"><span class="tm tn">10:00</span>${AV('Family','m')}Farmers market</div><div class="ev"><span class="tm tn">2:00</span>${AV('Jess','m')}Run club</div><div class="more">Rest of the week →</div></div></section></div>`;
+
+document.getElementById('r2').innerHTML = `${pvRail()}<div class="main"><div class="bands">
+ <header class="b1"><span class="day">Saturday</span><span class="clock tn">3:15</span><span class="wx">${ic('sun')}<b class="tn">54°</b>High 61 <em>· rain likely 6–8 pm</em></span></header>
+ <section class="band"><span class="k">NEXT</span><h6>Dinner at Grandma's</h6><div class="sub"><b class="tn">5:00</b>${AV('Family','m')}Everyone · in 1 hr 45 min</div></section>
+ <section class="band"><span class="k n">TONIGHT</span><div class="lst"><div class="row"><span class="tm tn">7:45</span>${AV('Paul','m')}Call Grandpa</div><div class="row"><span class="tm tn">8:30</span>${AV('Family','m')}Movie at home</div></div></section>
+ <section class="band"><span class="k n">TO DO</span><div class="dues">${OPEN.map(([t,w,d,l])=>`<span class="chip${l?' late':''}"><span class="bx"></span>${t.replace('Call about furnace filter','Furnace filter').replace('Return library books','Library books').replace('Pick up dry cleaning','Dry cleaning')}</span>`).join('')}</div></section>
+ <section class="tail"><span class="k n">TOMORROW</span><div class="lst"><div class="row"><span class="tm tn">10:00</span>${AV('Family','m')}Farmers market</div><div class="row"><span class="tm tn">2:00</span>${AV('Jess','m')}Run club</div></div></section>
+</div></div>`;
+
+const r3Day = ([wd,dn,rel,ev]) => `<div class="ds"><div class="dh"><b>${rel||wd}</b><span>${rel?wd+' '+dn:'Oct '+dn}</span></div>${ev.slice(0,3).map(e=>e[0]==='bill'?`<div class="r bill2"><span class="tm">Due</span><span class="t">${RC()}${e[1]}</span></div>`:`<div class="r"><span class="tm tn">${e[0]}</span><span class="t">${AV(e[2],'s')}${e[1]}</span></div>`).join('')}</div>`;
+document.getElementById('r3').innerHTML = `${pvRail()}<div class="main">
+ <section class="room"><div class="np"><span class="clock tn">3:15</span><span class="st"><b>Saturday</b><span>October 3</span></span><span class="wx"><span class="t">${ic('sun')}<b class="tn">54°</b></span><em>Rain 6–8 pm</em></span></div>
+  <div class="nx"><span class="k">NEXT · IN 1 HR 45 MIN</span><h6>Dinner at Grandma's</h6><div class="when"><b class="tn">5:00</b>${AV('Family','m')}Everyone</div></div>
+  <div class="later"><div><span class="tm tn">7:45</span>${AV('Paul','m')}Call Grandpa</div><div><span class="tm tn">8:30</span>${AV('Family','m')}Movie</div></div></section>
+ <section class="counter"><div>${pvDue()}</div><div><div class="shd"><b>Coming up</b><span>Day · <u>Week</u> · Month</span></div>${WEEKB.slice(0,3).map(r3Day).join('')}</div></section></div>`;
+
+/* ===== Untimed items ===== */
+const UW = [
+ ['Sun','4','Tomorrow',[['allday','Grandma visiting','Family'],['10:00','Farmers market','Family'],['2:00','Run club','Jess']]],
+ ['Mon','5','',[['allday','Picture day','Leo'],['bill','Water bill'],['3:30','Soccer practice','Leo'],['6:30','PTO meeting','Paul']]],
+ ['Tue','6','',[['8:00','Dentist','Mia'],['4:00','Piano','Leo']]],
+ ['Wed','7','',[['bill','Phone bill'],['12:45','Early release pickup','Mia'],['3:30','Soccer practice','Leo'],['4:00','Orthodontist','Jess']]],
+ ['Thu','8','',[['4:00','Piano','Leo']]],
+];
+const timed = ev => ev.filter(e => e[0] !== 'allday' && e[0] !== 'bill');
+const utRow = e => `<div class="r"><span class="tm tn">${e[0]}</span><span class="t">${AV(e[2],'s')}${e[1]}</span></div>`;
+const utDay = (mode) => ([wd,dn,rel,ev]) => {
+  const ad = ev.filter(e=>e[0]==='allday'), bl = ev.filter(e=>e[0]==='bill'), tv = timed(ev).slice(0,3), more = timed(ev).length - tv.length;
+  let top = '';
+  if (mode === 'banner' || mode === 'nobills') top = ad.map(e=>`<div class="ban" style="--c:${C[e[2]]}">${AV(e[2])}${e[1]}</div>`).join('') + (mode === 'banner' ? bl.map(e=>`<div class="ban bill">${ic('bill')}${e[1]}<span class="amt">DUE</span></div>`).join('') : '');
+  if (mode === 'sub' && (ad.length || bl.length)) top = `<div class="sub">${ad.map(e=>`<span><i class="pip" style="--c:${C[e[2]]}"></i>${e[1]}</span>`).join('')}${bl.map(e=>`<span class="bl">${e[1]}</span>`).join('')}</div>`;
+  return `<div class="ds"><div class="dh"><b>${rel||wd}</b><span>${rel?wd+' '+dn:'Oct '+dn}</span></div>${top}${tv.map(utRow).join('')}${more?`<div class="more">+${more} more</div>`:''}</div>`;
+};
+const utPanel = (mode, days=UW) => `<aside class="side"><div class="sh"><b>Coming up</b><span>Day · Week · Month</span></div>${days.map(utDay(mode)).join('')}</aside>`;
+const utPort = (mode) => `<aside class="side"><div class="sh"><b>Coming up</b><span>Day · Week · Month</span></div><div class="cols">${UW.slice(0,3).map(utDay(mode)).join('')}</div></aside>`;
+[['banner','ua'],['sub','ub'],['nobills','uc']].forEach(([m,id]) => {
+  document.getElementById(id).innerHTML = utPanel(m);
+  document.getElementById(id+'d').innerHTML = utPanel(m);
+  document.getElementById(id+'p').innerHTML = utPort(m);
+  document.getElementById(id+'pd').innerHTML = utPort(m);
+});
+['r1','r2','r3'].forEach(id => { const el = document.getElementById(id+'d'); if (el) el.innerHTML = document.getElementById(id).innerHTML; });
+
+/* ===== Portrait final candidates ===== */
+const PFW = [
+ ['Sun','4','Tomorrow',[['allday','Grandma visiting','Family'],['10:00','Farmers market','Family'],['2:00','Run club','Jess']]],
+ ['Mon','5','',[['allday','Picture day','Leo'],['bill','Water bill'],['3:30','Soccer practice','Leo'],['6:30','PTO meeting','Paul']]],
+ ['Tue','6','',[['8:00','Dentist','Mia'],['4:00','Piano','Leo']]],
+ ['Wed','7','',[['bill','Phone bill'],['12:45','Early release pickup','Mia'],['3:30','Soccer practice','Leo'],['4:00','Orthodontist','Jess'],['5:30','Swim lessons','Mia']]],
+ ['Thu','8','',[['4:00','Piano','Leo']]],
+ ['Fri','9','',[['6:00','Pizza night','Family']]],
+ ['Sat','10','',[['9:00','Soccer game','Leo']]],
+ ['Sun','11','',[['allday','Grandma visiting','Family'],['11:00','Brunch out','Family']]],
+];
+const pfDay = ([wd,dn,rel,ev]) => { const ad = ev.filter(e=>e[0]==='allday'), bl = ev.filter(e=>e[0]==='bill'), tv = ev.filter(e=>e[0]!=='allday'&&e[0]!=='bill'), sh = tv.slice(0,3);
+  return `<div class="ds"><div class="dh"><b>${rel||wd}</b><span>${rel?wd+' '+dn:'Oct '+dn}</span></div>${ad.length||bl.length?`<div class="sub">${ad.map(e=>`<span><i class="pip" style="--c:${C[e[2]]}"></i>${e[1]}</span>`).join('')}${bl.map(e=>`<span class="bl">${e[1]}</span>`).join('')}</div>`:''}${sh.map(e=>`<div class="r"><span class="tm tn">${e[0]}</span><span class="t">${AV(e[2],'s')}<span>${e[1]}</span></span></div>`).join('')}${tv.length>3?`<div class="more">+${tv.length-3} more</div>`:''}</div>`; };
+const pfLeadTop = () => `<div class="nx"><span class="lbl">NEXT · IN 1 HR 45 MIN</span><b>Dinner at Grandma's</b><span class="who"><span class="tm tn">5:00</span>${AV('Family','s')}Everyone</span></div>
+  <div class="lt"><span class="tm tn">7:45</span><span class="t">${AV('Paul','s')}Call Grandpa</span><span class="tm tn">8:30</span><span class="t">${AV('Family','s')}Movie at home</span><span class="earl">Earlier: Soccer game · Ava's party · Haircut</span></div>`;
+const pfDue = (two) => `<div class="due"><div class="shd"><b>Due today</b><span>1 of 5 done</span></div><div class="g${two?' two':''}">${DUE.map(([t,w,d,l])=>`<div class="ck${d?' done':''}"><span class="bx${d?' on':''}">${d?ic('check'):''}</span><span class="tx">${t}${l?'<small>Overdue</small>':''}</span>${AV(w,'s')}</div>`).join('')}</div></div>`;
+const pfDin = `<div class="din"><span>Dinner tonight</span><b>Dinner at Grandma's</b></div>`;
+const pfRight = () => `${pvRail()}<section class="lead"><div class="mast"><span class="clock tn">3:15</span><span class="dd"><b>Saturday</b><span>October 3</span></span></div><div class="wxl">${ic('sun')}<b class="tn">54°</b><span class="tn">61° / 43°</span><em>Rain 6–8 pm</em></div>${pfLeadTop()}${pfDue(false)}${pfDin}</section>
+  <aside class="panel"><div class="sh"><b>Coming up</b><span>Day · <u>Week</u> · Month</span></div>${PFW.map(pfDay).join('')}</aside>`;
+const pfBottom = () => `${pvRail()}<div class="col"><section class="lead"><div class="mast"><span style="display:flex;align-items:flex-end;gap:18px"><span class="clock tn">3:15</span><span class="dd"><b>Saturday</b><span>October 3</span></span></span><span class="wxr"><span class="t">${ic('sun')}<b class="tn">54°</b></span><span class="tn">61° / 43° · <em>Rain 6–8 pm</em></span></span></div>
+  <div class="row2 ruled"><div style="display:grid;gap:calc(var(--k)*18px)">${pfLeadTop()}</div><div>${pfDue(false).replace('class="due"','class="due" style="border-top:0;padding-top:0"')}</div></div>${pfDin}</section>
+  <aside class="panel"><div class="sh"><b>Coming up</b><span>Day · <u>Week</u> · Month</span></div><div class="days">${PFW.slice(0,3).map(pfDay).join('')}</div></aside></div>`;
+['pfr','pfrd'].forEach(id => document.getElementById(id).innerHTML = pfRight());
+['pfb','pfbd'].forEach(id => document.getElementById(id).innerHTML = pfBottom());
+/* useWallFit, as shipped: grow the lead's type until it fills its box (0.8–1.6). */
+const wallFit = () => document.querySelectorAll('.pf .lead').forEach(el => {
+  let lo = 0.8, hi = 1.6;
+  for (let i = 0; i < 14; i++) { const m = (lo + hi) / 2; el.style.setProperty('--k', m); if (el.scrollHeight <= el.clientHeight + 1) lo = m; else hi = m; }
+  el.style.setProperty('--k', lo);
+});
+
+
+/* ===== Portrait: panel variants ===== */
+const MEALS = [['Sun','Tacos'],['Mon','Sheet-pan chicken'],['Tue','Leftovers'],['Wed','Spaghetti & meatballs'],['Thu',''],['Fri','Pizza night'],['Sat','Burgers on the grill']];
+const pfDayM = (dots) => ([wd,dn,rel,ev]) => { const ad = ev.filter(e=>e[0]==='allday'), bl = ev.filter(e=>e[0]==='bill'), tv = ev.filter(e=>e[0]!=='allday'&&e[0]!=='bill'), sh = tv.slice(0,3);
+  return `<div class="ds"><div class="dh"><b>${rel||wd}</b><span>${rel?wd+' '+dn:'Oct '+dn}</span></div>${ad.length||bl.length?`<div class="sub">${ad.map(e=>`<span><i class="pip" style="--c:${C[e[2]]}"></i>${e[1]}</span>`).join('')}${bl.map(e=>`<span class="bl">${e[1]}</span>`).join('')}</div>`:''}${sh.map(e=>`<div class="r"><span class="tm tn">${e[0]}</span><span class="t">${dots?dot(e[2]):AV(e[2],'s')}<span>${e[1]}</span></span></div>`).join('')}${tv.length>3?`<div class="more">+${tv.length-3} more</div>`:''}</div>`; };
+const mealsBlock = () => `<div class="meals"><div class="mh"><b>Dinners</b><span>this week</span></div>${MEALS.map(([d,n])=>`<div class="m"><span class="d">${d}</span><span class="n${n?'':' none'}">${n||'Nothing planned'}</span></div>`).join('')}</div>`;
+const pfVariant = (dots, meals) => `${pvRail()}<section class="lead"><div class="mast"><span class="clock tn">3:15</span><span class="dd"><b>Saturday</b><span>October 3</span></span></div><div class="wxl">${ic('sun')}<b class="tn">54°</b><span class="tn">61° / 43°</span><em>Rain 6–8 pm</em></div>${pfLeadTop()}${pfDue(false)}${pfDin}</section>
+  <aside class="panel"><div class="sh"><b>Coming up</b><span>Day · <u>Week</u> · Month</span></div><div class="wkfill">${PFW.map(pfDayM(dots)).join('')}</div>${meals?mealsBlock():''}</aside>`;
+[['pm1',1,0],['pm2',1,1],['pm3',0,1]].forEach(([id,d,m]) => { document.getElementById(id).innerHTML = pfVariant(d,m); document.getElementById(id+'d').innerHTML = pfVariant(d,m); });
+/* "Fill whole days": drop any day that doesn't fit whole. */
+const fillDays = () => document.querySelectorAll('.wkfill').forEach(box => { [...box.children].forEach(c => c.hidden = false); const lim = box.clientHeight; let cut = false; [...box.children].forEach(c => { if (cut || c.offsetTop + c.offsetHeight > lim + 1) { cut = true; c.hidden = true; } }); });
+
+/* ===== View picker + landscape ===== */
+const picker = (kind) => kind === 'seg' ? `<div class="vseg"><span>Day</span><span class="on">Week</span><span>Month</span></div>` : kind === 'pills' ? `<div class="vpills"><span>Day</span><span class="on">Week</span><span>Month</span></div>` : '';
+const railSub = () => `<nav class="rail">${nav.map(([k,l],i)=>`<div class="nav${i?'':' on'}">${ic(k)}<span>${l}</span>${k==='todo'?'<span class="badge">4</span>':''}</div>${i===0?`<div class="rsub"><span>Day</span><span class="on">Week</span><span>Month</span></div>`:''}`).join('')}<div class="sp"></div><div class="mic">${ic('mic')}</div></nav>`;
+const panelHead = (kind) => kind === 'seg' ? `<div class="sh plain">${picker('seg')}</div><div class="dh" style="margin-top:-4px"><b style="font-family:var(--font-display);font-size:28px;font-weight:600">Coming up</b></div>`
+  : kind === 'pills' ? `<div class="sh"><b>Coming up</b></div>${picker('pills')}`
+  : `<div class="sh"><b>Coming up</b></div>`;
+const leadBlock = (two) => `<section class="lead"><div class="mast"><span class="clock tn">3:15</span><span class="dd"><b>Saturday</b><span>October 3</span></span></div><div class="wxl">${ic('sun')}<b class="tn">54°</b><span class="tn">61° / 43°</span><em>Rain 6–8 pm</em></div>${pfLeadTop()}${pfDue(two)}${pfDin}</section>`;
+const panelBlock = (kind) => `<aside class="panel">${panelHead(kind)}<div class="wkfill">${PFW.map(pfDayM(true)).join('')}</div>${mealsBlock()}</aside>`;
+const mealsC2 = () => `<div class="meals c2"><div class="mh"><b>Dinners</b><span>this week</span></div><div class="grid2">${MEALS.map(([d,n])=>`<div class="m"><span class="d">${d}</span><span class="n${n?'':' none'}">${n||'—'}</span></div>`).join('')}</div></div>`;
+const mealsQ = () => `<div class="meals q"><div class="mh"><b>Dinners</b><span>next few nights</span></div><div class="wkfill mfill">${MEALS.map(([d,n])=>`<div class="m"><span class="d">${d}</span><span class="n${n?'':' none'}">${n||'Nothing planned'}</span></div>`).join('')}</div></div>`;
+const vpBoard2 = () => `${pvRail()}${leadBlock(1)}<aside class="panel">${panelHead('seg')}<div class="wkfill">${PFW.map(pfDayM(true)).join('')}</div>${mealsQ()}</aside>`;
+const vpBoard = (kind, land) => `${kind==='rail'?railSub():pvRail()}${leadBlock(land)}${panelBlock(kind)}`;
+[['vp1','seg',0],['vp2','pills',0],['vp3','rail',0],['ls1','seg',1]].forEach(([id,k,l]) => { document.getElementById(id).innerHTML = vpBoard(k,l); document.getElementById(id+'d').innerHTML = vpBoard(k,l); });
+['ls2','ls2d'].forEach(id => document.getElementById(id).innerHTML = vpBoard2());
+const vpBoard3 = () => `${pvRail()}${leadBlock(0)}<aside class="panel">${panelHead('seg')}<div class="wkfill">${PFW.map(pfDayM(true)).join('')}</div>${mealsQ()}</aside>`;
+['pt2','pt2d'].forEach(id => document.getElementById(id).innerHTML = vpBoard3());
+
+/* ===== Night + Arrange ===== */
+const nightN1 = () => `<div class="mast"><span class="c tn">11:42</span><span class="dd"><b>Saturday</b><span>October 3</span></span></div><div class="tm"><span class="k">TOMORROW</span><div class="row"><span class="t tn">10:00</span><i class="dotn" style="--c:${C.Family}"></i>Farmers market</div><div class="row"><span class="t tn">2:00</span><i class="dotn" style="--c:${C.Jess}"></i>Run club</div><span class="wx">${ic('sun')}61° / 43° · Grandma visiting</span></div>`;
+const nightN2 = () => `<span class="c tn">11:42</span><span class="d">Saturday, October 3</span><span class="nx">Tomorrow <b class="tn">10:00</b><i class="dotn" style="--c:${C.Family}"></i>Farmers market</span>`;
+const nightN3 = () => `<div class="top"><b class="tn">11:42</b><span>Saturday night</span></div><h6>Tomorrow</h6><div class="sub">Sunday, October 4 · ${ic('sun')} 61° / 43° · <i class="dotn" style="--c:${C.Family}"></i> Grandma visiting</div><div class="row"><span class="t tn">10:00</span><i class="dotn" style="--c:${C.Family}"></i>Farmers market</div><div class="row"><span class="t tn">2:00</span><i class="dotn" style="--c:${C.Jess}"></i>Run club</div><div class="din">Dinner<b>Tacos</b></div>`;
+[['nl1',nightN1],['np1',nightN1],['nl2',nightN2],['np2',nightN2],['nl3',nightN3],['np3',nightN3]].forEach(([id,f]) => document.getElementById(id).innerHTML = f());
+/* Arrange: in place */
+const ghost = (lines) => `<div class="ghost">${lines.join('<br>')}</div>`;
+const arrInPlace = (panelW) => `<div class="dim" style="right:${panelW}px"></div><div class="apanel" style="width:${panelW}px"><div class="abar"><b>Arrange the panel</b><span class="btnp">Done</span></div>
+  <div class="slot big"><div class="sh2"><b>Coming up</b><span class="btns">Switch ${ic('ud')}</span></div>${ghost(['Tomorrow · Farmers market, Run club','Mon · Soccer practice, PTO meeting','Tue · Dentist, Piano','Wed · Early release pickup …'])}<span class="note">The top module can be switched but not removed.</span></div>
+  <div class="slot small"><div class="sh2"><b>Dinners</b><span class="btns">Switch ${ic('ud')}</span><span class="btns">${ic('x')}</span></div>${ghost(['Sun Tacos · Mon Sheet-pan chicken …'])}</div></div>`;
+const OPTS = [['cal','Coming up'],['meal','Dinners'],['cart','Shopping'],['todo','To-dos']];
+const arrSheet = () => `<div class="dim" style="right:0"></div><div class="sheet"><div class="abar"><b>Arrange the panel</b><span class="btnp">Done</span></div>
+  <div class="mini3"><div class="lt"></div><div class="rt"><i>Coming up</i><i>Dinners</i></div></div>
+  <div class="cols"><div class="col"><h5>TOP <small>· most of the panel</small></h5>${OPTS.map(([k,l],i)=>`<div class="opt2${i===0?' on':''}${i===1?' off':''}">${ic(k)}${l}${i===0?`<span class="ck2">${ic('check')}</span>`:''}${i===1?'<small>In bottom</small>':''}</div>`).join('')}</div>
+  <div class="col"><h5>BOTTOM <small>· a quarter</small></h5>${[...OPTS,['x','Nothing']].map(([k,l],i)=>`<div class="opt2${i===1?' on':''}${i===0?' off':''}">${ic(k)}${l}${i===1?`<span class="ck2">${ic('check')}</span>`:''}${i===0?'<small>In top</small>':''}</div>`).join('')}</div></div></div>`;
+[['a1l',vpBoard2,arrInPlace,470],['a1ld',vpBoard2,arrInPlace,470],['a1p',vpBoard3,arrInPlace,372],['a1pd',vpBoard3,arrInPlace,372],
+ ['a2l',vpBoard2,arrSheet,0],['a2ld',vpBoard2,arrSheet,0],['a2p',vpBoard3,arrSheet,0],['a2pd',vpBoard3,arrSheet,0]].forEach(([id,b,a,w]) => document.getElementById(id).innerHTML = b() + a(w));
+
+/* Scale each artboard into its frame */
+const fit = () => document.querySelectorAll('.frame').forEach(f => {
+  const w = +f.dataset.w, h = +f.dataset.h, s = f.clientWidth / w;
+  f.style.height = (h * s) + 'px';
+  f.firstElementChild.style.transform = `scale(${s})`;
+});
+fit();
+const settle = () => { wallFit(); fillDays(); };
+settle(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(settle);
+if ('ResizeObserver' in window) new ResizeObserver(fit).observe(document.body); else addEventListener('resize', fit);
+</script>
+
+</body>
+</html>

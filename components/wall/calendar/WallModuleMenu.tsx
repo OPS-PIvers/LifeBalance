@@ -3,7 +3,6 @@ import { CalendarDays, ListChecks, ShoppingCart, UtensilsCrossed } from 'lucide-
 import type { WallModuleKey } from '@/types/schema';
 import { WALL_MODULE_KEYS } from '@/utils/wall/wallSettings';
 import { MODULE_TITLES } from '@/utils/wall/wallModules';
-import { useWallPortrait } from '@/components/wall/useWallFit';
 
 const ICONS: Record<WallModuleKey, typeof CalendarDays> = {
   coming: CalendarDays,
@@ -21,19 +20,10 @@ interface WallModuleMenuProps {
   onClose: () => void;
 }
 
-/** Switch / Add module menu for the Week panel (plan §3). */
+/** Switch / Add module menu for Arrange mode (the Week panel). */
 const WallModuleMenu: React.FC<WallModuleMenuProps> = ({ menu, modules, onPick, onClose }) => {
-  // Portrait puts two modules side by side (wall.css), landscape stacks them.
-  const portrait = useWallPortrait();
-  const halves: readonly [string, string] = portrait ? ['Left side shows', 'Right side shows'] : ['Top half shows', 'Bottom half shows'];
   const title =
-    menu.kind === 'add'
-      ? 'Add a module'
-      : modules.length === 2
-        ? menu.slot === 0
-          ? halves[0]
-          : halves[1]
-        : 'Panel shows';
+    menu.kind === 'add' ? 'Add a bottom module' : modules.length === 2 ? (menu.slot === 0 ? 'Top shows' : 'Bottom shows') : 'Panel shows';
   const low = menu.kind === 'add' || (modules.length === 2 && menu.slot === 1);
   return (
     <>

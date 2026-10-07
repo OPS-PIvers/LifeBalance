@@ -98,6 +98,47 @@ export function todayTimeline(events: readonly WallEvent[], today: string, now: 
   return { allDay, rows, nowIndex };
 }
 
+/** Without an end time, an event counts as running for an hour. */
+const DEFAULT_EVENT_MS = 60 * 60 * 1000;
+
+export interface TodayFocus {
+  /** The hero: the event running now, else the next one to start. */
+  lead: TodayRow | null;
+  /** True when `lead` has already started. */
+  leadIsNow: boolean;
+  /** The rest of today after the hero, in start order. */
+  later: TodayRow[];
+  /** Already over, for the faint "Earlier:" line. */
+  earlier: TodayRow[];
+}
+
+/**
+ * The Week lead's split of today (docs/DECISIONS.md "Wall redesign"): one
+ * hero, the rest of the day, and what's already over.
+ */
+export function todayFocus(timeline: TodayTimeline, now: Date): TodayFocus {
+  const nowMs = now.getTime();
+  const over = (r: TodayRow) => {
+    const start = Date.parse(r.event.start ?? '');
+    const end = Date.parse(r.event.end ?? '');
+    return Number.isFinite(end) ? end <= nowMs : Number.isFinite(start) && start + DEFAULT_EVENT_MS <= nowMs;
+  };
+  const earlier = timeline.rows.filter(over);
+  const live = timeline.rows.filter(r => !over(r));
+  const lead = live[0] ?? null;
+  const leadIsNow = !!lead && Date.parse(lead.event.start ?? '') <= nowMs;
+  return { lead, leadIsNow, later: live.slice(1), earlier };
+}
+
+/** "in 45 min", "in 1 hr 45 min", "in 3 hr": how long until `startMs`. */
+export function untilText(startMs: number, nowMs: number): string {
+  const minutes = Math.max(1, Math.ceil((startMs - nowMs) / 60000));
+  if (minutes < 60) return `in ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `in ${hours} hr ${rest} min` : `in ${hours} hr`;
+}
+
 /**
  * The Today panel's "Due today" checklist: open overdue and due-today
  * to-dos, plus the ones ticked off today so a tap shows as done instead of
@@ -156,6 +197,18 @@ export function groupComingUp(events: readonly WallEvent[], today: string, days 
     });
   }
   return out;
+}
+
+/**
+ * A Coming up day as the panel draws it: untimed items (all-day events,
+ * bills, holidays) fold into one quiet line under the heading, and only
+ * timed events get rows. Nothing untimed pretends to have a time.
+ */
+export function splitComingUpDay(day: ComingUpDay): { untimed: WallEvent[]; timed: WallEvent[] } {
+  return {
+    untimed: [...day.events.filter(e => e.allDay), ...day.muted],
+    timed: day.events.filter(e => !e.allDay),
+  };
 }
 
 // ---------------------------------------------------------------------------

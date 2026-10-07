@@ -49,8 +49,8 @@ describe('WallDisplaySettings → Week layout', () => {
     fireEvent.change(screen.getByLabelText('Bottom module'), { target: { value: 'shopping' } });
     expect(saved()).toMatchObject({ defaultModules: ['coming', 'shopping'] });
     expect(screen.getByLabelText('Bottom module').querySelector('option[value="coming"]')).toBeNull();
-    fireEvent.change(screen.getByLabelText('Top module'), { target: { value: 'none' } });
-    expect(saved()).toMatchObject({ defaultModules: [] });
+    // The top can't be empty: there is no "Nothing" choice for it.
+    expect(screen.getByLabelText('Top module').querySelector('option[value="none"]')).toBeNull();
   });
 
   it('shows the interval only while rotation is on', () => {

@@ -10,7 +10,10 @@ import {
   longDateText,
   monthCells,
   outsideDayHours,
+  splitComingUpDay,
+  todayFocus,
   todayTimeline,
+  untilText,
 } from './wallCalendar';
 
 const TZ = 'America/Chicago';
@@ -76,6 +79,54 @@ describe('todayTimeline', () => {
   });
 });
 
+describe('todayFocus', () => {
+  const D = '2026-10-03';
+  const day = [
+    ev('Soccer', D, at(D, '09:00'), at(D, '10:30')),
+    ev('Lunch', D, at(D, '12:00')),
+    ev('Haircut', D, at(D, '14:30'), at(D, '15:30')),
+    ev('Dinner', D, at(D, '17:00'), at(D, '19:00')),
+    ev('Movie', D, at(D, '20:30')),
+  ];
+  const focus = (hhmm: string) => {
+    const now = new Date(at(D, hhmm));
+    return todayFocus(todayTimeline(day, D, now, TZ), now);
+  };
+
+  it('leads with the next event and lists the rest of the day after it', () => {
+    const f = focus('15:45');
+    expect(f.lead?.event.id).toBe('Dinner');
+    expect(f.leadIsNow).toBe(false);
+    expect(f.later.map(r => r.event.id)).toEqual(['Movie']);
+    expect(f.earlier.map(r => r.event.id)).toEqual(['Soccer', 'Lunch', 'Haircut']);
+  });
+
+  it('leads with an event in progress, and ends an event without an end time after an hour', () => {
+    const f = focus('15:15');
+    expect(f.lead?.event.id).toBe('Haircut');
+    expect(f.leadIsNow).toBe(true);
+    expect(focus('12:30').lead?.event.id).toBe('Lunch');
+    expect(focus('13:05').lead?.event.id).toBe('Haircut');
+  });
+
+  it('has no lead once the day is over', () => {
+    const f = focus('22:00');
+    expect(f.lead).toBeNull();
+    expect(f.later).toEqual([]);
+    expect(f.earlier).toHaveLength(5);
+  });
+});
+
+describe('untilText', () => {
+  const t0 = Date.parse('2026-10-03T15:15:00-05:00');
+  it('counts down in minutes, then hours and minutes', () => {
+    expect(untilText(t0 + 45 * 60000, t0)).toBe('in 45 min');
+    expect(untilText(t0 + 105 * 60000, t0)).toBe('in 1 hr 45 min');
+    expect(untilText(t0 + 180 * 60000, t0)).toBe('in 3 hr');
+    expect(untilText(t0 + 10000, t0)).toBe('in 1 min');
+  });
+});
+
 describe('dueTodayChecklist', () => {
   const todo = (id: string, date: string, completedAt?: string): ToDo =>
     ({ id, text: id, completeByDate: date, isCompleted: !!completedAt, ...(completedAt ? { completedAt } : {}) }) as ToDo;
@@ -126,6 +177,26 @@ describe('groupComingUp', () => {
     const days = groupComingUp(many, '2026-10-03');
     expect(days).toHaveLength(14);
     expect(days.reduce((n, d) => n + d.events.length, 0)).toBe(300);
+  });
+});
+
+describe('splitComingUpDay', () => {
+  it('folds all-day events, bills and holidays into the untimed line, timed events into rows', () => {
+    const D = '2026-10-05';
+    const [day] = groupComingUp(
+      [
+        ev('Soccer', D, at(D, '15:30')),
+        ev('Picture day', D, undefined, undefined, { ownerKey: 'l' }),
+        ev('Water bill', D, undefined, undefined, { source: 'bill' }),
+        ev('Columbus Day', D, undefined, undefined, { source: 'holiday' }),
+      ],
+      '2026-10-04'
+    );
+    expect(day).toBeDefined();
+    if (!day) return;
+    const { untimed, timed } = splitComingUpDay(day);
+    expect(untimed.map(e => e.id)).toEqual(['Picture day', 'Columbus Day', 'Water bill']);
+    expect(timed.map(e => e.id)).toEqual(['Soccer']);
   });
 });
 

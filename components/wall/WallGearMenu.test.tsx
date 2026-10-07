@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { hashKidPin } from '@/utils/kidPin';
 import WallGearMenu from './WallGearMenu';
 
-const props = { title: 'Kitchen iPad', isDisplay: true, onClose: vi.fn(), onReload: vi.fn(), onUnpair: vi.fn(), onSyncCalendars: vi.fn(async () => ({ failed: 0 })), onTestSound: vi.fn(), rotating: false, rotationIntervalSec: 60, onToggleRotation: vi.fn() };
+const props = { title: 'Kitchen iPad', isDisplay: true, onClose: vi.fn(), onReload: vi.fn(), onUnpair: vi.fn(), onSyncCalendars: vi.fn(async () => ({ failed: 0 })), onTestSound: vi.fn(), rotating: false, rotationIntervalSec: 60, onToggleRotation: vi.fn(), onArrange: vi.fn() };
 
 function typePin(pin: string) {
   for (const d of pin) fireEvent.click(screen.getByRole('button', { name: d }));
@@ -54,5 +54,11 @@ describe('WallGearMenu', () => {
     expect(props.onToggleRotation).toHaveBeenCalled();
     rerender(<WallGearMenu {...props} rotating />);
     expect(screen.getByRole('button', { name: /Stop rotating the panel/ })).toBeInTheDocument();
+  });
+
+  it('opens Arrange mode for the panel', () => {
+    render(<WallGearMenu {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: /Arrange the panel/ }));
+    expect(props.onArrange).toHaveBeenCalled();
   });
 });

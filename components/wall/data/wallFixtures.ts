@@ -7,7 +7,11 @@ import { DEFAULT_WALL_SETTINGS } from '@/utils/wall/wallSettings';
  * loaded behind `import.meta.env.DEV` + the Test Mode session flag, so
  * production builds tree-shake this module away.
  */
-export function wallTestFixtures(today = new Date()): {
+export function wallTestFixtures(
+  today = new Date(),
+  /** The wall's theme; the screenshot spec sets dark through the session flag the provider reads. */
+  theme: WallSettings['theme'] = 'light'
+): {
   events: WallEvent[];
   feeds: WallCalendarFeed[];
   travel: WallTravel[];
@@ -53,5 +57,5 @@ export function wallTestFixtures(today = new Date()): {
     { id: 'fxp2', date: day(0), type: 'breakfast', mealName: 'Pancakes', isCooked: false },
     { id: 'fxp3', date: day(1), type: 'dinner', mealName: 'Roast chicken', isCooked: false },
   ];
-  return { events, feeds, travel, meals, mealPlan, settings: { ...DEFAULT_WALL_SETTINGS, weather: { lat: 44.97, lon: -93.59, label: 'Test City' } } };
+  return { events, feeds, travel, meals, mealPlan, settings: { ...DEFAULT_WALL_SETTINGS, theme, weather: { lat: 44.97, lon: -93.59, label: 'Test City' } } };
 }

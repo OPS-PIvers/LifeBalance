@@ -16,6 +16,8 @@ interface WallGearMenuProps {
   rotating: boolean;
   rotationIntervalSec: number;
   onToggleRotation: () => void;
+  /** Opens Arrange mode: the Week panel's modules become editable in place. */
+  onArrange: () => void;
 }
 
 const MAX_TRIES = 5;
@@ -39,6 +41,7 @@ const WallGearMenu: React.FC<WallGearMenuProps> = ({
   rotating,
   rotationIntervalSec,
   onToggleRotation,
+  onArrange,
 }) => {
   const [unlocked, setUnlocked] = useState(!pinHash);
   const [digits, setDigits] = useState('');
@@ -122,6 +125,10 @@ const WallGearMenu: React.FC<WallGearMenuProps> = ({
       <div className="pin">
         <h2>{title}</h2>
         <div className="gmenu">
+          <button type="button" onClick={onArrange}>
+            <span>Arrange the panel</span>
+            <span>Choose what the right side shows</span>
+          </button>
           <button type="button" onClick={onReload}>
             <span>Reload display</span>
             <span>Fixes a stuck screen</span>

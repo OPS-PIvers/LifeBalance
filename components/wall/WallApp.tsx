@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, WifiOff } from 'lucide-react';
 import type { WallLayout, WallModuleKey } from '@/types/schema';
-import { firstEventOn, dueTodayTodos } from '@/utils/wall/wallSelectors';
-import { nextRotation } from '@/utils/wall/wallModules';
+import { dueTodayTodos, tomorrowPreview } from '@/utils/wall/wallSelectors';
+import { nextRotation, withTopModule } from '@/utils/wall/wallModules';
 import { makeWallPeople } from '@/utils/wall/wallPeople';
 import { zonedDateString, zonedParts } from '@/utils/wall/wallTime';
 import { useWallData } from './data/wallData';
@@ -13,6 +13,7 @@ import { WallToastContext, useWallToastController, type WallToaster } from './wa
 import WallDay from './calendar/WallDay';
 import WallMonth from './calendar/WallMonth';
 import WallWeek from './calendar/WallWeek';
+import WallViewPicker, { type CalendarView } from './calendar/WallViewPicker';
 import WallAddSheet, { type AddKind } from './lists/WallAddSheet';
 import WallMeals from './lists/WallMeals';
 import WallShopping from './lists/WallShopping';
@@ -24,7 +25,7 @@ import WallNight from './WallNight';
 import WallRail, { type WallView } from './WallRail';
 import WallToast from './WallToast';
 import WallUpdateToast from './WallUpdateToast';
-import WallTopBar from './WallTopBar';
+import WallHeader from './WallHeader';
 import WallVoiceBanner from './voice/WallVoiceBanner';
 import { useWallVoice, type WallVoiceFeedback, type WallVoiceMissReport } from './voice/useWallVoice';
 import WallSoundChip from './sound/WallSoundChip';
@@ -41,24 +42,19 @@ import { buildVoiceMiss, takeMissSlot } from '@/utils/wall/wallVoiceMiss';
 import './wall.css';
 
 type Overlay = 'none' | 'weather' | 'gear';
-type CalendarView = 'day' | 'week' | 'month';
+
+const HEADER_TITLES: Record<WallView, string> = { calendar: 'Calendar', shopping: 'Shopping', todos: 'To-dos', meals: 'Meals' };
 
 const NOTES = {
   offline: "The wall can't reach the internet. It keeps showing what it last saw, and anything you change is saved and syncs when the connection is back.",
 } as const;
-
-const CAL_VIEWS: { key: CalendarView; label: string }[] = [
-  { key: 'day', label: 'Day' },
-  { key: 'week', label: 'Week' },
-  { key: 'month', label: 'Month' },
-];
 
 interface WallAppProps {
   /** Unpair (display) or leave the wall (member preview). */
   onLeave: () => void;
 }
 
-/** The wall shell (docs/plans/wall-display-kiosk.md §4.9): rail, top bar, screens, overlays. */
+/** The wall shell (docs/plans/wall-display-kiosk.md §4.9): rail, screens (Week's masthead or a slim header), overlays. */
 const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   const data = useWallData();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -88,6 +84,8 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   // Day view adds a to-do for the day it shows.
   const [sheetDate, setSheetDate] = useState<string | undefined>(undefined);
   const [mealDate, setMealDate] = useState<string | null>(null);
+  // Arrange mode: the Week panel's modules are editable in place.
+  const [arranging, setArranging] = useState(false);
   // Rotation: the gear can start/stop it on this wall; otherwise Settings decides.
   const [rotateOverride, setRotateOverride] = useState<boolean | null>(null);
   const [rotationPaused, setRotationPaused] = useState(false);
@@ -101,6 +99,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     setOverlay('none');
     setSheet(null);
     setMealDate(null);
+    setArranging(false);
     setRotationPaused(false);
     dismiss();
     cancelVoiceRef.current();
@@ -140,7 +139,8 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   const today = zonedDateString(runtime.now, runtime.timeZone);
   const tomorrow = zonedDateString(new Date(runtime.now.getTime() + 24 * 60 * 60 * 1000), runtime.timeZone);
   const badge = useMemo(() => dueTodayTodos(data.todos, today).length, [data.todos, today]);
-  const tomorrowFirst = useMemo(() => firstEventOn(data.wallEvents, tomorrow), [data.wallEvents, tomorrow]);
+  const tomorrowAhead = useMemo(() => tomorrowPreview(data.wallEvents, tomorrow), [data.wallEvents, tomorrow]);
+  const tomorrowWeather = runtime.weather?.days.find(d => d.date === tomorrow);
   const dark = data.settings.theme === 'dark';
   const people = useMemo(() => makeWallPeople(data.members, dark), [data.members, dark]);
 
@@ -155,6 +155,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     setOverlay('none');
     setSheet(null);
     setMealDate(null);
+    setArranging(false);
   };
   const setRotation = (on: boolean) => {
     setRotateOverride(on);
@@ -288,9 +289,10 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   const rotating = rotateOverride ?? data.settings.rotation.enabled;
   // Compared by content: the providers rebuild the layout object on every snapshot.
   const savedKey = data.layout.modules.join(',');
-  const shownLayout = rotated && rotated.from === savedKey ? rotated.shown : data.layout;
+  // The panel is never empty: a layout saved in the old Today-only mode shows Coming up.
+  const shownLayout = withTopModule(rotated && rotated.from === savedKey ? rotated.shown : data.layout);
   const onWeek = view === 'calendar' && calView === 'week';
-  const rotationLive = rotating && !rotationPaused && !runtime.nightShowing && onWeek && overlay === 'none';
+  const rotationLive = rotating && !rotationPaused && !runtime.nightShowing && onWeek && overlay === 'none' && !arranging;
   const shownRef = useRef(shownLayout);
   useEffect(() => {
     shownRef.current = shownLayout;
@@ -320,6 +322,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     setView('calendar');
     setCalView(next);
     setDayDate(date);
+    if (next !== 'week') setArranging(false);
   };
 
   const openMeal = (date: string) => {
@@ -328,17 +331,12 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   };
 
   const cartCount = data.shoppingList.filter(i => i.isPurchased).length;
+  const toBuy = data.shoppingList.length - cartCount;
+  const headerMeta =
+    view === 'shopping' ? `${toBuy} to buy` : view === 'todos' && badge > 0 ? `${badge} due` : undefined;
   let topRight: React.ReactNode = null;
   if (view === 'calendar') {
-    topRight = (
-      <div className="seg" role="group" aria-label="Calendar view">
-        {CAL_VIEWS.map(v => (
-          <button key={v.key} type="button" aria-pressed={calView === v.key} onClick={() => goCalendar(v.key)}>
-            {v.label}
-          </button>
-        ))}
-      </div>
-    );
+    topRight = <WallViewPicker view={calView} onView={next => goCalendar(next)} />;
   } else if (view === 'shopping' || view === 'todos') {
     topRight = (
       <>
@@ -405,10 +403,15 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
         now={runtime.now}
         timeZone={runtime.timeZone}
         people={people}
+        weather={runtime.weather}
+        onWeather={() => setOverlay('weather')}
         layout={shownLayout}
         onLayout={changeLayout}
-        onSeeMonth={() => goCalendar('month')}
+        onView={next => goCalendar(next)}
+        onOpenDay={date => goCalendar('day', date)}
         onOpenMeal={openMeal}
+        arranging={arranging}
+        onArrangeDone={() => setArranging(false)}
       />
     );
   }
@@ -422,6 +425,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
             onView={v => {
               if (v === 'calendar') goCalendar('week');
               else setView(v);
+              setArranging(false);
               setOverlay('none');
               setSheet(null);
               setMealDate(null);
@@ -435,14 +439,23 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
             onGear={() => setOverlay('gear')}
           />
           <div className="main">
-            <WallTopBar
-              now={runtime.now}
-              timeZone={runtime.timeZone}
-              weather={runtime.weather}
-              offline={runtime.offline}
-              onWeather={() => setOverlay('weather')}
-              right={topRight}
-            />
+            {!onWeek && (
+              <WallHeader
+                title={view === 'calendar' && calView === 'month' ? zonedParts(runtime.now, runtime.timeZone).monthName : HEADER_TITLES[view]}
+                meta={headerMeta}
+                now={runtime.now}
+                timeZone={runtime.timeZone}
+                weather={runtime.weather}
+                onWeather={() => setOverlay('weather')}
+                right={topRight}
+              />
+            )}
+            {runtime.offline === 'strip' && (
+              <div className="ostrip" role="status">
+                <WifiOff className="wi" size="1em" aria-hidden="true" />
+                Offline for a while. Showing what was saved; changes will sync when the connection is back.
+              </div>
+            )}
             {body}
             {sheet && (
               <WallAddSheet
@@ -494,6 +507,11 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
                 setRotation(!rotating);
                 setOverlay('none');
               }}
+              onArrange={() => {
+                goCalendar('week');
+                setArranging(true);
+                setOverlay('none');
+              }}
               onClose={() => setOverlay('none')}
               onReload={() => window.location.reload()}
               onUnpair={onLeave}
@@ -505,7 +523,14 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
           <WallAlertCard alert={alert} words={alertText} night={runtime.nightShowing} onClose={alerts.dismiss} />
         )}
         {runtime.nightShowing && overlay !== 'gear' && (
-            <WallNight now={runtime.now} timeZone={runtime.timeZone} tomorrowFirst={tomorrowFirst} onWake={runtime.wake} />
+            <WallNight
+              now={runtime.now}
+              timeZone={runtime.timeZone}
+              tomorrow={tomorrowAhead}
+              tomorrowWeather={tomorrowWeather}
+              people={people}
+              onWake={runtime.wake}
+            />
           )}
         </div>
       </WallToastContext.Provider>
