@@ -22,11 +22,14 @@ import WallToday from './WallToday';
 import WallDueToday from './WallDueToday';
 import WallModuleMenu, { type ModuleMenuState } from './WallModuleMenu';
 import WallModuleSlot from './WallModuleSlot';
+import { ModuleScrollContext } from './modules/moduleScroll';
 import ComingUpModule, { type ComingUpRange } from './modules/ComingUpModule';
 import DueModule from './modules/DueModule';
 import MealsModule from './modules/MealsModule';
 import ShoppingModule from './modules/ShoppingModule';
 import TodosModule from './modules/TodosModule';
+
+const noop = () => undefined;
 
 const RANGES: { key: ComingUpRange; label: string }[] = [
   { key: 'week', label: 'Week' },
@@ -154,6 +157,11 @@ const WallWeek: React.FC<WallWeekProps> = ({
     </WallModuleSlot>
   );
 
+  /** A module's list in Arrange mode: it keeps its saved auto scroll; only the chrome changes. */
+  const arranged = (key: WallModuleKey) => (
+    <ModuleScrollContext.Provider value={{ on: autoScrolls(shown, key), onOverflow: noop }}>{body(key)}</ModuleScrollContext.Provider>
+  );
+
   // Under today's events. Due today is part of the column (sized by its fit);
   // any other module gets a fixed slot at the column's foot, like the panel's bottom.
   let bottom: React.ReactNode = null;
@@ -170,7 +178,7 @@ const WallWeek: React.FC<WallWeekProps> = ({
             <X className="wi" size="1em" aria-hidden="true" />
           </button>
         </div>
-        <div className="mb">{day === 'due' ? <WallDueToday today={today} timeZone={timeZone} people={people} heading={false} /> : body(day)}</div>
+        <div className="mb">{day === 'due' ? <WallDueToday today={today} timeZone={timeZone} people={people} heading={false} /> : arranged(day)}</div>
       </section>
     ) : (
       <button type="button" className="addmod dslot" onClick={() => setMenu({ kind: 'day' })}>
@@ -222,7 +230,7 @@ const WallWeek: React.FC<WallWeekProps> = ({
                   </button>
                 )}
               </div>
-              <div className="mb">{body(key)}</div>
+              <div className="mb">{arranged(key)}</div>
               {i === 0 && <span className="mnote">The top module can be switched but not removed.</span>}
             </section>
           );

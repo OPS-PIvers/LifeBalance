@@ -167,6 +167,13 @@ describe('WallWeek', () => {
     expect(onLayout).toHaveBeenLastCalledWith({ modules: ['coming', 'meals'], day: null });
   });
 
+  it('keeps each module’s saved auto scroll in Arrange mode', () => {
+    renderWeek({ modules: ['coming'], day: 'shopping' }, {}, { arranging: true });
+    // Coming up is off by default (whole days, no wheel); Shopping is on.
+    expect(screen.getByRole('region', { name: 'Coming up' }).querySelector('.wheel')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Under today: Shopping' }).querySelector('.wheel')).not.toBeNull();
+  });
+
   it('shows the picked module under today, or nothing there', () => {
     const { unmount } = renderWeek({ modules: ['coming'], day: 'shopping' });
     const today = screen.getByRole('region', { name: 'Today' });
