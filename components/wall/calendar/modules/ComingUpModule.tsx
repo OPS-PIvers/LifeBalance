@@ -1,10 +1,11 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo } from 'react';
 import { eventTimeText, groupComingUp, monthName, splitComingUpDay } from '@/utils/wall/wallCalendar';
 import type { WallPeople } from '@/utils/wall/wallPeople';
 import { useWallData } from '@/components/wall/data/wallData';
-import { useWholeFill } from '@/components/wall/useWallFit';
 import { WallDot } from '@/components/wall/WallAvatar';
 import WallUntimedLine from '@/components/wall/calendar/WallUntimedLine';
+import WallAutoScroll from './WallAutoScroll';
+import WallModuleFill from './WallModuleFill';
 
 /** Timed rows a Week day shows before "+N more". */
 const ROWS_PER_DAY = 3;
@@ -28,7 +29,8 @@ const shortMonth = (date: string) => monthName(Number(date.slice(5, 7))).slice(0
 /**
  * The days after today (today itself is the day column's). Week shows the
  * next seven days as whole days that fit, a free day as one quiet line;
- * Month is a denser list of the next 30 days that scrolls. A tap opens that day.
+ * Month is a denser list of the next 30 days that scrolls. With auto scroll
+ * started, both turn like the lists. A tap opens that day.
  */
 const ComingUpModule: React.FC<ComingUpModuleProps> = ({ today, timeZone, people, range = 'week', onOpenDay }) =>
   range === 'month' ? (
@@ -42,11 +44,9 @@ type ListProps = Omit<ComingUpModuleProps, 'range'>;
 const WeekList: React.FC<ListProps> = ({ today, timeZone, people, onOpenDay }) => {
   const { wallEvents } = useWallData();
   const days = useMemo(() => groupComingUp(wallEvents, today, 7, true), [wallEvents, today]);
-  const ref = useRef<HTMLDivElement>(null);
-  useWholeFill(ref);
   // The box always renders, so the fill keeps watching it when the list changes.
   return (
-    <div className="fill" ref={ref}>
+    <WallModuleFill>
       {days.map(day => {
         const { untimed, timed } = splitComingUpDay(day);
         const free = untimed.length === 0 && timed.length === 0;
@@ -74,7 +74,7 @@ const WeekList: React.FC<ListProps> = ({ today, timeZone, people, onOpenDay }) =
           </button>
         );
       })}
-    </div>
+    </WallModuleFill>
   );
 };
 
@@ -116,7 +116,11 @@ const MonthList: React.FC<ListProps> = ({ today, timeZone, people, onOpenDay }) 
       </button>
     );
   });
-  return <div className="mlist">{rows}</div>;
+  return (
+    <WallAutoScroll>
+      <div className="mlist">{rows}</div>
+    </WallAutoScroll>
+  );
 };
 
 export default ComingUpModule;

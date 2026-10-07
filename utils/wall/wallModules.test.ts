@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import type { WallLayout } from '@/types/schema';
-import { addModule, dayModule, nextRotation, removeModule, setDayModule, shownModules, switchModule, withTopModule } from './wallModules';
+import {
+  addModule,
+  autoScrolls,
+  dayModule,
+  nextRotation,
+  removeModule,
+  setAutoScroll,
+  setDayModule,
+  shownModules,
+  swipeModule,
+  switchModule,
+  withTopModule,
+} from './wallModules';
 
 describe('panel layout edits', () => {
   it('switches, adds and removes without ever showing a module twice', () => {
@@ -94,5 +106,52 @@ describe('nextRotation', () => {
   it('leaves an empty layout alone (the panel fills it with Coming up)', () => {
     const empty = { modules: [] };
     expect(nextRotation(empty, ['coming'])).toBe(empty);
+  });
+});
+
+describe('swiping a module', () => {
+  it('steps the panel slot forward and back, wrapping, skipping what the other slots show', () => {
+    const layout: WallLayout = { modules: ['coming', 'shopping'], day: 'due' };
+    expect(swipeModule(layout, 0, 1)).toEqual({ modules: ['todos', 'shopping'], day: 'due' });
+    expect(swipeModule(layout, 0, -1)).toEqual({ modules: ['meals', 'shopping'], day: 'due' });
+    expect(swipeModule(layout, 1, 1)).toEqual({ modules: ['coming', 'todos'], day: 'due' });
+    expect(swipeModule({ modules: ['coming', 'meals'], day: 'shopping' }, 1, -1)).toEqual({ modules: ['coming', 'todos'], day: 'shopping' });
+    // Due today is under today, so Meals steps past it and wraps round to Coming up.
+    expect(swipeModule({ modules: ['meals'], day: 'due' }, 0, 1)).toEqual({ modules: ['coming'], day: 'due' });
+  });
+
+  it('swipes the slot under today among the modules the panel leaves free', () => {
+    expect(swipeModule({ modules: ['coming', 'shopping'], day: 'due' }, 'day', 1)).toEqual({ modules: ['coming', 'shopping'], day: 'todos' });
+    expect(swipeModule({ modules: ['coming', 'shopping'], day: 'todos' }, 'day', -1)).toEqual({ modules: ['coming', 'shopping'], day: 'due' });
+    const empty: WallLayout = { modules: ['coming'], day: null };
+    expect(swipeModule(empty, 'day', 1)).toBe(empty);
+  });
+
+  it('pins the default Due today first, so a panel swipe through To-dos never hides it', () => {
+    expect(swipeModule({ modules: ['coming'] }, 0, 1)).toEqual({ modules: ['shopping'], day: 'due' });
+    expect(swipeModule({ modules: ['shopping'] }, 0, 1)).toEqual({ modules: ['todos'], day: 'due' });
+  });
+
+  it('keeps auto scroll choices through every edit', () => {
+    const layout: WallLayout = { modules: ['coming', 'shopping'], day: 'due', scroll: { coming: true } };
+    expect(swipeModule(layout, 1, 1).scroll).toEqual({ coming: true });
+    expect(switchModule(layout, 1, 'meals').scroll).toEqual({ coming: true });
+    expect(removeModule(layout, 1).scroll).toEqual({ coming: true });
+    expect(setDayModule(layout, null).scroll).toEqual({ coming: true });
+  });
+});
+
+describe('auto scroll', () => {
+  it('turns the lists by default and fills whole days elsewhere, until changed', () => {
+    const layout: WallLayout = { modules: ['coming', 'shopping'] };
+    expect(autoScrolls(layout, 'shopping')).toBe(true);
+    expect(autoScrolls(layout, 'todos')).toBe(true);
+    expect(autoScrolls(layout, 'due')).toBe(true);
+    expect(autoScrolls(layout, 'coming')).toBe(false);
+    expect(autoScrolls(layout, 'meals')).toBe(false);
+    const changed = setAutoScroll(setAutoScroll(layout, 'shopping', false), 'coming', true);
+    expect(changed).toEqual({ modules: ['coming', 'shopping'], scroll: { shopping: false, coming: true } });
+    expect(autoScrolls(changed, 'shopping')).toBe(false);
+    expect(autoScrolls(changed, 'coming')).toBe(true);
   });
 });

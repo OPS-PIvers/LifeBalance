@@ -92,7 +92,7 @@ test.describe('Wall display shell (Test Mode)', () => {
   test('boots with the clock, weather and rail', async ({ page }) => {
     await openWall(page, '15:15:00');
     // The Week screen's masthead sits at the top of the day column.
-    const today = page.getByRole('region', { name: 'Today' });
+    const today = page.getByRole('region', { name: 'Today', exact: true });
     await expect(today.getByText('3:15', { exact: true })).toBeVisible();
     await expect(today.getByText('Saturday, Oct 3', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Five-day forecast' })).toContainText('54°');
@@ -126,7 +126,7 @@ test.describe('Wall display shell (Test Mode)', () => {
 
   test('shows the week, switches Coming up to Month, switches a module, and opens a day from the month', async ({ page }) => {
     await openWall(page, '15:15:00');
-    const today = page.getByRole('region', { name: 'Today' });
+    const today = page.getByRole('region', { name: 'Today', exact: true });
     // Haircut is over by 3:15, so it moves under "Earlier today"; dinner is next.
     await expect(today.getByText('Earlier today')).toBeVisible();
     await expect(today.getByText('Haircut')).toBeVisible();
@@ -244,7 +244,7 @@ test.describe('Wall display shell (Test Mode)', () => {
   test('a starting-soon alert says when to leave', async ({ page }) => {
     // Fixture: Piano lesson at 4:30 on an alert calendar, a 20-minute drive away.
     await openWall(page, '15:59:30');
-    await expect(page.getByRole('region', { name: 'Today' }).getByText('3:59', { exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Today', exact: true }).getByText('3:59', { exact: true })).toBeVisible();
     await page.clock.fastForward('00:45');
     const card = page.getByRole('alertdialog');
     await expect(card).toContainText('Leave in 10 min');

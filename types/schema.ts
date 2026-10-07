@@ -2118,6 +2118,11 @@ export type WallModuleKey = 'coming' | 'shopping' | 'todos' | 'meals' | 'due';
 export interface WallLayout {
   modules: WallModuleKey[];
   day?: WallModuleKey | null;
+  /**
+   * Auto scroll started or stopped on the wall (or from the phone), per
+   * module. Absent = the module's default (`autoScrolls` in utils/wall/wallModules.ts).
+   */
+  scroll?: Partial<Record<WallModuleKey, boolean>>;
 }
 
 export type WallDisplayStatus = 'pending' | 'active' | 'revoked';

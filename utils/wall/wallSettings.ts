@@ -93,14 +93,29 @@ export function normalizeModules(raw: unknown): WallModuleKey[] {
   return out;
 }
 
+/** Only known modules with a boolean; absent when nothing is set. */
+function normalizeScroll(raw: unknown): WallLayout['scroll'] {
+  if (!isRecord(raw)) return undefined;
+  const out: Partial<Record<WallModuleKey, boolean>> = {};
+  for (const key of WALL_MODULE_KEYS) {
+    const v = raw[key];
+    if (typeof v === 'boolean') out[key] = v;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export function normalizeLayout(raw: unknown): WallLayout | undefined {
   if (!isRecord(raw)) return undefined;
   const modules = normalizeModules(raw['modules']);
+  const layout: WallLayout = { modules };
   const rawDay = raw['day'];
-  if (rawDay === null) return { modules, day: null };
   const day = WALL_MODULE_KEYS.find(k => k === rawDay);
+  if (rawDay === null) layout.day = null;
   // An unknown key (a newer wall's module) falls back to the default.
-  return day && !modules.includes(day) ? { modules, day } : { modules };
+  else if (day && !modules.includes(day)) layout.day = day;
+  const scroll = normalizeScroll(raw['scroll']);
+  if (scroll) layout.scroll = scroll;
+  return layout;
 }
 
 function isValidTimeZone(zone: string): boolean {
