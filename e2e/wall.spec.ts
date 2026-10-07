@@ -147,8 +147,8 @@ test.describe('Wall display shell (Test Mode)', () => {
     // Module controls live in Arrange mode, opened from the display menu.
     await expect(page.getByRole('button', { name: /Switch/ })).toHaveCount(0);
     await page.getByRole('button', { name: 'Display menu' }).click();
-    await page.getByRole('button', { name: /Arrange the panel/ }).click();
-    await page.getByRole('button', { name: /Switch/ }).click();
+    await page.getByRole('button', { name: /Arrange modules/ }).click();
+    await page.getByRole('region', { name: 'Coming up' }).getByRole('button', { name: /Switch/ }).click();
     await page.getByRole('dialog', { name: 'Panel shows' }).getByRole('button', { name: /To-dos/ }).click();
     await expect(page.getByRole('region', { name: 'To-dos' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Coming up' })).toBeHidden();
@@ -157,8 +157,8 @@ test.describe('Wall display shell (Test Mode)', () => {
     // Day and Month are full screens with their own header switch and a way back.
     await page.getByRole('region', { name: 'To-dos' }).waitFor();
     await page.getByRole('button', { name: 'Display menu' }).click();
-    await page.getByRole('button', { name: /Arrange the panel/ }).click();
-    await page.getByRole('button', { name: /Switch/ }).click();
+    await page.getByRole('button', { name: /Arrange modules/ }).click();
+    await page.getByRole('region', { name: 'To-dos' }).getByRole('button', { name: /Switch/ }).click();
     await page.getByRole('dialog', { name: 'Panel shows' }).getByRole('button', { name: /Coming up/ }).click();
     await page.getByRole('button', { name: 'Done', exact: true }).click();
     await page.getByRole('region', { name: 'Coming up' }).getByRole('button', { name: /Dentist/ }).click();

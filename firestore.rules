@@ -1348,9 +1348,11 @@ service cloud.firestore {
                          isValidOptionalString(request.resource.data.get('appVersion', null), 40) &&
                          (request.resource.data.get('layout', null) == null ||
                            (request.resource.data.layout is map &&
-                            request.resource.data.layout.keys().hasOnly(['modules']) &&
+                            request.resource.data.layout.keys().hasOnly(['modules', 'day']) &&
                             request.resource.data.layout.modules is list &&
-                            request.resource.data.layout.modules.size() <= 2));
+                            request.resource.data.layout.modules.size() <= 2 &&
+                            (request.resource.data.layout.get('day', null) == null ||
+                              (request.resource.data.layout.day is string && request.resource.data.layout.day.size() <= 20))));
       }
 
       // Household wall settings (single doc `config`). Any member edits it from

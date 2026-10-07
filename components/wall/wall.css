@@ -198,7 +198,12 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .due .dh span { font-size: var(--t-meta); color: var(--muted); }
 .wall .due .dg { display: grid; grid-template-columns: 1fr; }
 .wall .ck { display: flex; align-items: center; gap: 14px; min-height: calc(var(--k, 1) * 58px); width: 100%; font-size: calc(var(--k, 1) * 22px); text-align: left; }
-.wall .due .ck { border-bottom: 1px solid var(--line); }
+.wall .due .dblk { border-bottom: 1px solid var(--line); }
+.wall .due .subs { padding-bottom: calc(var(--k) * 10px); }
+.wall .due .sub { min-height: calc(var(--k) * 46px); }
+.wall .due .sub .tx { font-size: calc(var(--k) * 19px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wall .due .ck .stp { font-size: calc(var(--k) * 15px); }
+.wall .dempty { padding: calc(var(--k, 1) * 12px) 0; font-size: calc(var(--k, 1) * 20px); color: var(--muted); }
 .wall .due .ck .tx { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wall .ck .tx { flex: 1; min-width: 0; line-height: 1.2; }
 .wall .ck .tx small { display: block; font-size: calc(var(--k, 1) * 15px); }
@@ -216,6 +221,13 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .mod { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
 .wall .mod.top { flex: 1 1 0; }
 .wall .mod.bottom { flex: 0 0 25%; border-top: 1px solid var(--line-strong); padding-top: 16px; }
+/* A module under today's events (other than Due today, which flows with the column): a fixed slot at the column's foot, above dinner. */
+.wall .today .dslot { flex: 0 0 34%; margin-top: auto; border-top: 1px solid var(--line-strong); padding-top: calc(var(--s) * 16px); }
+.wall .today .dslot.natural { flex: none; }
+.wall .today .dslot ~ .foot { margin-top: 0; }
+.wall .dslot .due { border-top: 0; padding-top: 0; }
+/* Module rows stay one line: a long to-do ends in an ellipsis, never wraps the list out of step. */
+.wall .mod .row .tx, .wall .mod .sub .tx { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wall .mh { display: flex; align-items: center; gap: 10px; }
 .wall .mh b { font-family: var(--font-display); font-size: calc(var(--s) * var(--t-title)); font-weight: 600; margin-right: auto; }
 .wall .mh span { font-size: 15px; color: var(--muted); }
@@ -266,11 +278,11 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .cday.free { gap: 0; padding-bottom: 16px; }
 .wall .cday .dh em { font-style: normal; font-size: 15px; color: var(--faint); margin-left: auto; }
 .wall .cday .more { padding-left: 66px; font-size: 15px; font-weight: 600; color: var(--accent); }
-.wall .panel .mrow { display: grid; grid-template-columns: 46px 1fr; column-gap: 12px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--line); width: 100%; text-align: left; }
-.wall .panel .mrow:last-child { border-bottom: 0; }
-.wall .panel .mrow .d { font-size: 15px; font-weight: 600; color: var(--muted); text-align: right; }
-.wall .panel .mrow .n { font-family: var(--font-display); font-size: calc(var(--s) * 20px); font-weight: 500; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.wall .panel .mrow .n.none { font-family: var(--font-sans); font-size: 16px; color: var(--faint); }
+.wall :is(.panel, .dslot) .mrow { display: grid; grid-template-columns: 46px 1fr; column-gap: 12px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--line); width: 100%; text-align: left; }
+.wall :is(.panel, .dslot) .mrow:last-child { border-bottom: 0; }
+.wall :is(.panel, .dslot) .mrow .d { font-size: 15px; font-weight: 600; color: var(--muted); text-align: right; }
+.wall :is(.panel, .dslot) .mrow .n { font-family: var(--font-display); font-size: calc(var(--s) * 20px); font-weight: 500; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wall :is(.panel, .dslot) .mrow .n.none { font-family: var(--font-sans); font-size: 16px; color: var(--faint); }
 .wall .cols2 { display: grid; grid-template-columns: 1fr; gap: 0; }
 .wall .panel .row .in { background: var(--surface); }
 .wall .row { position: relative; min-height: calc(var(--s) * 56px); border-bottom: 1px solid var(--line); width: 100%; overflow: hidden; touch-action: pan-y; display: flex; }
@@ -281,8 +293,8 @@ html:has(.wall.dark) body { background: #1b1a17; }
    (box width + the row's 14px gap) so the block reads as a hanging indent. */
 .wall .tblk { border-bottom: 1px solid var(--line); }
 .wall .tblk > .row { border-bottom: 0; }
-.wall .row .stp { font-size: calc(var(--s) * 16px); font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; border: 1.5px solid var(--line-strong); border-radius: 999px; padding: 1px 9px; white-space: nowrap; }
-.wall .row.done .stp { color: var(--faint); border-color: var(--line); }
+.wall .stp { font-size: calc(var(--s) * 16px); font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; border: 1.5px solid var(--line-strong); border-radius: 999px; padding: 1px 9px; white-space: nowrap; }
+.wall .row.done .stp, .wall .ck.done .stp { color: var(--faint); border-color: var(--line); }
 .wall .subs { list-style: none; margin: 0; padding: 0 0 8px calc(var(--k, 1) * 30px + 14px); }
 .wall .sec .subs { --k: 1.12; }
 .wall .sub { display: flex; align-items: center; gap: 12px; width: 100%; min-height: calc(var(--s) * 44px); text-align: left; border-top: 1px dashed var(--line); }
@@ -291,19 +303,23 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .sub .tx { font-size: calc(var(--s) * 20px); flex: 1; min-width: 0; line-height: 1.25; }
 .wall .sec .sub .tx { font-size: calc(var(--s) * 21px); }
 
-/* Arrange mode: the day dims; the panel's real modules get outlines and controls. */
-.wall .wk.arranging .today { opacity: 0.35; pointer-events: none; }
+/* Arrange mode: the day dims except its module slot; the real modules get outlines and controls. */
+.wall .wk.arranging .today { pointer-events: none; }
+.wall .wk.arranging .today > :not(.dslot) { opacity: 0.35; }
+.wall .wk.arranging .today .dslot { pointer-events: auto; }
+.wall .wk.arranging .today .addmod.dslot { flex: none; margin-top: auto; border-top: 2px dashed var(--line-strong); padding-top: 0; }
 .wall .wk.arranging .mod { border: 2px dashed var(--line-strong); border-radius: 14px; padding: 14px 16px; background: color-mix(in srgb, var(--bg) 55%, transparent); }
 .wall .wk.arranging .mod.bottom { border-top-width: 2px; }
 .wall .wk.arranging .mb { opacity: 0.55; pointer-events: none; }
 .wall .abar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; }
 .wall .abar b { font-family: var(--font-display); font-size: 28px; font-weight: 600; }
-.wall .mod .note { font-size: 15px; color: var(--muted); }
+.wall .mod .mnote { font-size: 15px; color: var(--muted); }
 .wall .addmod { flex: none; height: 64px; border: 2px dashed var(--line-strong); border-radius: 14px; color: var(--fg2); font-size: 18px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
 
 /* Module menu */
 .wall .menu { position: absolute; z-index: 21; right: 36px; top: 200px; width: 500px; background: var(--card); border: 1px solid var(--line-strong); border-radius: 16px; box-shadow: var(--shadow); padding: 8px 0; }
 .wall .menu.low { top: 420px; }
+.wall .menu.day { right: auto; left: 48px; top: auto; bottom: 110px; }
 .wall .menu .hd { padding: 10px 24px 6px; font-size: 14px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .wall .menu .mi { display: flex; align-items: center; gap: 18px; padding: 0 24px; height: 78px; width: 100%; font-size: 24px; border-top: 1px solid var(--line); }
 .wall .menu .mi svg { font-size: 28px; color: var(--muted); }

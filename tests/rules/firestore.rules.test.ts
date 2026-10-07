@@ -2598,6 +2598,10 @@ describe('wall display identity', () => {
           lastSeenAt: serverTimestamp(), appVersion: '1.0.2', layout: { modules: ['coming', 'shopping'] },
         })
       );
+      await assertSucceeds(
+        updateDoc(doc(displayDb(), 'households', H1, 'displays', DID), { layout: { modules: ['coming'], day: 'shopping' } })
+      );
+      await assertSucceeds(updateDoc(doc(displayDb(), 'households', H1, 'displays', DID), { layout: { modules: ['coming'], day: null } }));
     });
   });
 
@@ -2695,6 +2699,8 @@ describe('wall display identity', () => {
       await assertFails(updateDoc(doc(db, 'households', H1, 'displays', 'd2'), { layout: { modules: [] } }));
       await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { status: 'active', name: 'Renamed' }));
       await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['a', 'b', 'c'] } }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['coming'], day: 7 } }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['coming'], extra: true } }));
     });
 
     it('a revoked display loses all access immediately', async () => {

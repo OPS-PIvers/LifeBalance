@@ -287,7 +287,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
 
   const rotating = rotateOverride ?? data.settings.rotation.enabled;
   // Compared by content: the providers rebuild the layout object on every snapshot.
-  const savedKey = data.layout.modules.join(',');
+  const savedKey = `${data.layout.modules.join(',')}|${data.layout.day === undefined ? '' : String(data.layout.day)}`;
   // The panel is never empty: a layout saved in the old Today-only mode shows Coming up.
   const shownLayout = withTopModule(rotated && rotated.from === savedKey ? rotated.shown : data.layout);
   const onWeek = view === 'calendar' && calView === 'week';

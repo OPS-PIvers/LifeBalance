@@ -8,7 +8,7 @@ import type { WallLayout, WallModuleKey, WallSettings, WallSoundStyle, WallVoice
  * breaking the wall.
  */
 
-export const WALL_MODULE_KEYS: readonly WallModuleKey[] = ['coming', 'shopping', 'todos', 'meals'];
+export const WALL_MODULE_KEYS: readonly WallModuleKey[] = ['coming', 'shopping', 'todos', 'meals', 'due'];
 export const WALL_ROTATION_INTERVALS: readonly number[] = [30, 60, 120, 300];
 export const WALL_IDLE_RETURN_OPTIONS: readonly number[] = [60, 180, 300, 600];
 export const WALL_VOICE_ENGINES: readonly WallVoiceEngine[] = ['auto', 'device', 'speech', 'audio', 'off'];
@@ -95,7 +95,12 @@ export function normalizeModules(raw: unknown): WallModuleKey[] {
 
 export function normalizeLayout(raw: unknown): WallLayout | undefined {
   if (!isRecord(raw)) return undefined;
-  return { modules: normalizeModules(raw['modules']) };
+  const modules = normalizeModules(raw['modules']);
+  const rawDay = raw['day'];
+  if (rawDay === null) return { modules, day: null };
+  const day = WALL_MODULE_KEYS.find(k => k === rawDay);
+  // An unknown key (a newer wall's module) falls back to the default.
+  return day && !modules.includes(day) ? { modules, day } : { modules };
 }
 
 function isValidTimeZone(zone: string): boolean {

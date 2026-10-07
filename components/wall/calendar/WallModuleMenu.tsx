@@ -1,5 +1,5 @@
 import React from 'react';
-import { CalendarDays, ListChecks, ShoppingCart, UtensilsCrossed } from 'lucide-react';
+import { CalendarCheck, CalendarDays, ListChecks, ShoppingCart, UtensilsCrossed } from 'lucide-react';
 import type { WallModuleKey } from '@/types/schema';
 import { WALL_MODULE_KEYS } from '@/utils/wall/wallSettings';
 import { MODULE_TITLES } from '@/utils/wall/wallModules';
@@ -9,31 +9,42 @@ const ICONS: Record<WallModuleKey, typeof CalendarDays> = {
   shopping: ShoppingCart,
   todos: ListChecks,
   meals: UtensilsCrossed,
+  due: CalendarCheck,
 };
 
-export type ModuleMenuState = { kind: 'switch'; slot: number } | { kind: 'add' };
+/** A panel slot to switch, the panel's bottom slot to fill, or the day column's slot (under today). */
+export type ModuleMenuState = { kind: 'switch'; slot: number } | { kind: 'add' } | { kind: 'day' };
 
 interface WallModuleMenuProps {
   menu: ModuleMenuState;
   modules: readonly WallModuleKey[];
+  /** What the day column shows under today, or null. */
+  day: WallModuleKey | null;
   onPick: (key: WallModuleKey) => void;
   onClose: () => void;
 }
 
-/** Switch / Add module menu for Arrange mode (the Week panel). */
-const WallModuleMenu: React.FC<WallModuleMenuProps> = ({ menu, modules, onPick, onClose }) => {
-  const title =
-    menu.kind === 'add' ? 'Add a bottom module' : modules.length === 2 ? (menu.slot === 0 ? 'Top shows' : 'Bottom shows') : 'Panel shows';
-  const low = menu.kind === 'add' || (modules.length === 2 && menu.slot === 1);
+function menuTitle(menu: ModuleMenuState, modules: readonly WallModuleKey[], day: WallModuleKey | null): string {
+  if (menu.kind === 'day') return day ? 'Under today shows' : 'Add a module under today';
+  if (menu.kind === 'add') return 'Add a bottom module';
+  return modules.length === 2 ? (menu.slot === 0 ? 'Top shows' : 'Bottom shows') : 'Panel shows';
+}
+
+/** Switch / Add module menu for Arrange mode (the Week panel and the slot under today). */
+const WallModuleMenu: React.FC<WallModuleMenuProps> = ({ menu, modules, day, onPick, onClose }) => {
+  const title = menuTitle(menu, modules, day);
+  const current = menu.kind === 'day' ? day : menu.kind === 'switch' ? modules[menu.slot] : undefined;
+  const shown = day ? [...modules, day] : modules;
+  const place = menu.kind === 'day' ? 'menu day' : menu.kind === 'add' || (modules.length === 2 && menu.slot === 1) ? 'menu low' : 'menu';
   return (
     <>
       <div className="scrim" onClick={onClose} aria-hidden="true" />
-      <div className={low ? 'menu low' : 'menu'} role="dialog" aria-label={title}>
+      <div className={place} role="dialog" aria-label={title}>
         <div className="hd">{title}</div>
         {WALL_MODULE_KEYS.map(key => {
           const Icon = ICONS[key];
-          const on = menu.kind === 'switch' && modules[menu.slot] === key;
-          const elsewhere = modules.includes(key) && !on;
+          const on = current === key;
+          const elsewhere = shown.includes(key) && !on;
           return (
             <button
               key={key}
