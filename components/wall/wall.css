@@ -226,8 +226,8 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .today .dslot.natural { flex: none; }
 .wall .today .dslot ~ .foot { margin-top: 0; }
 .wall .dslot .due { border-top: 0; padding-top: 0; }
-/* Due today in its natural place: the swipe wrapper sizes like the bare Due today section it holds. */
-.wall .today .dnat { flex: 0 1 auto; min-height: 0; }
+/* Due today in its natural place: as tall as its items, like the Arrange-mode slot (.dslot.natural). */
+.wall .today .dnat { flex: none; }
 /* Module rows stay one line: a long to-do ends in an ellipsis, never wraps the list out of step. */
 .wall .mod .row .tx, .wall .mod .sub .tx { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wall .mh { display: flex; align-items: center; gap: 10px; min-height: 48px; }
