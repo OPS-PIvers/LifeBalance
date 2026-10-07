@@ -188,6 +188,8 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .due .dh b { font-family: var(--font-display); font-size: calc(var(--k) * var(--t-title)); font-weight: 600; }
 .wall .due .dh span { font-size: var(--t-meta); color: var(--muted); }
 .wall .due .dg { display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px; }
+/* A lone to-do takes the whole row: half a column wrapped short titles for no reason. */
+.wall .due .dg > .ck:only-child { grid-column: 1 / -1; }
 .wall .ck { display: flex; align-items: center; gap: 14px; min-height: calc(var(--k, 1) * 58px); width: 100%; font-size: calc(var(--k, 1) * 22px); text-align: left; }
 .wall .due .ck { border-bottom: 1px solid var(--line); }
 .wall .ck .tx { flex: 1; min-width: 0; line-height: 1.2; }
