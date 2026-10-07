@@ -18,6 +18,10 @@ interface WallGearMenuProps {
   onToggleRotation: () => void;
   /** Opens Arrange mode: the Week panel's modules become editable in place. */
   onArrange: () => void;
+  /** A paired display in a Safari tab: whether the wall is full screen now. */
+  fullscreen?: boolean;
+  /** Absent where full screen isn't offered (a Home Screen app, a member preview). */
+  onToggleFullscreen?: () => void;
 }
 
 const MAX_TRIES = 5;
@@ -42,6 +46,8 @@ const WallGearMenu: React.FC<WallGearMenuProps> = ({
   rotationIntervalSec,
   onToggleRotation,
   onArrange,
+  fullscreen = false,
+  onToggleFullscreen,
 }) => {
   const [unlocked, setUnlocked] = useState(!pinHash);
   const [digits, setDigits] = useState('');
@@ -129,6 +135,12 @@ const WallGearMenu: React.FC<WallGearMenuProps> = ({
             <span>Arrange the panel</span>
             <span>Choose what the right side shows</span>
           </button>
+          {onToggleFullscreen && (
+            <button type="button" onClick={onToggleFullscreen}>
+              <span>{fullscreen ? 'Exit full screen' : 'Full screen'}</span>
+              <span>{fullscreen ? 'Shows Safari’s address bar again' : 'Hides Safari’s address bar until a reload'}</span>
+            </button>
+          )}
           <button type="button" onClick={onReload}>
             <span>Reload display</span>
             <span>Fixes a stuck screen</span>
