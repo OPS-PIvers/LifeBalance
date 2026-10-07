@@ -16,7 +16,7 @@ interface WallMastheadProps {
   people: WallPeople;
 }
 
-/** The Week screen's masthead: the clock with the day and date under it, the weather at the right on the date's line, today's untimed line. */
+/** The Week screen's masthead: the clock with the weather beside it, the day and date on their own line under both, today's untimed line. */
 const WallMasthead: React.FC<WallMastheadProps> = ({ now, timeZone, weather, onWeather, untimed, people }) => {
   const p = zonedParts(now, timeZone);
   return (
