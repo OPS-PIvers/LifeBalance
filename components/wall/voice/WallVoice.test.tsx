@@ -211,6 +211,19 @@ describe('wall voice', () => {
     expect(screen.getByText('Undone')).toBeInTheDocument();
   });
 
+  it('logs a command only Gemini could read, with what it did, so the grammar can learn it', async () => {
+    const { say, onMiss } = setup();
+    await say({ kind: 'text', transcript: 'grab what we need for breakfast' });
+    expect(onMiss).toHaveBeenCalledWith({
+      kind: 'ai',
+      heard: 'grab what we need for breakfast',
+      free: 'grab what we need for breakfast',
+      alternative: '',
+      engine: 'speech',
+      did: 'Added to Shopping: Milk, Eggs',
+    });
+  });
+
   it('reads a plain add itself, with no AI call', async () => {
     const { say, parse, data } = setup();
     await say({ kind: 'text', transcript: 'Add milk and eggs to the shopping list' });

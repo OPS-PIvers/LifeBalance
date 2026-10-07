@@ -30,6 +30,7 @@ curl -sS -H "Authorization: Bearer $LIFEBALANCE_VOICE_KEY" \
   - `undo`: the user said or tapped undo within 10 s. `did` is what the wall did, and `heard` is what it heard. Usually the grammar matched the wrong thing, or Vosk misheard.
   - `cancel`: the user said "cancel" or "never mind" as the command. Usually noise; sometimes the wake word fired by accident.
   - `no-speech`: the wake word fired with nothing after it. Count these only; they're about the mic and wake word, not the grammar.
+  - `ai`: neither grammar read it, but Gemini did, and the wall acted on it. `did` is what it did ("Added to Shopping: Milk, Eggs"), so it's a labelled example: teach the local grammar to read `heard` to that same result, so the next one costs no AI call. If an `undo` with the same `heard` follows it, Gemini got it wrong: treat it like an `unparsed` miss instead. Usually comes from the Safari engine, whose transcripts are accurate, so `heard` is what was really said.
 
 **If there are zero misses, stop.** No branch, no PR, no message beyond one line.
 
