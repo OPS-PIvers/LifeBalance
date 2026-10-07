@@ -61,4 +61,15 @@ describe('WallGearMenu', () => {
     fireEvent.click(screen.getByRole('button', { name: /Arrange the panel/ }));
     expect(props.onArrange).toHaveBeenCalled();
   });
+
+  it('offers full screen only when the wall passes a toggle', () => {
+    const onToggleFullscreen = vi.fn();
+    const { rerender } = render(<WallGearMenu {...props} />);
+    expect(screen.queryByRole('button', { name: /Full screen/ })).not.toBeInTheDocument();
+    rerender(<WallGearMenu {...props} onToggleFullscreen={onToggleFullscreen} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Full screen/ }));
+    expect(onToggleFullscreen).toHaveBeenCalled();
+    rerender(<WallGearMenu {...props} fullscreen onToggleFullscreen={onToggleFullscreen} />);
+    expect(screen.getByRole('button', { name: /Exit full screen/ })).toBeInTheDocument();
+  });
 });

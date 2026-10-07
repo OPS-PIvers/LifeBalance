@@ -182,9 +182,9 @@ Say the wake word, wait for the short chime, then the command. Or tap the
     **doesn't work in a Home Screen app** (it never hears anything; the wall
     says so after a few seconds), so open the wall in a **Safari tab**
     instead: pair it from Safari (Safari keeps its own sign-in), keep that tab
-    open, and let Guided Access hold it there. The first touch makes the page
-    full screen (no address bar); a reload ends that, and the next touch
-    brings it back. Set iPad Settings → Safari → Microphone → **Allow** so it
+    open, and let Guided Access hold it there. To hide the address bar, open
+    the display menu (sliders icon) → **Full screen**; a reload ends it, and
+    Safari's X (top left) or the same menu leaves it. Set iPad Settings → Safari → Microphone → **Allow** so it
     never asks again. The **Hands-free** wake word still runs on the iPad:
     after "Hey Jarvis" it lets go of the mic, Safari hears the command, then
     it listens again — so pause for the chime before speaking. Commands the

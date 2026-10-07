@@ -15,7 +15,7 @@ import { WEATHER_REFRESH_MS, WEATHER_STALE_MS, forecastUrl, parseForecast, type 
 import type { WallSettings } from '@/types/schema';
 
 /** Reported in displays/{did}.appVersion; bump when the wall's behavior changes. */
-export const APP_VERSION = 'wall-5';
+export const APP_VERSION = 'wall-6';
 const RELOADED_FOR_KEY = 'LB_WALL_RELOADED_FOR';
 const WEATHER_KEY = 'LB_WALL_WEATHER';
 const HIDDEN_RESYNC_MS = 5 * 60 * 1000;
