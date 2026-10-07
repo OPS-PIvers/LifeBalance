@@ -3,8 +3,7 @@ import { weekdayName } from '@/utils/wall/wallCalendar';
 import { groupTodos } from '@/utils/wall/wallLists';
 import type { WallPeople } from '@/utils/wall/wallPeople';
 import { useWallData } from '@/components/wall/data/wallData';
-import WallSwipeRow from './WallSwipeRow';
-import { useWallListActions } from './useWallListActions';
+import WallTodoRow from './WallTodoRow';
 
 interface WallTodosProps {
   today: string;
@@ -18,7 +17,6 @@ interface WallTodosProps {
  */
 const WallTodos: React.FC<WallTodosProps> = ({ today, timeZone, people }) => {
   const { todos } = useWallData();
-  const act = useWallListActions();
   const [person, setPerson] = useState('all');
   const groups = useMemo(() => groupTodos(todos, today, timeZone, person), [todos, today, timeZone, person]);
   const chips = [{ key: 'all', name: 'Everyone' }, { key: 'family', name: 'Family' }, ...people.members.map(m => ({ key: m.uid, name: m.name }))];
@@ -45,12 +43,10 @@ const WallTodos: React.FC<WallTodosProps> = ({ today, timeZone, people }) => {
                   <span>{g.open} open</span>
                 </h3>
                 {g.items.map(t => (
-                  <WallSwipeRow
+                  <WallTodoRow
                     key={t.id}
-                    label={t.text}
-                    done={t.isCompleted}
-                    onToggle={() => act.toggleTodo(t)}
-                    onDelete={() => act.deleteTodo(t)}
+                    todo={t}
+                    people={people}
                     meta={
                       <span className="nm">
                         <span className="dot" style={{ background: people.color(t.assignedTo) }} /> {people.name(t.assignedTo)}

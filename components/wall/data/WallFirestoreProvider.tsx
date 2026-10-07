@@ -15,8 +15,10 @@ import {
   makeAddToDo,
   makeCompleteToDo,
   makeTodoCrudMutations,
+  makeToggleTodoSubtask,
   makeUncompleteToDo,
   type MutationActor,
+  type TodoCompletionOptions,
 } from '@/contexts/household/mutations/todoMutations';
 import {
   householdMemberConverter,
@@ -225,9 +227,14 @@ const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked
   const completeToDo = useCallback(async (id: string) => {
     await makeCompleteToDo({ db, householdId, membersRef: { current: members }, user: actor }).completeToDo(id);
   }, [householdId, actor, members]);
-  const uncompleteToDo = useCallback(async (id: string) => {
-    await makeUncompleteToDo({ db, householdId, membersRef: { current: members }, user: actor }).uncompleteToDo(id);
+  const uncompleteToDo = useCallback(async (id: string, options?: TodoCompletionOptions) => {
+    await makeUncompleteToDo({ db, householdId, membersRef: { current: members }, user: actor }).uncompleteToDo(id, options);
   }, [householdId, actor, members]);
+  const toggleTodoSubtask = useCallback(
+    (todoId: string, subtaskId: string) =>
+      makeToggleTodoSubtask({ db, householdId, membersRef: { current: members }, user: actor }).toggleTodoSubtask(todoId, subtaskId),
+    [householdId, actor, members]
+  );
 
   const actions = useMemo<WallDataActions>(() => {
     const shopping = makeShoppingListMutations({ db, householdId });
@@ -243,6 +250,7 @@ const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked
       addToDo,
       completeToDo,
       uncompleteToDo,
+      toggleTodoSubtask,
       deleteToDo,
       setLayout: async (layout: WallLayout) => {
         if (!householdId || !displayId) return;
@@ -260,7 +268,7 @@ const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked
         });
       },
     };
-  }, [householdId, displayId, actor, shoppingList, groceryCatalog, completeToDo, uncompleteToDo]);
+  }, [householdId, displayId, actor, shoppingList, groceryCatalog, completeToDo, uncompleteToDo, toggleTodoSubtask]);
 
   const value = useMemo<WallData | null>(() => {
     if (!householdId) return null;

@@ -3,8 +3,7 @@ import { weekdayName } from '@/utils/wall/wallCalendar';
 import { groupTodos } from '@/utils/wall/wallLists';
 import type { WallPeople } from '@/utils/wall/wallPeople';
 import { useWallData } from '@/components/wall/data/wallData';
-import WallSwipeRow from '@/components/wall/lists/WallSwipeRow';
-import { useWallListActions } from '@/components/wall/lists/useWallListActions';
+import WallTodoRow from '@/components/wall/lists/WallTodoRow';
 
 interface TodosModuleProps {
   today: string;
@@ -15,7 +14,6 @@ interface TodosModuleProps {
 /** The panel's To-dos module: overdue, today and this week in one list. */
 const TodosModule: React.FC<TodosModuleProps> = ({ today, timeZone, people }) => {
   const { todos } = useWallData();
-  const act = useWallListActions();
   const items = useMemo(
     () => groupTodos(todos, today, timeZone).flatMap(g => g.items.map(t => ({ t, group: g.key }))),
     [todos, today, timeZone]
@@ -24,12 +22,10 @@ const TodosModule: React.FC<TodosModuleProps> = ({ today, timeZone, people }) =>
   return (
     <>
       {items.map(({ t, group }) => (
-        <WallSwipeRow
+        <WallTodoRow
           key={t.id}
-          label={t.text}
-          done={t.isCompleted}
-          onToggle={() => act.toggleTodo(t)}
-          onDelete={() => act.deleteTodo(t)}
+          todo={t}
+          people={people}
           meta={
             <>
               <span className="nm">

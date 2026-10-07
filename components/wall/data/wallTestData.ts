@@ -41,6 +41,7 @@ export function makeWallData(spy: Spy, overrides: Partial<WallData> = {}): WallD
       addToDo: spy(async () => undefined),
       completeToDo: spy(async () => undefined),
       uncompleteToDo: spy(async () => undefined),
+      toggleTodoSubtask: spy(async (_todoId: string, subtaskId: string) => ({ autoCompleted: false, toggledSubtaskId: subtaskId })),
       deleteToDo: spy(async () => undefined),
       setLayout: spy(async () => undefined),
       syncCalendarsNow: spy(async () => ({ failed: 0 })),

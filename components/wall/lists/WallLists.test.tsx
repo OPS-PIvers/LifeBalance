@@ -153,6 +153,75 @@ describe('WallTodos', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(value.actions.addToDo).toHaveBeenCalledWith({ text: 'Feed the fish', completeByDate: D, isCompleted: false, assignedTo: 'l', points: 5 });
   });
+
+  describe('steps', () => {
+    const withSteps = (done: [boolean, boolean, boolean], extra: Partial<ToDo> = {}) =>
+      [
+        {
+          id: 't4',
+          text: 'Clean the garage',
+          completeByDate: D,
+          isCompleted: false,
+          createdAt: 'x',
+          createdBy: 'p',
+          subtasks: [
+            { id: 'a', text: 'Sweep the floor', isDone: done[0] },
+            { id: 'b', text: 'Recycle boxes', isDone: done[1], assigneeId: 'l' },
+            { id: 'c', text: 'Hang the bikes', isDone: done[2] },
+          ],
+          ...extra,
+        },
+      ] as ToDo[];
+
+    it('lists each step as its own checkable row under the to-do, with n/m progress', () => {
+      setup(<WallTodos today={D} timeZone={TZ} people={people} />, { todos: withSteps([true, false, false]) });
+      expect(screen.getByTitle('1 of 3 steps done')).toHaveTextContent('1/3');
+      const steps = within(screen.getByRole('list', { name: 'Steps for Clean the garage' })).getAllByRole('button');
+      expect(steps.map(b => b.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false']);
+      expect(steps[1]).toHaveTextContent('Recycle boxes');
+      expect(steps[1]).toHaveTextContent('Leo');
+    });
+
+    it('checks a step with Undo flipping it back', async () => {
+      const { value } = setup(<WallTodos today={D} timeZone={TZ} people={people} />, { todos: withSteps([true, false, false]) });
+      fireEvent.click(screen.getByRole('button', { name: /Recycle boxes/ }));
+      expect(value.actions.toggleTodoSubtask).toHaveBeenCalledWith('t4', 'b');
+      expect(screen.getByRole('status')).toHaveTextContent('Checked off Recycle boxes');
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+      });
+      expect(value.actions.toggleTodoSubtask).toHaveBeenCalledTimes(2);
+      expect(value.actions.uncompleteToDo).not.toHaveBeenCalled();
+    });
+
+    it('checking the last step completes the to-do; Undo reopens it and unchecks that step', async () => {
+      const value = makeWallData(vi.fn, { todos: withSteps([true, true, false]) });
+      value.actions.toggleTodoSubtask = vi.fn(async (_id: string, subtaskId: string) => ({ autoCompleted: true, toggledSubtaskId: subtaskId }));
+      render(
+        <WallDataContext.Provider value={value}>
+          <ToastHost>
+            <WallTodos today={D} timeZone={TZ} people={people} />
+          </ToastHost>
+        </WallDataContext.Provider>
+      );
+      fireEvent.click(screen.getByRole('button', { name: /Hang the bikes/ }));
+      expect(screen.getByRole('status')).toHaveTextContent('Completed Clean the garage');
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+      });
+      expect(value.actions.uncompleteToDo).toHaveBeenCalledWith('t4', { subtaskToggle: { subtaskId: 'c', done: false } });
+      expect(value.actions.toggleTodoSubtask).toHaveBeenCalledTimes(1);
+    });
+
+    it('says how many steps are left instead of failing a habit-linked to-do', () => {
+      const { value } = setup(<WallTodos today={D} timeZone={TZ} people={people} />, {
+        todos: withSteps([true, false, false], { linkedHabitId: 'h1' }),
+      });
+      fireEvent.click(screen.getByRole('button', { name: /Clean the garage/ }));
+      expect(value.actions.completeToDo).not.toHaveBeenCalled();
+      expect(screen.getByRole('status')).toHaveTextContent('Check off 2 steps first');
+    });
+  });
 });
 
 describe('WallAddSheet', () => {
