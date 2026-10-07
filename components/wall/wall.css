@@ -176,12 +176,14 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .nxk { font-size: calc(var(--k) * 16px); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--warm); }
 .wall .nxt { font-family: var(--font-display); font-size: calc(var(--k) * var(--t-display)); font-weight: 500; line-height: 1.05; letter-spacing: -0.015em; }
 .wall .nxw { display: flex; align-items: center; gap: 10px; font-size: calc(var(--k) * 21px); color: var(--muted); }
-.wall .nxw .tm { font-family: var(--font-display); font-size: calc(var(--k) * 28px); color: var(--fg); min-width: calc(var(--k) * 84px); margin-right: 4px; }
+.wall .nxw .tm { font-family: var(--font-display); font-size: calc(var(--k) * 28px); color: var(--fg); }
+.wall .nxw .sep { color: var(--faint); }
 .wall .tempty { font-size: calc(var(--k) * 26px); color: var(--muted); }
-.wall .lt { display: grid; gap: calc(var(--k) * 12px); }
-.wall .lt .lr { display: grid; grid-template-columns: calc(var(--k) * 84px) auto 1fr; column-gap: 14px; align-items: center; }
+/* Upcoming events: labelled like Earlier today so Next's own time-and-owner line never reads as a row; the owner trails, as on to-dos. */
+.wall .lt { display: grid; gap: calc(var(--k) * 10px); }
+.wall .lt .ek, .wall .lt .lr { display: grid; grid-template-columns: calc(var(--k) * 84px) minmax(0, 1fr) auto; column-gap: 14px; align-items: center; }
 .wall .lt .tm { font-size: calc(var(--k) * 22px); color: var(--muted); }
-.wall .lt .tt { font-size: calc(var(--k) * 27px); line-height: 1.2; }
+.wall .lt .tt { font-size: calc(var(--k) * 27px); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Finished events: a quiet labelled list, flush with the rest of the column, one event per row. */
 .wall .earl { display: grid; gap: calc(var(--k) * 6px); color: var(--muted); }
 .wall .earl .ek { font-size: calc(var(--k) * 15px); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
