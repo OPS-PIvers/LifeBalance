@@ -108,7 +108,7 @@ describe('WallWeek', () => {
     const range = within(coming).getByRole('group', { name: 'Coming up range' });
     expect(within(range).getByRole('button', { name: 'Week' })).toHaveAttribute('aria-pressed', 'true');
     // Week: every one of the next seven days, a free one said so; nothing past it.
-    expect(within(coming).getAllByRole('button', { name: /^(Tomorrow|Mon|Tue|Wed|Thu|Fri|Sat|Sun)/ })).toHaveLength(7);
+    expect(within(coming).getAllByRole('button', { name: /^(Tomorrow|Mon(?!th)|Tue|Wed|Thu|Fri|Sat|Sun)/ })).toHaveLength(7);
     expect(within(coming).getAllByText('Nothing planned').length).toBeGreaterThan(0);
     expect(within(coming).queryByText('Orchard trip')).not.toBeInTheDocument();
 
