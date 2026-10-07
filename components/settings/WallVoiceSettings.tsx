@@ -18,7 +18,7 @@ interface WallVoiceSettingsProps {
 const ENGINE_NOTES: Record<Exclude<WallVoiceEngine, 'off'>, string> = {
   auto: 'On the iPad itself: free, private, no AI allowance',
   device: 'On the iPad itself: free, private, no AI allowance',
-  speech: 'Safari’s recognizer: hears best. Open the wall in Safari, not from the Home Screen (it goes full screen on the first touch)',
+  speech: 'Safari’s recognizer: hears best. Open the wall in Safari, not from the Home Screen (the wall’s display menu has Full screen)',
   audio: 'Records and sends each command to Gemini (AI allowance)',
 };
 
