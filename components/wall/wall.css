@@ -159,13 +159,15 @@ html:has(.wall.dark) body { background: #1b1a17; }
 
 /* The day column. --k comes from useWallFit: it grows on a quiet day and shrinks on a busy one. */
 .wall .today { --k: calc(var(--s) * var(--fit, 1)); position: relative; padding: 32px 44px 26px 48px; display: flex; flex-direction: column; gap: calc(var(--k) * 22px); min-height: 0; overflow: hidden; }
-.wall .mast { display: grid; gap: 12px; padding-bottom: calc(var(--k) * 18px); border-bottom: 1px solid var(--line); }
-.wall .mast .mtop { display: flex; align-items: flex-end; gap: 22px; }
+.wall .mast { display: grid; gap: calc(var(--k) * 18px); padding-bottom: calc(var(--k) * 18px); border-bottom: 1px solid var(--line); }
+.wall .mast .mtop { display: flex; align-items: flex-end; justify-content: space-between; gap: 22px; }
+/* Day, date and weather sit right-aligned opposite the clock, so the left of the column stays quiet. */
+.wall .mast .mside { display: grid; justify-items: end; gap: 6px; text-align: right; min-width: 0; }
 .wall .mast .clock { font-family: var(--font-display); font-size: var(--t-hero); font-weight: 500; line-height: 0.8; letter-spacing: -0.035em; }
-.wall .mast .dd { display: grid; gap: 2px; padding-bottom: 4px; }
+.wall .mast .dd { display: grid; justify-items: end; gap: 2px; }
 .wall .mast .dd b { font-family: var(--font-display); font-size: 40px; font-weight: 600; line-height: 1; }
 .wall .mast .dd span { font-size: 22px; color: var(--muted); }
-.wall .mast .wxl { justify-self: start; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 4px 10px; margin-left: -10px; border-radius: 10px; font-size: 21px; color: var(--fg2); }
+.wall .mast .wxl { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px 12px; padding: 4px 10px; margin-right: -10px; border-radius: 10px; font-size: 21px; color: var(--fg2); }
 .wall .mast .wxl svg { font-size: 32px; color: var(--warm); }
 .wall .mast .wxl svg.r { color: var(--rain); }
 .wall .mast .wxl b { font-family: var(--font-display); font-size: 34px; font-weight: 500; color: var(--fg); }
