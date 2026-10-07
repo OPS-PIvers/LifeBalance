@@ -8,7 +8,7 @@ import { zonedDateString, zonedParts } from '@/utils/wall/wallTime';
 import { useWallData } from './data/wallData';
 import { APP_VERSION, useWallRuntime } from './runtime/useWallRuntime';
 import { useWallViewport } from './runtime/useWallViewport';
-import { useWallFullscreen } from './runtime/useWallFullscreen';
+import { canFullscreen, isFullscreen, toggleFullscreen } from './runtime/wallFullscreen';
 import { WallToastContext, useWallToastController, type WallToaster } from './wallToast';
 import WallDay from './calendar/WallDay';
 import WallMonth from './calendar/WallMonth';
@@ -252,7 +252,6 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
 
   // Hands-free only on a paired display (never a member's phone preview), never
   // at night, and not until a touch has unlocked audio (iPadOS needs one).
-  useWallFullscreen(data.isDisplay);
   const wakeWanted = data.settings.wakeWord && data.isDisplay && !runtime.nightShowing && soundState !== 'locked';
   const voice = useWallVoice({
     setting: data.settings.voice,
@@ -514,6 +513,15 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
                 setRotation(!rotating);
                 setOverlay('none');
               }}
+              {...(data.isDisplay && canFullscreen()
+                ? {
+                    fullscreen: isFullscreen(),
+                    onToggleFullscreen: () => {
+                      toggleFullscreen(rootRef.current);
+                      setOverlay('none');
+                    },
+                  }
+                : {})}
               onArrange={() => {
                 goCalendar('week');
                 setArranging(true);
