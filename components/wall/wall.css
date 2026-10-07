@@ -160,12 +160,12 @@ html:has(.wall.dark) body { background: #1b1a17; }
 /* The day column. --k comes from useWallFit: it grows on a quiet day and shrinks on a busy one. */
 .wall .today { --k: calc(var(--s) * var(--fit, 1)); position: relative; padding: 32px 44px 26px 48px; display: flex; flex-direction: column; gap: calc(var(--k) * 22px); min-height: 0; overflow: hidden; }
 .wall .mast { display: grid; gap: calc(var(--k) * 18px); padding-bottom: calc(var(--k) * 18px); border-bottom: 1px solid var(--line); }
-/* Clock and weather share the top row (weather level with the clock's foot); the day and date get a row of their own, so nothing competes with them. */
+/* Clock and weather share the top row (the weather centred on the clock, no empty band above it); the day and date get a row of their own, so nothing competes with them. */
 .wall .mast .mtop { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'clock wx' 'date date'; column-gap: 22px; row-gap: calc(var(--k) * 16px); align-items: end; }
 .wall .mast .mtime { display: contents; }
 .wall .mast .clock { grid-area: clock; }
 .wall .mast .dd { grid-area: date; }
-.wall .mast .wxl { grid-area: wx; }
+.wall .mast .wxl { grid-area: wx; align-self: center; }
 .wall .mast .clock { padding-top: 0.12em; font-family: var(--font-display); font-size: var(--t-hero); font-weight: 500; line-height: 0.8; letter-spacing: -0.035em; }
 .wall .mast .dd { display: flex; align-items: baseline; gap: 12px; white-space: nowrap; line-height: 1; }
 .wall .mast .dd b { font-family: var(--font-display); font-size: 40px; font-weight: 600; line-height: 1; }
