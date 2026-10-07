@@ -335,6 +335,15 @@ Settled through a prototyped review (`docs/plans/wall-redesign-review.html`, eve
 - **Night is the masthead at night**: the dim Besley clock beside the day, tomorrow's first two events with dim dots, tomorrow's weather and all-day line (`tomorrowPreview`; bills left out). It keeps the old near-black values.
 - **One five-step type scale** (`--t-hero`, `--t-display`, `--t-title`, `--t-item`, `--t-meta` on `.wall`). New wall CSS uses them, not one-off sizes.
 
+## Wall panel lists turn like a wheel
+
+A Shopping or To-dos list taller than its panel module scrolls itself (`WallAutoScroll`, motion in `utils/wall/wallAutoScroll.ts`), so nobody has to walk up and swipe to see the end of the list. It is the one ambient motion on the wall besides the voice indicators; reduced motion turns it off and leaves a hand-scrolled list. Choices that look like they could be "simplified":
+
+- **A loop, not a bounce.** The track holds the list, a "Top of list" seam, then the list again (`aria-hidden`, so assistive tech reads it once). One lap later the copy sits exactly where the list started, so the jump back to offset 0 is invisible. Scrolling back up to the top reads as rewinding and doubles the motion.
+- **A transform, not `scrollTop`.** At 24 px/s a frame moves about 0.4 px; `scrollTop` snaps to device pixels and stutters at that speed. The cost is that the list can't be scrolled natively while it turns, so a vertical drag spins it by hand instead (and the click it ends in is swallowed, so a spin never checks off a row). Horizontal swipe-to-delete is untouched.
+- **Rests are at the top only.** It waits 4.5 s with the first item on top, glides one whole lap, and settles there again. After a touch it holds for 8 s, then finishes the lap it's in.
+- **The top edge fades only away from rest**, so the resting first item is never dimmed; the bottom edge always fades, which is what tells you there is more.
+
 ## Wall updates: ask in the day, apply at night
 
 A wall shows **An update is available** (Update / Later) when a new build is deployed, matching the phone's prompt, but it never reloads on its own in the day. Two things look like they could be simplified and can't:

@@ -378,7 +378,7 @@ The wall is a separate surface with its own rules: a 1366×1024 iPad on the wall
 - **No editing chrome at rest:** module controls appear only in Arrange mode.
 - **Member colors:** use `memberColorFor(..., { scheme: 'dark' })` in dark. `DARK_MEMBER_COLORS` must cover every palette color, and a test enforces it.
 - **One bottom-center slot** holds either the dark Undo toast or the voice banner, never both. Every write gets an Undo for 10 s.
-- **Motion:** only the voice pulse, spinner and level bars animate, and `prefers-reduced-motion` turns them off.
+- **Motion:** only the voice pulse, spinner, level bars and the panel's list wheel animate, and `prefers-reduced-motion` turns them off. The wheel (`WallAutoScroll`, Shopping and To-dos in the panel) turns only a list taller than its module: rest 4.5 s with the first item at the top, glide up at 24 px/s with soft starts and stops, run on past a quiet "Top of list" seam into a copy, settle with the first item back on top.
 - **Phone chrome is off on the wall:** no phone toasts, no offline banner, no drawers. Wall overlays are the add sheet (top-anchored, above the iPad keyboard), the module menu, the recipe panel and the gear menu.
 
 ---
