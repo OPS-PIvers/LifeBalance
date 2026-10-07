@@ -128,8 +128,9 @@ test.describe('Wall display shell (Test Mode)', () => {
   test('shows the week, switches a module, and opens a day from the month', async ({ page }) => {
     await openWall(page, '15:15:00');
     const today = page.getByRole('region', { name: 'Today' });
-    // Haircut is over by 3:15, so it folds into the "Earlier" line; dinner is next.
-    await expect(today.getByText(/Earlier: .*Haircut/)).toBeVisible();
+    // Haircut is over by 3:15, so it moves under "Earlier today"; dinner is next.
+    await expect(today.getByText('Earlier today')).toBeVisible();
+    await expect(today.getByText('Haircut')).toBeVisible();
     await expect(today.getByText('Dinner at Grandma’s').first()).toBeVisible();
     const coming = page.getByRole('region', { name: 'Coming up' });
     await expect(coming.getByText('Dentist')).toBeVisible();
