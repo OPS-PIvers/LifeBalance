@@ -91,9 +91,11 @@ async function fakeSpeech(page: Page, phrases: string[]) {
 test.describe('Wall display shell (Test Mode)', () => {
   test('boots with the clock, weather and rail', async ({ page }) => {
     await openWall(page, '15:15:00');
-    await expect(page.getByRole('banner').getByText('3:15')).toBeVisible();
-    await expect(page.getByRole('banner').getByText('Saturday')).toBeVisible();
-    await expect(page.getByRole('banner').getByText('October 3')).toBeVisible();
+    // The Week screen's masthead sits at the top of the day column.
+    const today = page.getByRole('region', { name: 'Today' });
+    await expect(today.getByText('3:15', { exact: true })).toBeVisible();
+    await expect(today.getByText('Saturday', { exact: true })).toBeVisible();
+    await expect(today.getByText('October 3', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Five-day forecast' })).toContainText('54°');
     await expect(page.getByText('Rain likely 6–8 pm')).toBeVisible();
     const rail = page.getByRole('navigation', { name: 'Views' });
@@ -126,16 +128,22 @@ test.describe('Wall display shell (Test Mode)', () => {
   test('shows the week, switches a module, and opens a day from the month', async ({ page }) => {
     await openWall(page, '15:15:00');
     const today = page.getByRole('region', { name: 'Today' });
-    await expect(today.getByText('Haircut')).toBeVisible();
-    await expect(today.getByText('Dinner at Grandma’s')).toBeVisible();
+    // Haircut is over by 3:15, so it folds into the "Earlier" line; dinner is next.
+    await expect(today.getByText(/Earlier: .*Haircut/)).toBeVisible();
+    await expect(today.getByText('Dinner at Grandma’s').first()).toBeVisible();
     const coming = page.getByRole('region', { name: 'Coming up' });
     await expect(coming.getByText('Dentist')).toBeVisible();
     await expect(coming.getByText('Water bill')).toBeVisible();
 
+    // Module controls live in Arrange mode, opened from the display menu.
+    await expect(page.getByRole('button', { name: /Switch/ })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Display menu' }).click();
+    await page.getByRole('button', { name: /Arrange the panel/ }).click();
     await page.getByRole('button', { name: /Switch/ }).click();
     await page.getByRole('dialog', { name: 'Panel shows' }).getByRole('button', { name: /To-dos/ }).click();
     await expect(page.getByRole('region', { name: 'To-dos' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Coming up' })).toBeHidden();
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
 
     await page.getByRole('group', { name: 'Calendar view' }).getByRole('button', { name: 'Month' }).click();
     await page.getByRole('button', { name: 'Sunday, October 4' }).click();
@@ -217,7 +225,7 @@ test.describe('Wall display shell (Test Mode)', () => {
   test('a starting-soon alert says when to leave', async ({ page }) => {
     // Fixture: Piano lesson at 4:30 on an alert calendar, a 20-minute drive away.
     await openWall(page, '15:59:30');
-    await expect(page.getByRole('banner').getByText('3:59')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Today' }).getByText('3:59', { exact: true })).toBeVisible();
     await page.clock.fastForward('00:45');
     const card = page.getByRole('alertdialog');
     await expect(card).toContainText('Leave in 10 min');

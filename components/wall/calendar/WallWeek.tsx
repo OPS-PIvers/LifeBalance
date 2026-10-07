@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { ChevronsUpDown, Plus, X } from 'lucide-react';
 import type { WallLayout, WallModuleKey } from '@/types/schema';
-import { MODULE_TITLES, addModule, removeModule, suppressDuplicates, switchModule } from '@/utils/wall/wallModules';
+import { MODULE_TITLES, addModule, removeModule, suppressDuplicates, switchModule, withTopModule } from '@/utils/wall/wallModules';
 import type { WallPeople } from '@/utils/wall/wallPeople';
+import type { WallWeather } from '@/utils/wall/wallWeather';
 import WallToday from './WallToday';
-import { useWallPortrait } from '@/components/wall/useWallFit';
 import WallModuleMenu, { type ModuleMenuState } from './WallModuleMenu';
+import WallViewPicker, { type CalendarView } from './WallViewPicker';
 import ComingUpModule from './modules/ComingUpModule';
 import MealsModule from './modules/MealsModule';
 import ShoppingModule from './modules/ShoppingModule';
@@ -16,30 +17,49 @@ interface WallWeekProps {
   now: Date;
   timeZone: string;
   people: WallPeople;
+  weather: WallWeather | null;
+  onWeather: () => void;
   /** What the panel shows right now (the saved layout, or a rotation step). */
   layout: WallLayout;
   onLayout: (layout: WallLayout) => void;
-  onSeeMonth: () => void;
+  onView: (view: CalendarView) => void;
+  onOpenDay: (date: string) => void;
   onOpenMeal?: (date: string) => void;
+  /** Arrange mode: the panel's controls show, the day column dims. */
+  arranging?: boolean;
+  onArrangeDone?: () => void;
 }
 
 /**
- * The resting screen (plan §3 "Week"): Today on the left, up to two stacked
- * modules on the right. Two modules fit to content, the top capped at 60%.
- * In portrait, Today sits on top and the modules share the bottom side by side.
+ * The resting screen (docs/DECISIONS.md "Wall redesign"): the day column,
+ * then the panel. The panel has the view picker on top, a top module, and
+ * an optional bottom module a quarter of its height. It shows no editing
+ * controls except in Arrange mode. Portrait keeps the same structure, narrower.
  */
-const WallWeek: React.FC<WallWeekProps> = ({ today, now, timeZone, people, layout, onLayout, onSeeMonth, onOpenMeal }) => {
+const WallWeek: React.FC<WallWeekProps> = ({
+  today,
+  now,
+  timeZone,
+  people,
+  weather,
+  onWeather,
+  layout,
+  onLayout,
+  onView,
+  onOpenDay,
+  onOpenMeal,
+  arranging = false,
+  onArrangeDone,
+}) => {
   const [menu, setMenu] = useState<ModuleMenuState | null>(null);
-  const { modules } = layout;
-  const { showDueToday, showDinner } = useMemo(() => suppressDuplicates(modules), [modules]);
-  const solo = modules.length === 0;
-  // Portrait stacks Today above the modules (wall.css), sized by its content.
-  const portrait = useWallPortrait();
+  const shown = useMemo(() => withTopModule(layout), [layout]);
+  const { modules } = shown;
+  const { showDueToday } = useMemo(() => suppressDuplicates(modules), [modules]);
 
   const body = (key: WallModuleKey) => {
     switch (key) {
       case 'coming':
-        return <ComingUpModule today={today} timeZone={timeZone} people={people} onSeeMonth={onSeeMonth} />;
+        return <ComingUpModule today={today} timeZone={timeZone} people={people} onOpenDay={onOpenDay} />;
       case 'shopping':
         return <ShoppingModule />;
       case 'todos':
@@ -51,48 +71,64 @@ const WallWeek: React.FC<WallWeekProps> = ({ today, now, timeZone, people, layou
 
   const pick = (key: WallModuleKey) => {
     if (!menu) return;
-    onLayout(menu.kind === 'add' ? addModule(layout, key) : switchModule(layout, menu.slot, key));
+    onLayout(menu.kind === 'add' ? addModule(shown, key) : switchModule(shown, menu.slot, key));
     setMenu(null);
   };
 
   return (
-    <div className={solo ? 'wk solo' : 'wk'}>
+    <div className={arranging ? 'wk arranging' : 'wk'}>
       <WallToday
         today={today}
         now={now}
         timeZone={timeZone}
         people={people}
+        weather={weather}
+        onWeather={onWeather}
         showDueToday={showDueToday}
-        showDinner={showDinner}
-        solo={solo}
-        stacked={portrait && !solo}
-        onAddModule={() => setMenu({ kind: 'add' })}
+        onOpenDay={() => onOpenDay(today)}
       />
-      {!solo && (
-        <div className={`panel n${modules.length}`}>
-          {modules.map((key, slot) => (
-            <section className="mod" key={key} aria-label={MODULE_TITLES[key]}>
-              <div className="mh">
-                <b>{MODULE_TITLES[key]}</b>
-                <button type="button" className="sw" onClick={() => setMenu({ kind: 'switch', slot })}>
-                  Switch
-                  <ChevronsUpDown className="wi" size="1em" aria-hidden="true" />
-                </button>
-                <button type="button" className="x" aria-label={`Remove ${MODULE_TITLES[key]}`} onClick={() => onLayout(removeModule(layout, slot))}>
-                  <X className="wi" size="1em" aria-hidden="true" />
-                </button>
-              </div>
-              <div className="mb">{body(key)}</div>
-              {modules.length === 1 && (
-                <button type="button" className="addmod" onClick={() => setMenu({ kind: 'add' })}>
-                  <Plus className="wi" size="1em" aria-hidden="true" />
-                  Add module
-                </button>
+      <div className={`panel n${modules.length}`}>
+        {arranging ? (
+          <div className="abar">
+            <b>Arrange the panel</b>
+            <button type="button" className="btn pri" onClick={onArrangeDone}>
+              Done
+            </button>
+          </div>
+        ) : (
+          <WallViewPicker view="week" onView={onView} />
+        )}
+        {modules.map((key, slot) => (
+          <section className={slot === 0 ? 'mod top' : 'mod bottom'} key={key} aria-label={MODULE_TITLES[key]}>
+            <div className="mh">
+              <b>{MODULE_TITLES[key]}</b>
+              {arranging ? (
+                <>
+                  <button type="button" className="btn sm" onClick={() => setMenu({ kind: 'switch', slot })}>
+                    Switch
+                    <ChevronsUpDown className="wi" size="1em" aria-hidden="true" />
+                  </button>
+                  {slot > 0 && (
+                    <button type="button" className="btn sm x" aria-label={`Remove ${MODULE_TITLES[key]}`} onClick={() => onLayout(removeModule(shown, slot))}>
+                      <X className="wi" size="1em" aria-hidden="true" />
+                    </button>
+                  )}
+                </>
+              ) : (
+                key === 'meals' && <span>next few nights</span>
               )}
-            </section>
-          ))}
-        </div>
-      )}
+            </div>
+            <div className="mb">{body(key)}</div>
+            {arranging && slot === 0 && <span className="note">The top module can be switched but not removed.</span>}
+          </section>
+        ))}
+        {arranging && modules.length < 2 && (
+          <button type="button" className="addmod" onClick={() => setMenu({ kind: 'add' })}>
+            <Plus className="wi" size="1em" aria-hidden="true" />
+            Add a bottom module
+          </button>
+        )}
+      </div>
       {menu && <WallModuleMenu menu={menu} modules={modules} onPick={pick} onClose={() => setMenu(null)} />}
     </div>
   );

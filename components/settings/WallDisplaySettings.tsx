@@ -57,7 +57,8 @@ async function callable<Req, Res>(name: string, data: Req): Promise<Res> {
 }
 
 /** Settings' two pickers → the stored list ('none' drops a slot). */
-const startingModules = (top: string, bottom: string) => normalizeModules(top === 'none' ? [] : [top, bottom]);
+// The panel always has a top module; 'none' (only the bottom has it) is dropped by normalizeModules.
+const startingModules = (top: string, bottom: string) => normalizeModules([top, bottom]);
 
 const errorText = (e: unknown) => (e instanceof Error && e.message ? e.message : 'Something went wrong. Try again.');
 
@@ -192,7 +193,7 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
     }
   };
 
-  const topModule = settings.defaultModules[0] ?? 'none';
+  const topModule = settings.defaultModules[0] ?? 'coming';
   const bottomModule = settings.defaultModules[1] ?? 'none';
 
   const pendingLeft = pending ? countdownText(pending.expiresAt, now) : null;
@@ -284,27 +285,24 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
                 value={topModule}
                 onChange={e => void save({ defaultModules: startingModules(e.target.value, bottomModule) })}
               >
-                <option value="none">Nothing (Today only)</option>
                 {WALL_MODULE_KEYS.map(key => (
                   <option key={key} value={key}>
                     {MODULE_TITLES[key]}
                   </option>
                 ))}
               </Select>
-              {topModule !== 'none' && (
-                <Select
-                  aria-label="Bottom module"
-                  value={bottomModule}
-                  onChange={e => void save({ defaultModules: startingModules(topModule, e.target.value) })}
-                >
-                  <option value="none">Nothing below</option>
-                  {WALL_MODULE_KEYS.filter(key => key !== topModule).map(key => (
-                    <option key={key} value={key}>
-                      {MODULE_TITLES[key]}
-                    </option>
-                  ))}
-                </Select>
-              )}
+              <Select
+                aria-label="Bottom module"
+                value={bottomModule}
+                onChange={e => void save({ defaultModules: startingModules(topModule, e.target.value) })}
+              >
+                <option value="none">Nothing below</option>
+                {WALL_MODULE_KEYS.filter(key => key !== topModule).map(key => (
+                  <option key={key} value={key}>
+                    {MODULE_TITLES[key]}
+                  </option>
+                ))}
+              </Select>
             </div>
           </Row>
           <Row className="flex-wrap">

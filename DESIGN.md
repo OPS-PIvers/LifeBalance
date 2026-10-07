@@ -364,15 +364,18 @@ These are the "generic AI slop" markers the redesign removed:
 
 ## 12. Wall display (`#/wall`)
 
-The wall is a separate surface with its own rules: a 1366×1024 iPad on the wall, read from across the kitchen. **The approved prototype `docs/plans/wall-display-prototype.html` is its source of truth**, and everything above applies only where this section doesn't override it.
+The wall is a separate surface with its own rules: a 1366×1024 iPad on the wall, read from across the kitchen. **The October 2026 redesign review `docs/plans/wall-redesign-review.html` is its source of truth** (the reasons are in docs/DECISIONS.md "Wall redesign"), and everything above applies only where this section doesn't override it.
 
 - **Styles live in `components/wall/wall.css`**, scoped under `.wall` and lazy-loaded with the wall. They're plain CSS, not Tailwind utilities, because the sizes are fixed for one device and come straight from the prototype. Colors come from the app tokens (`--color-brand-*`, `accent-*`, `warm-*`) wherever the prototype matches one.
 - **Theme and size come from `wallSettings`, not the device:** `.wall.dark` and `.wall.large` (`--s: 1.15`, which multiplies body text). Don't make the wall follow `html.dark`. A member previewing `#/wall` on a phone must not have their app theme changed.
 - **Scale:**
+  - one five-step type scale on `.wall`: `--t-hero` (the clock, 132 px; 92 px in portrait), `--t-display` (46 px, the Next title), `--t-title` (28 px, section heads), `--t-item` (22 px, rows), `--t-meta` (16 px). Use them, not one-off sizes;
   - touch targets are at least 56 px;
-  - body text is 22 px or more;
-  - the clock and day headings use Besley;
+  - the clock, day names and section heads use Besley;
   - times use tabular numbers.
+- **Layout:** Week has no top bar: rail, then the day column (masthead, Next, the rest of today, Due today, dinner), then a tinted panel (view picker, a top module, an optional bottom quarter). Other screens get the slim header. Portrait is the same structure, narrower.
+- **Owners:** initial avatars in the day column and Day view; color dots in the panel and Month. Untimed items (all-day events, bills, holidays) go in one quiet line under the day heading, never a row.
+- **No editing chrome at rest:** module controls appear only in Arrange mode.
 - **Member colors:** use `memberColorFor(..., { scheme: 'dark' })` in dark. `DARK_MEMBER_COLORS` must cover every palette color, and a test enforces it.
 - **One bottom-center slot** holds either the dark Undo toast or the voice banner, never both. Every write gets an Undo for 10 s.
 - **Motion:** only the voice pulse, spinner and level bars animate, and `prefers-reduced-motion` turns them off.

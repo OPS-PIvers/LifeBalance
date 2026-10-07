@@ -1,10 +1,10 @@
 /*
  * Wall display styles (docs/plans/wall-display-kiosk.md §4.9). Everything is
  * scoped under .wall and lazy-loaded with the wall, so none of it reaches the
- * phone bundle. Values come from the approved prototype
- * (docs/plans/wall-display-prototype.html); app tokens are used where the
- * prototype matches one. The wall sets its own light/dark palette from
- * wallSettings rather than following the device theme.
+ * phone bundle. The layout follows the October 2026 redesign
+ * (docs/plans/wall-redesign-review.html, decisions in docs/DECISIONS.md
+ * "Wall redesign"); colors come from the app tokens. The wall sets its own
+ * light/dark palette from wallSettings rather than following the device theme.
  */
 .wall {
   --s: 1;
@@ -26,6 +26,12 @@
   --warm-bg: var(--color-warm-50);
   --scrim: rgba(22, 21, 18, 0.28);
   --shadow: 0 18px 48px rgba(22, 21, 18, 0.16);
+  /* One five-step type scale for every screen: hero, display, title, item, meta. */
+  --t-hero: 132px;
+  --t-display: 46px;
+  --t-title: 28px;
+  --t-item: 22px;
+  --t-meta: 16px;
   /*
    * Not `inset: 0`: in an iPadOS 16 Home Screen app with a translucent status
    * bar, a fixed box pinned to bottom stops a status bar's height short of the
@@ -84,130 +90,159 @@ html:has(.wall.dark) body { background: #1b1a17; }
  * Not on the whole wall: this font's tabular set also widens the comma and
  * period, which read as "Monday , October 5" in running text.
  */
-.wall .hero .big, .wall .hero .sub, .wall .blocks, .wall .fc .days, .wall .tev .tm, .wall .nowmark, .wall .grp li .tm,
-.wall .mo .cell .n, .wall .mo .ml .t, .wall .dvg .hrs, .wall .blk .tm, .wall .evs li .tm, .wall .dpw, .wall .night .c,
+.wall .mast .clock, .wall .mast .wxl, .wall .hdr .hclk, .wall .nxw .tm, .wall .lt .tm, .wall .cday .r .tm, .wall .fc .days,
+.wall .mo .cell .n, .wall .mo .ml .t, .wall .dvg .hrs, .wall .blk .tm, .wall .evs li .tm, .wall .dpw, .wall .night .c, .wall .night .t,
 .wall .rail .badge, .wall .mr .d, .wall .mrow .d, .wall .code { font-variant-numeric: tabular-nums; }
 :where(.wall) button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
 .wall button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .wall svg.wi { width: 1em; height: 1em; flex: none; display: inline-block; vertical-align: -0.125em; }
 
-/* Rail */
-.wall .rail { border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 20px 0 16px; gap: 4px; min-height: 0; }
-.wall .rail .nav { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 0; color: var(--muted); font-size: 16px; font-weight: 500; text-align: center; width: 100%; }
-.wall .rail .nav svg { font-size: 34px; }
-.wall .rail .nav[aria-current='page'] { color: var(--fg); }
-.wall .rail .nav[aria-current='page']::before { content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 4px; border-radius: 0 3px 3px 0; background: var(--accent); }
-.wall .rail .badge { position: absolute; top: 8px; left: 58px; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: var(--warm-fill); color: #fff; font-size: 14px; font-weight: 700; display: grid; place-items: center; }
+/* Rail: icons with small labels; the current screen sits on a tinted tile. */
+.wall .rail { border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; padding: 30px 0 22px; gap: 8px; min-height: 0; }
+.wall .rail .nav { position: relative; display: grid; justify-items: center; gap: 4px; width: 84px; padding: 10px 0 8px; border-radius: 12px; color: var(--faint); font-size: 14px; font-weight: 600; text-align: center; }
+.wall .rail .nav svg { font-size: 28px; }
+.wall .rail .nav[aria-current='page'] { background: var(--surface); color: var(--fg); }
+.wall .rail .badge { position: absolute; top: 4px; right: 12px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--warm-fill); color: #fff; font-size: 13px; font-weight: 700; display: grid; place-items: center; }
 .wall.dark .rail .badge { color: #1b1a17; }
 .wall .rail .sp { flex: 1; }
-.wall .rail .off { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--warm); font-size: 14px; font-weight: 600; margin-bottom: 18px; width: 100%; }
-.wall .rail .off svg { font-size: 30px; }
-.wall .rail .mic { margin: 0 auto; width: 76px; height: 76px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
-.wall .rail .mic svg { font-size: 34px; }
+.wall .rail .off { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--warm); font-size: 14px; font-weight: 600; margin-bottom: 14px; width: 100%; }
+.wall .rail .off svg { font-size: 28px; }
+.wall .rail .mic { margin: 0 auto; width: 68px; height: 68px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
+.wall .rail .mic svg { font-size: 30px; }
 .wall .rail .mic.wake { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent); }
 .wall .rail .wake { margin: 6px auto 0; max-width: 96px; font-size: 13px; line-height: 1.2; text-align: center; color: var(--muted); overflow-wrap: anywhere; }
 .wall .rail .mic.live { background: var(--warm-fill); color: #fff; box-shadow: 0 0 0 8px color-mix(in srgb, var(--warm-fill) 22%, transparent); }
-.wall .rail .gear { margin: 14px auto 0; width: 56px; height: 56px; display: grid; place-items: center; color: var(--faint); font-size: 26px; }
+.wall .rail .gear { margin: 10px auto 0; width: 56px; height: 56px; display: grid; place-items: center; color: var(--faint); font-size: 26px; }
 
 .wall .main { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 
-/* Top bar */
-.wall .top { position: relative; display: flex; align-items: center; gap: 22px; padding: 16px 32px 16px 40px; border-bottom: 1px solid var(--line); min-height: 128px; }
-.wall .hero { display: flex; align-items: center; gap: 14px; flex: none; }
-.wall .hero .big { font-family: var(--font-display); font-size: 72px; font-weight: 500; line-height: 0.9; letter-spacing: -0.025em; }
-.wall .hero .sub { display: grid; gap: 2px; font-size: 21px; line-height: 1.15; color: var(--fg2); white-space: nowrap; text-align: left; flex: none; }
-.wall .hero svg { font-size: 46px; color: var(--warm); }
-.wall .top .vr { flex: none; width: 1px; align-self: stretch; background: var(--line); margin: 6px 0; }
-.wall .wxb { display: flex; align-items: center; gap: 22px; border-radius: 12px; padding: 6px 10px; margin-left: -10px; flex: none; }
-.wall .wxb.parts { flex-direction: column; gap: 0; }
-.wall .blocks { display: flex; gap: 16px; }
-.wall .blocks .b { display: grid; justify-items: center; gap: 3px; font-size: 17px; color: var(--muted); }
-.wall .blocks .b b { font-family: var(--font-display); font-size: 30px; font-weight: 500; line-height: 1; color: var(--fg); }
-.wall .blocks svg { font-size: 28px; color: var(--warm); }
-.wall .blocks svg.r { color: var(--rain); }
-.wall .rainnote { display: block; font-size: 18px; font-weight: 600; color: var(--rain); margin-top: 6px; text-align: center; white-space: nowrap; }
-.wall .top .right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
-.wall .seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; border: 1px solid var(--line-strong); }
-.wall .seg button { font-size: 18px; font-weight: 600; padding: 0 18px; height: 50px; border-radius: 7px; color: var(--muted); }
-.wall .seg button[aria-pressed='true'] { background: var(--card); color: var(--fg); box-shadow: 0 0 0 1px var(--line-strong); }
-.wall .seg button:disabled { opacity: 0.45; cursor: default; }
+/* Slim header (every screen but Week): title, then the time, temperature and that screen's actions. */
+.wall .hdr { display: flex; align-items: center; gap: 22px; min-height: 104px; padding: 12px 36px 12px 48px; border-bottom: 1px solid var(--line); }
+.wall .hdr h2 { margin: 0; font-family: var(--font-display); font-size: calc(var(--s) * 40px); font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+.wall .hdr .hmeta { font-size: var(--t-meta); color: var(--muted); white-space: nowrap; }
+.wall .hdr .hclk { margin-left: auto; display: flex; align-items: center; gap: 16px; color: var(--muted); }
+.wall .hdr .hclk > b, .wall .hdr .hwx b { font-family: var(--font-display); font-size: 34px; font-weight: 500; color: var(--fg); }
+.wall .hdr .hwx { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 10px; border-left: 1px solid var(--line-strong); }
+.wall .hdr .hwx svg { font-size: 28px; color: var(--warm); }
+.wall .hdr .hwx svg.r { color: var(--rain); }
+.wall .hdr .right { display: flex; gap: 10px; align-items: center; }
+.wall .hdr .vseg { width: 420px; }
 .wall .ostrip { display: flex; align-items: center; gap: 10px; padding: 9px 40px; background: var(--warm-bg); color: var(--warm); font-size: 17px; font-weight: 600; border-bottom: 1px solid var(--line); }
 .wall .ostrip svg { font-size: 20px; }
 
+/* Day · Week · Month: a full-size segmented control, the current view filled. */
+.wall .vseg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 14px; background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--line-strong); flex: none; }
+.wall .vseg button { height: 52px; border-radius: 10px; font-size: 19px; font-weight: 600; color: var(--fg2); text-align: center; }
+.wall .vseg button[aria-pressed='true'] { background: var(--accent); color: var(--on-accent); }
+
 /* Shared bits */
-.wall .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.wall .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.wall .av { width: calc(var(--k, 1) * 34px); height: calc(var(--k, 1) * 34px); border-radius: 50%; background: var(--c, var(--faint)); color: #fff; font-size: calc(var(--k, 1) * 16px); font-weight: 700; display: inline-grid; place-items: center; flex: none; font-family: var(--font-sans); line-height: 1; }
+.wall .av.sm { width: calc(var(--k, 1) * 28px); height: calc(var(--k, 1) * 28px); font-size: calc(var(--k, 1) * 13px); }
+.wall.dark .av { color: #1b1a17; }
+.wall .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .wall .nm { color: var(--muted); font-size: calc(var(--s) * 17px); margin-left: 8px; white-space: nowrap; }
-.wall .btn { height: 58px; padding: 0 22px; border-radius: 10px; font-size: 19px; font-weight: 600; display: inline-flex; align-items: center; gap: 10px; border: 1px solid var(--line-strong); color: var(--fg2); white-space: nowrap; }
+.wall .btn { height: 58px; padding: 0 22px; border-radius: 10px; font-size: 19px; font-weight: 600; display: inline-flex; align-items: center; gap: 10px; border: 1px solid var(--line-strong); color: var(--fg2); white-space: nowrap; background: var(--bg); }
 .wall .btn.pri { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.wall .btn.sm { height: 48px; padding: 0 16px; font-size: 17px; }
+.wall .btn.x { width: 48px; padding: 0; justify-content: center; }
 .wall .btn:disabled { opacity: 0.45; cursor: default; }
 .wall .btn svg { font-size: 22px; }
-.wall .empty { padding: 60px 0; text-align: center; color: var(--muted); font-size: calc(var(--s) * 22px); }
+.wall .empty { padding: 40px 0; text-align: center; color: var(--muted); font-size: calc(var(--s) * 21px); }
+.wall .untimed { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: var(--t-meta); color: var(--muted); line-height: 1.35; }
+.wall .untimed > span { display: inline-flex; align-items: center; gap: 6px; }
+.wall .untimed .pip { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.wall .untimed .bill::before { content: '$'; font-weight: 700; font-size: 0.85em; }
 
-/* Week: Today + panel */
-.wall .wk { flex: 1; display: grid; grid-template-columns: 0.92fr 1fr; min-height: 0; }
-.wall .wk.solo { grid-template-columns: 1fr; }
-.wall .today { --ts: 1; --k: calc(var(--s) * var(--ts) * var(--fit, 1)); position: relative; padding: 24px 40px 22px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: calc(var(--k) * 16px); min-height: 0; overflow: hidden; }
-.wall .wk.solo .today { --ts: 1.25; border-right: 0; padding: 28px 80px; }
-/* Keep Dinner clear of the corner "Add module" button. */
-.wall .wk.solo .today .foot { padding-right: 250px; }
-.wall .today .th { display: flex; align-items: baseline; gap: 14px; }
-.wall .today .th b { font-family: var(--font-display); font-size: calc(var(--k) * 40px); font-weight: 600; color: var(--accent); }
-.wall .today .th span { font-size: calc(var(--k) * 20px); color: var(--muted); }
-.wall .today .tempty { font-size: calc(var(--k) * 24px); color: var(--muted); }
-.wall .today .tall { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: calc(var(--k) * 21px); color: var(--fg2); }
-.wall .today .tall li { display: flex; align-items: center; gap: 10px; }
-.wall .today .tall li.muted { color: var(--muted); font-size: calc(var(--k) * 18px); }
-.wall .tev { display: grid; grid-template-columns: calc(var(--k) * 78px) 1fr; gap: calc(var(--k) * 14px) 16px; align-items: baseline; }
-.wall .tev .tm { font-size: calc(var(--k) * 23px); color: var(--muted); text-align: right; white-space: nowrap; }
-.wall .tev .tt { font-size: calc(var(--k) * 29px); line-height: 1.18; }
-.wall .tev .tt small { display: flex; align-items: center; gap: 7px; font-size: calc(var(--k) * 18px); color: var(--muted); margin-top: 2px; }
-.wall .tev .past, .wall .tev .past small { color: var(--faint); }
-.wall .nowmark { grid-column: 1 / 3; display: flex; align-items: center; gap: 10px; color: var(--warm); font-size: calc(var(--k) * 16px); font-weight: 700; margin: -4px 0; }
-.wall .nowmark::after { content: ''; flex: 1; border-top: 2px solid var(--warm); }
-.wall .due { border-top: 1px solid var(--line); padding-top: 10px; }
-.wall .due .lab { font-size: calc(var(--k) * 18px); color: var(--muted); margin-bottom: 2px; }
-.wall .ck { display: flex; align-items: center; gap: 14px; min-height: calc(var(--k) * 50px); width: 100%; font-size: calc(var(--k) * 23px); }
+/* Week: the day column, then the tinted panel. */
+.wall .wk { position: relative; flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 470px; min-height: 0; }
+
+/* The day column. --k comes from useWallFit: it grows on a quiet day and shrinks on a busy one. */
+.wall .today { --k: calc(var(--s) * var(--fit, 1)); position: relative; padding: 32px 44px 26px 48px; display: flex; flex-direction: column; gap: calc(var(--k) * 22px); min-height: 0; overflow: hidden; }
+.wall .mast { display: grid; gap: 12px; padding-bottom: calc(var(--k) * 18px); border-bottom: 1px solid var(--line); }
+.wall .mast .mtop { display: flex; align-items: flex-end; gap: 22px; }
+.wall .mast .clock { font-family: var(--font-display); font-size: var(--t-hero); font-weight: 500; line-height: 0.8; letter-spacing: -0.035em; }
+.wall .mast .dd { display: grid; gap: 2px; padding-bottom: 4px; }
+.wall .mast .dd b { font-family: var(--font-display); font-size: 40px; font-weight: 600; line-height: 1; }
+.wall .mast .dd span { font-size: 22px; color: var(--muted); }
+.wall .mast .wxl { justify-self: start; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 4px 10px; margin-left: -10px; border-radius: 10px; font-size: 21px; color: var(--fg2); }
+.wall .mast .wxl svg { font-size: 32px; color: var(--warm); }
+.wall .mast .wxl svg.r { color: var(--rain); }
+.wall .mast .wxl b { font-family: var(--font-display); font-size: 34px; font-weight: 500; color: var(--fg); }
+.wall .mast .wxl em { font-style: normal; color: var(--rain); font-weight: 600; }
+.wall .nx { display: grid; gap: calc(var(--k) * 6px); }
+.wall .nxk { font-size: calc(var(--k) * 16px); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--warm); }
+.wall .nxt { font-family: var(--font-display); font-size: calc(var(--k) * var(--t-display)); font-weight: 500; line-height: 1.05; letter-spacing: -0.015em; }
+.wall .nxw { display: flex; align-items: center; gap: 10px; font-size: calc(var(--k) * 21px); color: var(--muted); }
+.wall .nxw .tm { font-family: var(--font-display); font-size: calc(var(--k) * 28px); color: var(--fg); margin-right: 4px; }
+.wall .tempty { font-size: calc(var(--k) * 26px); color: var(--muted); }
+.wall .lt { display: grid; gap: calc(var(--k) * 12px); }
+.wall .lt .lr { display: grid; grid-template-columns: calc(var(--k) * 84px) auto 1fr; column-gap: 14px; align-items: center; }
+.wall .lt .tm { font-size: calc(var(--k) * 22px); color: var(--muted); text-align: right; }
+.wall .lt .tt { font-size: calc(var(--k) * 27px); line-height: 1.2; }
+.wall .lt .earl { padding-left: calc(var(--k) * 84px + 14px); font-size: calc(var(--k) * 17px); color: var(--faint); }
+.wall .more-link { justify-self: start; padding: 6px 0; color: var(--accent); font-weight: 600; font-size: calc(var(--k, 1) * 18px); }
+.wall .lt .more-link { margin-left: calc(var(--k) * 84px + 14px); }
+.wall .due { border-top: 1px solid var(--line); padding-top: calc(var(--k) * 16px); }
+.wall .due .dh { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
+.wall .due .dh b { font-family: var(--font-display); font-size: calc(var(--k) * var(--t-title)); font-weight: 600; }
+.wall .due .dh span { font-size: var(--t-meta); color: var(--muted); }
+.wall .due .dg { display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px; }
+.wall .ck { display: flex; align-items: center; gap: 14px; min-height: calc(var(--k, 1) * 58px); width: 100%; font-size: calc(var(--k, 1) * 22px); text-align: left; }
+.wall .due .ck { border-bottom: 1px solid var(--line); }
+.wall .ck .tx { flex: 1; min-width: 0; line-height: 1.2; }
+.wall .ck .tx small { display: block; font-size: calc(var(--k, 1) * 15px); }
 .wall .bx { width: calc(var(--k, 1) * 30px); height: calc(var(--k, 1) * 30px); border-radius: 50%; border: 2.5px solid var(--faint); flex: none; display: grid; place-items: center; }
 .wall .bx svg { font-size: 70%; stroke-width: 3; }
 .wall .done .bx { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .wall .done .tx { color: var(--faint); text-decoration: line-through; text-decoration-thickness: 1px; }
-.wall .late { color: var(--warm); font-weight: 600; font-size: calc(var(--s) * 16px); margin-left: 8px; white-space: nowrap; }
-.wall .today .foot { margin-top: auto; font-size: calc(var(--k) * 18px); color: var(--muted); }
-.wall .today .foot b { display: block; font-family: var(--font-display); font-size: calc(var(--k) * 26px); font-weight: 500; color: var(--fg); }
+.wall .late { color: var(--warm); font-weight: 600; font-size: calc(var(--s) * 16px); white-space: nowrap; }
+.wall .today .foot { margin-top: auto; display: grid; gap: 2px; padding-top: calc(var(--k) * 14px); border-top: 1px solid var(--line-strong); }
+.wall .today .foot span { font-size: var(--t-meta); font-weight: 600; color: var(--muted); }
+.wall .today .foot b { font-family: var(--font-display); font-size: calc(var(--k) * var(--t-title)); font-weight: 500; }
 
-/* Panel: two modules fit to content, the top capped at 60% */
-.wall .panel { display: flex; flex-direction: column; min-height: 0; }
-.wall .mod { display: flex; flex-direction: column; min-height: 0; flex: 1 1 0; }
-.wall .panel.n2 .mod:first-child { flex: 0 1 auto; max-height: 60%; }
-.wall .mod + .mod { border-top: 1px solid var(--line-strong); }
-.wall .mh { display: flex; align-items: center; gap: 12px; padding: 14px 26px 4px 32px; }
-.wall .mh b { font-family: var(--font-display); font-size: calc(var(--s) * 25px); font-weight: 600; }
-.wall .mh .sw { display: inline-flex; align-items: center; gap: 6px; font-size: 16px; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 9px; padding: 0 12px; height: 42px; }
-.wall .mh .x { margin-left: auto; width: 48px; height: 48px; display: grid; place-items: center; color: var(--muted); font-size: 24px; }
-.wall .mb { flex: 1 1 auto; overflow-y: auto; padding: 0 30px 14px 32px; min-height: 0; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
-.wall .addmod { flex: none; margin: 4px 32px 18px; height: 56px; border: 1px dashed var(--line-strong); border-radius: 10px; color: var(--muted); font-size: 18px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
-.wall .addmod.solo { position: absolute; right: 30px; bottom: 22px; width: 230px; margin: 0; }
-.wall .grp .gh { position: -webkit-sticky; position: sticky; top: 0; background: var(--bg); padding: 10px 0 6px; display: flex; gap: 8px; align-items: baseline; border-bottom: 1px solid var(--line); z-index: 1; }
-.wall .grp .gh .wd { font-size: calc(var(--s) * 18px); color: var(--muted); font-weight: 500; }
-.wall .grp .gh .dn { font-family: var(--font-display); font-size: calc(var(--s) * 25px); font-weight: 500; }
-.wall .grp .gh .rel { font-size: calc(var(--s) * 15px); color: var(--muted); margin-left: 4px; }
-.wall .grp ul { list-style: none; margin: 0; padding: 8px 0 14px; display: grid; gap: 7px; }
-.wall .grp li { display: grid; grid-template-columns: calc(var(--s) * 66px) 1fr; gap: 12px; align-items: baseline; font-size: calc(var(--s) * 22px); }
-.wall .grp li .tm { font-size: calc(var(--s) * 18px); color: var(--muted); text-align: right; white-space: nowrap; }
-.wall .grp li .dot { width: 10px; height: 10px; margin-right: 8px; transform: translateY(-2px); }
-.wall .grp li.muted { font-size: calc(var(--s) * 18px); color: var(--muted); }
-.wall .grp li.muted svg { margin-right: 8px; transform: translateY(2px); }
-.wall .more-link { display: block; padding: 10px 0 4px; color: var(--accent); font-weight: 600; font-size: 18px; }
-.wall .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+/* The panel: picker, a top module, an optional bottom module a quarter of its height. One step lighter than the day in dark too. */
+.wall .panel { background: var(--surface); padding: 32px 36px 26px; display: flex; flex-direction: column; gap: 18px; min-height: 0; overflow: hidden; }
+.wall .mod { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.wall .mod.top { flex: 1 1 0; }
+.wall .mod.bottom { flex: 0 0 25%; border-top: 1px solid var(--line-strong); padding-top: 16px; }
+.wall .mh { display: flex; align-items: center; gap: 10px; }
+.wall .mh b { font-family: var(--font-display); font-size: calc(var(--s) * var(--t-title)); font-weight: 600; margin-right: auto; }
+.wall .mh span { font-size: 15px; color: var(--muted); }
+.wall .mb { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.wall .mod.top .mb:has(.row) { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.wall .fill { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.wall .cday { display: grid; gap: 9px; padding-bottom: 24px; width: 100%; text-align: left; }
+.wall .cday .dh { display: flex; align-items: baseline; gap: 10px; }
+.wall .cday .dh b { font-family: var(--font-display); font-size: calc(var(--s) * 24px); font-weight: 600; }
+.wall .cday .dh span { font-size: 15px; color: var(--muted); }
+.wall .cday .untimed { margin-top: -2px; }
+.wall .cday .r { display: grid; grid-template-columns: 54px 1fr; column-gap: 12px; align-items: baseline; font-size: calc(var(--s) * 20px); line-height: 1.2; }
+.wall .cday .r .tm { font-size: 15px; color: var(--muted); text-align: right; }
+.wall .cday .r .t { display: flex; align-items: baseline; gap: 10px; }
+.wall .cday .r .dot { transform: translateY(-1px); }
+.wall .cday .more { padding-left: 66px; font-size: 15px; font-weight: 600; color: var(--accent); }
+.wall .panel .mrow { display: grid; grid-template-columns: 46px 1fr; column-gap: 12px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--line); width: 100%; text-align: left; }
+.wall .panel .mrow:last-child { border-bottom: 0; }
+.wall .panel .mrow .d { font-size: 15px; font-weight: 600; color: var(--muted); text-align: right; }
+.wall .panel .mrow .n { font-family: var(--font-display); font-size: calc(var(--s) * 20px); font-weight: 500; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wall .panel .mrow .n.none { font-family: var(--font-sans); font-size: 16px; color: var(--faint); }
+.wall .cols2 { display: grid; grid-template-columns: 1fr; gap: 0; }
+.wall .panel .row .in { background: var(--surface); }
 .wall .row { position: relative; min-height: calc(var(--s) * 56px); border-bottom: 1px solid var(--line); width: 100%; overflow: hidden; touch-action: pan-y; display: flex; }
 .wall .row .in { display: flex; align-items: center; gap: 14px; width: 100%; min-height: inherit; background: var(--bg); position: relative; z-index: 1; transition: transform 160ms ease; }
-.wall .row .tx { font-size: calc(var(--s) * 23px); flex: 1; min-width: 0; }
+.wall .row .tx { font-size: calc(var(--s) * 22px); flex: 1; min-width: 0; }
 .wall .row .q { font-size: calc(var(--s) * 17px); color: var(--muted); }
-.wall .mrow { display: grid; grid-template-columns: 76px 1fr; gap: 14px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--line); width: 100%; }
-.wall .mrow .d { font-size: calc(var(--s) * 17px); color: var(--muted); }
-.wall .mrow .d.on { color: var(--accent); font-weight: 700; }
-.wall .mrow .n { font-family: var(--font-display); font-size: calc(var(--s) * 23px); font-weight: 500; }
-.wall .mrow .n.none { font-family: var(--font-sans); font-size: calc(var(--s) * 18px); color: var(--faint); }
+
+/* Arrange mode: the day dims; the panel's real modules get outlines and controls. */
+.wall .wk.arranging .today { opacity: 0.35; pointer-events: none; }
+.wall .wk.arranging .mod { border: 2px dashed var(--line-strong); border-radius: 14px; padding: 14px 16px; background: color-mix(in srgb, var(--bg) 55%, transparent); }
+.wall .wk.arranging .mod.bottom { border-top-width: 2px; }
+.wall .wk.arranging .mb { opacity: 0.55; pointer-events: none; }
+.wall .abar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; }
+.wall .abar b { font-family: var(--font-display); font-size: 28px; font-weight: 600; }
+.wall .mod .note { font-size: 15px; color: var(--muted); }
+.wall .addmod { flex: none; height: 64px; border: 2px dashed var(--line-strong); border-radius: 14px; color: var(--fg2); font-size: 18px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
 
 /* Module menu */
 .wall .menu { position: absolute; z-index: 21; right: 36px; top: 200px; width: 500px; background: var(--card); border: 1px solid var(--line-strong); border-radius: 16px; box-shadow: var(--shadow); padding: 8px 0; }
@@ -389,12 +424,20 @@ html:has(.wall.dark) body { background: #1b1a17; }
 
 .wall .note { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 30; display: inline-flex; align-items: center; gap: 18px; background: var(--fg); color: var(--bg); border-radius: 12px; padding: 0 22px; min-height: 64px; font-size: 21px; max-width: 900px; }
 
-.wall .night { position: absolute; inset: 0; z-index: 40; background: #000; display: grid; place-items: center; text-align: center; cursor: pointer; width: 100%; }
-.wall .night > div { max-width: 92%; }
-/* Sized to the screen, not in pixels: as wide as fits standing up, as tall as fits lying down. */
-.wall .night .c { font-family: var(--font-display); font-size: min(30vw, 38vh); color: #4f4b44; line-height: 1; white-space: nowrap; }
-.wall .night .d { color: #45413a; font-size: max(30px, min(4.6vw, 5.4vh)); margin-top: 0.4em; }
-.wall .night .n { color: #45413a; font-size: max(24px, min(3.4vw, 4vh)); margin-top: 0.8em; line-height: 1.25; }
+/* Night: the day's masthead, near-black on black (the brightest text is about 3:1). */
+.wall .night { position: absolute; inset: 0; z-index: 40; background: #000; display: grid; place-items: center; cursor: pointer; width: 100%; padding: 0 7vw; text-align: left; }
+.wall .night .nin { display: grid; gap: min(3.4vh, 30px); width: 100%; }
+.wall .night .nmast { display: flex; align-items: flex-end; gap: min(3vw, 34px); flex-wrap: wrap; }
+.wall .night .c { font-family: var(--font-display); font-size: min(24vw, 30vh); font-weight: 400; line-height: 0.78; letter-spacing: -0.04em; color: #5a554c; white-space: nowrap; }
+.wall .night .d { display: grid; gap: 2px; }
+.wall .night .d b { font-family: var(--font-display); font-size: max(36px, min(4.4vw, 5.2vh)); font-weight: 500; color: #45413a; line-height: 1; }
+.wall .night .d span { font-size: max(24px, min(2.6vw, 3vh)); color: #36332d; }
+.wall .night .ntom { display: grid; gap: 12px; border-top: 1px solid #24221e; padding-top: min(3vh, 28px); }
+.wall .night .ntom .k { font-size: 18px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #36332d; }
+.wall .night .ntom .row { display: flex; align-items: center; gap: 16px; font-size: max(26px, min(2.8vw, 3.2vh)); color: #45413a; }
+.wall .night .ntom .t { font-family: var(--font-display); min-width: 3.4em; color: #36332d; }
+.wall .night .ndot { width: 12px; height: 12px; border-radius: 50%; opacity: 0.45; flex: none; }
+.wall .night .ntom .wx { display: flex; align-items: center; gap: 10px; font-size: max(20px, min(2vw, 2.4vh)); color: #36332d; }
 
 .wall .full { position: absolute; inset: 0; z-index: 35; background: var(--bg); display: grid; grid-template-columns: 1fr 1fr; align-items: center; }
 .wall .full.center { grid-template-columns: 1fr; place-items: center; }
@@ -479,34 +522,20 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .brf li .dot { flex: none; width: 14px; height: 14px; border-radius: 50%; background: var(--c); }
 
 /*
- * Portrait: an iPad standing up. The landscape layout leaves the top bar too
- * narrow (the Day · Week · Month switch fell off the edge) and the Week screen
- * a tall empty column, so the screens stack instead of sitting side by side.
+ * Portrait: an iPad standing up keeps the landscape structure, narrower
+ * (rail, day, panel), so turning it changes how much shows, never how it
+ * looks. The taller panel simply fits more days and more dinners.
  */
 @media (orientation: portrait) {
-  /* Top bar: clock and weather on the first row; today's forecast and the view controls on the second. */
-  .wall .top { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'clock wx' 'parts right'; align-items: center; gap: 12px 24px; padding: 16px 32px 14px 36px; min-height: 0; }
-  .wall .top > .vr { display: none; }
-  .wall .top > .hero { grid-area: clock; }
-  .wall .top > .hero .big { font-size: 92px; }
-  .wall .top > .hero .sub { font-size: 24px; }
-  .wall .top > .wxb.now { grid-area: wx; justify-self: end; margin: 0 -10px 0 0; }
-  .wall .top > .wxb.now .big { font-size: 80px; }
-  .wall .top > .wxb.parts { grid-area: parts; justify-self: start; flex-direction: row; gap: 20px; }
-  .wall .top > .wxb.parts .blocks { gap: 28px; }
-  .wall .top > .wxb.parts .rainnote { margin-top: 0; }
-  .wall .top > .right { grid-area: right; justify-self: end; margin-left: 0; }
-  .wall .top > .right:empty { display: none; }
-
-  /* Week: Today on top, sized by its content; the modules share the rest side by side. */
-  .wall .wk { display: flex; flex-direction: column; }
-  .wall .today { --ts: 1.15; flex: 0 1 auto; max-height: 58%; border-right: 0; border-bottom: 1px solid var(--line-strong); padding: 24px 40px 22px 44px; }
-  .wall .wk.solo .today { flex: 1 1 auto; max-height: none; border-bottom: 0; padding: 32px 56px; }
-  .wall .wk .panel { flex: 1 1 0; flex-direction: row; }
-  .wall .panel .mod { flex: 1 1 0; min-width: 0; }
-  .wall .panel.n2 .mod:first-child { flex: 1 1 0; max-height: none; }
-  .wall .mod + .mod { border-top: 0; border-left: 1px solid var(--line-strong); }
-  .wall .panel.n2 .cols2 { grid-template-columns: 1fr; }
+  .wall { --t-hero: 92px; }
+  .wall .wk { grid-template-columns: minmax(0, 1fr) 372px; }
+  .wall .today { padding: 32px 36px 26px 40px; }
+  .wall .mast .dd b { font-size: 34px; }
+  .wall .mast .dd span { font-size: 20px; }
+  .wall .due .dg { grid-template-columns: 1fr; }
+  .wall .panel { padding: 30px 28px 24px; }
+  .wall .hdr { padding: 12px 28px 12px 40px; gap: 16px; }
+  .wall .hdr .vseg { width: 330px; }
 
   /* Day: the hour grid on top, the side panel (weather, to-dos, dinner) along the bottom. */
   .wall .dv { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }

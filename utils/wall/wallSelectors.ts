@@ -24,10 +24,10 @@ export function eventsOn(events: readonly WallEvent[], date: string): WallEvent[
 }
 
 /**
- * The night screen's "Tomorrow 10:00 · Farmers market": the first timed
- * event of `date`, else its first all-day event that isn't a bill.
+ * The night screen's preview of tomorrow: its first two timed events, and
+ * its all-day events (bills left out: nobody needs one at bedtime).
  */
-export function firstEventOn(events: readonly WallEvent[], date: string): WallEvent | null {
+export function tomorrowPreview(events: readonly WallEvent[], date: string): { timed: WallEvent[]; allDay: WallEvent[] } {
   const day = eventsOn(events, date);
-  return day.find(e => !e.allDay) ?? day.find(e => e.source !== 'bill') ?? null;
+  return { timed: day.filter(e => !e.allDay).slice(0, 2), allDay: day.filter(e => e.allDay && e.source !== 'bill') };
 }

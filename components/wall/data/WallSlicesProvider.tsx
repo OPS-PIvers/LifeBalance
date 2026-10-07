@@ -53,7 +53,7 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ) {
       void import('./wallFixtures').then(({ wallTestFixtures }) => {
         if (cancelled) return;
-        const fx = wallTestFixtures();
+        const fx = wallTestFixtures(new Date(), sessionStorage.getItem('LIFEBALANCE_WALL_THEME') === 'dark' ? 'dark' : 'light');
         setWallEvents(fx.events);
         setCalendarFeeds(fx.feeds);
         setTravel(fx.travel);

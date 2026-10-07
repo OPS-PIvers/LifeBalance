@@ -1,21 +1,5 @@
-import { useEffect, useLayoutEffect, useState, type RefObject } from 'react';
+import { useLayoutEffect, type RefObject } from 'react';
 import { fitScale } from '@/utils/wall/wallFit';
-
-const PORTRAIT = '(orientation: portrait)';
-
-/** Whether the screen is taller than it is wide (an iPad standing up). */
-export function useWallPortrait(): boolean {
-  const supported = typeof window !== 'undefined' && typeof window.matchMedia === 'function';
-  const [portrait, setPortrait] = useState(() => supported && window.matchMedia(PORTRAIT).matches);
-  useEffect(() => {
-    if (!supported) return undefined;
-    const list = window.matchMedia(PORTRAIT);
-    const update = () => setPortrait(list.matches);
-    list.addEventListener('change', update);
-    return () => list.removeEventListener('change', update);
-  }, [supported]);
-  return portrait;
-}
 
 /**
  * Grows the type inside `ref` until it fills the box, and shrinks it on a busy
@@ -57,4 +41,48 @@ export function useWallFit(ref: RefObject<HTMLElement | null>, opts: { on: boole
       if (frame) window.cancelAnimationFrame(frame);
     };
   }, [ref, on, min, max]);
+}
+
+/**
+ * Shows only the children of `ref` that fit whole and hides the rest, so a
+ * list never ends on half a day (the Week panel's "fill whole days"). The
+ * first child always shows. The box needs `position: relative` (children are
+ * measured against it) and a height of its own. Unmeasured (0 high, as in
+ * tests) → everything shows.
+ */
+export function useWholeFill(ref: RefObject<HTMLElement | null>): void {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    let frame = 0;
+    const fill = () => {
+      frame = 0;
+      const items = Array.from(el.children).filter((c): c is HTMLElement => c instanceof HTMLElement);
+      for (const c of items) c.hidden = false;
+      const limit = el.clientHeight;
+      if (limit <= 0) return;
+      let cut = false;
+      items.forEach((c, i) => {
+        if (i > 0 && (cut || c.offsetTop + c.offsetHeight > limit + 1)) {
+          cut = true;
+          c.hidden = true;
+        }
+      });
+    };
+    const later = () => {
+      if (!frame) frame = window.requestAnimationFrame(fill);
+    };
+    fill();
+    const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(later);
+    resize?.observe(el);
+    // Only the list changing: `hidden` is an attribute, so hiding doesn't re-trigger this.
+    const mutate = typeof MutationObserver === 'undefined' ? null : new MutationObserver(later);
+    mutate?.observe(el, { childList: true, subtree: true, characterData: true });
+    if ('fonts' in document) void document.fonts.ready.then(later);
+    return () => {
+      resize?.disconnect();
+      mutate?.disconnect();
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [ref]);
 }
