@@ -180,7 +180,13 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .lt .lr { display: grid; grid-template-columns: calc(var(--k) * 84px) auto 1fr; column-gap: 14px; align-items: center; }
 .wall .lt .tm { font-size: calc(var(--k) * 22px); color: var(--muted); text-align: right; }
 .wall .lt .tt { font-size: calc(var(--k) * 27px); line-height: 1.2; }
-.wall .lt .earl { padding-left: calc(var(--k) * 84px + 14px); font-size: calc(var(--k) * 17px); color: var(--faint); }
+/* Finished events: a quiet labelled list, flush with the rest of the column, one event per row. */
+.wall .earl { display: grid; gap: calc(var(--k) * 6px); color: var(--muted); }
+.wall .earl .ek { font-size: calc(var(--k) * 15px); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
+.wall .earl .er { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; align-items: baseline; font-size: calc(var(--k) * 19px); line-height: 1.25; }
+.wall .earl .er .tm { min-width: 3.4em; color: var(--faint); }
+.wall .earl .er .tt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.wall .earl .em { font-size: calc(var(--k) * 16px); color: var(--faint); }
 .wall .more-link { justify-self: start; padding: 6px 0; color: var(--accent); font-weight: 600; font-size: calc(var(--k, 1) * 18px); }
 .wall .lt .more-link { margin-left: calc(var(--k) * 84px + 14px); }
 .wall .due { border-top: 1px solid var(--line); padding-top: calc(var(--k) * 16px); }
