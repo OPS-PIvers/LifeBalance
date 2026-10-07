@@ -575,9 +575,9 @@ html:has(.wall.dark) body { background: #1b1a17; }
   .wall .mast .dd b { font-size: 34px; }
   .wall .mast .dd span { font-size: 20px; }
   .wall .panel { padding: 30px 28px 24px; }
-  /* The narrow panel can't fit "Coming up" and Week · Month on one line: the switch drops under the title. */
-  .wall .mh { flex-wrap: wrap; row-gap: 12px; }
-  .wall .mh b { white-space: nowrap; }
+  /* The narrow panel keeps Week · Month at the heading's top right: a smaller heading and a compact switch share the row. */
+  .wall .mh b { font-size: calc(var(--s) * 26px); white-space: nowrap; }
+  .wall .mseg button { height: 40px; min-width: 0; padding: 0 12px; font-size: 15px; }
   .wall .hdr { padding: 12px 28px 12px 40px; gap: 16px; }
   .wall .hdr .vseg { width: 240px; }
 
