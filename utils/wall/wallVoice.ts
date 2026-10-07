@@ -24,7 +24,7 @@ export type LocalCommand =
   | { kind: 'ask'; question: WallQuestion };
 
 const TARGETS: [RegExp, VoiceTarget][] = [
-  [/^(the )?(calendar|week|this week|week view)$/, 'week'],
+  [/^(the |a )?(calendar|week|this week|week view)$/, 'week'],
   [/^(the )?(day|today|day view)$/, 'day'],
   [/^(the )?(month|this month|month view)$/, 'month'],
   [/^(the )?(shopping|grocery|groceries)( list)?$/, 'shopping'],
@@ -53,8 +53,8 @@ export function normalizeSpeech(text: string): string {
     .trim();
 }
 
-const BRIEF_TODAY = /^(good morning|(whats|what is) (on |happening )?today|whats the plan( for)? today|(give me )?(my |the )?(morning |daily |day )?brief(ing)?( me)?|brief me|how does (my |the )?(day|today) look|(whats|what is|tell me about) (my|the|our) day( today)?|my day|day at a glance|(whats|what is) on (my|the|our) calendar( today)?)$/;
-const BRIEF_TOMORROW = /^((whats|what is) (on |happening )?tomorrow|whats the plan( for)? tomorrow|how does tomorrow look|(whats|what is|tell me about) (my|the|our) day tomorrow|(whats|what is) on (my|the|our) calendar tomorrow|tomorrow)$/;
+const BRIEF_TODAY = /^(good morning|(whats|what is) (on |happening )?today|whats the plan( for)? today|(give me )?(my |the )?(morning |daily |day )?brief(ing)?( me)?|brief me|how does (my |the )?(day|today) look|(whats|what is|tell me about) (my|the|our) day( today)?|my day|day at a glance|(whats|what is) (on|up) (my|the|our) calendar( today)?)$/;
+const BRIEF_TOMORROW = /^((whats|what is) (on |happening )?tomorrow|whats the plan( for)? tomorrow|how does tomorrow look|(whats|what is|tell me about) (my|the|our) day tomorrow|(whats|what is) (on|up) (my|the|our) calendar tomorrow|tomorrow)$/;
 
 function briefOf(t: string): LocalCommand | null {
   if (BRIEF_TOMORROW.test(t)) return { kind: 'brief', day: 'tomorrow' };

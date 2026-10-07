@@ -24,6 +24,7 @@ const TODAY = '2026-10-04';
 describe('parseLocalCommand (the no-AI grammar)', () => {
   it.each([
     ['Show the calendar', { kind: 'show', target: 'week' }],
+    ['show me a calendar', { kind: 'show', target: 'week' }],
     ['open month', { kind: 'show', target: 'month' }],
     ['Show me today.', { kind: 'show', target: 'day' }],
     ['go to the shopping list', { kind: 'show', target: 'shopping' }],
@@ -55,6 +56,8 @@ describe('parseLocalCommand (the no-AI grammar)', () => {
     ["What's tomorrow?", 'tomorrow'],
     ['How does tomorrow look', 'tomorrow'],
     ["what's on the calendar tomorrow", 'tomorrow'],
+    ["whats up my calendar tomorrow", 'tomorrow'],
+    ["whats up my calendar", 'today'],
   ])('“%s” asks for the day brief (%s)', (text, day) => {
     expect(parseLocalCommand(text)).toEqual({ kind: 'brief', day });
   });
