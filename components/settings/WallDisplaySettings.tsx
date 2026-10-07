@@ -63,7 +63,7 @@ const startingModules = (top: string, bottom: string) => normalizeModules([top, 
 /** What each Side buttons choice does on the wall. */
 const RAIL_NOTES: Record<WallRailMode, string> = {
   shown: 'Views, voice and the display menu down the left',
-  tap: 'A toolbar appears when someone touches the wall',
+  tap: 'A toolbar rises along the bottom on a touch',
   hidden: 'Hold the clock to open the display menu',
 };
 

@@ -18,9 +18,9 @@ interface Hold {
 }
 
 /**
- * The rail's Settings choice on the wall (`wallSettings.rail`). 'tap' slides
- * the rail in over the screen on any touch and back out after RAIL_PEEK_MS
- * without one; the touch itself still lands on what was touched. Holding the
+ * The rail's Settings choice on the wall (`wallSettings.rail`). 'tap' brings
+ * the rail up as a floating toolbar (wall.css) on any touch and takes it away
+ * after RAIL_PEEK_MS without one; the touch itself still lands on what was touched. Holding the
  * clock opens the display menu in every mode, which is the way in when the
  * rail (and its button) is hidden.
  */

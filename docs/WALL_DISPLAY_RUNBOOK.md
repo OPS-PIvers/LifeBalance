@@ -113,7 +113,7 @@ The wall still switches to its dim night clock on its own.
   anyone at the wall can open it.
 - **Side buttons** (Settings → Wall display → Night & look): **Always**
   keeps the rail, **On tap** hides it until someone touches the wall (it
-  comes back as a floating toolbar for 8 seconds), **Hidden** removes it. Holding
+  comes back as a floating toolbar along the bottom for 8 seconds), **Hidden** removes it. Holding
   the clock for a moment opens the gear menu in every mode, which is the way
   in when the rail is hidden. In Safari's full screen the screens keep
   clear of Safari's close button in the top-left corner.
