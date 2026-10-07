@@ -26,31 +26,32 @@ const WallTopBar: React.FC<WallTopBarProps> = ({ now, timeZone, weather, offline
         {weather && (
           <>
             <span className="vr" />
-            <button type="button" className="wxb" onClick={onWeather} aria-label="Five-day forecast">
+            <button type="button" className="wxb now" onClick={onWeather} aria-label="Five-day forecast">
               <WallHero
                 icon={<WallWeatherIcon icon={weather.current.icon} />}
                 big={`${weather.current.temp}°`}
                 top={`H ${weather.high}°`}
                 bottom={`L ${weather.low}°`}
               />
-              {weather.blocks.length > 0 && (
-                <>
-                  <span className="vr" style={{ margin: 0 }} />
-                  <span>
-                    <span className="blocks">
-                      {weather.blocks.map(b => (
-                        <span className="b" key={b.label}>
-                          {b.label}
-                          <WallWeatherIcon icon={b.icon} />
-                          <b>{b.temp}°</b>
-                        </span>
-                      ))}
-                    </span>
-                    {weather.rainNote && <span className="rainnote">{weather.rainNote}</span>}
-                  </span>
-                </>
-              )}
             </button>
+            {/* Its own button, so portrait can put today's blocks on the second row. */}
+            {weather.blocks.length > 0 && (
+              <>
+                <span className="vr" />
+                <button type="button" className="wxb parts" onClick={onWeather} aria-label="Today's forecast">
+                  <span className="blocks">
+                    {weather.blocks.map(b => (
+                      <span className="b" key={b.label}>
+                        {b.label}
+                        <WallWeatherIcon icon={b.icon} />
+                        <b>{b.temp}°</b>
+                      </span>
+                    ))}
+                  </span>
+                  {weather.rainNote && <span className="rainnote">{weather.rainNote}</span>}
+                </button>
+              </>
+            )}
           </>
         )}
         <div className="right">{right}</div>

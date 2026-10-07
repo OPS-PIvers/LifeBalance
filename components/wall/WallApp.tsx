@@ -7,6 +7,7 @@ import { makeWallPeople } from '@/utils/wall/wallPeople';
 import { zonedDateString, zonedParts } from '@/utils/wall/wallTime';
 import { useWallData } from './data/wallData';
 import { APP_VERSION, useWallRuntime } from './runtime/useWallRuntime';
+import { useWallViewport } from './runtime/useWallViewport';
 import { WallToastContext, useWallToastController, type WallToaster } from './wallToast';
 import WallDay from './calendar/WallDay';
 import WallMonth from './calendar/WallMonth';
@@ -58,6 +59,8 @@ interface WallAppProps {
 /** The wall shell (docs/plans/wall-display-kiosk.md §4.9): rail, top bar, screens, overlays. */
 const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   const data = useWallData();
+  const rootRef = useRef<HTMLDivElement>(null);
+  useWallViewport(rootRef);
   const { toast, dismiss, toaster: slotToaster } = useWallToastController();
   // The voice banner and the toast share one slot: a new toast replaces the banner.
   const cancelVoiceRef = useRef<() => void>(() => undefined);
@@ -405,7 +408,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   return (
     <WallSoundContext.Provider value={sound}>
       <WallToastContext.Provider value={toaster}>
-        <div className={className} onPointerDownCapture={() => setRotationPaused(true)}>
+        <div ref={rootRef} className={className} onPointerDownCapture={() => setRotationPaused(true)}>
           <WallRail
             view={view}
             onView={v => {

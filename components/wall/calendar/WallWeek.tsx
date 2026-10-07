@@ -4,6 +4,7 @@ import type { WallLayout, WallModuleKey } from '@/types/schema';
 import { MODULE_TITLES, addModule, removeModule, suppressDuplicates, switchModule } from '@/utils/wall/wallModules';
 import type { WallPeople } from '@/utils/wall/wallPeople';
 import WallToday from './WallToday';
+import { useWallPortrait } from '@/components/wall/useWallFit';
 import WallModuleMenu, { type ModuleMenuState } from './WallModuleMenu';
 import ComingUpModule from './modules/ComingUpModule';
 import MealsModule from './modules/MealsModule';
@@ -25,12 +26,15 @@ interface WallWeekProps {
 /**
  * The resting screen (plan §3 "Week"): Today on the left, up to two stacked
  * modules on the right. Two modules fit to content, the top capped at 60%.
+ * In portrait, Today sits on top and the modules share the bottom side by side.
  */
 const WallWeek: React.FC<WallWeekProps> = ({ today, now, timeZone, people, layout, onLayout, onSeeMonth, onOpenMeal }) => {
   const [menu, setMenu] = useState<ModuleMenuState | null>(null);
   const { modules } = layout;
   const { showDueToday, showDinner } = useMemo(() => suppressDuplicates(modules), [modules]);
   const solo = modules.length === 0;
+  // Portrait stacks Today above the modules (wall.css), sized by its content.
+  const portrait = useWallPortrait();
 
   const body = (key: WallModuleKey) => {
     switch (key) {
@@ -61,6 +65,7 @@ const WallWeek: React.FC<WallWeekProps> = ({ today, now, timeZone, people, layou
         showDueToday={showDueToday}
         showDinner={showDinner}
         solo={solo}
+        stacked={portrait && !solo}
         onAddModule={() => setMenu({ kind: 'add' })}
       />
       {!solo && (

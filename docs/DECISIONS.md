@@ -311,6 +311,14 @@ later): the live scorer additionally consults `Habit.count` for whichever period
 
 ---
 
+## Wall layout: portrait and landscape, sized for across the room
+
+- **Orientation is read from the screen, not a setting.** `@media (orientation: portrait)` in `components/wall/wall.css` restacks every screen (top bar on two rows, Today above the modules with the modules side by side, Day's side panel along the bottom); `useWallPortrait()` covers the few places JS needs it (module-menu wording, whether Today is stacked). Rotating the iPad or its stand is the switch.
+- **Today fills its panel.** `useWallFit` grows Today's type (`--fit`, multiplied into `--k`) to the largest size that still fits, and shrinks it on a busy day rather than clipping. It only runs where Today has a height of its own (solo, or the landscape column); stacked above the modules in portrait it is sized by its content, so fitting would just grow it to its cap.
+- **The night clock is sized in viewport units** (`min(30vw, 38vh)`), so it is as big as fits whichever way the iPad stands.
+- **The bottom strip is an iPadOS viewport bug, not missing paint.** In a Home Screen app with the translucent status bar, the viewport (100vh, 100dvh, `innerHeight`) comes up a status bar short while the page is drawn under the bar, so a light strip of the web view shows below the page — painting `html` can't reach it. `useWallViewport` sets the wall's height to the screen's when the shortfall is a status bar or less (`utils/wall/wallViewport.ts`), and leaves browser tabs, Split View and a correct viewport alone.
+- **Tabular figures only on numbers.** Schibsted Grotesk's tabular set widens the comma and period too, so `tabular-nums` on the whole wall printed "Monday , October 5". It is applied to the clock, times, temperatures and day numbers only.
+
 ## Wall voice: spoken answers, and the voice miss log that teaches the grammar
 
 **Questions are answered by the local grammar too, never Gemini.** "Weather", "what's for dinner", "what's on the shopping list", "what time is it", "what's next" are `{ kind: 'ask' }` commands (`utils/wall/wallAnswers.ts`: `parseQuestion` + `composeAnswer`). They are read-only — they answer from what the wall already loads (`useWallData()` + `runtime.weather`) and never write. Every phrase given to the command-only recognizer must parse (`QUESTION_PHRASES`, checked by `wallAnswers.test.ts`).
