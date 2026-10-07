@@ -88,10 +88,11 @@ html:has(.wall.dark) body { background: #1b1a17; }
 /*
  * Tabular figures only where digits line up (clocks, times, temperatures).
  * Not on the whole wall: this font's tabular set also widens the comma and
- * period, which read as "Monday , October 5" in running text.
+ * period, which read as "Monday , October 5" in running text, and the colon,
+ * which spaced short left-aligned times out as "5 : 00" (those stay proportional).
  */
-.wall .mast .clock, .wall .mast .wxl, .wall .hdr .hclk, .wall .nxw .tm, .wall .lt .tm, .wall .cday .r .tm, .wall .fc .days,
-.wall .mo .cell .n, .wall .mo .ml .t, .wall .dvg .hrs, .wall .blk .tm, .wall .evs li .tm, .wall .dpw, .wall .night .c, .wall .night .t,
+.wall .mast .clock, .wall .mast .wxl, .wall .hdr .hclk, .wall .nxw .tm, .wall .fc .days,
+.wall .mo .cell .n, .wall .mo .ml .t, .wall .dvg .hrs, .wall .dpw, .wall .night .c, .wall .night .t,
 .wall .rail .badge, .wall .mr .d, .wall .mrow .d, .wall .code { font-variant-numeric: tabular-nums; }
 :where(.wall) button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
 .wall button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
@@ -126,12 +127,12 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .hdr .hwx svg { font-size: 28px; color: var(--warm); }
 .wall .hdr .hwx svg.r { color: var(--rain); }
 .wall .hdr .right { display: flex; gap: 10px; align-items: center; }
-.wall .hdr .vseg { width: 420px; }
+.wall .hdr .vseg { width: 290px; }
 .wall .ostrip { display: flex; align-items: center; gap: 10px; padding: 9px 40px; background: var(--warm-bg); color: var(--warm); font-size: 17px; font-weight: 600; border-bottom: 1px solid var(--line); }
 .wall .ostrip svg { font-size: 20px; }
 
-/* Day · Week · Month: a full-size segmented control, the current view filled. */
-.wall .vseg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 14px; background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--line-strong); flex: none; }
+/* Day · Month (full-screen calendar header): a full-size segmented control, the current view filled. */
+.wall .vseg { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; padding: 4px; border-radius: 14px; background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--line-strong); flex: none; }
 .wall .vseg button { height: 52px; border-radius: 10px; font-size: 19px; font-weight: 600; color: var(--fg2); text-align: center; }
 .wall .vseg button[aria-pressed='true'] { background: var(--accent); color: var(--on-accent); }
 
@@ -160,46 +161,45 @@ html:has(.wall.dark) body { background: #1b1a17; }
 /* The day column. --k comes from useWallFit: it grows on a quiet day and shrinks on a busy one. */
 .wall .today { --k: calc(var(--s) * var(--fit, 1)); position: relative; padding: 32px 44px 26px 48px; display: flex; flex-direction: column; gap: calc(var(--k) * 22px); min-height: 0; overflow: hidden; }
 .wall .mast { display: grid; gap: calc(var(--k) * 18px); padding-bottom: calc(var(--k) * 18px); border-bottom: 1px solid var(--line); }
-.wall .mast .mtop { display: flex; align-items: flex-end; justify-content: space-between; gap: 22px; }
-/* Day, date and weather sit right-aligned opposite the clock, so the left of the column stays quiet. */
-.wall .mast .mside { display: grid; justify-items: end; gap: 6px; text-align: right; min-width: 0; }
-.wall .mast .clock { font-family: var(--font-display); font-size: var(--t-hero); font-weight: 500; line-height: 0.8; letter-spacing: -0.035em; }
-.wall .mast .dd { display: grid; justify-items: end; gap: 2px; }
-.wall .mast .dd b { font-family: var(--font-display); font-size: 40px; font-weight: 600; line-height: 1; }
-.wall .mast .dd span { font-size: 22px; color: var(--muted); }
-.wall .mast .wxl { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px 12px; padding: 4px 10px; margin-right: -10px; border-radius: 10px; font-size: 21px; color: var(--fg2); }
+/* One block: the clock with a single short day-and-date line under it (never wider than the clock), the weather centred beside the pair. */
+.wall .mast .mtop { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 28px; align-items: center; }
+.wall .mast .mtime { display: grid; gap: calc(var(--k) * 14px); justify-items: start; }
+.wall .mast .clock { padding-top: 0.12em; font-family: var(--font-display); font-size: var(--t-hero); font-weight: 500; line-height: 0.8; letter-spacing: -0.035em; }
+.wall .mast .dd { font-family: var(--font-display); font-size: 30px; font-weight: 500; line-height: 1; color: var(--fg2); white-space: nowrap; }
+.wall .mast .wxl { justify-self: end; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px 12px; padding: 4px 10px; margin-right: -10px; border-radius: 10px; font-size: 21px; color: var(--fg2); }
 .wall .mast .wxl svg { font-size: 32px; color: var(--warm); }
 .wall .mast .wxl svg.r { color: var(--rain); }
 .wall .mast .wxl b { font-family: var(--font-display); font-size: 34px; font-weight: 500; color: var(--fg); }
-.wall .mast .wxl em { font-style: normal; color: var(--rain); font-weight: 600; }
+.wall .mast .wxl em { flex-basis: 100%; text-align: right; font-style: normal; color: var(--rain); font-weight: 600; }
 .wall .nx { display: grid; gap: calc(var(--k) * 6px); }
 .wall .nxk { font-size: calc(var(--k) * 16px); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--warm); }
 .wall .nxt { font-family: var(--font-display); font-size: calc(var(--k) * var(--t-display)); font-weight: 500; line-height: 1.05; letter-spacing: -0.015em; }
 .wall .nxw { display: flex; align-items: center; gap: 10px; font-size: calc(var(--k) * 21px); color: var(--muted); }
-.wall .nxw .tm { font-family: var(--font-display); font-size: calc(var(--k) * 28px); color: var(--fg); margin-right: 4px; }
+.wall .nxw .tm { font-family: var(--font-display); font-size: calc(var(--k) * 28px); color: var(--fg); }
+.wall .nxw .sep { color: var(--faint); }
 .wall .tempty { font-size: calc(var(--k) * 26px); color: var(--muted); }
-.wall .lt { display: grid; gap: calc(var(--k) * 12px); }
-.wall .lt .lr { display: grid; grid-template-columns: calc(var(--k) * 84px) auto 1fr; column-gap: 14px; align-items: center; }
-.wall .lt .tm { font-size: calc(var(--k) * 22px); color: var(--muted); text-align: right; }
-.wall .lt .tt { font-size: calc(var(--k) * 27px); line-height: 1.2; }
+/* Upcoming events: labelled like Earlier today so Next's own time-and-owner line never reads as a row; the owner trails, as on to-dos. */
+.wall .lt { display: grid; gap: calc(var(--k) * 10px); }
+.wall .lt .lr { display: grid; grid-template-columns: calc(var(--k) * 72px) minmax(0, 1fr) auto; column-gap: 14px; align-items: center; }
+.wall .lt .tm { font-size: calc(var(--k) * 22px); color: var(--muted); }
+.wall .lt .tt { font-size: calc(var(--k) * 25px); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Finished events: a quiet labelled list, flush with the rest of the column, one event per row. */
 .wall .earl { display: grid; gap: calc(var(--k) * 6px); color: var(--muted); }
-.wall .earl .ek { font-size: calc(var(--k) * 15px); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
-.wall .earl .er { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; align-items: baseline; font-size: calc(var(--k) * 19px); line-height: 1.25; }
-.wall .earl .er .tm { min-width: 3.4em; color: var(--faint); }
+.wall .lt .ek, .wall .earl .ek { font-size: calc(var(--k) * 15px); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
+.wall .earl .er { display: grid; grid-template-columns: calc(var(--k) * 72px) minmax(0, 1fr); column-gap: 14px; align-items: baseline; font-size: calc(var(--k) * 19px); line-height: 1.25; }
+.wall .earl .er .tm { color: var(--faint); }
 .wall .earl .er .tt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .wall .earl .em { font-size: calc(var(--k) * 16px); color: var(--faint); }
 .wall .more-link { justify-self: start; padding: 6px 0; color: var(--accent); font-weight: 600; font-size: calc(var(--k, 1) * 18px); }
-.wall .lt .more-link { margin-left: calc(var(--k) * 84px + 14px); }
+.wall .lt .more-link { margin-left: calc(var(--k) * 72px + 14px); }
 .wall .due { border-top: 1px solid var(--line); padding-top: calc(var(--k) * 16px); }
 .wall .due .dh { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
 .wall .due .dh b { font-family: var(--font-display); font-size: calc(var(--k) * var(--t-title)); font-weight: 600; }
 .wall .due .dh span { font-size: var(--t-meta); color: var(--muted); }
-.wall .due .dg { display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px; }
-/* A lone to-do takes the whole row: half a column wrapped short titles for no reason. */
-.wall .due .dg > .ck:only-child { grid-column: 1 / -1; }
+.wall .due .dg { display: grid; grid-template-columns: 1fr; }
 .wall .ck { display: flex; align-items: center; gap: 14px; min-height: calc(var(--k, 1) * 58px); width: 100%; font-size: calc(var(--k, 1) * 22px); text-align: left; }
 .wall .due .ck { border-bottom: 1px solid var(--line); }
+.wall .due .ck .tx { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wall .ck .tx { flex: 1; min-width: 0; line-height: 1.2; }
 .wall .ck .tx small { display: block; font-size: calc(var(--k, 1) * 15px); }
 .wall .bx { width: calc(var(--k, 1) * 30px); height: calc(var(--k, 1) * 30px); border-radius: 50%; border: 2.5px solid var(--faint); flex: none; display: grid; place-items: center; }
@@ -219,6 +219,22 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .mh { display: flex; align-items: center; gap: 10px; }
 .wall .mh b { font-family: var(--font-display); font-size: calc(var(--s) * var(--t-title)); font-weight: 600; margin-right: auto; }
 .wall .mh span { font-size: 15px; color: var(--muted); }
+/* Coming up's Week · Month: the vseg look at heading size, so it reads as the module's own. */
+.wall .mseg { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; padding: 3px; border-radius: 12px; background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--line-strong); flex: none; }
+.wall .mseg button { height: 42px; min-width: 84px; padding: 0 14px; border-radius: 9px; font-size: 17px; font-weight: 600; color: var(--fg2); text-align: center; }
+.wall .mseg button[aria-pressed='true'] { background: var(--accent); color: var(--on-accent); }
+/* Month: a denser list that scrolls, the date in a gutter. */
+.wall .mlist { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; display: flex; flex-direction: column; }
+.wall .mlist .mmon { font-family: var(--font-display); font-size: calc(var(--s) * 20px); font-weight: 600; color: var(--muted); padding: 14px 0 6px; }
+.wall .mday { display: grid; grid-template-columns: 46px 1fr; column-gap: 14px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--line); width: 100%; text-align: left; }
+.wall .mday:last-child { border-bottom: 0; }
+.wall .mday .md { display: grid; justify-items: center; line-height: 1; padding-top: 2px; }
+.wall .mday .md small { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.wall .mday .md b { font-family: var(--font-display); font-size: calc(var(--s) * 26px); font-weight: 600; margin-top: 3px; }
+.wall .mday .me { display: grid; gap: 5px; min-width: 0; }
+.wall .mday .r { display: grid; grid-template-columns: 50px 1fr; column-gap: 10px; align-items: baseline; font-size: calc(var(--s) * 18px); line-height: 1.2; }
+.wall .mday .r .tm { font-size: 14px; color: var(--muted); }
+.wall .mday .r .t { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
 .wall .mb { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .wall .mod.top .mb:has(.row) { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
 /*
@@ -244,9 +260,11 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .cday .dh span { font-size: 15px; color: var(--muted); }
 .wall .cday .untimed { margin-top: -2px; }
 .wall .cday .r { display: grid; grid-template-columns: 54px 1fr; column-gap: 12px; align-items: baseline; font-size: calc(var(--s) * 20px); line-height: 1.2; }
-.wall .cday .r .tm { font-size: 15px; color: var(--muted); text-align: right; }
+.wall .cday .r .tm { font-size: 15px; color: var(--muted); }
 .wall .cday .r .t { display: flex; align-items: baseline; gap: 10px; }
 .wall .cday .r .dot { transform: translateY(-1px); }
+.wall .cday.free { gap: 0; padding-bottom: 16px; }
+.wall .cday .dh em { font-style: normal; font-size: 15px; color: var(--faint); margin-left: auto; }
 .wall .cday .more { padding-left: 66px; font-size: 15px; font-weight: 600; color: var(--accent); }
 .wall .panel .mrow { display: grid; grid-template-columns: 46px 1fr; column-gap: 12px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--line); width: 100%; text-align: left; }
 .wall .panel .mrow:last-child { border-bottom: 0; }
@@ -569,12 +587,13 @@ html:has(.wall.dark) body { background: #1b1a17; }
   .wall { --t-hero: 92px; }
   .wall .wk { grid-template-columns: minmax(0, 1fr) 372px; }
   .wall .today { padding: 32px 36px 26px 40px; }
-  .wall .mast .dd b { font-size: 34px; }
-  .wall .mast .dd span { font-size: 20px; }
-  .wall .due .dg { grid-template-columns: 1fr; }
+  .wall .mast .dd { font-size: 24px; }
   .wall .panel { padding: 30px 28px 24px; }
+  /* The narrow panel keeps Week · Month at the heading's top right: a smaller heading and a compact switch share the row. */
+  .wall .mh b { font-size: calc(var(--s) * 26px); white-space: nowrap; }
+  .wall .mseg button { height: 40px; min-width: 0; padding: 0 12px; font-size: 15px; }
   .wall .hdr { padding: 12px 28px 12px 40px; gap: 16px; }
-  .wall .hdr .vseg { width: 330px; }
+  .wall .hdr .vseg { width: 240px; }
 
   /* Day: the hour grid on top, the side panel (weather, to-dos, dinner) along the bottom. */
   .wall .dv { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }

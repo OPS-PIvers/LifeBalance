@@ -62,6 +62,7 @@ const WallToday: React.FC<WallTodayProps> = ({ today, now, timeZone, people, wea
           <b className="nxt">{lead.event.title}</b>
           <span className="nxw">
             <span className="tm">{lead.time}</span>
+            <span className="sep" aria-hidden="true">·</span>
             <WallAvatar people={people} who={lead.event.ownerKey} small />
             {lead.event.ownerKey === 'family' || !lead.event.ownerKey ? 'Everyone' : people.name(lead.event.ownerKey)}
           </span>
@@ -71,11 +72,12 @@ const WallToday: React.FC<WallTodayProps> = ({ today, now, timeZone, people, wea
       )}
       {later.length > 0 && (
         <div className="lt">
+          <span className="ek">Later today</span>
           {later.map(row => (
             <div className="lr" key={row.event.id}>
               <span className="tm">{row.time}</span>
-              <WallAvatar people={people} who={row.event.ownerKey} />
               <span className="tt">{row.event.title}</span>
+              <WallAvatar people={people} who={row.event.ownerKey} small />
             </div>
           ))}
           {moreLater > 0 && (

@@ -406,7 +406,6 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
         onWeather={() => setOverlay('weather')}
         layout={shownLayout}
         onLayout={changeLayout}
-        onView={next => goCalendar(next)}
         onOpenDay={date => goCalendar('day', date)}
         onOpenMeal={openMeal}
         arranging={arranging}
