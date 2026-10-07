@@ -1,7 +1,7 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import type { ShoppingItem, WallVoiceEngine, WallWakeModel } from '@/types/schema';
+import type { ShoppingItem, WallVoiceEngine, WallWakeFile, WallWakeModel } from '@/types/schema';
 import type { WallVoiceCommand } from '@/services/geminiService.types';
 import { WallDataContext, type WallData } from '@/components/wall/data/wallData';
 import { makeWallData } from '@/components/wall/data/wallTestData';
@@ -45,7 +45,7 @@ function fakeEngines() {
   const listenOptions: DeviceListenOptions[] = [];
   const setWake = vi.fn(async (_on: boolean) => undefined);
   const createDeviceEngine = vi.fn(
-    (_model: WallWakeModel, wake: () => void): DeviceVoiceEngine => {
+    (_model: WallWakeModel, wake: () => void, _loadFile: (file: WallWakeFile) => Promise<Uint8Array>, _wakeOnly: boolean): DeviceVoiceEngine => {
       onWake = wake;
       return {
         kind: 'device',
@@ -488,6 +488,59 @@ describe('wall voice', () => {
       await act(async () => rerenderWake({ keyword: 'hey_mycroft', label: 'Hey Mycroft', threshold: 0.5 }));
       expect(engines.createDeviceEngine).toHaveBeenCalledTimes(2);
       expect(engines.createDeviceEngine.mock.calls[1]?.[0]).toMatchObject({ keyword: 'hey_mycroft' });
+    });
+  });
+
+  describe('Safari with the on-device wake word', () => {
+    const device = { speech: true, audio: true, device: true };
+
+    it('the wake word opens a Safari command, letting go of the mic while Safari listens', async () => {
+      const { engines, parse, onShow } = setup({ setting: 'speech', support: device, wake: true });
+      await act(async () => undefined);
+      expect(engines.createDeviceEngine.mock.calls[0]?.[3]).toBe(true);
+      expect(engines.setWake).toHaveBeenLastCalledWith(true);
+      expect(screen.getByText('wake on')).toBeInTheDocument();
+
+      await act(async () => engines.wake());
+      expect(engines.setWake).toHaveBeenLastCalledWith(false);
+      expect(engines.sessions.at(-1)?.kind).toBe('speech');
+      await act(async () => {
+        engines.sessions.at(-1)!.resolve({ kind: 'text', transcript: 'Jarvis show the meals' });
+      });
+      expect(onShow).toHaveBeenCalledWith('meals');
+      expect(parse).not.toHaveBeenCalled();
+      expect(engines.setWake).toHaveBeenLastCalledWith(true);
+    });
+
+    it('a tap with the wake word off starts Safari at once', () => {
+      const { engines } = setup({ setting: 'speech', support: device });
+      fireEvent.click(screen.getByRole('button', { name: 'Mic' }));
+      expect(engines.sessions.at(-1)?.kind).toBe('speech');
+      expect(engines.setWake).not.toHaveBeenCalledWith(true);
+    });
+
+    it('does not take the mic back if the wall stopped wanting the wake word meanwhile', async () => {
+      const { engines, setWake } = setup({ setting: 'speech', support: device, wake: true });
+      await act(async () => undefined);
+      await act(async () => engines.wake());
+      await act(async () => setWake(false));
+      engines.setWake.mockClear();
+      await act(async () => {
+        engines.sessions.at(-1)!.resolve({ kind: 'text', transcript: 'show the meals' });
+      });
+      expect(engines.setWake).not.toHaveBeenCalledWith(true);
+    });
+
+    it('Cancel before Safari starts never starts it', async () => {
+      const { engines } = setup({ setting: 'speech', support: device, wake: true });
+      await act(async () => undefined);
+      let release: () => void = () => undefined;
+      engines.setWake.mockImplementationOnce(() => new Promise<undefined>(r => (release = () => r(undefined))));
+      act(() => engines.wake());
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      await act(async () => release());
+      expect(engines.sessions).toHaveLength(0);
+      expect(screen.queryByText('Listening')).toBeNull();
     });
   });
 

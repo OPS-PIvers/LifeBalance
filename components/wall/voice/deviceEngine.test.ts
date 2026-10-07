@@ -125,11 +125,11 @@ function fakeTimers() {
 
 const settle = () => new Promise(r => setTimeout(r, 0));
 
-function setup(opts: Parameters<typeof fakeLib>[0] = {}) {
+function setup(opts: Parameters<typeof fakeLib>[0] & { wakeOnly?: boolean } = {}) {
   const f = fakeLib(opts);
   const timers = fakeTimers();
   const onWake = vi.fn();
-  const engine = createDeviceEngine(MODEL, onWake, { lib: async () => f.lib, commandPhrases: PHRASES, timers });
+  const engine = createDeviceEngine(MODEL, onWake, { lib: async () => f.lib, commandPhrases: PHRASES, timers, wakeOnly: opts.wakeOnly ?? false });
   return { f, timers, onWake, engine };
 }
 
@@ -316,6 +316,15 @@ describe('createDeviceEngine', () => {
     await engine.setWake(true);
     await engine.setWake(false);
     expect(f.log).toEqual(['sub:wake', 'unsub:wake']);
+  });
+
+  it('wake-only (Safari hears the command) skips the speech model, and forgets the old "Hey …" when it comes back', async () => {
+    const { f, engine } = setup({ wakeOnly: true });
+    await engine.setWake(true);
+    expect(f.lib.prepare).not.toHaveBeenCalled();
+    await engine.setWake(false);
+    await engine.setWake(true);
+    expect(f.log).toEqual(['sub:wake', 'unsub:wake', 'wake-reset', 'sub:wake']);
   });
 });
 

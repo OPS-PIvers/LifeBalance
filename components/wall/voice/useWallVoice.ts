@@ -66,7 +66,8 @@ export interface WallVoiceFeedback {
 export interface WallVoiceDeps {
   support?: VoiceSupport;
   createEngine?: (kind: 'speech' | 'audio') => VoiceEngine;
-  createDeviceEngine?: (model: WallWakeModel, onWake: () => void, loadFile: (file: WallWakeFile) => Promise<Uint8Array>) => DeviceVoiceEngine;
+  /** `wakeOnly`: Safari's recognizer hears the command; this engine only listens for the wake word. */
+  createDeviceEngine?: (model: WallWakeModel, onWake: () => void, loadFile: (file: WallWakeFile) => Promise<Uint8Array>, wakeOnly: boolean) => DeviceVoiceEngine;
   parseText?: (householdId: string, transcript: string, ctx: WallVoiceContext) => Promise<WallVoiceCommand>;
   parseAudio?: (householdId: string, data: string, mimeType: string, ctx: WallVoiceContext) => Promise<WallVoiceCommand>;
 }
@@ -76,7 +77,7 @@ interface UseWallVoiceOptions {
   /** The wake word the on-device engine listens for. */
   wakeModel: WallWakeModel;
   /**
-   * Listen for the wake word now (on-device engine only). The caller turns
+   * Listen for the wake word now (on-device or Safari engine). The caller turns
    * this off at night, while the sound is locked, and on a member preview.
    */
   wake?: boolean;
@@ -114,8 +115,8 @@ function deviceSupported(): boolean {
   );
 }
 
-function defaultCreateDeviceEngine(model: WallWakeModel, onWake: () => void, loadFile: (file: WallWakeFile) => Promise<Uint8Array>): DeviceVoiceEngine {
-  return createDeviceEngine(model, onWake, { commandPhrases: COMMAND_PHRASES, loadFile });
+function defaultCreateDeviceEngine(model: WallWakeModel, onWake: () => void, loadFile: (file: WallWakeFile) => Promise<Uint8Array>, wakeOnly: boolean): DeviceVoiceEngine {
+  return createDeviceEngine(model, onWake, { commandPhrases: COMMAND_PHRASES, loadFile, wakeOnly });
 }
 
 function defaultCreateEngine(kind: 'speech' | 'audio'): VoiceEngine {
@@ -161,6 +162,10 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
 
   const engines = useRef<Partial<Record<'speech' | 'audio', VoiceEngine>>>({});
   const device = useRef<{ key: string; engine: DeviceVoiceEngine } | null>(null);
+  /** The wake word has (or had, before a Safari command) the mic. */
+  const wakeHeld = useRef(false);
+  /** The wall wants the wake word listening (not at night, not locked). */
+  const wakeWantedRef = useRef(false);
   // The wake word calls start(), which is defined below and changes identity.
   const onWakeRef = useRef<() => void>(() => undefined);
   const stateRef = useRef<WallVoiceState | null>(null);
@@ -206,11 +211,22 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
     latest.current.onMiss?.({ kind: 'undo', heard: last.heard, free: last.free, alternative: last.alternative, engine: last.engine, did: last.did });
   }, []);
 
-  const available = pickVoiceEngine(setting, support, false) !== null;
-  const usesDevice = pickVoiceEngine(setting, support, false) === 'device';
+  const engineKind = pickVoiceEngine(setting, support, false);
+  const available = engineKind !== null;
+  /**
+   * Safari's recognizer hears commands far better than Vosk but has no wake
+   * word, so the on-device wake word opens them: it gives up the mic while
+   * Safari listens, then takes it back.
+   */
+  const wakeOnly = engineKind === 'speech' && support.device === true;
+  const usesDevice = engineKind === 'device' || wakeOnly;
 
   /** The on-device engine for the current wake word (rebuilt when it changes). */
-  const wakeKey = configKey(wakeModel);
+  const wakeKey = `${configKey(wakeModel)}|${wakeOnly ? 'wake' : 'full'}`;
+  const wakeOnlyRef = useRef(wakeOnly);
+  useEffect(() => {
+    wakeOnlyRef.current = wakeOnly;
+  });
   const wakeModelRef = useRef(wakeModel);
   useEffect(() => {
     wakeModelRef.current = wakeModel;
@@ -221,7 +237,8 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
     const engine = makeDeviceEngine(
       wakeModelRef.current,
       () => onWakeRef.current(),
-      file => latest.current.loadWakeFile(file)
+      file => latest.current.loadWakeFile(file),
+      wakeOnlyRef.current
     );
     device.current = { key: wakeKey, engine };
     return engine;
@@ -373,6 +390,10 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
             return;
           }
           heardRef.current = { ...heardRef.current, heard: transcript };
+        } else if (engine === 'speech') {
+          // After the wake word Safari sometimes catches its tail.
+          transcript = stripWakeWord(transcript, wakeModelRef.current.label);
+          heardRef.current = { ...heardRef.current, heard: transcript };
         }
         const local = parseLocalCommand(transcript);
         if (local) {
@@ -422,6 +443,43 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
     [fail, miss, runAction, runLocal]
   );
 
+  /**
+   * Safari's recognizer and the wake word can't share the iPad's mic: the
+   * wake word lets go first, and takes the mic back once Safari is done
+   * (unless the wall stopped wanting it meanwhile, e.g. night fell).
+   */
+  const listenAfterWakePause = useCallback((engine: VoiceEngine, onInterim: (text: string) => void): VoiceSession => {
+    const wakeEngine = device.current?.engine;
+    let cancelled = false;
+    let inner: VoiceSession | null = null;
+    let finishWanted = false;
+    const resume = () => {
+      if (wakeWantedRef.current && device.current?.engine === wakeEngine) {
+        wakeEngine?.setWake(true).catch((error: unknown) => console.error('[wall] wake word failed to resume:', error));
+      }
+    };
+    const result = (wakeEngine ? wakeEngine.setWake(false) : Promise.resolve())
+      .catch(() => undefined)
+      .then(() => {
+        if (cancelled) throw new VoiceCaptureError('aborted');
+        inner = engine.listen({ onInterim });
+        if (finishWanted) inner.finish();
+        return inner.result;
+      });
+    void result.then(resume, resume);
+    return {
+      result,
+      finish: () => {
+        finishWanted = true;
+        inner?.finish();
+      },
+      cancel: () => {
+        cancelled = true;
+        inner?.cancel();
+      },
+    };
+  }, []);
+
   /** `afterWake`: the wake word opened it, so the moments before count. */
   const begin = useCallback((afterWake: boolean) => {
     session.current?.cancel();
@@ -449,7 +507,7 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
       } else {
         const engine = engines.current[kind] ?? createEngine(kind);
         engines.current[kind] = engine;
-        s = engine.listen({ onInterim });
+        s = kind === 'speech' && wakeHeld.current ? listenAfterWakePause(engine, onInterim) : engine.listen({ onInterim });
       }
       session.current = s;
       s.result.then(
@@ -484,7 +542,7 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
       );
     };
     listen();
-  }, [createEngine, deviceEngine, fail, handleCapture, setting, support]);
+  }, [createEngine, deviceEngine, fail, handleCapture, listenAfterWakePause, setting, support]);
   // Public, and used as a click handler: never forward the event as `afterWake`.
   const start = useCallback(() => begin(false), [begin]);
 
@@ -500,9 +558,13 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
 
   // Wake-word listening follows `wake`; a failure to start is reported once per wake word.
   const listenKey = usesDevice && wake ? wakeKey : '';
+  useEffect(() => {
+    wakeWantedRef.current = listenKey !== '';
+  });
   const reportedWake = useRef('');
   useEffect(() => {
     if (!usesDevice) {
+      wakeHeld.current = false;
       void device.current?.engine.setWake(false).catch(() => undefined);
       return undefined;
     }
@@ -511,9 +573,11 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
     let live = true;
     engine.setWake(on).then(
       () => {
+        wakeHeld.current = on;
         if (live) setWakeOnKey(listenKey);
       },
       (error: unknown) => {
+        wakeHeld.current = false;
         if (!live) return;
         setWakeOnKey('');
         console.error(`[wall] wake word failed to ${on ? 'start' : 'stop'}:`, error);
