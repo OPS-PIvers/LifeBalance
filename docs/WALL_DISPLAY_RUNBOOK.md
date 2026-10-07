@@ -113,9 +113,12 @@ The wall still switches to its dim night clock on its own.
   anyone at the wall can open it.
 - **Last seen** on the phone turns red when the wall hasn't checked in for
   30 minutes (it checks in every 5).
-- **App updates** install themselves overnight: the wall checks for a new
-  version every 30 minutes and reloads only while the night screen is up.
-  There's no other scheduled reload.
+- **App updates:** the wall checks for a new version every 10 minutes. When
+  one is out it shows **An update is available** at the bottom, like the
+  phone app: **Update** reloads now, **Later** hides it for that version.
+  Either way it installs itself overnight while the night screen is up.
+  There's no other scheduled reload. After tapping Update, touch the screen
+  once more to turn sound back on.
 - **Sound:** iPadOS keeps a web app silent until someone touches the screen
   after it launches or reloads. While that's the case the wall shows **Tap to
   turn on sound** at the bottom left; any touch turns it on. Settings → Wall

@@ -1,8 +1,9 @@
 /**
  * Update detection for the wall (docs/plans/wall-display-kiosk.md §12
- * "Reloads"). The wall reloads only when a new version is deployed, and only
- * during the night window, because a reload locks the iPad's audio and mic
- * again until someone touches the screen.
+ * "Reloads"). The wall reloads on its own only when a new version is
+ * deployed, and only during the night window, because a reload locks the
+ * iPad's audio and mic again until someone touches the screen. In the day it
+ * shows an "update available" toast and reloads when someone taps Update.
  *
  * A deploy changes the hashed entry script that index.html loads, so the
  * running page compares its own entry script with the one the server's
@@ -36,4 +37,11 @@ export function isUpdateAvailable(running: string | null, served: string | null)
 }
 
 /** How often the wall asks whether a new version is out. */
-export const UPDATE_CHECK_MS = 30 * 60 * 1000;
+export const UPDATE_CHECK_MS = 10 * 60 * 1000;
+
+/**
+ * Fired on window by the inline script in index.html when a new service
+ * worker takes over a wall: it asks the wall to check now rather than
+ * reloading under someone's hand. Keep the name in sync with index.html.
+ */
+export const WALL_UPDATE_EVENT = 'lb-wall-update';

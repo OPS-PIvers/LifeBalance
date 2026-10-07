@@ -22,6 +22,7 @@ import WallGearMenu from './WallGearMenu';
 import WallNight from './WallNight';
 import WallRail, { type WallView } from './WallRail';
 import WallToast from './WallToast';
+import WallUpdateToast from './WallUpdateToast';
 import WallTopBar from './WallTopBar';
 import WallVoiceBanner from './voice/WallVoiceBanner';
 import { useWallVoice, type WallVoiceFeedback, type WallVoiceMissReport } from './voice/useWallVoice';
@@ -129,6 +130,11 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     displayId: data.displayId,
     onIdle,
   });
+
+  // "Later" holds the prompt back for that build; a newer deploy asks again,
+  // and the night screen applies it either way.
+  const [declinedBuild, setDeclinedBuild] = useState<string | null>(null);
+  const offerUpdate = runtime.updateBuild !== null && runtime.updateBuild !== declinedBuild && !runtime.nightShowing;
 
   const today = zonedDateString(runtime.now, runtime.timeZone);
   const tomorrow = zonedDateString(new Date(runtime.now.getTime() + 24 * 60 * 60 * 1000), runtime.timeZone);
@@ -466,8 +472,13 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
                   showTarget(target);
                 }}
               />
+            ) : toast ? (
+              <WallToast key={toast.id} toast={toast} toaster={toaster} onDismiss={dismiss} />
             ) : (
-              toast && <WallToast key={toast.id} toast={toast} toaster={toaster} onDismiss={dismiss} />
+              offerUpdate &&
+              runtime.updateBuild && (
+                <WallUpdateToast key={runtime.updateBuild} onUpdate={runtime.applyUpdate} onLater={() => setDeclinedBuild(runtime.updateBuild)} />
+              )
             )}
           </div>
           {overlay === 'gear' && (

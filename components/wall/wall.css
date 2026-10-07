@@ -366,6 +366,10 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .toast { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 30; display: inline-flex; align-items: center; gap: 18px; background: var(--fg); color: var(--bg); border-radius: 12px; padding: 0 8px 0 22px; height: 64px; font-size: 21px; white-space: nowrap; max-width: 1000px; }
 .wall .toast > span { overflow: hidden; text-overflow: ellipsis; }
 .wall .toast button { font-weight: 700; padding: 0 18px; height: 50px; border-radius: 8px; }
+.wall .toast.update { gap: 6px; padding-left: 26px; }
+.wall .toast.update > span { margin-right: 14px; }
+.wall .toast.update .later { font-weight: 500; opacity: 0.7; }
+.wall .toast.update button:not(.later) { background: var(--bg); color: var(--fg); }
 
 /* Overlays */
 .wall .scrim { position: absolute; inset: 0; background: var(--scrim); z-index: 20; }
