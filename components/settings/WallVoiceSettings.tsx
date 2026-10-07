@@ -18,7 +18,7 @@ interface WallVoiceSettingsProps {
 const ENGINE_NOTES: Record<Exclude<WallVoiceEngine, 'off'>, string> = {
   auto: 'On the iPad itself: free, private, no AI allowance',
   device: 'On the iPad itself: free, private, no AI allowance',
-  speech: 'Safari’s recognizer. It doesn’t run in a Home Screen app',
+  speech: 'Safari’s recognizer: hears best. Open the wall in Safari, not from the Home Screen (it goes full screen on the first touch)',
   audio: 'Records and sends each command to Gemini (AI allowance)',
 };
 
@@ -38,6 +38,8 @@ const WallVoiceSettings: React.FC<WallVoiceSettingsProps> = ({ settings, save, u
   const label = editedLabel ?? (wake.keyword === 'custom' ? wake.label : 'Hey Home');
 
   const usesDevice = settings.voice === 'auto' || settings.voice === 'device';
+  // The wake word runs on the iPad for both; with Safari it only opens the command.
+  const hasWakeWord = usesDevice || settings.voice === 'speech';
   const saveWake = (patch: Partial<WallWakeModel>) => save({ wakeModel: { ...wake, ...patch } });
 
   const pickModel = async (file: File | undefined) => {
@@ -102,7 +104,7 @@ const WallVoiceSettings: React.FC<WallVoiceSettingsProps> = ({ settings, save, u
               />
             </Row>
 
-            {usesDevice && (
+            {hasWakeWord && (
               <>
                 <Row className="flex-wrap">
                   <div className="flex-1 min-w-0">

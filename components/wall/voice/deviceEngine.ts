@@ -111,6 +111,11 @@ export interface DeviceEngineOptions {
   lib?: () => Promise<LocalVoiceLib>;
   /** What the command-only recognizer can hear; none = free recognizer only. */
   commandPhrases?: readonly string[];
+  /**
+   * Only the wake word is used (Safari's recognizer hears the command), so
+   * don't download the speech model ahead of time.
+   */
+  wakeOnly?: boolean;
   /** Fetches a custom wake word's .onnx. */
   loadFile?: (file: WallWakeFile) => Promise<Uint8Array>;
   timers?: { set: (fn: () => void, ms: number) => number; clear: (id: number) => void };
@@ -119,6 +124,7 @@ export interface DeviceEngineOptions {
 export function createDeviceEngine(model: WallWakeModel, onWake: () => void, options: DeviceEngineOptions = {}): DeviceVoiceEngine {
   const lib = options.lib ?? loadLocalVoice;
   const commandPhrases = options.commandPhrases ?? [];
+  const wakeOnly = options.wakeOnly ?? false;
   const loadFile = options.loadFile ?? (() => Promise.reject(new Error('No wake word file loader.')));
   const timers = options.timers ?? {
     set: (fn: () => void, ms: number) => window.setTimeout(fn, ms),
@@ -130,6 +136,8 @@ export function createDeviceEngine(model: WallWakeModel, onWake: () => void, opt
   let wakeWanted = false;
   let wakeOn = false;
   let inCommand = false;
+  /** The wake word has listened before, so it holds audio from then. */
+  let wakeHeard = false;
   // Every mic change runs in order, so a quick wake → command → wake never races.
   let queue: Promise<unknown> = Promise.resolve();
   const serial = <T,>(fn: () => Promise<T>): Promise<T> => {
@@ -166,11 +174,15 @@ export function createDeviceEngine(model: WallWakeModel, onWake: () => void, opt
       const wake = await getWake();
       if (want) {
         // Load the speech model now, not on the first "Hey …".
-        void l.prepare().catch(() => undefined);
+        if (!wakeOnly) void l.prepare().catch(() => undefined);
+        // Back after a pause (Safari heard a command): forget the "Hey …"
+        // that opened it, or it fires again on the old audio.
+        if (wakeHeard) await wake.reset().catch(() => undefined);
         await l.subscribe([wake]).catch(error => {
           throw deviceErrorCode(error);
         });
         wakeOn = true;
+        wakeHeard = true;
       } else {
         wakeOn = false;
         await l.unsubscribe([wake]);
