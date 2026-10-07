@@ -428,8 +428,8 @@ run in the node test project), wired in through one `useWallRuntime()` hook.
   - rotation is paused.
 - **Maintenance** (`wallMaintenance.ts`), once per night at 03:00:
   1. If an SW update is waiting, apply it.
-  2. Otherwise, `waitForPendingWrites(db)` with a 30 s cap, then `location.reload()`.
-  3. If writes are still pending, skip and retry at 03:30.
+  2. Otherwise, if the wall isn't offline, give `waitForPendingWrites(db)` up to 5 s, then `location.reload()` (queued writes persist in IndexedDB; see docs/DECISIONS.md "Wall updates").
+  3. If the wall is offline, skip and retry later.
 - **Connectivity** (`wallConnectivity.ts`):
   - A heartbeat updates `displays/{did}.lastSeenAt` every 5 min, which is also what the phone's "last seen" reads.
   - The wall counts as offline when `navigator.onLine === false` **or** the heartbeat write has been pending for more than 60 s (`snapshot.metadata.hasPendingWrites`).

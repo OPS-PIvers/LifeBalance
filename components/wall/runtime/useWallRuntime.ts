@@ -15,7 +15,7 @@ import { WEATHER_REFRESH_MS, WEATHER_STALE_MS, forecastUrl, parseForecast, type 
 import type { WallSettings } from '@/types/schema';
 
 /** Reported in displays/{did}.appVersion; bump when the wall's behavior changes. */
-export const APP_VERSION = 'wall-4';
+export const APP_VERSION = 'wall-5';
 const RELOADED_FOR_KEY = 'LB_WALL_RELOADED_FOR';
 const WEATHER_KEY = 'LB_WALL_WEATHER';
 const HIDDEN_RESYNC_MS = 5 * 60 * 1000;
@@ -34,8 +34,9 @@ export interface WallRuntime {
   /** The new build's entry script once a deploy is out and not yet loaded, else null. */
   updateBuild: string | null;
   /**
-   * Reloads into the new build once queued writes are saved (someone tapped
-   * Update). Resolves false when they can't be saved yet (offline).
+   * Reloads into the new build (someone tapped Update), after giving queued
+   * writes a moment to reach the server. Resolves false while the wall is
+   * offline.
    */
   applyUpdate: () => Promise<boolean>;
 }
@@ -48,10 +49,21 @@ interface Options {
   onIdle: () => void;
 }
 
-/** True once queued writes reach the server; false after 30 s (offline) or if Firestore gives up. */
-function writesSaved(): Promise<boolean> {
-  const timeout = new Promise<false>(resolve => window.setTimeout(() => resolve(false), 30_000));
-  return Promise.race([waitForPendingWrites(db).then(() => true, () => false), timeout]);
+/** How long a reload waits for queued writes before going ahead anyway. */
+const WRITES_GRACE_MS = 5_000;
+
+/**
+ * Gives queued writes a moment to reach the server before a reload. It does
+ * not gate the reload: whether the wall is online is the offline mark's call
+ * (navigator.onLine plus the heartbeat), and persistence keeps queued writes
+ * in IndexedDB for the new page to send. Gating on waitForPendingWrites left
+ * Update stuck on "Try again" on a wall whose heartbeat was confirming fine:
+ * it waits on the whole local write queue, and something in it never settled
+ * until the page was refreshed by hand.
+ */
+function settleWrites(): Promise<void> {
+  const grace = new Promise<void>(resolve => window.setTimeout(resolve, WRITES_GRACE_MS));
+  return Promise.race([waitForPendingWrites(db).catch(() => undefined), grace]);
 }
 
 function readCachedWeather(): WallWeather | null {
@@ -205,9 +217,17 @@ export function useWallRuntime({ settings, householdId, displayId, onIdle }: Opt
   const effectiveOfflineSince =
     offlineSince ?? (heartbeatStuckSince !== null && now.getTime() - heartbeatStuckSince > HEARTBEAT_PENDING_OFFLINE_MS ? heartbeatStuckSince : null);
 
+  const offline = offlineLevel(effectiveOfflineSince, now.getTime());
+  const online = offline === 'online';
+  const onlineRef = useRef(online);
+  useEffect(() => {
+    onlineRef.current = online;
+  }, [online]);
+
   const wake = useCallback(() => setWakeUntil(Date.now() + NIGHT_WAKE_MS), []);
   const applyUpdate = useCallback(async () => {
-    if (!(await writesSaved())) return false;
+    if (!onlineRef.current || !navigator.onLine) return false;
+    await settleWrites();
     window.location.reload();
     return true;
   }, []);
@@ -245,20 +265,20 @@ export function useWallRuntime({ settings, householdId, displayId, onIdle }: Opt
   // ...and apply it on its own only while the night screen is up: a reload
   // locks the iPad's audio and mic until the next touch, which nobody notices
   // at night. In the day the wall offers it instead (WallUpdateToast).
-  // Skipped while writes are queued (retried each minute) and never twice
+  // Skipped while the wall is offline (retried each minute) and never twice
   // for the same build, so a stale CDN can't cause a reload loop.
   const updateReady = isUpdateAvailable(running, served);
   const minuteTick = nightShowing && updateReady ? now.getMinutes() : -1;
   useEffect(() => {
-    if (!updateReady || !nightShowing || !served) return undefined;
+    if (!updateReady || !nightShowing || !served || !online) return undefined;
     try {
       if (localStorage.getItem(RELOADED_FOR_KEY) === served) return undefined;
     } catch {
       return undefined; // without storage we couldn't stop a loop
     }
     let cancelled = false;
-    void writesSaved().then(saved => {
-      if (cancelled || !saved) return;
+    void settleWrites().then(() => {
+      if (cancelled) return;
       try {
         localStorage.setItem(RELOADED_FOR_KEY, served);
       } catch {
@@ -269,7 +289,7 @@ export function useWallRuntime({ settings, householdId, displayId, onIdle }: Opt
     return () => {
       cancelled = true;
     };
-  }, [updateReady, nightShowing, served, minuteTick]);
+  }, [updateReady, nightShowing, served, online, minuteTick]);
 
   // Re-check the wake window when it ends (the minute tick may be up to 15 s late).
   useEffect(() => {
@@ -282,7 +302,7 @@ export function useWallRuntime({ settings, householdId, displayId, onIdle }: Opt
     now,
     timeZone,
     weather: weather && now.getTime() - weather.fetchedAt < WEATHER_STALE_MS ? weather : null,
-    offline: offlineLevel(effectiveOfflineSince, now.getTime()),
+    offline,
     nightShowing,
     wake,
     idleEpoch,
