@@ -116,25 +116,28 @@ export const WallDisplayLayout: React.FC<WallDisplayLayoutProps> = ({ display, s
             <p className={hint}>A list longer than its space moves by itself. Pause or play it on the wall too.</p>
           </div>
           <div className="flex flex-wrap gap-2" role="group" aria-label={`${display.name}: auto scroll`}>
-            {shownModules(layout).map(key => {
-              const on = autoScrolls(layout, key);
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => onSave(setAutoScroll(layout, key, !on))}
-                  className={cn(
-                    'min-h-11 rounded-full px-4 text-sm font-semibold border transition-colors',
-                    on
-                      ? 'bg-accent-600 border-accent-600 text-white dark:bg-accent-500 dark:border-accent-500'
-                      : 'border-brand-300 text-brand-700 dark:border-brand-600 dark:text-brand-200'
-                  )}
-                >
-                  {MODULE_TITLES[key]}
-                </button>
-              );
-            })}
+            {/* Due today under today shows every item at its natural height, so it has nothing to scroll. */}
+            {shownModules(layout)
+              .filter(key => !(key === 'due' && day === 'due'))
+              .map(key => {
+                const on = autoScrolls(layout, key);
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => onSave(setAutoScroll(layout, key, !on))}
+                    className={cn(
+                      'min-h-11 rounded-full px-4 text-sm font-semibold border transition-colors',
+                      on
+                        ? 'bg-accent-600 border-accent-600 text-white dark:bg-accent-500 dark:border-accent-500'
+                        : 'border-brand-300 text-brand-700 dark:border-brand-600 dark:text-brand-200'
+                    )}
+                  >
+                    {MODULE_TITLES[key]}
+                  </button>
+                );
+              })}
           </div>
         </Row>
       </SurfaceList>

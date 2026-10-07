@@ -95,11 +95,18 @@ describe('WallDisplaySettings → each wall’s layout', () => {
     mocks.displays = [kitchen];
     renderIt();
     const group = screen.getByRole('group', { name: 'Kitchen iPad: auto scroll' });
-    expect(within(group).getAllByRole('button').map(b => b.textContent)).toEqual(['Coming up', 'Shopping', 'Due today']);
+    expect(within(group).getAllByRole('button').map(b => b.textContent)).toEqual(['Coming up', 'Shopping']);
     expect(within(group).getByRole('button', { name: 'Coming up' })).toHaveAttribute('aria-pressed', 'false');
     expect(within(group).getByRole('button', { name: 'Shopping' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(within(group).getByRole('button', { name: 'Coming up' }));
     expect(savedLayout()).toEqual({ layout: { modules: ['coming', 'shopping'], day: 'due', scroll: { coming: true } } });
+  });
+
+  it('offers auto scroll for Due today only where it can scroll, in the panel', () => {
+    mocks.displays = [{ ...kitchen, layout: { modules: ['due'], day: null } }];
+    renderIt();
+    const group = screen.getByRole('group', { name: 'Kitchen iPad: auto scroll' });
+    expect(within(group).getAllByRole('button').map(b => b.textContent)).toEqual(['Due today']);
   });
 
   it('shows no wall rows before a wall is paired', () => {
