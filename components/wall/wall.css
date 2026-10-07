@@ -211,6 +211,22 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .mh span { font-size: 15px; color: var(--muted); }
 .wall .mb { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .wall .mod.top .mb:has(.row) { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+/*
+ * A panel list taller than its module turns like a wheel (WallAutoScroll): the
+ * track holds the list, a quiet seam, then the list again, and is moved with a
+ * transform for sub-pixel smoothness. The bottom edge always fades (there's
+ * more); the top fades only away from rest (--fade-top), so the first item is
+ * never dimmed. A list that fits, or reduced motion, scrolls by hand.
+ */
+.wall .wheel { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.wall .wheel.on {
+  overflow: hidden; touch-action: none;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-top, 0px), #000 calc(100% - 44px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-top, 0px), #000 calc(100% - 44px), transparent 100%);
+}
+.wall .wheel.on .track { will-change: transform; backface-visibility: hidden; }
+.wall .wheel .seam { height: 64px; display: flex; align-items: center; gap: 14px; color: var(--faint); font-size: var(--t-meta); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.wall .wheel .seam::before, .wall .wheel .seam::after { content: ''; flex: 1; height: 1px; background: var(--line-strong); }
 .wall .fill { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .wall .cday { display: grid; gap: 9px; padding-bottom: 24px; width: 100%; text-align: left; }
 .wall .cday .dh { display: flex; align-items: baseline; gap: 10px; }

@@ -4,6 +4,7 @@ import { groupTodos } from '@/utils/wall/wallLists';
 import type { WallPeople } from '@/utils/wall/wallPeople';
 import { useWallData } from '@/components/wall/data/wallData';
 import WallTodoRow from '@/components/wall/lists/WallTodoRow';
+import WallAutoScroll from './WallAutoScroll';
 
 interface TodosModuleProps {
   today: string;
@@ -11,7 +12,7 @@ interface TodosModuleProps {
   people: WallPeople;
 }
 
-/** The panel's To-dos module: overdue, today and this week in one list. */
+/** The panel's To-dos module: overdue, today and this week in one list; a long list turns like a wheel. */
 const TodosModule: React.FC<TodosModuleProps> = ({ today, timeZone, people }) => {
   const { todos } = useWallData();
   const items = useMemo(
@@ -20,7 +21,7 @@ const TodosModule: React.FC<TodosModuleProps> = ({ today, timeZone, people }) =>
   );
   if (items.length === 0) return <div className="empty">No to-dos</div>;
   return (
-    <>
+    <WallAutoScroll>
       {items.map(({ t, group }) => (
         <WallTodoRow
           key={t.id}
@@ -37,7 +38,7 @@ const TodosModule: React.FC<TodosModuleProps> = ({ today, timeZone, people }) =>
           }
         />
       ))}
-    </>
+    </WallAutoScroll>
   );
 };
 
