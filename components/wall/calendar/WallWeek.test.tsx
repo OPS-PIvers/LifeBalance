@@ -79,7 +79,7 @@ describe('WallWeek', () => {
     renderWeek({ modules: ['coming'] });
     const today = screen.getByRole('region', { name: 'Today' });
     expect(within(today).getByText('3:15')).toHaveClass('clock');
-    expect(within(today).getByText('Saturday')).toBeInTheDocument();
+    expect(within(today).getByText('Saturday, Oct 3')).toBeInTheDocument();
     // Haircut ran 2–3 pm: over, so it joins Soccer game under "Earlier today", one row each.
     expect(within(today).getByText('Earlier today')).toBeInTheDocument();
     expect(within(today).getByText('Soccer game')).toBeInTheDocument();

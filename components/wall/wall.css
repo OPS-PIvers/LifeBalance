@@ -88,10 +88,11 @@ html:has(.wall.dark) body { background: #1b1a17; }
 /*
  * Tabular figures only where digits line up (clocks, times, temperatures).
  * Not on the whole wall: this font's tabular set also widens the comma and
- * period, which read as "Monday , October 5" in running text.
+ * period, which read as "Monday , October 5" in running text, and the colon,
+ * which spaced short left-aligned times out as "5 : 00" (those stay proportional).
  */
-.wall .mast .clock, .wall .mast .wxl, .wall .hdr .hclk, .wall .nxw .tm, .wall .lt .tm, .wall .cday .r .tm, .wall .mday .r .tm, .wall .fc .days,
-.wall .mo .cell .n, .wall .mo .ml .t, .wall .dvg .hrs, .wall .blk .tm, .wall .evs li .tm, .wall .dpw, .wall .night .c, .wall .night .t,
+.wall .mast .clock, .wall .mast .wxl, .wall .hdr .hclk, .wall .nxw .tm, .wall .fc .days,
+.wall .mo .cell .n, .wall .mo .ml .t, .wall .dvg .hrs, .wall .dpw, .wall .night .c, .wall .night .t,
 .wall .rail .badge, .wall .mr .d, .wall .mrow .d, .wall .code { font-variant-numeric: tabular-nums; }
 :where(.wall) button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
 .wall button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }

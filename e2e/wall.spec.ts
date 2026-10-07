@@ -94,8 +94,7 @@ test.describe('Wall display shell (Test Mode)', () => {
     // The Week screen's masthead sits at the top of the day column.
     const today = page.getByRole('region', { name: 'Today' });
     await expect(today.getByText('3:15', { exact: true })).toBeVisible();
-    await expect(today.getByText('Saturday', { exact: true })).toBeVisible();
-    await expect(today.getByText('October 3', { exact: true })).toBeVisible();
+    await expect(today.getByText('Saturday, Oct 3', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Five-day forecast' })).toContainText('54°');
     await expect(page.getByText('Rain likely 6–8 pm')).toBeVisible();
     const rail = page.getByRole('navigation', { name: 'Views' });
