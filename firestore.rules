@@ -83,7 +83,16 @@ service cloud.firestore {
          (layout.get('day', null) == null || (layout.day is string && layout.day.size() <= 20)) &&
          (layout.get('scroll', null) == null ||
            (layout.scroll is map &&
-            layout.scroll.keys().hasOnly(['coming', 'shopping', 'todos', 'meals', 'due']))));
+            layout.scroll.keys().hasOnly(['coming', 'shopping', 'todos', 'meals', 'due']) &&
+            isOptionalScrollFlag(layout.scroll, 'coming') &&
+            isOptionalScrollFlag(layout.scroll, 'shopping') &&
+            isOptionalScrollFlag(layout.scroll, 'todos') &&
+            isOptionalScrollFlag(layout.scroll, 'meals') &&
+            isOptionalScrollFlag(layout.scroll, 'due'))));
+    }
+
+    function isOptionalScrollFlag(scroll, key) {
+      return !(key in scroll) || scroll[key] is bool;
     }
 
     function isValidBoolean(val) {

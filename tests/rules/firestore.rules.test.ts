@@ -2706,6 +2706,7 @@ describe('wall display identity', () => {
       await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['coming'], extra: true } }));
       await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['coming'], scroll: { radio: true } } }));
       await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['coming'], scroll: 'on' } }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['coming'], scroll: { coming: 'yes' } } }));
     });
 
     it('a revoked display loses all access immediately', async () => {
@@ -2773,6 +2774,7 @@ describe('wall display identity', () => {
       );
       await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['a', 'b', 'c'] } }));
       await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['coming'], scroll: { radio: true } } }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['coming'], scroll: { meals: { on: true } } } }));
       await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { name: 'Renamed' }));
       await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['coming'] }, lastSeenAt: serverTimestamp() }));
       await assertFails(updateDoc(doc(dbFor(CAROL), 'households', H1, 'displays', DID), { layout: { modules: ['coming'] } }));
