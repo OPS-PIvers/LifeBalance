@@ -7,6 +7,7 @@ import {
   shouldAutoScroll,
   wrapOffset,
 } from '@/utils/wall/wallAutoScroll';
+import { useModuleScroll } from './moduleScroll';
 
 /** How far a finger must travel up or down before a touch counts as spinning the list. */
 const DRAG_PX = 8;
@@ -24,7 +25,8 @@ type Motion =
  * glides up, runs on into a copy of itself past a quiet "Top of list" seam,
  * and settles with the first item back at the top. A touch holds it and a
  * vertical drag spins it by hand; it moves again after a pause. A list that
- * fits, or a reduced-motion device, gets a plain list (scrollable by hand).
+ * fits, a module whose auto scroll is stopped, or a reduced-motion device gets
+ * a plain list (scrollable by hand).
  */
 const WallAutoScroll: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const reduceMotion = useReducedMotion();
@@ -33,7 +35,12 @@ const WallAutoScroll: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const seamRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const [overflows, setOverflows] = useState(false);
-  const active = overflows && !reduceMotion;
+  const { on, onOverflow } = useModuleScroll();
+  const active = on && overflows && !reduceMotion;
+
+  useEffect(() => {
+    onOverflow(overflows);
+  }, [overflows, onOverflow]);
 
   useEffect(() => {
     const wheel = wheelRef.current;

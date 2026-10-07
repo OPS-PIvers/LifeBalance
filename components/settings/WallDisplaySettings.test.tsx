@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { DEFAULT_WALL_SETTINGS } from '@/utils/wall/wallSettings';
-import type { WallSettings } from '@/types/schema';
+import type { WallDisplay, WallSettings } from '@/types/schema';
 
 const mocks = vi.hoisted(() => ({
   settings: null as WallSettings | null,
+  displays: [] as WallDisplay[],
   setDoc: vi.fn(async () => undefined),
+  updateDoc: vi.fn(async (_ref: { path: string }, _data: unknown) => undefined),
   batchSet: vi.fn(),
   commit: vi.fn(async () => undefined),
   call: vi.fn(async (_name: string, _data: unknown): Promise<unknown> => ({ ok: true })),
@@ -17,11 +19,12 @@ vi.mock('firebase/firestore', () => ({
   collection: () => ({ withConverter: () => ({ kind: 'collection' }) }),
   doc: (_db: unknown, path: string) => ({ path, withConverter: () => ({ kind: 'doc' }) }),
   setDoc: mocks.setDoc,
+  updateDoc: mocks.updateDoc,
   writeBatch: () => ({ set: mocks.batchSet, commit: mocks.commit }),
   Bytes: { fromUint8Array: (u: Uint8Array) => ({ bytes: Array.from(u) }) },
   onSnapshot: (ref: { kind: string }, next: (snap: unknown) => void) => {
     if (ref.kind === 'doc') next({ data: () => mocks.settings ?? undefined });
-    else next({ docs: [] });
+    else next({ docs: mocks.displays.map(d => ({ data: () => d })) });
     return () => undefined;
   },
 }));
@@ -36,7 +39,9 @@ const saved = () => (mocks.setDoc.mock.calls.at(-1) as unknown[] | undefined)?.[
 
 beforeEach(() => {
   mocks.settings = null;
+  mocks.displays = [];
   mocks.setDoc.mockClear();
+  mocks.updateDoc.mockClear();
   mocks.batchSet.mockClear();
   mocks.commit.mockClear();
   mocks.call.mockClear();
@@ -60,6 +65,47 @@ describe('WallDisplaySettings → Week layout', () => {
     expect(saved()).toMatchObject({ rotation: { enabled: true, intervalSec: 120 } });
     fireEvent.click(screen.getAllByRole('radio', { name: 'Off' })[0]!);
     expect(saved()).toMatchObject({ rotation: { enabled: false, intervalSec: 60 } });
+  });
+});
+
+describe('WallDisplaySettings → each wall’s layout', () => {
+  const kitchen: WallDisplay = { id: 'd1', name: 'Kitchen iPad', status: 'active', createdBy: 'u', createdAt: '', layout: { modules: ['coming', 'shopping'] } };
+  const savedLayout = () => (mocks.updateDoc.mock.calls.at(-1) as unknown[] | undefined)?.[1];
+
+  it('arranges a paired wall’s three slots on its own doc, never offering a module twice', () => {
+    mocks.displays = [kitchen, { ...kitchen, id: 'd2', name: 'Old', status: 'revoked' }];
+    renderIt();
+    expect(screen.queryByLabelText('Old: top of the panel')).toBeNull();
+    const top = screen.getByLabelText('Kitchen iPad: top of the panel');
+    expect(top).toHaveValue('coming');
+    // Shopping (bottom) and Due today (under today, the default) are taken.
+    expect(top.querySelector('option[value="shopping"]')).toBeNull();
+    expect(top.querySelector('option[value="due"]')).toBeNull();
+    fireEvent.change(top, { target: { value: 'todos' } });
+    expect(mocks.updateDoc.mock.calls.at(-1)?.[0]).toMatchObject({ path: 'households/h1/displays/d1' });
+    // Due today stays under today even with To-dos in the panel: the slot is saved as shown.
+    expect(savedLayout()).toEqual({ layout: { modules: ['todos', 'shopping'], day: 'due' } });
+    fireEvent.change(screen.getByLabelText('Kitchen iPad: bottom of the panel'), { target: { value: 'none' } });
+    expect(savedLayout()).toEqual({ layout: { modules: ['coming'], day: 'due' } });
+    fireEvent.change(screen.getByLabelText('Kitchen iPad: under today'), { target: { value: 'meals' } });
+    expect(savedLayout()).toEqual({ layout: { modules: ['coming', 'shopping'], day: 'meals' } });
+  });
+
+  it('starts and stops auto scroll for the modules the wall shows', () => {
+    mocks.displays = [kitchen];
+    renderIt();
+    const group = screen.getByRole('group', { name: 'Kitchen iPad: auto scroll' });
+    expect(within(group).getAllByRole('button').map(b => b.textContent)).toEqual(['Coming up', 'Shopping', 'Due today']);
+    expect(within(group).getByRole('button', { name: 'Coming up' })).toHaveAttribute('aria-pressed', 'false');
+    expect(within(group).getByRole('button', { name: 'Shopping' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(group).getByRole('button', { name: 'Coming up' }));
+    expect(savedLayout()).toEqual({ layout: { modules: ['coming', 'shopping'], day: 'due', scroll: { coming: true } } });
+  });
+
+  it('shows no wall rows before a wall is paired', () => {
+    renderIt();
+    expect(screen.queryByText('Top of the panel')).toBeNull();
+    expect(screen.getByLabelText('Top module')).toBeInTheDocument();
   });
 });
 

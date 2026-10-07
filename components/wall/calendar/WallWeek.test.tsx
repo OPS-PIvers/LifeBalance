@@ -74,6 +74,20 @@ function renderWeek(layout: WallLayout, data: Partial<WallData> = {}, extra: { a
   return { ...utils, value, onLayout, onOpenDay, onArrangeDone };
 }
 
+/** A finger on `el`, moved `dx` sideways, then lifted (jsdom has no PointerEvent: a MouseEvent carries the coordinates). */
+function swipe(el: Element, dx: number) {
+  const fire = (target: EventTarget, type: string, x: number) => {
+    const e = new MouseEvent(type, { clientX: x, clientY: 300, bubbles: true });
+    Object.defineProperty(e, 'isPrimary', { value: true });
+    Object.defineProperty(e, 'pointerType', { value: 'touch' });
+    target.dispatchEvent(e);
+  };
+  fire(el, 'pointerdown', 500);
+  for (let i = 1; i <= 5; i++) fire(window, 'pointermove', 500 + (dx * i) / 5);
+  fire(window, 'pointerup', 500 + dx);
+  fireEvent.click(el);
+}
+
 describe('WallWeek', () => {
   it('leads the day with what’s next, then the rest of today, Due today and dinner', () => {
     renderWeek({ modules: ['coming'] });
@@ -195,6 +209,28 @@ describe('WallWeek', () => {
     expect(within(dinners).getByText('Chili')).toBeInTheDocument();
     expect(within(dinners).queryByText('Tacos')).not.toBeInTheDocument();
     expect(within(screen.getByRole('region', { name: 'To-dos' })).getByText('Feed the fish')).toBeInTheDocument();
+  });
+
+  it('a sideways swipe switches what a slot shows, and never ends in a tap', () => {
+    // Reduced motion: the switch happens on release, with no slide to wait for.
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce'), media: query, addEventListener: () => {}, removeEventListener: () => {} }));
+    try {
+      const { onLayout, onOpenDay } = renderWeek({ modules: ['coming', 'meals'] });
+      swipe(screen.getByRole('region', { name: 'Coming up' }), -160);
+      // Next after Coming up is Shopping; Due today is pinned under today as shown.
+      expect(onLayout).toHaveBeenLastCalledWith({ modules: ['shopping', 'meals'], day: 'due' });
+      expect(onOpenDay).not.toHaveBeenCalled();
+      swipe(screen.getByRole('region', { name: 'Dinners' }), 160);
+      expect(onLayout).toHaveBeenLastCalledWith({ modules: ['coming', 'todos'], day: 'due' });
+      swipe(within(screen.getByRole('region', { name: 'Today' })).getByRole('region', { name: 'Due today' }), -160);
+      expect(onLayout).toHaveBeenLastCalledWith({ modules: ['coming', 'meals'], day: 'shopping' });
+      // A short drag springs back.
+      onLayout.mockClear();
+      swipe(screen.getByRole('region', { name: 'Coming up' }), -30);
+      expect(onLayout).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('shows Coming up when the saved panel is empty (the old Today-only mode)', () => {
