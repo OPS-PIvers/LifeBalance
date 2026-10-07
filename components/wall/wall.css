@@ -575,6 +575,9 @@ html:has(.wall.dark) body { background: #1b1a17; }
   .wall .mast .dd span { font-size: 20px; }
   .wall .due .dg { grid-template-columns: 1fr; }
   .wall .panel { padding: 30px 28px 24px; }
+  /* The narrow panel can't fit "Coming up" and Week · Month on one line: the switch drops under the title. */
+  .wall .mh { flex-wrap: wrap; row-gap: 12px; }
+  .wall .mh b { white-space: nowrap; }
   .wall .hdr { padding: 12px 28px 12px 40px; gap: 16px; }
   .wall .hdr .vseg { width: 240px; }
 
