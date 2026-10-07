@@ -16,31 +16,31 @@ interface WallMastheadProps {
   people: WallPeople;
 }
 
-/** The Week screen's masthead: the clock beside the day, weather as one line, today's untimed line. */
+/** The Week screen's masthead: the clock with the day and date under it, the weather at the right on the date's line, today's untimed line. */
 const WallMasthead: React.FC<WallMastheadProps> = ({ now, timeZone, weather, onWeather, untimed, people }) => {
   const p = zonedParts(now, timeZone);
   return (
     <header className="mast">
       <div className="mtop">
-        <span className="clock">{clockText(p.hour, p.minute)}</span>
-        <div className="mside">
+        <div className="mtime">
+          <span className="clock">{clockText(p.hour, p.minute)}</span>
           <span className="dd">
             <b>{p.weekday}</b>
             <span>
               {p.monthName} {p.day}
             </span>
           </span>
-          {weather && (
-            <button type="button" className="wxl" onClick={onWeather} aria-label="Five-day forecast">
-              <WallWeatherIcon icon={weather.current.icon} />
-              <b>{weather.current.temp}°</b>
-              <span>
-                {weather.high}° / {weather.low}°
-              </span>
-              {weather.rainNote && <em>{weather.rainNote}</em>}
-            </button>
-          )}
         </div>
+        {weather && (
+          <button type="button" className="wxl" onClick={onWeather} aria-label="Five-day forecast">
+            <WallWeatherIcon icon={weather.current.icon} />
+            <b>{weather.current.temp}°</b>
+            <span>
+              {weather.high}° / {weather.low}°
+            </span>
+            {weather.rainNote && <em>{weather.rainNote}</em>}
+          </button>
+        )}
       </div>
       {untimed.length > 0 && <WallUntimedLine events={untimed} people={people} />}
     </header>
