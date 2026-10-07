@@ -160,17 +160,12 @@ html:has(.wall.dark) body { background: #1b1a17; }
 /* The day column. --k comes from useWallFit: it grows on a quiet day and shrinks on a busy one. */
 .wall .today { --k: calc(var(--s) * var(--fit, 1)); position: relative; padding: 32px 44px 26px 48px; display: flex; flex-direction: column; gap: calc(var(--k) * 22px); min-height: 0; overflow: hidden; }
 .wall .mast { display: grid; gap: calc(var(--k) * 18px); padding-bottom: calc(var(--k) * 18px); border-bottom: 1px solid var(--line); }
-/* Clock and weather share the top row (the weather centred on the clock, no empty band above it); the day and date get a row of their own, so nothing competes with them. */
-.wall .mast .mtop { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'clock wx' 'date date'; column-gap: 22px; row-gap: calc(var(--k) * 16px); align-items: end; }
-.wall .mast .mtime { display: contents; }
-.wall .mast .clock { grid-area: clock; }
-.wall .mast .dd { grid-area: date; }
-.wall .mast .wxl { grid-area: wx; align-self: center; }
+/* One block: the clock with a single short day-and-date line under it (never wider than the clock), the weather centred beside the pair. */
+.wall .mast .mtop { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 28px; align-items: center; }
+.wall .mast .mtime { display: grid; gap: calc(var(--k) * 14px); justify-items: start; }
 .wall .mast .clock { padding-top: 0.12em; font-family: var(--font-display); font-size: var(--t-hero); font-weight: 500; line-height: 0.8; letter-spacing: -0.035em; }
-.wall .mast .dd { display: flex; align-items: baseline; gap: 12px; white-space: nowrap; line-height: 1; }
-.wall .mast .dd b { font-family: var(--font-display); font-size: 40px; font-weight: 600; line-height: 1; }
-.wall .mast .dd span { font-size: 22px; color: var(--muted); }
-.wall .mast .wxl { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px 12px; padding: 4px 10px; margin-right: -10px; border-radius: 10px; font-size: 21px; color: var(--fg2); }
+.wall .mast .dd { font-family: var(--font-display); font-size: 30px; font-weight: 500; line-height: 1; color: var(--fg2); white-space: nowrap; }
+.wall .mast .wxl { justify-self: end; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px 12px; padding: 4px 10px; margin-right: -10px; border-radius: 10px; font-size: 21px; color: var(--fg2); }
 .wall .mast .wxl svg { font-size: 32px; color: var(--warm); }
 .wall .mast .wxl svg.r { color: var(--rain); }
 .wall .mast .wxl b { font-family: var(--font-display); font-size: 34px; font-weight: 500; color: var(--fg); }
@@ -575,8 +570,7 @@ html:has(.wall.dark) body { background: #1b1a17; }
   .wall { --t-hero: 92px; }
   .wall .wk { grid-template-columns: minmax(0, 1fr) 372px; }
   .wall .today { padding: 32px 36px 26px 40px; }
-  .wall .mast .dd b { font-size: 34px; }
-  .wall .mast .dd span { font-size: 20px; }
+  .wall .mast .dd { font-size: 24px; }
   .wall .panel { padding: 30px 28px 24px; }
   /* The narrow panel keeps Week · Month at the heading's top right: a smaller heading and a compact switch share the row. */
   .wall .mh b { font-size: calc(var(--s) * 26px); white-space: nowrap; }
