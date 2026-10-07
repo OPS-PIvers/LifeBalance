@@ -63,6 +63,19 @@ describe('WallDisplaySettings → Week layout', () => {
   });
 });
 
+describe('WallDisplaySettings → Side buttons', () => {
+  it('starts at Always, and says how to reach the menu once they are hidden', () => {
+    renderIt();
+    const group = screen.getByRole('radiogroup', { name: 'Wall side buttons' });
+    expect(within(group).getByRole('radio', { name: 'Always' })).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(within(group).getByRole('radio', { name: 'Hidden' }));
+    expect(saved()).toMatchObject({ rail: 'hidden' });
+    mocks.settings = { ...DEFAULT_WALL_SETTINGS, rail: 'hidden' };
+    renderIt();
+    expect(screen.getByText('Hold the clock to open the display menu')).toBeInTheDocument();
+  });
+});
+
 describe('WallDisplaySettings → Voice', () => {
   it('switches the engine, and shows the allowance left where it’s spent', () => {
     renderIt();

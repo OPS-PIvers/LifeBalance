@@ -2224,6 +2224,8 @@ export interface WallSoundSettings {
   volume: number;
 }
 
+export type WallRailMode = 'shown' | 'tap' | 'hidden';
+
 export interface WallSettings {
   defaultModules: WallModuleKey[];
   rotation: { enabled: boolean; intervalSec: number };
@@ -2231,6 +2233,8 @@ export interface WallSettings {
   night: { start: string; end: string }; // 'HH:mm'
   theme: 'light' | 'dark';
   textSize: 'normal' | 'large';
+  /** The left rail of view buttons: always shown, shown on a tap, or never (hold the clock for the display menu). */
+  rail: WallRailMode;
   showBills: boolean;
   holidaysEnabled: boolean;
   voice: WallVoiceEngine;

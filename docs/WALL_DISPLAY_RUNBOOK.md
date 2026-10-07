@@ -111,6 +111,11 @@ The wall still switches to its dim night clock on its own.
   asks for the **family PIN** when one is set (Settings → Household → Wall
   display → Family PIN; it's the same PIN as Kid Mode's). Without a PIN,
   anyone at the wall can open it.
+- **Side buttons** (Settings → Wall display → Night & look): **Always**
+  keeps the rail, **On tap** hides it until someone touches the wall (it
+  slides in over the screen for 8 seconds), **Hidden** removes it. Holding
+  the clock for a moment opens the gear menu in every mode, which is the way
+  in when the rail is hidden.
 - **Last seen** on the phone turns red when the wall hasn't checked in for
   30 minutes (it checks in every 5).
 - **App updates:** the wall checks for a new version every 10 minutes. When

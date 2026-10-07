@@ -30,7 +30,7 @@ import {
   parseGeocode,
   type GeocodeResult,
 } from '@/utils/wall/wallSettingsView';
-import type { HouseholdMember, WallDisplay, WallSettings } from '@/types/schema';
+import type { HouseholdMember, WallDisplay, WallRailMode, WallSettings } from '@/types/schema';
 import WallCalendarSettings from './WallCalendarSettings';
 import WallVoiceSettings from './WallVoiceSettings';
 import { useAiUsageToday } from '@/hooks/useAiUsageToday';
@@ -59,6 +59,13 @@ async function callable<Req, Res>(name: string, data: Req): Promise<Res> {
 /** Settings' two pickers → the stored list ('none' drops a slot). */
 // The panel always has a top module; 'none' (only the bottom has it) is dropped by normalizeModules.
 const startingModules = (top: string, bottom: string) => normalizeModules([top, bottom]);
+
+/** What each Side buttons choice does on the wall. */
+const RAIL_NOTES: Record<WallRailMode, string> = {
+  shown: 'Views, voice and the display menu down the left',
+  tap: 'Slide in when someone touches the wall',
+  hidden: 'Hold the clock to open the display menu',
+};
 
 const errorText = (e: unknown) => (e instanceof Error && e.message ? e.message : 'Something went wrong. Try again.');
 
@@ -395,6 +402,23 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
               ]}
               value={settings.textSize}
               onChange={textSize => void save({ textSize })}
+            />
+          </Row>
+          <Row className="flex-col items-stretch gap-2">
+            <div>
+              <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Side buttons</p>
+              <p className="text-xs text-brand-500 dark:text-brand-400">{RAIL_NOTES[settings.rail]}</p>
+            </div>
+            <SegmentedControl
+              name="Wall side buttons"
+              size="sm"
+              options={[
+                { value: 'shown', label: 'Always' },
+                { value: 'tap', label: 'On tap' },
+                { value: 'hidden', label: 'Hidden' },
+              ]}
+              value={settings.rail}
+              onChange={rail => void save({ rail })}
             />
           </Row>
           <Row className="flex-col items-stretch gap-2">

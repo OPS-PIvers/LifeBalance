@@ -1364,7 +1364,7 @@ service cloud.firestore {
         allow create, update: if isMemberOf(householdId) &&
                                  docId == 'config' &&
                                  request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys().hasOnly([
-                                   'defaultModules', 'rotation', 'idleReturnSec', 'night', 'theme', 'textSize',
+                                   'defaultModules', 'rotation', 'idleReturnSec', 'night', 'theme', 'textSize', 'rail',
                                    'showBills', 'holidaysEnabled', 'weather', 'timeZone', 'voice', 'sound', 'alerts',
                                    'wakeWord', 'wakeModel'
                                  ]) &&
@@ -1389,6 +1389,7 @@ service cloud.firestore {
                                  isValidOptionalNumber(request.resource.data.get('idleReturnSec', null)) &&
                                  isValidOptionalString(request.resource.data.get('theme', null), 10) &&
                                  isValidOptionalString(request.resource.data.get('textSize', null), 10) &&
+                                 isValidOptionalString(request.resource.data.get('rail', null), 10) &&
                                  isValidOptionalString(request.resource.data.get('timeZone', null), 64) &&
                                  isValidOptionalString(request.resource.data.get('voice', null), 10) &&
                                  (request.resource.data.get('showBills', null) == null || request.resource.data.showBills is bool) &&

@@ -115,6 +115,19 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .rail .mic.live { background: var(--warm-fill); color: #fff; box-shadow: 0 0 0 8px color-mix(in srgb, var(--warm-fill) 22%, transparent); }
 .wall .rail .gear { margin: 10px auto 0; width: 56px; height: 56px; display: grid; place-items: center; color: var(--faint); font-size: 26px; }
 
+/*
+ * Settings' Side buttons. Hidden: no rail, the screens take the full width.
+ * On tap: the same full-width layout, with the rail sliding in over the left
+ * edge on a touch (useWallRail), so nothing under a finger moves.
+ */
+.wall.no-rail, .wall.rail-float { grid-template-columns: minmax(0, 1fr); }
+.wall.rail-float .rail { position: absolute; z-index: 28; top: env(safe-area-inset-top, 0px); bottom: 0; left: 0; width: 104px; background: var(--card); border-right-color: var(--line-strong); box-shadow: 12px 0 32px rgba(22, 21, 18, 0.1); transform: translateX(-100%); visibility: hidden; transition: transform 0.22s ease-in, visibility 0s 0.22s; }
+.wall.rail-float.rail-open .rail { transform: none; visibility: visible; transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1); }
+/* The clock is held to open the display menu: no iPadOS callout or magnifier. */
+.wall .mast .clock, .wall .hdr .hclk > b { -webkit-touch-callout: none; }
+@media (prefers-reduced-motion: reduce) {
+  .wall.rail-float .rail, .wall.rail-float.rail-open .rail { transition: none; }
+}
 .wall .main { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 
 /* Slim header (every screen but Week): title, then the time, temperature and that screen's actions. */
