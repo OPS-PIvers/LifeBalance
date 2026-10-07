@@ -15,6 +15,7 @@ import type {
   WallTravel,
   WallWakeFile,
 } from '@/types/schema';
+import type { TodoCompletionOptions, TodoSubtaskToggleResult } from '@/contexts/household/mutations/todoMutations';
 import type { VoiceMissDraft } from '@/utils/wall/wallVoiceMiss';
 
 /**
@@ -33,7 +34,10 @@ export interface WallDataActions {
   clearPurchasedShoppingItems: () => Promise<void>;
   addToDo: (todo: Omit<ToDo, 'id' | 'createdAt' | 'createdBy'>) => Promise<void>;
   completeToDo: (id: string) => Promise<void>;
-  uncompleteToDo: (id: string) => Promise<void>;
+  /** `options.subtaskToggle` re-unchecks the step that auto-completed it (Undo). */
+  uncompleteToDo: (id: string, options?: TodoCompletionOptions) => Promise<void>;
+  /** Flips one step; checking the last open one completes the to-do in the same batch. */
+  toggleTodoSubtask: (todoId: string, subtaskId: string) => Promise<TodoSubtaskToggleResult>;
   deleteToDo: (id: string) => Promise<void>;
   /** Saves this wall's panel layout (per display; per device for a member preview). */
   setLayout: (layout: WallLayout) => Promise<void>;

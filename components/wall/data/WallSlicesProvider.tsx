@@ -121,7 +121,8 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       clearPurchasedShoppingItems: shopping.clearPurchasedShoppingItems,
       addToDo: todoSlice.addToDo,
       completeToDo: id => todoSlice.completeToDo(id),
-      uncompleteToDo: id => todoSlice.uncompleteToDo(id),
+      uncompleteToDo: (id, options) => todoSlice.uncompleteToDo(id, options),
+      toggleTodoSubtask: todoSlice.toggleTodoSubtask,
       deleteToDo: todoSlice.deleteToDo,
       setLayout: async layout => {
         setLocalLayout(layout);

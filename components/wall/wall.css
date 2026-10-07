@@ -233,6 +233,19 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .row .in { display: flex; align-items: center; gap: 14px; width: 100%; min-height: inherit; background: var(--bg); position: relative; z-index: 1; transition: transform 160ms ease; }
 .wall .row .tx { font-size: calc(var(--s) * 22px); flex: 1; min-width: 0; }
 .wall .row .q { font-size: calc(var(--s) * 17px); color: var(--muted); }
+/* A to-do's steps: their own checkable rows, indented to the parent's text
+   (box width + the row's 14px gap) so the block reads as a hanging indent. */
+.wall .tblk { border-bottom: 1px solid var(--line); }
+.wall .tblk > .row { border-bottom: 0; }
+.wall .row .stp { font-size: calc(var(--s) * 16px); font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; border: 1.5px solid var(--line-strong); border-radius: 999px; padding: 1px 9px; white-space: nowrap; }
+.wall .row.done .stp { color: var(--faint); border-color: var(--line); }
+.wall .subs { list-style: none; margin: 0; padding: 0 0 8px calc(var(--k, 1) * 30px + 14px); }
+.wall .sec .subs { --k: 1.12; }
+.wall .sub { display: flex; align-items: center; gap: 12px; width: 100%; min-height: calc(var(--s) * 44px); text-align: left; border-top: 1px dashed var(--line); }
+.wall .subs li:first-child .sub { border-top: 0; }
+.wall .sub .bx { --k: 0.78; border-radius: 8px; }
+.wall .sub .tx { font-size: calc(var(--s) * 20px); flex: 1; min-width: 0; line-height: 1.25; }
+.wall .sec .sub .tx { font-size: calc(var(--s) * 21px); }
 
 /* Arrange mode: the day dims; the panel's real modules get outlines and controls. */
 .wall .wk.arranging .today { opacity: 0.35; pointer-events: none; }

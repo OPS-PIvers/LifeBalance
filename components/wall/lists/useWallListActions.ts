@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
-import type { ShoppingItem, ToDo } from '@/types/schema';
+import type { ShoppingItem, Subtask, ToDo } from '@/types/schema';
 import { withoutId } from '@/utils/wall/wallLists';
+import { setSubtaskDone, subtaskProgress } from '@/utils/subtasks';
+import { evaluateTodoSubtaskGate } from '@/utils/todoSubtaskGate';
 import { useWallData } from '@/components/wall/data/wallData';
 import { useWallToaster, type WallToaster } from '@/components/wall/wallToast';
 
@@ -64,10 +66,42 @@ export function useWallListActions(ownToaster?: WallToaster) {
           removeNewShopping(before, items.map(i => i.name))
         );
       },
-      toggleTodo: (todo: ToDo) =>
-        todo.isCompleted
-          ? toaster.run(actions.uncompleteToDo(todo.id), `Unchecked ${todo.text}`, () => actions.completeToDo(todo.id))
-          : toaster.run(actions.completeToDo(todo.id), `Completed ${todo.text}`, () => actions.uncompleteToDo(todo.id)),
+      toggleTodo: (todo: ToDo) => {
+        if (todo.isCompleted) {
+          toaster.run(actions.uncompleteToDo(todo.id), `Unchecked ${todo.text}`, () => actions.completeToDo(todo.id));
+          return;
+        }
+        // A habit-linked to-do refuses completion until every step is done;
+        // say so instead of letting the write fail as "Couldn't save".
+        const gate = evaluateTodoSubtaskGate(todo);
+        if (gate.blocked) {
+          toaster.show(`Check off ${plural(gate.stepsLeft, 'step')} first`);
+          return;
+        }
+        toaster.run(actions.completeToDo(todo.id), `Completed ${todo.text}`, () => actions.uncompleteToDo(todo.id));
+      },
+      /**
+       * Checks or unchecks one step. Checking the last open step completes the
+       * to-do (the mutation does both in one batch), so Undo reads the
+       * write's own result to know which of the two to reverse.
+       */
+      toggleSubtask: (todo: ToDo, subtask: Subtask) => {
+        const checking = !subtask.isDone;
+        const finishes = checking && !todo.isCompleted && subtaskProgress(setSubtaskDone(todo.subtasks, subtask.id, true)).allDone;
+        const write = actions.toggleTodoSubtask(todo.id, subtask.id);
+        toaster.run(
+          write,
+          finishes ? `Completed ${todo.text}` : checking ? `Checked off ${subtask.text}` : `Unchecked ${subtask.text}`,
+          async () => {
+            const result = await write;
+            if (result.autoCompleted) {
+              await actions.uncompleteToDo(todo.id, { subtaskToggle: { subtaskId: subtask.id, done: false } });
+            } else {
+              await actions.toggleTodoSubtask(todo.id, subtask.id);
+            }
+          }
+        );
+      },
       deleteTodo: (todo: ToDo) => {
         const { createdAt: _createdAt, createdBy: _createdBy, ...rest } = withoutId(todo);
         toaster.run(actions.deleteToDo(todo.id), `Deleted “${todo.text}”`, () => actions.addToDo(rest));
