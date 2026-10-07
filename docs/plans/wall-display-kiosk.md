@@ -407,7 +407,7 @@ function isDisplayOf(hid) {
   - Add `https://api.open-meteo.com` and `https://geocoding-api.open-meteo.com` to the (report-only) CSP `connect-src`.
   - Add `https://*.cloudfunctions.net` and `https://*.run.app` if they're missing, since callables use them.
 - **Service-worker update prompt** (`index.html:105–146`): the `confirm()` at L129 must not run on a wall.
-  - **As built:** `public/sw.js` calls `skipWaiting()` on install, so a new version activates and the existing `controllerchange` listener reloads every device within seconds of a deploy. A wall therefore just skips the `confirm()` (it would freeze an unattended screen) and reloads like any other device. The 3 am reload below remains the backstop.
+  - **As built:** `public/sw.js` calls `skipWaiting()` on install, so a new version activates and the existing `controllerchange` listener reloads every phone within seconds of a deploy. A wall skips the `confirm()` (it would freeze an unattended screen) **and the `controllerchange` reload** (it would re-lock audio and the mic mid-day). It fires `lb-wall-update` instead, and the wall shows its own "An update is available" toast (Update / Later); the night screen applies the update if nobody does.
   - The registration script checks `localStorage.LB_WALL_DEVICE === '1'`. On a wall it stores the waiting worker on `window.__lbSwUpdate` instead of prompting.
   - `WallApp`'s maintenance timer posts `'skipWaiting'` (the plain string `public/sw.js:446` listens for) during the night window. The existing `controllerchange` listener then reloads.
 - **Manifest:** `orientation` stays `portrait` for phones. iPadOS 16 standalone apps don't enforce it, and the wall is physically mounted. No manifest change is needed.
@@ -620,7 +620,7 @@ Record the results in `docs/plans/wall-display-phase0-results.md`. Delete the la
 - [ ] Idle 3 min returns to Week and resets scroll.
 - [ ] Rotation pauses on touch.
 - [ ] Night screen at 10 pm; a tap wakes it for 60 s; brightness automation fires.
-- [ ] A deployed update is applied overnight (during the night screen) with no prompt, and the wall doesn't reload at any other time.
+- [ ] A deployed update shows the "An update is available" toast within 10 minutes; Update reloads, Later hides it, and it's applied overnight (during the night screen) if nobody taps. The wall doesn't reload on its own at any other time.
 
 **Voice and access control**
 - [ ] Voice: 20 scripted commands; the undo of a voice add works.
@@ -698,7 +698,7 @@ the wall.
 | Alert on screen | A big centered card with a chime for **1 minute**. A setting chooses chime + spoken (default) or chime only. **Night window:** shown on the dimmed screen with no sound. |
 | Day brief | **On voice request** ("what's my day", "what's tomorrow"; after 6 pm "my day" means tomorrow). **Weather + events** with leave-by times. A big card lists the lines and highlights each as it's read. |
 | Wake word | "**Hey Home**", on-device, **not during the night window**, the word under the mic whenever it listens. **As built:** openWakeWord + Vosk (Picovoice went enterprise-only); "Hey Jarvis" until the custom "Hey Home" model is trained. |
-| Reloads | No blind 3 am reload. The wall reloads **only when a new version is deployed, and only during the night window** (a reload re-locks audio and mic until the next touch). A "Tap to turn on sound" chip shows whenever audio is locked. |
+| Reloads | No blind 3 am reload. The wall reloads on its own **only when a new version is deployed, and only during the night window** (a reload re-locks audio and mic until the next touch). In the day a new version shows an "An update is available" toast; Update reloads at once. A "Tap to turn on sound" chip shows whenever audio is locked. |
 
 ### Phases
 

@@ -128,7 +128,8 @@
                   console.log('[App] New version available!');
                   // A wall display (docs/plans/wall-display-kiosk.md §4.7) is
                   // unattended: a confirm() would freeze it until someone taps.
-                  // It updates silently instead. Key matches utils/wall/wallDevice.ts.
+                  // It shows its own toast instead (see controllerchange below).
+                  // Key matches utils/wall/wallDevice.ts.
                   var isWall = false;
                   try { isWall = localStorage.getItem('LB_WALL_DEVICE') === '1'; } catch (e) {}
                   if (isWall) {
@@ -146,8 +147,18 @@
             console.error('[App] SW registration failed:', error);
           });
 
-          // Reload when new SW takes control
+          // Reload when new SW takes control. Not on a wall: a reload there
+          // locks audio and the mic until someone touches it, so the wall asks
+          // with its own "update available" toast (and updates itself at
+          // night). The event name matches WALL_UPDATE_EVENT in
+          // utils/wall/wallVersion.ts.
           navigator.serviceWorker.addEventListener('controllerchange', () => {
+            var onWall = false;
+            try { onWall = localStorage.getItem('LB_WALL_DEVICE') === '1'; } catch (e) {}
+            if (onWall) {
+              window.dispatchEvent(new Event('lb-wall-update'));
+              return;
+            }
             console.log('[App] New SW took control, reloading...');
             window.location.reload();
           });

@@ -3,7 +3,7 @@ import { doc, onSnapshot, serverTimestamp, updateDoc, waitForPendingWrites } fro
 import { auth, db } from '@/firebase.config';
 import { createIdleTimer } from '@/utils/wall/wallIdle';
 import { isNight } from '@/utils/wall/wallNight';
-import { UPDATE_CHECK_MS, entryScriptOf, isUpdateAvailable, runningEntryScript } from '@/utils/wall/wallVersion';
+import { UPDATE_CHECK_MS, WALL_UPDATE_EVENT, entryScriptOf, isUpdateAvailable, runningEntryScript } from '@/utils/wall/wallVersion';
 import {
   HEARTBEAT_INTERVAL_MS,
   HEARTBEAT_PENDING_OFFLINE_MS,
@@ -31,6 +31,13 @@ export interface WallRuntime {
   wake: () => void;
   /** Bumps whenever the wall goes idle; screens reset on change. */
   idleEpoch: number;
+  /** The new build's entry script once a deploy is out and not yet loaded, else null. */
+  updateBuild: string | null;
+  /**
+   * Reloads into the new build once queued writes are saved (someone tapped
+   * Update). Resolves false when they can't be saved yet (offline).
+   */
+  applyUpdate: () => Promise<boolean>;
 }
 
 interface Options {
@@ -39,6 +46,12 @@ interface Options {
   displayId: string | null;
   /** Called once per idle timeout (navigate home, close overlays). */
   onIdle: () => void;
+}
+
+/** True once queued writes reach the server; false after 30 s (offline) or if Firestore gives up. */
+function writesSaved(): Promise<boolean> {
+  const timeout = new Promise<false>(resolve => window.setTimeout(() => resolve(false), 30_000));
+  return Promise.race([waitForPendingWrites(db).then(() => true, () => false), timeout]);
 }
 
 function readCachedWeather(): WallWeather | null {
@@ -193,9 +206,16 @@ export function useWallRuntime({ settings, householdId, displayId, onIdle }: Opt
     offlineSince ?? (heartbeatStuckSince !== null && now.getTime() - heartbeatStuckSince > HEARTBEAT_PENDING_OFFLINE_MS ? heartbeatStuckSince : null);
 
   const wake = useCallback(() => setWakeUntil(Date.now() + NIGHT_WAKE_MS), []);
+  const applyUpdate = useCallback(async () => {
+    if (!(await writesSaved())) return false;
+    window.location.reload();
+    return true;
+  }, []);
   const nightShowing = isNight(now, settings.night, timeZone) && now.getTime() >= wakeUntil;
 
-  // Updates: ask every 30 min whether a new version is deployed...
+  // Updates: ask every 10 min whether a new version is deployed, and right
+  // away when the service worker reports one (index.html fires the event
+  // instead of reloading a wall).
   const [running] = useState(() => runningEntryScript(document));
   const [served, setServed] = useState<string | null>(null);
   useEffect(() => {
@@ -211,16 +231,20 @@ export function useWallRuntime({ settings, householdId, displayId, onIdle }: Opt
         // Offline: ask again next time.
       }
     };
+    const onWorkerUpdate = () => void check();
     void check();
     const id = window.setInterval(() => void check(), UPDATE_CHECK_MS);
+    window.addEventListener(WALL_UPDATE_EVENT, onWorkerUpdate);
     return () => {
       cancelled = true;
       window.clearInterval(id);
+      window.removeEventListener(WALL_UPDATE_EVENT, onWorkerUpdate);
     };
   }, [running]);
 
-  // ...and apply it only while the night screen is up: a reload locks the
-  // iPad's audio and mic until the next touch, which nobody notices at night.
+  // ...and apply it on its own only while the night screen is up: a reload
+  // locks the iPad's audio and mic until the next touch, which nobody notices
+  // at night. In the day the wall offers it instead (WallUpdateToast).
   // Skipped while writes are queued (retried each minute) and never twice
   // for the same build, so a stale CDN can't cause a reload loop.
   const updateReady = isUpdateAvailable(running, served);
@@ -233,9 +257,8 @@ export function useWallRuntime({ settings, householdId, displayId, onIdle }: Opt
       return undefined; // without storage we couldn't stop a loop
     }
     let cancelled = false;
-    const timeout = new Promise<'timeout'>(resolve => window.setTimeout(() => resolve('timeout'), 30_000));
-    void Promise.race([waitForPendingWrites(db).then(() => 'done' as const), timeout]).then(result => {
-      if (cancelled || result !== 'done') return;
+    void writesSaved().then(saved => {
+      if (cancelled || !saved) return;
       try {
         localStorage.setItem(RELOADED_FOR_KEY, served);
       } catch {
@@ -263,5 +286,7 @@ export function useWallRuntime({ settings, householdId, displayId, onIdle }: Opt
     nightShowing,
     wake,
     idleEpoch,
+    updateBuild: updateReady ? served : null,
+    applyUpdate,
   };
 }
