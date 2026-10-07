@@ -16,9 +16,8 @@ const WallForecastSheet: React.FC<{ weather: WallWeather; place?: string; onClos
             <span className="w">{i === 0 ? 'Today' : WEEKDAY.format(new Date(`${d.date}T12:00:00Z`))}</span>
             <WallWeatherIcon icon={d.icon} />
             <b>{d.high}°</b>
-            <small>
-              {d.low}°{d.precipMax >= 30 ? ` · ${Math.round(d.precipMax)}% rain` : ''}
-            </small>
+            <small>{d.low}°</small>
+            {d.precipMax >= 30 && <small className="rain">{Math.round(d.precipMax)}% rain</small>}
           </div>
         ))}
       </div>

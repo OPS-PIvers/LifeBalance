@@ -38,6 +38,8 @@
   right: 0;
   height: 100vh;
   height: 100dvh;
+  /* useWallViewport overrides the height where iPadOS reports it short. The status bar sits on top of the page, so keep clear of it. */
+  padding-top: env(safe-area-inset-top, 0px);
   display: grid;
   grid-template-columns: 104px minmax(0, 1fr);
   background: var(--bg);
@@ -45,7 +47,6 @@
   font-family: var(--font-sans);
   font-size: calc(var(--s) * 22px);
   line-height: 1.3;
-  font-variant-numeric: tabular-nums;
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -78,6 +79,14 @@ html:has(.wall.dark) body { background: #1b1a17; }
   color-scheme: dark;
 }
 .wall.large { --s: 1.15; }
+/*
+ * Tabular figures only where digits line up (clocks, times, temperatures).
+ * Not on the whole wall: this font's tabular set also widens the comma and
+ * period, which read as "Monday , October 5" in running text.
+ */
+.wall .hero .big, .wall .hero .sub, .wall .blocks, .wall .fc .days, .wall .tev .tm, .wall .nowmark, .wall .grp li .tm,
+.wall .mo .cell .n, .wall .mo .ml .t, .wall .dvg .hrs, .wall .blk .tm, .wall .evs li .tm, .wall .dpw, .wall .night .c,
+.wall .rail .badge, .wall .mr .d, .wall .mrow .d, .wall .code { font-variant-numeric: tabular-nums; }
 :where(.wall) button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
 .wall button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .wall svg.wi { width: 1em; height: 1em; flex: none; display: inline-block; vertical-align: -0.125em; }
@@ -110,6 +119,7 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .hero svg { font-size: 46px; color: var(--warm); }
 .wall .top .vr { flex: none; width: 1px; align-self: stretch; background: var(--line); margin: 6px 0; }
 .wall .wxb { display: flex; align-items: center; gap: 22px; border-radius: 12px; padding: 6px 10px; margin-left: -10px; flex: none; }
+.wall .wxb.parts { flex-direction: column; gap: 0; }
 .wall .blocks { display: flex; gap: 16px; }
 .wall .blocks .b { display: grid; justify-items: center; gap: 3px; font-size: 17px; color: var(--muted); }
 .wall .blocks .b b { font-family: var(--font-display); font-size: 30px; font-weight: 500; line-height: 1; color: var(--fg); }
@@ -136,8 +146,10 @@ html:has(.wall.dark) body { background: #1b1a17; }
 /* Week: Today + panel */
 .wall .wk { flex: 1; display: grid; grid-template-columns: 0.92fr 1fr; min-height: 0; }
 .wall .wk.solo { grid-template-columns: 1fr; }
-.wall .today { --ts: 1; --k: calc(var(--s) * var(--ts)); position: relative; padding: 24px 40px 22px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: calc(var(--k) * 16px); min-height: 0; overflow: hidden; }
+.wall .today { --ts: 1; --k: calc(var(--s) * var(--ts) * var(--fit, 1)); position: relative; padding: 24px 40px 22px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: calc(var(--k) * 16px); min-height: 0; overflow: hidden; }
 .wall .wk.solo .today { --ts: 1.25; border-right: 0; padding: 28px 80px; }
+/* Keep Dinner clear of the corner "Add module" button. */
+.wall .wk.solo .today .foot { padding-right: 250px; }
 .wall .today .th { display: flex; align-items: baseline; gap: 14px; }
 .wall .today .th b { font-family: var(--font-display); font-size: calc(var(--k) * 40px); font-weight: 600; color: var(--accent); }
 .wall .today .th span { font-size: calc(var(--k) * 20px); color: var(--muted); }
@@ -357,24 +369,28 @@ html:has(.wall.dark) body { background: #1b1a17; }
 
 /* Overlays */
 .wall .scrim { position: absolute; inset: 0; background: var(--scrim); z-index: 20; }
-.wall .fc { position: absolute; left: 200px; right: 200px; top: 150px; z-index: 21; background: var(--card); border-radius: 16px; box-shadow: var(--shadow); padding: 26px 32px; }
-.wall .fc h3 { margin: 0 0 14px; font-family: var(--font-display); font-size: 30px; font-weight: 600; }
-.wall .fc .days { display: grid; grid-template-columns: repeat(5, 1fr); }
-.wall .fc .days > div { display: grid; justify-items: center; gap: 8px; padding: 14px 0; border-left: 1px solid var(--line); }
+/* The forecast spans the screen and is sized to it, so it reads from across the room in either orientation. */
+.wall .fc { position: absolute; left: 40px; right: 40px; top: 50%; transform: translateY(-50%); max-height: calc(100% - 48px); overflow-y: auto; z-index: 21; background: var(--card); border-radius: 20px; box-shadow: var(--shadow); padding: min(4vw, 44px) min(4vw, 48px); }
+.wall .fc h3 { margin: 0 0 min(2.4vw, 24px); font-family: var(--font-display); font-size: min(3.8vw, 44px); font-weight: 600; line-height: 1.15; }
+.wall .fc .days { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.wall .fc .days > div { display: grid; justify-items: center; align-content: start; gap: min(1.4vw, 14px); padding: min(2.4vw, 26px) 6px; border-left: 1px solid var(--line); text-align: center; }
 .wall .fc .days > div:first-child { border-left: 0; }
-.wall .fc .days .w { font-size: 18px; color: var(--muted); font-weight: 600; }
-.wall .fc .days svg { font-size: 44px; color: var(--warm); }
+.wall .fc .days .w { font-size: min(2.8vw, 30px); color: var(--muted); font-weight: 600; }
+.wall .fc .days svg { font-size: min(7vw, 84px); color: var(--warm); }
 .wall .fc .days svg.r { color: var(--rain); }
-.wall .fc .days b { font-family: var(--font-display); font-size: 30px; font-weight: 500; }
-.wall .fc .days small { font-size: 17px; color: var(--muted); }
-.wall .fc p { margin: 16px 0 0; color: var(--muted); font-size: 17px; }
+.wall .fc .days b { font-family: var(--font-display); font-size: min(6vw, 68px); font-weight: 500; line-height: 1; }
+.wall .fc .days small { font-size: min(2.8vw, 30px); color: var(--muted); line-height: 1.25; }
+.wall .fc .days small.rain { color: var(--rain); font-weight: 600; font-size: min(2.4vw, 24px); }
+.wall .fc p { margin: min(2.4vw, 24px) 0 0; color: var(--muted); font-size: min(2vw, 20px); }
 
 .wall .note { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 30; display: inline-flex; align-items: center; gap: 18px; background: var(--fg); color: var(--bg); border-radius: 12px; padding: 0 22px; min-height: 64px; font-size: 21px; max-width: 900px; }
 
 .wall .night { position: absolute; inset: 0; z-index: 40; background: #000; display: grid; place-items: center; text-align: center; cursor: pointer; width: 100%; }
-.wall .night .c { font-family: var(--font-display); font-size: 220px; color: #4f4b44; line-height: 1; }
-.wall .night .d { color: #36332e; font-size: 30px; margin-top: 16px; }
-.wall .night .n { color: #36332e; font-size: 24px; margin-top: 26px; }
+.wall .night > div { max-width: 92%; }
+/* Sized to the screen, not in pixels: as wide as fits standing up, as tall as fits lying down. */
+.wall .night .c { font-family: var(--font-display); font-size: min(30vw, 38vh); color: #4f4b44; line-height: 1; white-space: nowrap; }
+.wall .night .d { color: #45413a; font-size: max(30px, min(4.6vw, 5.4vh)); margin-top: 0.4em; }
+.wall .night .n { color: #45413a; font-size: max(24px, min(3.4vw, 4vh)); margin-top: 0.8em; line-height: 1.25; }
 
 .wall .full { position: absolute; inset: 0; z-index: 35; background: var(--bg); display: grid; grid-template-columns: 1fr 1fr; align-items: center; }
 .wall .full.center { grid-template-columns: 1fr; place-items: center; }
@@ -457,3 +473,48 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .brf li.weather, .wall .brf li.count, .wall .brf li.answer { font-weight: 600; color: var(--fg); }
 .wall .brf li.cur { background: var(--warm-bg); color: var(--fg); }
 .wall .brf li .dot { flex: none; width: 14px; height: 14px; border-radius: 50%; background: var(--c); }
+
+/*
+ * Portrait: an iPad standing up. The landscape layout leaves the top bar too
+ * narrow (the Day · Week · Month switch fell off the edge) and the Week screen
+ * a tall empty column, so the screens stack instead of sitting side by side.
+ */
+@media (orientation: portrait) {
+  /* Top bar: clock and weather on the first row; today's forecast and the view controls on the second. */
+  .wall .top { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'clock wx' 'parts right'; align-items: center; gap: 12px 24px; padding: 16px 32px 14px 36px; min-height: 0; }
+  .wall .top > .vr { display: none; }
+  .wall .top > .hero { grid-area: clock; }
+  .wall .top > .hero .big { font-size: 92px; }
+  .wall .top > .hero .sub { font-size: 24px; }
+  .wall .top > .wxb.now { grid-area: wx; justify-self: end; margin: 0 -10px 0 0; }
+  .wall .top > .wxb.now .big { font-size: 80px; }
+  .wall .top > .wxb.parts { grid-area: parts; justify-self: start; flex-direction: row; gap: 20px; }
+  .wall .top > .wxb.parts .blocks { gap: 28px; }
+  .wall .top > .wxb.parts .rainnote { margin-top: 0; }
+  .wall .top > .right { grid-area: right; justify-self: end; margin-left: 0; }
+  .wall .top > .right:empty { display: none; }
+
+  /* Week: Today on top, sized by its content; the modules share the rest side by side. */
+  .wall .wk { display: flex; flex-direction: column; }
+  .wall .today { --ts: 1.15; flex: 0 1 auto; max-height: 58%; border-right: 0; border-bottom: 1px solid var(--line-strong); padding: 24px 40px 22px 44px; }
+  .wall .wk.solo .today { flex: 1 1 auto; max-height: none; border-bottom: 0; padding: 32px 56px; }
+  .wall .wk .panel { flex: 1 1 0; flex-direction: row; }
+  .wall .panel .mod { flex: 1 1 0; min-width: 0; }
+  .wall .panel.n2 .mod:first-child { flex: 1 1 0; max-height: none; }
+  .wall .mod + .mod { border-top: 0; border-left: 1px solid var(--line-strong); }
+  .wall .panel.n2 .cols2 { grid-template-columns: 1fr; }
+
+  /* Day: the hour grid on top, the side panel (weather, to-dos, dinner) along the bottom. */
+  .wall .dv { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .wall .dvl { padding-right: 32px; }
+  .wall .dp { flex-direction: row; border-left: 0; border-top: 1px solid var(--line-strong); max-height: 32vh; padding: 0; }
+  .wall .dpw { flex: none; flex-direction: column; justify-content: center; border-bottom: 0; border-right: 1px solid var(--line); padding: 18px 32px; }
+  .wall .dp > .dps, .wall .dp > .dps.grow { flex: 1 1 0; min-width: 0; padding-bottom: 12px; }
+  .wall .dps + .dps { border-top: 0; border-left: 1px solid var(--line); }
+
+  /* Overlays sized for the narrower screen. */
+  .wall .sheet { left: 40px; right: 40px; }
+  .wall .recipe { width: min(560px, 70%); }
+  .wall .full { grid-template-columns: 1fr; align-content: center; gap: 40px; }
+  .wall .ptext { padding: 0 72px; }
+}
