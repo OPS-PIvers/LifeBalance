@@ -82,8 +82,10 @@ describe('WallWeek', () => {
     const today = screen.getByRole('region', { name: 'Today' });
     expect(within(today).getByText('3:15')).toHaveClass('clock');
     expect(within(today).getByText('Saturday')).toBeInTheDocument();
-    // Haircut ran 2–3 pm: over, so it folds into the faint line.
-    expect(within(today).getByText('Earlier: Soccer game · Haircut')).toBeInTheDocument();
+    // Haircut ran 2–3 pm: over, so it joins Soccer game under "Earlier today", one row each.
+    expect(within(today).getByText('Earlier today')).toBeInTheDocument();
+    expect(within(today).getByText('Soccer game')).toBeInTheDocument();
+    expect(within(today).getByText('Haircut')).toBeInTheDocument();
     expect(within(today).getByText('Dinner out')).toHaveClass('nxt');
     expect(within(today).getByText('Next · in 1 hr 45 min')).toBeInTheDocument();
     expect(within(today).getByText('Overdue')).toBeInTheDocument();

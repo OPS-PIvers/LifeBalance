@@ -159,13 +159,15 @@ html:has(.wall.dark) body { background: #1b1a17; }
 
 /* The day column. --k comes from useWallFit: it grows on a quiet day and shrinks on a busy one. */
 .wall .today { --k: calc(var(--s) * var(--fit, 1)); position: relative; padding: 32px 44px 26px 48px; display: flex; flex-direction: column; gap: calc(var(--k) * 22px); min-height: 0; overflow: hidden; }
-.wall .mast { display: grid; gap: 12px; padding-bottom: calc(var(--k) * 18px); border-bottom: 1px solid var(--line); }
-.wall .mast .mtop { display: flex; align-items: flex-end; gap: 22px; }
+.wall .mast { display: grid; gap: calc(var(--k) * 18px); padding-bottom: calc(var(--k) * 18px); border-bottom: 1px solid var(--line); }
+.wall .mast .mtop { display: flex; align-items: flex-end; justify-content: space-between; gap: 22px; }
+/* Day, date and weather sit right-aligned opposite the clock, so the left of the column stays quiet. */
+.wall .mast .mside { display: grid; justify-items: end; gap: 6px; text-align: right; min-width: 0; }
 .wall .mast .clock { font-family: var(--font-display); font-size: var(--t-hero); font-weight: 500; line-height: 0.8; letter-spacing: -0.035em; }
-.wall .mast .dd { display: grid; gap: 2px; padding-bottom: 4px; }
+.wall .mast .dd { display: grid; justify-items: end; gap: 2px; }
 .wall .mast .dd b { font-family: var(--font-display); font-size: 40px; font-weight: 600; line-height: 1; }
 .wall .mast .dd span { font-size: 22px; color: var(--muted); }
-.wall .mast .wxl { justify-self: start; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 4px 10px; margin-left: -10px; border-radius: 10px; font-size: 21px; color: var(--fg2); }
+.wall .mast .wxl { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px 12px; padding: 4px 10px; margin-right: -10px; border-radius: 10px; font-size: 21px; color: var(--fg2); }
 .wall .mast .wxl svg { font-size: 32px; color: var(--warm); }
 .wall .mast .wxl svg.r { color: var(--rain); }
 .wall .mast .wxl b { font-family: var(--font-display); font-size: 34px; font-weight: 500; color: var(--fg); }
@@ -180,7 +182,13 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .lt .lr { display: grid; grid-template-columns: calc(var(--k) * 84px) auto 1fr; column-gap: 14px; align-items: center; }
 .wall .lt .tm { font-size: calc(var(--k) * 22px); color: var(--muted); text-align: right; }
 .wall .lt .tt { font-size: calc(var(--k) * 27px); line-height: 1.2; }
-.wall .lt .earl { padding-left: calc(var(--k) * 84px + 14px); font-size: calc(var(--k) * 17px); color: var(--faint); }
+/* Finished events: a quiet labelled list, flush with the rest of the column, one event per row. */
+.wall .earl { display: grid; gap: calc(var(--k) * 6px); color: var(--muted); }
+.wall .earl .ek { font-size: calc(var(--k) * 15px); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
+.wall .earl .er { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; align-items: baseline; font-size: calc(var(--k) * 19px); line-height: 1.25; }
+.wall .earl .er .tm { min-width: 3.4em; color: var(--faint); }
+.wall .earl .er .tt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.wall .earl .em { font-size: calc(var(--k) * 16px); color: var(--faint); }
 .wall .more-link { justify-self: start; padding: 6px 0; color: var(--accent); font-weight: 600; font-size: calc(var(--k, 1) * 18px); }
 .wall .lt .more-link { margin-left: calc(var(--k) * 84px + 14px); }
 .wall .due { border-top: 1px solid var(--line); padding-top: calc(var(--k) * 16px); }
@@ -188,6 +196,8 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .due .dh b { font-family: var(--font-display); font-size: calc(var(--k) * var(--t-title)); font-weight: 600; }
 .wall .due .dh span { font-size: var(--t-meta); color: var(--muted); }
 .wall .due .dg { display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px; }
+/* A lone to-do takes the whole row: half a column wrapped short titles for no reason. */
+.wall .due .dg > .ck:only-child { grid-column: 1 / -1; }
 .wall .ck { display: flex; align-items: center; gap: 14px; min-height: calc(var(--k, 1) * 58px); width: 100%; font-size: calc(var(--k, 1) * 22px); text-align: left; }
 .wall .due .ck { border-bottom: 1px solid var(--line); }
 .wall .ck .tx { flex: 1; min-width: 0; line-height: 1.2; }

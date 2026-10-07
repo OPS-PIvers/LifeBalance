@@ -11,6 +11,8 @@ import WallMasthead from '@/components/wall/WallMasthead';
 
 /** Rows after "Next" before the rest folds into "+N more today" (the fit rule shrinks them first). */
 const LATER_MAX = 5;
+/** Finished events kept under "Earlier today" (the latest ones); older ones fold into "+N earlier". */
+const EARLIER_MAX = 3;
 
 interface WallTodayProps {
   today: string;
@@ -47,6 +49,8 @@ const WallToday: React.FC<WallTodayProps> = ({ today, now, timeZone, people, wea
   }
   const later = focus.later.slice(0, LATER_MAX);
   const moreLater = focus.later.length - later.length;
+  const earlier = focus.earlier.slice(-EARLIER_MAX);
+  const moreEarlier = focus.earlier.length - earlier.length;
   const doneCount = due.filter(t => t.isCompleted).length;
 
   return (
@@ -65,7 +69,7 @@ const WallToday: React.FC<WallTodayProps> = ({ today, now, timeZone, people, wea
       ) : (
         <div className="tempty">{timeline.rows.length > 0 ? 'Nothing else today' : 'No events today'}</div>
       )}
-      {(later.length > 0 || focus.earlier.length > 0) && (
+      {later.length > 0 && (
         <div className="lt">
           {later.map(row => (
             <div className="lr" key={row.event.id}>
@@ -79,7 +83,18 @@ const WallToday: React.FC<WallTodayProps> = ({ today, now, timeZone, people, wea
               +{moreLater} more today
             </button>
           )}
-          {focus.earlier.length > 0 && <div className="earl">Earlier: {focus.earlier.map(r => r.event.title).join(' · ')}</div>}
+        </div>
+      )}
+      {earlier.length > 0 && (
+        <div className="earl">
+          <span className="ek">Earlier today</span>
+          {earlier.map(row => (
+            <div className="er" key={row.event.id}>
+              <span className="tm">{row.time}</span>
+              <span className="tt">{row.event.title}</span>
+            </div>
+          ))}
+          {moreEarlier > 0 && <span className="em">+{moreEarlier} earlier</span>}
         </div>
       )}
       {due.length > 0 && (

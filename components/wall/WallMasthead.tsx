@@ -23,23 +23,25 @@ const WallMasthead: React.FC<WallMastheadProps> = ({ now, timeZone, weather, onW
     <header className="mast">
       <div className="mtop">
         <span className="clock">{clockText(p.hour, p.minute)}</span>
-        <span className="dd">
-          <b>{p.weekday}</b>
-          <span>
-            {p.monthName} {p.day}
+        <div className="mside">
+          <span className="dd">
+            <b>{p.weekday}</b>
+            <span>
+              {p.monthName} {p.day}
+            </span>
           </span>
-        </span>
+          {weather && (
+            <button type="button" className="wxl" onClick={onWeather} aria-label="Five-day forecast">
+              <WallWeatherIcon icon={weather.current.icon} />
+              <b>{weather.current.temp}°</b>
+              <span>
+                {weather.high}° / {weather.low}°
+              </span>
+              {weather.rainNote && <em>{weather.rainNote}</em>}
+            </button>
+          )}
+        </div>
       </div>
-      {weather && (
-        <button type="button" className="wxl" onClick={onWeather} aria-label="Five-day forecast">
-          <WallWeatherIcon icon={weather.current.icon} />
-          <b>{weather.current.temp}°</b>
-          <span>
-            {weather.high}° / {weather.low}°
-          </span>
-          {weather.rainNote && <em>{weather.rainNote}</em>}
-        </button>
-      )}
       {untimed.length > 0 && <WallUntimedLine events={untimed} people={people} />}
     </header>
   );
