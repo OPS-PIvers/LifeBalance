@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, WifiOff } from 'lucide-react';
+import { ChevronLeft, Plus, WifiOff } from 'lucide-react';
 import type { WallLayout, WallModuleKey } from '@/types/schema';
 import { dueTodayTodos, tomorrowPreview } from '@/utils/wall/wallSelectors';
 import { nextRotation, withTopModule } from '@/utils/wall/wallModules';
@@ -336,7 +336,15 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     view === 'shopping' ? `${toBuy} to buy` : view === 'todos' && badge > 0 ? `${badge} due` : undefined;
   let topRight: React.ReactNode = null;
   if (view === 'calendar') {
-    topRight = <WallViewPicker view={calView} onView={next => goCalendar(next)} />;
+    topRight = (
+      <>
+        <button type="button" className="btn" onClick={() => goCalendar('week')}>
+          <ChevronLeft className="wi" size="1em" aria-hidden="true" />
+          Back
+        </button>
+        <WallViewPicker view={calView} onView={next => goCalendar(next)} />
+      </>
+    );
   } else if (view === 'shopping' || view === 'todos') {
     topRight = (
       <>
@@ -407,7 +415,6 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
         onWeather={() => setOverlay('weather')}
         layout={shownLayout}
         onLayout={changeLayout}
-        onView={next => goCalendar(next)}
         onOpenDay={date => goCalendar('day', date)}
         onOpenMeal={openMeal}
         arranging={arranging}

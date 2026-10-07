@@ -169,6 +169,12 @@ describe('groupComingUp', () => {
     expect(days[1]?.events.map(e => e.id)).toEqual(['practice']);
   });
 
+  it('keeps empty days when asked, for the Week list', () => {
+    const days = groupComingUp([ev('market', '2026-10-05', at('2026-10-05', '10:00'))], '2026-10-03', 7, true);
+    expect(days.map(d => d.date)).toEqual(['2026-10-04', '2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10']);
+    expect(days.map(d => d.events.length)).toEqual([0, 1, 0, 0, 0, 0, 0]);
+  });
+
   it('handles 300 events without dropping any', () => {
     const many = Array.from({ length: 300 }, (_, i) => {
       const date = addDaysTo('2026-10-04', i % 14);

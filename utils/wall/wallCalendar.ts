@@ -171,16 +171,16 @@ export interface ComingUpDay {
 }
 
 /**
- * The next `days` days after today, skipping empty ones. Every event shows
- * (one per line, never truncated): Coming up scrolls.
+ * The next `days` days after today, skipping empty ones unless `keepEmpty`
+ * (the panel's Week list shows every day, so a free day reads as free).
  */
-export function groupComingUp(events: readonly WallEvent[], today: string, days = 14): ComingUpDay[] {
+export function groupComingUp(events: readonly WallEvent[], today: string, days = 14, keepEmpty = false): ComingUpDay[] {
   const out: ComingUpDay[] = [];
   let nextWeekLabelled = false;
   for (let i = 1; i <= days; i++) {
     const date = addDaysTo(today, i);
     const day = eventsOn(events, date);
-    if (day.length === 0) continue;
+    if (day.length === 0 && !keepEmpty) continue;
     let rel: string | null = null;
     if (i === 1) rel = 'Tomorrow';
     else if (i >= 7 && !nextWeekLabelled) {

@@ -65,8 +65,12 @@ for (const o of ORIENTATIONS) {
         await openWall(page, '15:15:00', theme === 'dark');
         const rail = page.getByRole('navigation', { name: 'Views' });
 
-        await expect(page.getByRole('region', { name: 'Coming up' })).toBeVisible();
+        const coming = page.getByRole('region', { name: 'Coming up' });
+        await expect(coming).toBeVisible();
         await shot('1-week');
+        await coming.getByRole('group', { name: 'Coming up range' }).getByRole('button', { name: 'Month' }).click();
+        await shot('1b-week-month-list');
+        await coming.getByRole('group', { name: 'Coming up range' }).getByRole('button', { name: 'Week' }).click();
 
         await page.getByRole('button', { name: 'Display menu' }).click();
         await page.getByRole('button', { name: /Arrange the panel/ }).click();
@@ -74,8 +78,7 @@ for (const o of ORIENTATIONS) {
         await shot('2-arrange');
         await page.getByRole('button', { name: 'Done', exact: true }).click();
 
-        const picker = page.getByRole('group', { name: 'Calendar view' });
-        await picker.getByRole('button', { name: 'Day' }).click();
+        await page.getByRole('region', { name: 'Coming up' }).getByRole('button', { name: /^Tomorrow/ }).click();
         await shot('3-day');
         await page.getByRole('group', { name: 'Calendar view' }).getByRole('button', { name: 'Month' }).click();
         await shot('4-month');

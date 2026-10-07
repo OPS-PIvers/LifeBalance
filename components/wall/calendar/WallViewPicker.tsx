@@ -2,13 +2,17 @@ import React from 'react';
 
 export type CalendarView = 'day' | 'week' | 'month';
 
-const VIEWS: { key: CalendarView; label: string }[] = [
+/** 'week' is the resting screen (the day column and the panel), reached with Back or the rail. */
+const VIEWS: { key: Exclude<CalendarView, 'week'>; label: string }[] = [
   { key: 'day', label: 'Day' },
-  { key: 'week', label: 'Week' },
   { key: 'month', label: 'Month' },
 ];
 
-/** Day · Week · Month as a full-size segmented control (a caption-sized switch read as an error). */
+/**
+ * Day · Month in the header of the full-screen calendar views, as a full-size
+ * segmented control (a caption-sized switch read as an error). The resting
+ * screen has none: the panel's Coming up carries its own Week · Month switch.
+ */
 const WallViewPicker: React.FC<{ view: CalendarView; onView: (view: CalendarView) => void }> = ({ view, onView }) => (
   <div className="vseg" role="group" aria-label="Calendar view">
     {VIEWS.map(v => (

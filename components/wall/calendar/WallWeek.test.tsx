@@ -49,7 +49,6 @@ const ToastHost: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 function renderWeek(layout: WallLayout, data: Partial<WallData> = {}, extra: { arranging?: boolean } = {}) {
   const value = makeWallData(vi.fn, { wallEvents: events, todos, mealPlan, shoppingList: shopping, ...data });
   const onLayout = vi.fn();
-  const onView = vi.fn();
   const onOpenDay = vi.fn();
   const onArrangeDone = vi.fn();
   const people = makeWallPeople(value.members, false);
@@ -65,7 +64,6 @@ function renderWeek(layout: WallLayout, data: Partial<WallData> = {}, extra: { a
           onWeather={vi.fn()}
           layout={layout}
           onLayout={onLayout}
-          onView={onView}
           onOpenDay={onOpenDay}
           arranging={extra.arranging ?? false}
           onArrangeDone={onArrangeDone}
@@ -73,7 +71,7 @@ function renderWeek(layout: WallLayout, data: Partial<WallData> = {}, extra: { a
       </ToastHost>
     </WallDataContext.Provider>
   );
-  return { ...utils, value, onLayout, onView, onOpenDay, onArrangeDone };
+  return { ...utils, value, onLayout, onOpenDay, onArrangeDone };
 }
 
 describe('WallWeek', () => {
@@ -101,12 +99,22 @@ describe('WallWeek', () => {
     expect(onOpenDay).toHaveBeenCalledWith('2026-10-04');
   });
 
-  it('switches views from the picker and shows no editing controls at rest', () => {
-    const { onView } = renderWeek({ modules: ['coming'] });
-    const picker = screen.getByRole('group', { name: 'Calendar view' });
-    expect(within(picker).getByRole('button', { name: 'Week' })).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.click(within(picker).getByRole('button', { name: 'Month' }));
-    expect(onView).toHaveBeenCalledWith('month');
+  it('switches Coming up between Week and Month in its own heading, with no editing controls at rest', () => {
+    const { onOpenDay } = renderWeek({ modules: ['coming'] }, { wallEvents: [...events, ev('Orchard trip', '2026-10-20', at('2026-10-20', '13:00'))] });
+    expect(screen.queryByRole('group', { name: 'Calendar view' })).not.toBeInTheDocument();
+    const coming = screen.getByRole('region', { name: 'Coming up' });
+    const range = within(coming).getByRole('group', { name: 'Coming up range' });
+    expect(within(range).getByRole('button', { name: 'Week' })).toHaveAttribute('aria-pressed', 'true');
+    // Week: every one of the next seven days, a free one said so; nothing past it.
+    expect(within(coming).getAllByRole('button', { name: /^(Tomorrow|Mon|Tue|Wed|Thu|Fri|Sat|Sun)/ })).toHaveLength(7);
+    expect(within(coming).getAllByText('Nothing planned').length).toBeGreaterThan(0);
+    expect(within(coming).queryByText('Orchard trip')).not.toBeInTheDocument();
+
+    fireEvent.click(within(range).getByRole('button', { name: 'Month' }));
+    expect(within(range).getByRole('button', { name: 'Month' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(coming).queryByText('Nothing planned')).not.toBeInTheDocument();
+    fireEvent.click(within(coming).getByRole('button', { name: /Orchard trip/ }));
+    expect(onOpenDay).toHaveBeenCalledWith('2026-10-20');
     expect(screen.queryByRole('button', { name: /Switch/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Add a bottom module/ })).not.toBeInTheDocument();
   });

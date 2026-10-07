@@ -125,7 +125,7 @@ test.describe('Wall display shell (Test Mode)', () => {
     await expect(page.getByRole('button', { name: 'Wake the display' })).toBeVisible();
   });
 
-  test('shows the week, switches a module, and opens a day from the month', async ({ page }) => {
+  test('shows the week, switches Coming up to Month, switches a module, and opens a day from the month', async ({ page }) => {
     await openWall(page, '15:15:00');
     const today = page.getByRole('region', { name: 'Today' });
     // Haircut is over by 3:15, so it folds into the "Earlier" line; dinner is next.
@@ -134,6 +134,15 @@ test.describe('Wall display shell (Test Mode)', () => {
     const coming = page.getByRole('region', { name: 'Coming up' });
     await expect(coming.getByText('Dentist')).toBeVisible();
     await expect(coming.getByText('Water bill')).toBeVisible();
+
+    // The Week · Month switch belongs to Coming up, and only changes its list.
+    const range = coming.getByRole('group', { name: 'Coming up range' });
+    await expect(range.getByRole('button', { name: 'Week' })).toHaveAttribute('aria-pressed', 'true');
+    await range.getByRole('button', { name: 'Month' }).click();
+    await expect(range.getByRole('button', { name: 'Month' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(today).toBeVisible();
+    await expect(coming.getByText('Dentist')).toBeVisible();
+    await range.getByRole('button', { name: 'Week' }).click();
 
     // Module controls live in Arrange mode, opened from the display menu.
     await expect(page.getByRole('button', { name: /Switch/ })).toHaveCount(0);
@@ -145,12 +154,22 @@ test.describe('Wall display shell (Test Mode)', () => {
     await expect(page.getByRole('region', { name: 'Coming up' })).toBeHidden();
     await page.getByRole('button', { name: 'Done', exact: true }).click();
 
+    // Day and Month are full screens with their own header switch and a way back.
+    await page.getByRole('region', { name: 'To-dos' }).waitFor();
+    await page.getByRole('button', { name: 'Display menu' }).click();
+    await page.getByRole('button', { name: /Arrange the panel/ }).click();
+    await page.getByRole('button', { name: /Switch/ }).click();
+    await page.getByRole('dialog', { name: 'Panel shows' }).getByRole('button', { name: /Coming up/ }).click();
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await page.getByRole('region', { name: 'Coming up' }).getByRole('button', { name: /Dentist/ }).click();
     await page.getByRole('group', { name: 'Calendar view' }).getByRole('button', { name: 'Month' }).click();
     await page.getByRole('button', { name: 'Sunday, October 4' }).click();
     await expect(page.getByText('Sunday, October 4')).toBeVisible();
     await expect(page.getByText('Dentist')).toBeVisible();
     await expect(page.getByText('Water bill')).toBeVisible();
     await expect(page.getByRole('group', { name: 'Calendar view' }).getByRole('button', { name: 'Day' })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Coming up' })).toBeVisible();
   });
 
   test('adds, checks off and undoes on the shopping list', async ({ page }) => {

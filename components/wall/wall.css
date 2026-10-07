@@ -126,12 +126,12 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .hdr .hwx svg { font-size: 28px; color: var(--warm); }
 .wall .hdr .hwx svg.r { color: var(--rain); }
 .wall .hdr .right { display: flex; gap: 10px; align-items: center; }
-.wall .hdr .vseg { width: 420px; }
+.wall .hdr .vseg { width: 290px; }
 .wall .ostrip { display: flex; align-items: center; gap: 10px; padding: 9px 40px; background: var(--warm-bg); color: var(--warm); font-size: 17px; font-weight: 600; border-bottom: 1px solid var(--line); }
 .wall .ostrip svg { font-size: 20px; }
 
-/* Day · Week · Month: a full-size segmented control, the current view filled. */
-.wall .vseg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 14px; background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--line-strong); flex: none; }
+/* Day · Month (full-screen calendar header): a full-size segmented control, the current view filled. */
+.wall .vseg { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; padding: 4px; border-radius: 14px; background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--line-strong); flex: none; }
 .wall .vseg button { height: 52px; border-radius: 10px; font-size: 19px; font-weight: 600; color: var(--fg2); text-align: center; }
 .wall .vseg button[aria-pressed='true'] { background: var(--accent); color: var(--on-accent); }
 
@@ -209,6 +209,22 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .mh { display: flex; align-items: center; gap: 10px; }
 .wall .mh b { font-family: var(--font-display); font-size: calc(var(--s) * var(--t-title)); font-weight: 600; margin-right: auto; }
 .wall .mh span { font-size: 15px; color: var(--muted); }
+/* Coming up's Week · Month: the vseg look at heading size, so it reads as the module's own. */
+.wall .mseg { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; padding: 3px; border-radius: 12px; background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--line-strong); flex: none; }
+.wall .mseg button { height: 42px; min-width: 84px; padding: 0 14px; border-radius: 9px; font-size: 17px; font-weight: 600; color: var(--fg2); text-align: center; }
+.wall .mseg button[aria-pressed='true'] { background: var(--accent); color: var(--on-accent); }
+/* Month: a denser list that scrolls, the date in a gutter. */
+.wall .mlist { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; display: flex; flex-direction: column; }
+.wall .mlist .mmon { font-family: var(--font-display); font-size: calc(var(--s) * 20px); font-weight: 600; color: var(--muted); padding: 14px 0 6px; }
+.wall .mday { display: grid; grid-template-columns: 46px 1fr; column-gap: 14px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--line); width: 100%; text-align: left; }
+.wall .mday:last-child { border-bottom: 0; }
+.wall .mday .md { display: grid; justify-items: center; line-height: 1; padding-top: 2px; }
+.wall .mday .md small { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.wall .mday .md b { font-family: var(--font-display); font-size: calc(var(--s) * 26px); font-weight: 600; margin-top: 3px; }
+.wall .mday .me { display: grid; gap: 5px; min-width: 0; }
+.wall .mday .r { display: grid; grid-template-columns: 50px 1fr; column-gap: 10px; align-items: baseline; font-size: calc(var(--s) * 18px); line-height: 1.2; }
+.wall .mday .r .tm { font-size: 14px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.wall .mday .r .t { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
 .wall .mb { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .wall .mod.top .mb:has(.row) { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
 .wall .fill { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
@@ -221,6 +237,8 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .cday .r .tm { font-size: 15px; color: var(--muted); text-align: right; }
 .wall .cday .r .t { display: flex; align-items: baseline; gap: 10px; }
 .wall .cday .r .dot { transform: translateY(-1px); }
+.wall .cday.free { gap: 0; padding-bottom: 16px; }
+.wall .cday .dh em { font-style: normal; font-size: 15px; color: var(--faint); margin-left: auto; }
 .wall .cday .more { padding-left: 66px; font-size: 15px; font-weight: 600; color: var(--accent); }
 .wall .panel .mrow { display: grid; grid-template-columns: 46px 1fr; column-gap: 12px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--line); width: 100%; text-align: left; }
 .wall .panel .mrow:last-child { border-bottom: 0; }
@@ -548,7 +566,7 @@ html:has(.wall.dark) body { background: #1b1a17; }
   .wall .due .dg { grid-template-columns: 1fr; }
   .wall .panel { padding: 30px 28px 24px; }
   .wall .hdr { padding: 12px 28px 12px 40px; gap: 16px; }
-  .wall .hdr .vseg { width: 330px; }
+  .wall .hdr .vseg { width: 240px; }
 
   /* Day: the hour grid on top, the side panel (weather, to-dos, dinner) along the bottom. */
   .wall .dv { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
