@@ -2107,12 +2107,17 @@ export interface HouseholdApiKey {
 // Wall display (docs/plans/wall-display-kiosk.md §4.4)
 // ---------------------------------------------------------------------------
 
-/** Modules the Week screen's right panel can show. */
-export type WallModuleKey = 'coming' | 'shopping' | 'todos' | 'meals';
+/** Modules the Week screen's right panel and the day column's bottom slot can show. */
+export type WallModuleKey = 'coming' | 'shopping' | 'todos' | 'meals' | 'due';
 
-/** A display's own panel layout (0–2 modules, top first). */
+/**
+ * A display's own layout: the panel's 0–2 modules (top first) and the module
+ * under today's events in the day column. `day` absent = the default (Due
+ * today); `null` = nothing there, the column is all events.
+ */
 export interface WallLayout {
   modules: WallModuleKey[];
+  day?: WallModuleKey | null;
 }
 
 export type WallDisplayStatus = 'pending' | 'active' | 'revoked';

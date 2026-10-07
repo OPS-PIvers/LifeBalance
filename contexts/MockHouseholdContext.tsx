@@ -991,6 +991,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       // 'Category' sort mode, and the grouped headers all have something to
       // show. `todo_later_1` deliberately stays uncategorized.
       category: 'Errands',
+      // Due today WITH steps, so the wall's Due today shows checkable steps in Test Mode.
+      subtasks: [
+        { id: 'st_ins_1', text: 'Get two quotes', isDone: true },
+        { id: 'st_ins_2', text: 'Compare coverage', isDone: false },
+        { id: 'st_ins_3', text: 'Sign the new policy', isDone: false },
+      ],
     },
     {
       id: 'todo_schedule_1',

@@ -1,10 +1,8 @@
 import React, { useMemo, useRef } from 'react';
-import { Check } from 'lucide-react';
-import { dueTodayChecklist, eventTimeText, todayFocus, todayTimeline, untilText } from '@/utils/wall/wallCalendar';
+import { eventTimeText, todayFocus, todayTimeline, untilText } from '@/utils/wall/wallCalendar';
 import type { WallPeople } from '@/utils/wall/wallPeople';
 import type { WallWeather } from '@/utils/wall/wallWeather';
 import { useWallData } from '@/components/wall/data/wallData';
-import { useWallListActions } from '@/components/wall/lists/useWallListActions';
 import { useWallFit } from '@/components/wall/useWallFit';
 import { WallAvatar } from '@/components/wall/WallAvatar';
 import WallMasthead from '@/components/wall/WallMasthead';
@@ -21,22 +19,22 @@ interface WallTodayProps {
   people: WallPeople;
   weather: WallWeather | null;
   onWeather: () => void;
-  showDueToday: boolean;
+  /** The module under today's events (Due today by default), or nothing. */
+  bottom?: React.ReactNode;
   /** Opens Day view on today ("+N more today"). */
   onOpenDay: () => void;
 }
 
 /**
  * The Week screen's day column: the masthead, the event that's next (or
- * running), the rest of today, Due today and dinner tonight. Its type grows
+ * running), the rest of today, the day module (Due today unless changed in
+ * Arrange mode) and dinner tonight. Its type grows
  * to fill the column on a quiet day and shrinks on a busy one.
  */
-const WallToday: React.FC<WallTodayProps> = ({ today, now, timeZone, people, weather, onWeather, showDueToday, onOpenDay }) => {
-  const { wallEvents, todos, mealPlan } = useWallData();
-  const act = useWallListActions();
+const WallToday: React.FC<WallTodayProps> = ({ today, now, timeZone, people, weather, onWeather, bottom, onOpenDay }) => {
+  const { wallEvents, mealPlan } = useWallData();
   const timeline = useMemo(() => todayTimeline(wallEvents, today, now, timeZone), [wallEvents, today, now, timeZone]);
   const focus = useMemo(() => todayFocus(timeline, now), [timeline, now]);
-  const due = useMemo(() => (showDueToday ? dueTodayChecklist(todos, today, timeZone) : []), [showDueToday, todos, today, timeZone]);
   const dinner = mealPlan.find(m => m.date === today && m.type === 'dinner');
   const ref = useRef<HTMLElement>(null);
   useWallFit(ref, { on: true, min: 0.8, max: 1.4 });
@@ -51,7 +49,6 @@ const WallToday: React.FC<WallTodayProps> = ({ today, now, timeZone, people, wea
   const moreLater = focus.later.length - later.length;
   const earlier = focus.earlier.slice(-EARLIER_MAX);
   const moreEarlier = focus.earlier.length - earlier.length;
-  const doneCount = due.filter(t => t.isCompleted).length;
 
   return (
     <section ref={ref} className="today" aria-label="Today">
@@ -99,35 +96,7 @@ const WallToday: React.FC<WallTodayProps> = ({ today, now, timeZone, people, wea
           {moreEarlier > 0 && <span className="em">+{moreEarlier} earlier</span>}
         </div>
       )}
-      {due.length > 0 && (
-        <div className="due">
-          <div className="dh">
-            <b>Due today</b>
-            <span>
-              {doneCount} of {due.length} done
-            </span>
-          </div>
-          <div className="dg">
-            {due.map(t => (
-              <button
-                key={t.id}
-                type="button"
-                className={t.isCompleted ? 'ck done' : 'ck'}
-                aria-pressed={t.isCompleted}
-                onClick={() => act.toggleTodo(t)}
-              >
-                <span className="bx">{t.isCompleted && <Check className="wi" size="1em" aria-hidden="true" />}</span>
-                <span className="tx">
-                  {t.text}
-                  {!t.isCompleted && t.completeByDate < today && <small className="late">Overdue</small>}
-                </span>
-                <WallAvatar people={people} who={t.assignedTo} small />
-                <span className="sr">{people.name(t.assignedTo)}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {bottom}
       {dinner && (
         <div className="foot">
           <span>Dinner tonight</span>

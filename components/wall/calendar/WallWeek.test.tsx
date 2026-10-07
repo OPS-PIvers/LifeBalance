@@ -123,7 +123,7 @@ describe('WallWeek', () => {
 
   it('switches, adds and removes modules in Arrange mode, never the top one', () => {
     const { onLayout, onArrangeDone } = renderWeek({ modules: ['coming'] }, {}, { arranging: true });
-    fireEvent.click(screen.getByRole('button', { name: /Switch/ }));
+    fireEvent.click(within(screen.getByRole('region', { name: 'Coming up' })).getByRole('button', { name: /Switch/ }));
     const menu = screen.getByRole('dialog', { name: 'Panel shows' });
     expect(within(menu).getByRole('button', { name: /Coming up.*Showing/ })).toBeInTheDocument();
     fireEvent.click(within(menu).getByRole('button', { name: /Shopping/ }));
@@ -138,6 +138,45 @@ describe('WallWeek', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(onArrangeDone).toHaveBeenCalled();
+  });
+
+  it('switches, removes and re-adds the module under today in Arrange mode', () => {
+    const { onLayout } = renderWeek({ modules: ['coming', 'meals'] }, {}, { arranging: true });
+    const slot = screen.getByRole('region', { name: 'Under today: Due today' });
+    fireEvent.click(within(slot).getByRole('button', { name: /Switch/ }));
+    const menu = screen.getByRole('dialog', { name: 'Under today shows' });
+    expect(within(menu).getByRole('button', { name: /Due today.*Showing/ })).toBeInTheDocument();
+    expect(within(menu).getByRole('button', { name: /Dinners.*Already showing/ })).toBeDisabled();
+    fireEvent.click(within(menu).getByRole('button', { name: /Shopping/ }));
+    expect(onLayout).toHaveBeenLastCalledWith({ modules: ['coming', 'meals'], day: 'shopping' });
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Due today from under today' }));
+    expect(onLayout).toHaveBeenLastCalledWith({ modules: ['coming', 'meals'], day: null });
+  });
+
+  it('shows the picked module under today, or nothing there', () => {
+    const { unmount } = renderWeek({ modules: ['coming'], day: 'shopping' });
+    const today = screen.getByRole('region', { name: 'Today' });
+    expect(within(within(today).getByRole('region', { name: 'Shopping' })).getByText('Milk')).toBeInTheDocument();
+    expect(within(today).queryByText('Due today')).not.toBeInTheDocument();
+    expect(within(today).getByText('Tacos')).toBeInTheDocument();
+    unmount();
+    renderWeek({ modules: ['coming'], day: null }, {}, { arranging: true });
+    expect(screen.getByRole('button', { name: /Add a module under today/ })).toBeInTheDocument();
+  });
+
+  it('shows a due to-do’s steps under it and checks them off', () => {
+    const withSteps = [
+      ...todos,
+      {
+        id: 't3', text: 'Tuesday chores', completeByDate: D, isCompleted: false,
+        subtasks: [{ id: 'a', text: 'Dishes', isDone: true }, { id: 'b', text: 'Vacuum', isDone: false }],
+      },
+    ] as ToDo[];
+    const { value } = renderWeek({ modules: ['coming'] }, { todos: withSteps });
+    const steps = screen.getByRole('list', { name: 'Steps for Tuesday chores' });
+    expect(within(screen.getByRole('region', { name: 'Today' })).getByText('1/2')).toBeInTheDocument();
+    fireEvent.click(within(steps).getByRole('button', { name: /Vacuum/ }));
+    expect(value.actions.toggleTodoSubtask).toHaveBeenCalledWith('t3', 'b');
   });
 
   it('removes the bottom module in Arrange mode', () => {

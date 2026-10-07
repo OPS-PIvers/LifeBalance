@@ -16,7 +16,7 @@ interface WallGearMenuProps {
   rotating: boolean;
   rotationIntervalSec: number;
   onToggleRotation: () => void;
-  /** Opens Arrange mode: the Week panel's modules become editable in place. */
+  /** Opens Arrange mode: the Week screen's modules become editable in place. */
   onArrange: () => void;
   /** A paired display in a Safari tab: whether the wall is full screen now. */
   fullscreen?: boolean;
@@ -132,8 +132,8 @@ const WallGearMenu: React.FC<WallGearMenuProps> = ({
         <h2>{title}</h2>
         <div className="gmenu">
           <button type="button" onClick={onArrange}>
-            <span>Arrange the panel</span>
-            <span>Choose what the right side shows</span>
+            <span>Arrange modules</span>
+            <span>Choose which modules show where</span>
           </button>
           {onToggleFullscreen && (
             <button type="button" onClick={onToggleFullscreen}>

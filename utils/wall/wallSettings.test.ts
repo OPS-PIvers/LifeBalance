@@ -149,6 +149,14 @@ describe('normalizeModules / normalizeLayout', () => {
     expect(normalizeLayout({ modules: ['shopping'] })).toEqual({ modules: ['shopping'] });
     expect(normalizeLayout(undefined)).toBeUndefined();
   });
+
+  it('keeps the module under today: a known key, or null for nothing; anything else is the default', () => {
+    expect(normalizeLayout({ modules: ['coming'], day: 'shopping' })).toEqual({ modules: ['coming'], day: 'shopping' });
+    expect(normalizeLayout({ modules: ['coming'], day: null })).toEqual({ modules: ['coming'], day: null });
+    expect(normalizeLayout({ modules: ['coming'], day: 'radio' })).toEqual({ modules: ['coming'] });
+    // Never the same module twice: the panel wins.
+    expect(normalizeLayout({ modules: ['coming'], day: 'coming' })).toEqual({ modules: ['coming'] });
+  });
 });
 
 describe('effectiveLayout', () => {

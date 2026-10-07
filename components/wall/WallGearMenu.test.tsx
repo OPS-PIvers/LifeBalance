@@ -58,7 +58,7 @@ describe('WallGearMenu', () => {
 
   it('opens Arrange mode for the panel', () => {
     render(<WallGearMenu {...props} />);
-    fireEvent.click(screen.getByRole('button', { name: /Arrange the panel/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Arrange modules/ }));
     expect(props.onArrange).toHaveBeenCalled();
   });
 

@@ -6,6 +6,7 @@ import type { WallWeather } from '@/utils/wall/wallWeather';
 import { useWallData } from '@/components/wall/data/wallData';
 import { useWallListActions } from '@/components/wall/lists/useWallListActions';
 import { WallWeatherIcon } from '@/components/wall/WallIcons';
+import WallSubtasks, { WallStepCount } from '@/components/wall/lists/WallSubtasks';
 
 interface WallDayPanelProps {
   date: string;
@@ -21,7 +22,7 @@ interface WallDayPanelProps {
 /**
  * Day view's right panel: what belongs to the day on screen, not the Week
  * panel's modules. Weather only for a later day (the top bar already has
- * today's), that day's to-dos as real checkboxes, and its dinner.
+ * today's), that day's to-dos as real checkboxes (steps too), and its dinner.
  */
 const WallDayPanel: React.FC<WallDayPanelProps> = ({ date, today, timeZone, people, weather, onAddTodo, onOpenMeal }) => {
   const { todos, mealPlan } = useWallData();
@@ -61,16 +62,20 @@ const WallDayPanel: React.FC<WallDayPanelProps> = ({ date, today, timeZone, peop
         <div className="dpl">
           {due.length === 0 && <div className="dpn">Nothing due</div>}
           {due.map(t => (
-            <button key={t.id} type="button" className={t.isCompleted ? 'ck done' : 'ck'} aria-pressed={t.isCompleted} onClick={() => act.toggleTodo(t)}>
-              <span className="bx">{t.isCompleted && <Check className="wi" size="1em" aria-hidden="true" />}</span>
-              <span className="tx">
-                {t.text}
-                <small>
-                  {people.name(t.assignedTo)}
-                  {!t.isCompleted && t.completeByDate < date && <span className="late">Overdue</span>}
-                </small>
-              </span>
-            </button>
+            <div className="dblk" key={t.id}>
+              <button type="button" className={t.isCompleted ? 'ck done' : 'ck'} aria-pressed={t.isCompleted} onClick={() => act.toggleTodo(t)}>
+                <span className="bx">{t.isCompleted && <Check className="wi" size="1em" aria-hidden="true" />}</span>
+                <span className="tx">
+                  {t.text}
+                  <small>
+                    {people.name(t.assignedTo)}
+                    {!t.isCompleted && t.completeByDate < date && <span className="late">Overdue</span>}
+                  </small>
+                </span>
+                <WallStepCount todo={t} />
+              </button>
+              <WallSubtasks todo={t} people={people} />
+            </div>
           ))}
         </div>
       </section>
