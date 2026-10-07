@@ -73,8 +73,8 @@ for (const o of ORIENTATIONS) {
         await coming.getByRole('group', { name: 'Coming up range' }).getByRole('button', { name: 'Week' }).click();
 
         await page.getByRole('button', { name: 'Display menu' }).click();
-        await page.getByRole('button', { name: /Arrange the panel/ }).click();
-        await expect(page.getByText('Arrange the panel')).toBeVisible();
+        await page.getByRole('button', { name: /Arrange modules/ }).click();
+        await expect(page.getByText('Arrange modules')).toBeVisible();
         await shot('2-arrange');
         await page.getByRole('button', { name: 'Done', exact: true }).click();
 
