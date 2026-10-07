@@ -164,29 +164,29 @@ html:has(.wall.dark) body { background: #1b1a17; }
 /* Day, date and weather sit right-aligned opposite the clock, so the left of the column stays quiet. */
 .wall .mast .mside { display: grid; justify-items: end; gap: 6px; text-align: right; min-width: 0; }
 .wall .mast .clock { font-family: var(--font-display); font-size: var(--t-hero); font-weight: 500; line-height: 0.8; letter-spacing: -0.035em; }
-.wall .mast .dd { display: grid; justify-items: end; gap: 2px; }
+.wall .mast .dd { display: flex; align-items: baseline; gap: 12px; white-space: nowrap; }
 .wall .mast .dd b { font-family: var(--font-display); font-size: 40px; font-weight: 600; line-height: 1; }
 .wall .mast .dd span { font-size: 22px; color: var(--muted); }
 .wall .mast .wxl { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px 12px; padding: 4px 10px; margin-right: -10px; border-radius: 10px; font-size: 21px; color: var(--fg2); }
 .wall .mast .wxl svg { font-size: 32px; color: var(--warm); }
 .wall .mast .wxl svg.r { color: var(--rain); }
 .wall .mast .wxl b { font-family: var(--font-display); font-size: 34px; font-weight: 500; color: var(--fg); }
-.wall .mast .wxl em { font-style: normal; color: var(--rain); font-weight: 600; }
+.wall .mast .wxl em { flex-basis: 100%; text-align: right; font-style: normal; color: var(--rain); font-weight: 600; }
 .wall .nx { display: grid; gap: calc(var(--k) * 6px); }
 .wall .nxk { font-size: calc(var(--k) * 16px); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--warm); }
 .wall .nxt { font-family: var(--font-display); font-size: calc(var(--k) * var(--t-display)); font-weight: 500; line-height: 1.05; letter-spacing: -0.015em; }
 .wall .nxw { display: flex; align-items: center; gap: 10px; font-size: calc(var(--k) * 21px); color: var(--muted); }
-.wall .nxw .tm { font-family: var(--font-display); font-size: calc(var(--k) * 28px); color: var(--fg); margin-right: 4px; }
+.wall .nxw .tm { font-family: var(--font-display); font-size: calc(var(--k) * 28px); color: var(--fg); min-width: calc(var(--k) * 84px); margin-right: 4px; }
 .wall .tempty { font-size: calc(var(--k) * 26px); color: var(--muted); }
 .wall .lt { display: grid; gap: calc(var(--k) * 12px); }
 .wall .lt .lr { display: grid; grid-template-columns: calc(var(--k) * 84px) auto 1fr; column-gap: 14px; align-items: center; }
-.wall .lt .tm { font-size: calc(var(--k) * 22px); color: var(--muted); text-align: right; }
+.wall .lt .tm { font-size: calc(var(--k) * 22px); color: var(--muted); }
 .wall .lt .tt { font-size: calc(var(--k) * 27px); line-height: 1.2; }
 /* Finished events: a quiet labelled list, flush with the rest of the column, one event per row. */
 .wall .earl { display: grid; gap: calc(var(--k) * 6px); color: var(--muted); }
 .wall .earl .ek { font-size: calc(var(--k) * 15px); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
-.wall .earl .er { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; align-items: baseline; font-size: calc(var(--k) * 19px); line-height: 1.25; }
-.wall .earl .er .tm { min-width: 3.4em; color: var(--faint); }
+.wall .earl .er { display: grid; grid-template-columns: calc(var(--k) * 84px) minmax(0, 1fr); column-gap: 14px; align-items: baseline; font-size: calc(var(--k) * 19px); line-height: 1.25; }
+.wall .earl .er .tm { color: var(--faint); }
 .wall .earl .er .tt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .wall .earl .em { font-size: calc(var(--k) * 16px); color: var(--faint); }
 .wall .more-link { justify-self: start; padding: 6px 0; color: var(--accent); font-weight: 600; font-size: calc(var(--k, 1) * 18px); }
@@ -195,11 +195,10 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .due .dh { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
 .wall .due .dh b { font-family: var(--font-display); font-size: calc(var(--k) * var(--t-title)); font-weight: 600; }
 .wall .due .dh span { font-size: var(--t-meta); color: var(--muted); }
-.wall .due .dg { display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px; }
-/* A lone to-do takes the whole row: half a column wrapped short titles for no reason. */
-.wall .due .dg > .ck:only-child { grid-column: 1 / -1; }
+.wall .due .dg { display: grid; grid-template-columns: 1fr; }
 .wall .ck { display: flex; align-items: center; gap: 14px; min-height: calc(var(--k, 1) * 58px); width: 100%; font-size: calc(var(--k, 1) * 22px); text-align: left; }
 .wall .due .ck { border-bottom: 1px solid var(--line); }
+.wall .due .ck .tx { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wall .ck .tx { flex: 1; min-width: 0; line-height: 1.2; }
 .wall .ck .tx small { display: block; font-size: calc(var(--k, 1) * 15px); }
 .wall .bx { width: calc(var(--k, 1) * 30px); height: calc(var(--k, 1) * 30px); border-radius: 50%; border: 2.5px solid var(--faint); flex: none; display: grid; place-items: center; }
@@ -233,7 +232,7 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .mday .md b { font-family: var(--font-display); font-size: calc(var(--s) * 26px); font-weight: 600; margin-top: 3px; }
 .wall .mday .me { display: grid; gap: 5px; min-width: 0; }
 .wall .mday .r { display: grid; grid-template-columns: 50px 1fr; column-gap: 10px; align-items: baseline; font-size: calc(var(--s) * 18px); line-height: 1.2; }
-.wall .mday .r .tm { font-size: 14px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.wall .mday .r .tm { font-size: 14px; color: var(--muted); }
 .wall .mday .r .t { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
 .wall .mb { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .wall .mod.top .mb:has(.row) { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
@@ -244,7 +243,7 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .cday .dh span { font-size: 15px; color: var(--muted); }
 .wall .cday .untimed { margin-top: -2px; }
 .wall .cday .r { display: grid; grid-template-columns: 54px 1fr; column-gap: 12px; align-items: baseline; font-size: calc(var(--s) * 20px); line-height: 1.2; }
-.wall .cday .r .tm { font-size: 15px; color: var(--muted); text-align: right; }
+.wall .cday .r .tm { font-size: 15px; color: var(--muted); }
 .wall .cday .r .t { display: flex; align-items: baseline; gap: 10px; }
 .wall .cday .r .dot { transform: translateY(-1px); }
 .wall .cday.free { gap: 0; padding-bottom: 16px; }
@@ -573,7 +572,6 @@ html:has(.wall.dark) body { background: #1b1a17; }
   .wall .today { padding: 32px 36px 26px 40px; }
   .wall .mast .dd b { font-size: 34px; }
   .wall .mast .dd span { font-size: 20px; }
-  .wall .due .dg { grid-template-columns: 1fr; }
   .wall .panel { padding: 30px 28px 24px; }
   /* The narrow panel can't fit "Coming up" and Week · Month on one line: the switch drops under the title. */
   .wall .mh { flex-wrap: wrap; row-gap: 12px; }

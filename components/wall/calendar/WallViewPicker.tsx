@@ -2,7 +2,7 @@ import React from 'react';
 
 export type CalendarView = 'day' | 'week' | 'month';
 
-/** 'week' is the resting screen (the day column and the panel), reached with Back or the rail. */
+/** 'week' is the resting screen (the day column and the panel), reached from the rail's Calendar. */
 const VIEWS: { key: Exclude<CalendarView, 'week'>; label: string }[] = [
   { key: 'day', label: 'Day' },
   { key: 'month', label: 'Month' },

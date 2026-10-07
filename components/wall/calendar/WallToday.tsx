@@ -115,11 +115,11 @@ const WallToday: React.FC<WallTodayProps> = ({ today, now, timeZone, people, wea
                 onClick={() => act.toggleTodo(t)}
               >
                 <span className="bx">{t.isCompleted && <Check className="wi" size="1em" aria-hidden="true" />}</span>
+                <WallAvatar people={people} who={t.assignedTo} small />
                 <span className="tx">
                   {t.text}
                   {!t.isCompleted && t.completeByDate < today && <small className="late">Overdue</small>}
                 </span>
-                <WallAvatar people={people} who={t.assignedTo} small />
                 <span className="sr">{people.name(t.assignedTo)}</span>
               </button>
             ))}

@@ -161,7 +161,7 @@ describe('groupComingUp', () => {
     expect(days.map(d => [d.date, d.weekday, d.dayOfMonth, d.rel])).toEqual([
       ['2026-10-04', 'Sun', 4, 'Tomorrow'],
       ['2026-10-05', 'Mon', 5, null],
-      ['2026-10-10', 'Sat', 10, 'Next week'],
+      ['2026-10-10', 'Sat', 10, null],
       ['2026-10-11', 'Sun', 11, null],
       ['2026-10-17', 'Sat', 17, null],
     ]);

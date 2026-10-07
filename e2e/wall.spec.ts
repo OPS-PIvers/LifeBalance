@@ -169,7 +169,7 @@ test.describe('Wall display shell (Test Mode)', () => {
     await expect(page.getByText('Dentist')).toBeVisible();
     await expect(page.getByText('Water bill')).toBeVisible();
     await expect(page.getByRole('group', { name: 'Calendar view' }).getByRole('button', { name: 'Day' })).toHaveAttribute('aria-pressed', 'true');
-    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: /Calendar/ }).click();
     await expect(page.getByRole('region', { name: 'Coming up' })).toBeVisible();
   });
 

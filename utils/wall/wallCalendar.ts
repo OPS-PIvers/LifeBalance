@@ -163,7 +163,7 @@ export interface ComingUpDay {
   /** "Sun". */
   weekday: string;
   dayOfMonth: number;
-  /** "Tomorrow", "Next week" (the first day a week or more out), or null. */
+  /** "Tomorrow", or null. */
   rel: string | null;
   muted: WallEvent[];
   /** All-day feed events, then timed events in start order. */
@@ -176,17 +176,11 @@ export interface ComingUpDay {
  */
 export function groupComingUp(events: readonly WallEvent[], today: string, days = 14, keepEmpty = false): ComingUpDay[] {
   const out: ComingUpDay[] = [];
-  let nextWeekLabelled = false;
   for (let i = 1; i <= days; i++) {
     const date = addDaysTo(today, i);
     const day = eventsOn(events, date);
     if (day.length === 0 && !keepEmpty) continue;
-    let rel: string | null = null;
-    if (i === 1) rel = 'Tomorrow';
-    else if (i >= 7 && !nextWeekLabelled) {
-      rel = 'Next week';
-      nextWeekLabelled = true;
-    }
+    const rel = i === 1 ? 'Tomorrow' : null;
     out.push({
       date,
       weekday: weekdayName(date).slice(0, 3),

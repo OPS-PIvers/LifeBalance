@@ -373,7 +373,7 @@ The wall is a separate surface with its own rules: a 1366×1024 iPad on the wall
   - touch targets are at least 56 px;
   - the clock, day names and section heads use Besley;
   - times use tabular numbers.
-- **Layout:** Week has no top bar: rail, then the day column (masthead, Next, the rest of today, Due today, dinner), then a tinted panel (a top module, an optional bottom quarter; Coming up carries its own Week · Month switch in its heading). Other screens get the slim header; Day and Month put Back and a Day · Month switch in theirs. Portrait is the same structure, narrower.
+- **Layout:** Week has no top bar: rail, then the day column (masthead, Next, the rest of today, Due today, dinner), then a tinted panel (a top module, an optional bottom quarter; Coming up carries its own Week · Month switch in its heading). Other screens get the slim header; Day and Month put a Day · Month switch in theirs; the rail's Calendar goes back. Portrait is the same structure, narrower.
 - **Owners:** initial avatars in the day column and Day view; color dots in the panel and Month. Untimed items (all-day events, bills, holidays) go in one quiet line under the day heading, never a row.
 - **No editing chrome at rest:** module controls appear only in Arrange mode.
 - **Member colors:** use `memberColorFor(..., { scheme: 'dark' })` in dark. `DARK_MEMBER_COLORS` must cover every palette color, and a test enforces it.
