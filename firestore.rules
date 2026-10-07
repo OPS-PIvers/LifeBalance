@@ -1234,7 +1234,7 @@ service cloud.firestore {
         allow create: if isDisplayOf(householdId) &&
           request.resource.data.keys().hasOnly(['kind', 'heard', 'free', 'alternative', 'engine', 'view', 'did', 'displayId', 'appVersion', 'at', 'expireAt']) &&
           request.resource.data.keys().hasAll(['kind', 'heard', 'free', 'alternative', 'engine', 'view', 'displayId', 'appVersion', 'at', 'expireAt']) &&
-          request.resource.data.kind in ['unparsed', 'undo', 'cancel', 'no-speech'] &&
+          request.resource.data.kind in ['unparsed', 'undo', 'cancel', 'no-speech', 'ai'] &&
           request.resource.data.engine in ['device', 'speech', 'audio'] &&
           request.resource.data.displayId == request.auth.token.did &&
           request.resource.data.heard is string && request.resource.data.heard.size() <= 300 &&

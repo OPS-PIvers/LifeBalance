@@ -328,8 +328,9 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
     [fail, miss, noteUndo, ran, result, runUndo]
   );
 
+  /** `viaAi`: Gemini read what the grammar couldn't, so log it for the grammar to learn. */
   const runAction = useCallback(
-    (command: WallVoiceCommand) => {
+    (command: WallVoiceCommand, viaAi = false) => {
       const l = latest.current;
       const action = resolveVoiceCommand(command, { members: l.members, catalog: l.groceryCatalog, today: l.today });
       if (action.kind === 'unknown') {
@@ -348,7 +349,9 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
       const undo = done?.undo;
       if (undo) lastUndo.current = { undo, text: action.summary };
       const id = seq.current + 1;
-      ran(`${action.kind === 'shopping' ? 'Added to Shopping' : 'Added to To-dos'}: ${action.summary}`);
+      const did = `${action.kind === 'shopping' ? 'Added to Shopping' : 'Added to To-dos'}: ${action.summary}`;
+      ran(did);
+      if (viaAi) miss('ai', { did });
       result({
         title: action.kind === 'shopping' ? 'Added to Shopping' : 'Added to To-dos',
         text: action.summary,
@@ -438,7 +441,7 @@ export function useWallVoice({ setting, wakeModel, wake = false, today, timeZone
       if (cap.kind === 'audio') heardRef.current = { ...heardRef.current, heard: command.transcript, free: command.transcript };
       const local = cap.kind === 'audio' ? parseLocalCommand(command.transcript) : null;
       if (local) runLocal(local);
-      else runAction(command);
+      else runAction(command, cap.kind === 'text');
     },
     [fail, miss, runAction, runLocal]
   );

@@ -2589,6 +2589,7 @@ describe('wall display identity', () => {
     it('logs a voice miss as itself, text only, expiring within 31 days', async () => {
       await assertSucceeds(setDoc(doc(displayDb(), 'households', H1, 'voiceMisses', 'vm1'), voiceMiss()));
       await assertSucceeds(setDoc(doc(displayDb(), 'households', H1, 'voiceMisses', 'vm2'), voiceMiss({ kind: 'undo', did: 'Showed meals' })));
+      await assertSucceeds(setDoc(doc(displayDb(), 'households', H1, 'voiceMisses', 'vm3'), voiceMiss({ kind: 'ai', did: 'Added to Shopping: Milk' })));
     });
 
     it('heartbeats and saves its own layout', async () => {

@@ -2148,7 +2148,11 @@ export type WallVoiceEngine = 'auto' | 'device' | 'speech' | 'audio' | 'off';
  * "undo" came right after a command ran, "cancel" was the command, or the
  * wake word fired and nothing was heard.
  */
-export type WallVoiceMissKind = 'unparsed' | 'undo' | 'cancel' | 'no-speech';
+/**
+ * `ai`: the local grammar couldn't read it, but Gemini could (`did` says
+ * what it did) — the routine teaches the grammar so it stops needing AI.
+ */
+export type WallVoiceMissKind = 'unparsed' | 'undo' | 'cancel' | 'no-speech' | 'ai';
 
 /**
  * One voice command the wall got wrong, at
