@@ -25,10 +25,12 @@ interface WallRailProps {
   /** The wake word being listened for, while it is (shown under the mic). */
   wakeLabel?: string | undefined;
   onGear: () => void;
+  /** Slid out of sight (Settings' "On tap"): out of the tab order and away from screen readers. */
+  hidden?: boolean;
 }
 
-const WallRail: React.FC<WallRailProps> = ({ view, onView, todoBadge, offline, onOfflineInfo, onMic, micLive, wakeLabel, onGear }) => (
-  <nav className="rail" aria-label="Views">
+const WallRail: React.FC<WallRailProps> = ({ view, onView, todoBadge, offline, onOfflineInfo, onMic, micLive, wakeLabel, onGear, hidden = false }) => (
+  <nav className="rail" aria-label="Views" inert={hidden}>
     {ITEMS.map(({ view: v, label, Icon }) => (
       <button key={v} type="button" className="nav" aria-current={v === view ? 'page' : undefined} onClick={() => onView(v)}>
         <Icon className="wi" size="1em" strokeWidth={1.75} aria-hidden="true" />

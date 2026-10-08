@@ -1,4 +1,4 @@
-import type { WallLayout, WallModuleKey, WallSettings, WallSoundStyle, WallVoiceEngine, WallWakeFile, WallWakeModel } from '@/types/schema';
+import type { WallLayout, WallModuleKey, WallRailMode, WallSettings, WallSoundStyle, WallVoiceEngine, WallWakeFile, WallWakeModel } from '@/types/schema';
 
 /**
  * Defaults and normalization for `wallSettings/config`
@@ -15,6 +15,7 @@ export const WALL_VOICE_ENGINES: readonly WallVoiceEngine[] = ['auto', 'device',
 export const WALL_SOUND_STYLES: readonly WallSoundStyle[] = ['speak', 'chime'];
 /** Settings' Low / Medium / High. */
 export const WALL_VOLUMES: readonly number[] = [0.4, 0.7, 1];
+export const WALL_RAIL_MODES: readonly WallRailMode[] = ['shown', 'tap', 'hidden'];
 export const WALL_ALERT_LEADS: readonly number[] = [5, 10, 15, 30];
 
 /** openWakeWord's pre-trained English wake words the wall ships (public/voice/openwakeword-*). */
@@ -67,6 +68,7 @@ export const DEFAULT_WALL_SETTINGS: WallSettings = {
   night: { start: '22:00', end: '06:00' },
   theme: 'light',
   textSize: 'normal',
+  rail: 'shown',
   showBills: true,
   holidaysEnabled: true,
   voice: 'auto',
@@ -178,6 +180,7 @@ export function resolveWallSettings(raw: unknown): WallSettings {
     },
     theme: d['theme'] === 'dark' ? 'dark' : 'light',
     textSize: d['textSize'] === 'large' ? 'large' : 'normal',
+    rail: WALL_RAIL_MODES.find(v => v === d['rail']) ?? def.rail,
     showBills: typeof d['showBills'] === 'boolean' ? d['showBills'] : def.showBills,
     holidaysEnabled: typeof d['holidaysEnabled'] === 'boolean' ? d['holidaysEnabled'] : def.holidaysEnabled,
     voice: WALL_VOICE_ENGINES.find(v => v === d['voice']) ?? def.voice,

@@ -8,6 +8,7 @@ import { zonedDateString, zonedParts } from '@/utils/wall/wallTime';
 import { useWallData } from './data/wallData';
 import { APP_VERSION, useWallRuntime } from './runtime/useWallRuntime';
 import { useWallViewport } from './runtime/useWallViewport';
+import { useWallRail } from './runtime/useWallRail';
 import { canFullscreen, isFullscreen, toggleFullscreen } from './runtime/wallFullscreen';
 import { WallToastContext, useWallToastController, type WallToaster } from './wallToast';
 import WallDay from './calendar/WallDay';
@@ -92,7 +93,12 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   // A rotation step only lasts while the saved layout it started from is current.
   const [rotated, setRotated] = useState<{ from: string; shown: WallLayout } | null>(null);
 
+  const openGear = useCallback(() => setOverlay('gear'), []);
+  const rail = useWallRail(data.settings.rail, openGear);
+  const hideRail = rail.hide;
+
   const onIdle = useCallback(() => {
+    hideRail();
     setView('calendar');
     setCalView('week');
     setDayDate(null);
@@ -104,7 +110,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     dismiss();
     cancelVoiceRef.current();
     closeBriefRef.current();
-  }, [dismiss]);
+  }, [dismiss, hideRail]);
   const listActions = useWallListActions(toaster);
   // One stable cloud-voice function: the actions object is rebuilt on every
   // list snapshot, and swapping the synthesizer would empty the audio cache.
@@ -359,7 +365,14 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     );
   }
 
-  const className = ['wall', dark ? 'dark' : '', data.settings.textSize === 'large' ? 'large' : ''].filter(Boolean).join(' ');
+  const className = [
+    'wall',
+    dark ? 'dark' : '',
+    data.settings.textSize === 'large' ? 'large' : '',
+    !rail.shown ? 'no-rail' : rail.floating ? (rail.open ? 'rail-float rail-open' : 'rail-float') : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   let body: React.ReactNode;
   if (!data.ready) {
@@ -417,25 +430,38 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   return (
     <WallSoundContext.Provider value={sound}>
       <WallToastContext.Provider value={toaster}>
-        <div ref={rootRef} className={className} onPointerDownCapture={() => setRotationPaused(true)}>
-          <WallRail
-            view={view}
-            onView={v => {
-              if (v === 'calendar') goCalendar('week');
-              else setView(v);
-              setArranging(false);
-              setOverlay('none');
-              setSheet(null);
-              setMealDate(null);
-            }}
-            todoBadge={badge}
-            offline={runtime.offline}
-            onOfflineInfo={() => toaster.show(NOTES.offline)}
-            {...(voice.available ? { onMic: listening ? voice.finish : startVoice } : {})}
-            micLive={listening}
-            wakeLabel={voice.wakeListening ? data.settings.wakeModel.label : undefined}
-            onGear={() => setOverlay('gear')}
-          />
+        <div
+          ref={rootRef}
+          className={className}
+          onPointerDownCapture={e => {
+            setRotationPaused(true);
+            rail.handlers.onPointerDown(e);
+          }}
+          onPointerMoveCapture={rail.handlers.onPointerMove}
+          onPointerUpCapture={rail.handlers.onPointerUp}
+          onPointerCancelCapture={rail.handlers.onPointerCancel}
+        >
+          {rail.shown && (
+            <WallRail
+              hidden={rail.floating && !rail.open}
+              view={view}
+              onView={v => {
+                if (v === 'calendar') goCalendar('week');
+                else setView(v);
+                setArranging(false);
+                setOverlay('none');
+                setSheet(null);
+                setMealDate(null);
+              }}
+              todoBadge={badge}
+              offline={runtime.offline}
+              onOfflineInfo={() => toaster.show(NOTES.offline)}
+              {...(voice.available ? { onMic: listening ? voice.finish : startVoice } : {})}
+              micLive={listening}
+              wakeLabel={voice.wakeListening ? data.settings.wakeModel.label : undefined}
+              onGear={openGear}
+            />
+          )}
           <div className="main">
             {!onWeek && (
               <WallHeader

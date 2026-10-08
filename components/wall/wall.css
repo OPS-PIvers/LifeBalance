@@ -115,6 +115,35 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .rail .mic.live { background: var(--warm-fill); color: #fff; box-shadow: 0 0 0 8px color-mix(in srgb, var(--warm-fill) 22%, transparent); }
 .wall .rail .gear { margin: 10px auto 0; width: 56px; height: 56px; display: grid; place-items: center; color: var(--faint); font-size: 26px; }
 
+/*
+ * Settings' Side buttons. Hidden: no rail, the screens take the full width.
+ * On tap: the same full-width layout, and a touch (useWallRail) brings the
+ * same buttons up as a floating toolbar along the bottom centre, where a
+ * hand reaches without stretching, the corners stay clear, and nothing under
+ * a finger moves. Toasts and the voice banner step up above it while it's out;
+ * sheets, menus and their scrim (z 20+) sit over it.
+ */
+.wall.no-rail, .wall.rail-float { grid-template-columns: minmax(0, 1fr); }
+.wall.rail-float .rail { position: absolute; z-index: 19; left: 50%; bottom: 20px; flex-direction: row; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 26px; background: var(--card); box-shadow: var(--shadow); transform: translate(-50%, calc(100% + 28px)); visibility: hidden; transition: transform 0.22s ease-in, visibility 0s 0.22s; }
+.wall.rail-float.rail-open .rail { transform: translate(-50%, 0); visibility: visible; transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.wall.rail-float .rail .sp { flex: none; width: 1px; height: 52px; margin: 0 6px; background: var(--line); }
+.wall.rail-float .rail .off { width: auto; margin: 0 8px; }
+.wall.rail-float .rail .mic { margin: 0; width: 64px; height: 64px; }
+.wall.rail-float .rail .wake { display: none; }
+.wall.rail-float .rail .gear { margin: 0; }
+.wall.rail-float.rail-open .main :is(.toast, .vb) { bottom: 140px; }
+/*
+ * Safari's full screen (display menu → Full screen) floats its own close
+ * button over the top-left corner. Keep the rail's first button and, with no
+ * rail, the clock and headers out from under it.
+ */
+.wall:is(:fullscreen, :-webkit-full-screen):not(.rail-float) .rail { padding-top: 84px; }
+.wall:is(:fullscreen, :-webkit-full-screen):is(.no-rail, .rail-float) .main { padding-left: 56px; }
+/* The clock is held to open the display menu: no iPadOS callout or magnifier. */
+.wall .mast .clock, .wall .hdr .hclk > b { -webkit-touch-callout: none; }
+@media (prefers-reduced-motion: reduce) {
+  .wall.rail-float .rail, .wall.rail-float.rail-open .rail { transition: none; }
+}
 .wall .main { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 
 /* Slim header (every screen but Week): title, then the time, temperature and that screen's actions. */
