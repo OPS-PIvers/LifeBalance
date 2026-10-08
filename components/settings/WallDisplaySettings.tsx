@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Bytes, collection, doc, onSnapshot, setDoc, writeBatch } from 'firebase/firestore';
+import { Bytes, collection, doc, onSnapshot, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 import { db, getFunctionsInstance } from '@/firebase.config';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
@@ -30,7 +30,8 @@ import {
   parseGeocode,
   type GeocodeResult,
 } from '@/utils/wall/wallSettingsView';
-import type { HouseholdMember, WallDisplay, WallRailMode, WallSettings } from '@/types/schema';
+import type { HouseholdMember, WallDisplay, WallLayout, WallRailMode, WallSettings } from '@/types/schema';
+import { WallDisplayLayout } from './WallLayoutSettings';
 import WallCalendarSettings from './WallCalendarSettings';
 import WallVoiceSettings from './WallVoiceSettings';
 import { useAiUsageToday } from '@/hooks/useAiUsageToday';
@@ -124,6 +125,16 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
     }
   };
 
+  /** A wall's own layout: the display listens to its doc, so it changes at once. */
+  const saveLayout = async (did: string, layout: WallLayout) => {
+    try {
+      await updateDoc(doc(db, `households/${householdId}/displays/${did}`), { layout });
+    } catch (e) {
+      console.error('[displays] layout save failed:', e);
+      toast.error("Couldn't save the wall's layout.");
+    }
+  };
+
   /**
    * A custom wake word: its bytes into the wake-N chunk docs and the settings
    * pointing at them, in one batch, so the wall never sees half a file.
@@ -200,6 +211,7 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
     }
   };
 
+  const activeDisplays = displays.filter(d => d.status === 'active');
   const topModule = settings.defaultModules[0] ?? 'coming';
   const bottomModule = settings.defaultModules[1] ?? 'none';
 
@@ -280,86 +292,96 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
       <WallCalendarSettings householdId={householdId} isAdmin={isAdmin} members={members} settings={settings} onSave={save} />
 
       <Section title="Week layout">
-        <SurfaceList>
-          <Row className="flex-wrap">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Right side starts with</p>
-              <p className="text-xs text-brand-500 dark:text-brand-400">Each wall remembers its own changes</p>
-            </div>
-            <div className="flex gap-2">
-              <Select
-                aria-label="Top module"
-                value={topModule}
-                onChange={e => void save({ defaultModules: startingModules(e.target.value, bottomModule) })}
-              >
-                {WALL_MODULE_KEYS.map(key => (
-                  <option key={key} value={key}>
-                    {MODULE_TITLES[key]}
-                  </option>
-                ))}
-              </Select>
-              <Select
-                aria-label="Bottom module"
-                value={bottomModule}
-                onChange={e => void save({ defaultModules: startingModules(topModule, e.target.value) })}
-              >
-                <option value="none">Nothing below</option>
-                {WALL_MODULE_KEYS.filter(key => key !== topModule).map(key => (
-                  <option key={key} value={key}>
-                    {MODULE_TITLES[key]}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </Row>
-          <Row className="flex-wrap">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Rotate the bottom module</p>
-              <p className="text-xs text-brand-500 dark:text-brand-400">Pauses when someone touches the wall</p>
-            </div>
-            <SegmentedControl
-              name="Rotate the bottom module"
-              size="sm"
-              options={[
-                { value: 'on', label: 'On' },
-                { value: 'off', label: 'Off' },
-              ]}
-              value={settings.rotation.enabled ? 'on' : 'off'}
-              onChange={v => void save({ rotation: { ...settings.rotation, enabled: v === 'on' } })}
+        <div className="space-y-4">
+          {activeDisplays.map(d => (
+            <WallDisplayLayout
+              key={d.id}
+              display={d}
+              settings={settings}
+              onSave={layout => void saveLayout(d.id, layout)}
             />
-          </Row>
-          {settings.rotation.enabled && (
+          ))}
+          <SurfaceList>
+            <Row className="flex-col items-stretch gap-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">New walls start with</p>
+                <p className="text-xs text-brand-500 dark:text-brand-400">What a newly paired wall’s panel shows</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Select
+                  aria-label="Top module"
+                  value={topModule}
+                  onChange={e => void save({ defaultModules: startingModules(e.target.value, bottomModule) })}
+                >
+                  {WALL_MODULE_KEYS.map(key => (
+                    <option key={key} value={key}>
+                      {MODULE_TITLES[key]}
+                    </option>
+                  ))}
+                </Select>
+                <Select
+                  aria-label="Bottom module"
+                  value={bottomModule}
+                  onChange={e => void save({ defaultModules: startingModules(topModule, e.target.value) })}
+                >
+                  <option value="none">Nothing</option>
+                  {WALL_MODULE_KEYS.filter(key => key !== topModule).map(key => (
+                    <option key={key} value={key}>
+                      {MODULE_TITLES[key]}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </Row>
             <Row className="flex-wrap">
-              <p className="flex-1 min-w-0 text-sm font-semibold text-brand-900 dark:text-brand-100">Each module stays for</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Rotate the bottom module</p>
+                <p className="text-xs text-brand-500 dark:text-brand-400">Pauses when someone touches the wall</p>
+              </div>
               <SegmentedControl
-                name="Each module stays for"
+                name="Rotate the bottom module"
                 size="sm"
-                options={WALL_ROTATION_INTERVALS.map(sec => ({ value: String(sec), label: sec < 60 ? `${sec} s` : `${sec / 60} min` }))}
-                value={String(settings.rotation.intervalSec)}
-                onChange={v => void save({ rotation: { ...settings.rotation, intervalSec: Number(v) } })}
+                options={[
+                  { value: 'on', label: 'On' },
+                  { value: 'off', label: 'Off' },
+                ]}
+                value={settings.rotation.enabled ? 'on' : 'off'}
+                onChange={v => void save({ rotation: { ...settings.rotation, enabled: v === 'on' } })}
               />
             </Row>
-          )}
-          <Row className="flex-wrap">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Back to calendar after</p>
-              <p className="text-xs text-brand-500 dark:text-brand-400">When nobody touches it</p>
-            </div>
-            <SegmentedControl
-              name="Back to calendar after"
-              size="sm"
-              options={WALL_IDLE_RETURN_OPTIONS.map(sec => ({ value: String(sec), label: `${sec / 60} min` }))}
-              value={String(settings.idleReturnSec)}
-              onChange={v => void save({ idleReturnSec: Number(v) })}
-            />
-          </Row>
-        </SurfaceList>
+            {settings.rotation.enabled && (
+              <Row className="flex-col items-stretch gap-2">
+                <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Each module stays for</p>
+                <SegmentedControl
+                  name="Each module stays for"
+                  size="sm"
+                  options={WALL_ROTATION_INTERVALS.map(sec => ({ value: String(sec), label: sec < 60 ? `${sec} s` : `${sec / 60} min` }))}
+                  value={String(settings.rotation.intervalSec)}
+                  onChange={v => void save({ rotation: { ...settings.rotation, intervalSec: Number(v) } })}
+                />
+              </Row>
+            )}
+            <Row className="flex-col items-stretch gap-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Back to calendar after</p>
+                <p className="text-xs text-brand-500 dark:text-brand-400">When nobody touches it</p>
+              </div>
+              <SegmentedControl
+                name="Back to calendar after"
+                size="sm"
+                options={WALL_IDLE_RETURN_OPTIONS.map(sec => ({ value: String(sec), label: `${sec / 60} min` }))}
+                value={String(settings.idleReturnSec)}
+                onChange={v => void save({ idleReturnSec: Number(v) })}
+              />
+            </Row>
+          </SurfaceList>
+        </div>
       </Section>
 
       <Section title="Night & look">
         <SurfaceList>
-          <Row className="flex-wrap">
-            <p className="flex-1 min-w-0 text-sm font-semibold text-brand-900 dark:text-brand-100">Night screen</p>
+          <Row className="flex-col items-stretch gap-2">
+            <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Night screen</p>
             <div className="flex items-center gap-2 text-sm">
               <input
                 type="time"
@@ -472,7 +494,7 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
               without sound.
             </p>
           </Row>
-          <Row className="flex-wrap">
+          <Row className="flex-col items-stretch gap-2">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Without travel time, alert</p>
               <p className="text-xs text-brand-500 dark:text-brand-400">Before the event starts</p>
@@ -529,7 +551,7 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
 
       <Section title="Sound">
         <SurfaceList>
-          <Row className="flex-wrap">
+          <Row className="flex-col items-stretch gap-2">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Volume</p>
               <p className="text-xs text-brand-500 dark:text-brand-400">On top of the iPad’s own volume. Test it from the wall’s gear menu.</p>
@@ -542,7 +564,7 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
               onChange={v => void save({ sound: { ...settings.sound, volume: Number(v) } })}
             />
           </Row>
-          <Row className="flex-wrap">
+          <Row className="flex-col items-stretch gap-2">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">After a voice command</p>
               <p className="text-xs text-brand-500 dark:text-brand-400">A big card always shows what happened</p>
@@ -558,7 +580,7 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
               onChange={confirm => void save({ sound: { ...settings.sound, confirm } })}
             />
           </Row>
-          <Row className="flex-wrap">
+          <Row className="flex-col items-stretch gap-2">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Starting-soon alerts</p>
               <p className="text-xs text-brand-500 dark:text-brand-400">Silent during night hours</p>

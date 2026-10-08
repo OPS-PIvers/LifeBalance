@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import WallAutoScroll from './WallAutoScroll';
+import WallModuleSlot from '@/components/wall/calendar/WallModuleSlot';
 
 /** jsdom lays nothing out: give the wheel and its list real heights, and fire the observer by hand. */
 function layout(contentHeight: number | (() => number), viewportHeight: number) {
@@ -89,5 +90,44 @@ describe('WallAutoScroll', () => {
     fire();
     expect(container.querySelector('.wheel')).not.toHaveClass('on');
     expect(screen.queryByText('Top of list')).toBeNull();
+  });
+});
+
+describe('a module’s pause / play', () => {
+  const Slot = ({ on, onScroll }: { on: boolean; onScroll: (on: boolean) => void }) => (
+    <WallModuleSlot className="mod top" title="Shopping" scrollOn={on} onScroll={onScroll} onSwipe={() => undefined} swipeable={false}>
+      <List />
+    </WallModuleSlot>
+  );
+
+  it('shows only when the list is longer than its module', () => {
+    const measure = layout(300, 600);
+    render(<Slot on onScroll={vi.fn()} />);
+    measure();
+    expect(screen.queryByRole('button', { name: /scroll/i })).toBeNull();
+  });
+
+  it('pauses a turning list, and a paused list stays plain and offers play', () => {
+    const measure = layout(900, 600);
+    const onScroll = vi.fn();
+    const { container, rerender } = render(<Slot on onScroll={onScroll} />);
+    measure();
+    expect(container.querySelector('.wheel')).toHaveClass('on');
+    fireEvent.click(screen.getByRole('button', { name: 'Stop scrolling Shopping' }));
+    expect(onScroll).toHaveBeenLastCalledWith(false);
+    rerender(<Slot on={false} onScroll={onScroll} />);
+    measure();
+    expect(container.querySelector('.wheel')).not.toHaveClass('on');
+    expect(screen.queryByText('Top of list')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Scroll Shopping by itself' }));
+    expect(onScroll).toHaveBeenLastCalledWith(true);
+  });
+
+  it('offers no control under reduced motion, where nothing turns', () => {
+    reducedMotion(true);
+    const measure = layout(900, 600);
+    render(<Slot on onScroll={vi.fn()} />);
+    measure();
+    expect(screen.queryByRole('button', { name: /scroll/i })).toBeNull();
   });
 });

@@ -85,7 +85,7 @@ const WallVoiceSettings: React.FC<WallVoiceSettingsProps> = ({ settings, save, u
         </Row>
         {settings.voice !== 'off' && (
           <>
-            <Row className="flex-wrap">
+            <Row className="flex-col items-stretch gap-2">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">How it listens</p>
                 <p className="text-xs text-brand-500 dark:text-brand-400">{ENGINE_NOTES[settings.voice]}</p>
@@ -126,14 +126,14 @@ const WallVoiceSettings: React.FC<WallVoiceSettingsProps> = ({ settings, save, u
                 </Row>
                 {settings.wakeWord && (
                   <>
-                    <Row className="flex-wrap gap-3">
+                    <Row className="flex-col items-stretch gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Wake word</p>
                         <p className="text-xs text-brand-500 dark:text-brand-400">
                           A built-in word works now. For “Hey Home”, train it with openWakeWord’s free notebook and add the .onnx file below
                         </p>
                       </div>
-                      <div className="w-48">
+                      <div>
                         <Select
                           aria-label="Wake word"
                           value={wake.keyword}
@@ -177,7 +177,7 @@ const WallVoiceSettings: React.FC<WallVoiceSettingsProps> = ({ settings, save, u
                         />
                       </div>
                     </Row>
-                    <Row className="flex-wrap">
+                    <Row className="flex-col items-stretch gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Sensitivity</p>
                         <p className="text-xs text-brand-500 dark:text-brand-400">Higher hears it from farther away, and wakes by mistake more often</p>

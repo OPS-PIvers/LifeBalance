@@ -26,6 +26,7 @@ const DueModule: React.FC<DueModuleProps> = ({ today, timeZone, people }) => {
           key={t.id}
           todo={t}
           people={people}
+          swipeToDelete={false}
           meta={
             <>
               <span className="nm">{people.name(t.assignedTo)}</span>

@@ -71,6 +71,30 @@ service cloud.firestore {
       return num == null || num is number;
     }
 
+    // A wall display's layout (WallLayout): 0–2 panel modules, the slot under
+    // today, and per-module auto scroll on/off. Written by the display itself
+    // or by a member from Settings.
+    function isValidWallLayout(layout) {
+      return layout == null ||
+        (layout is map &&
+         layout.keys().hasOnly(['modules', 'day', 'scroll']) &&
+         layout.modules is list &&
+         layout.modules.size() <= 2 &&
+         (layout.get('day', null) == null || (layout.day is string && layout.day.size() <= 20)) &&
+         (layout.get('scroll', null) == null ||
+           (layout.scroll is map &&
+            layout.scroll.keys().hasOnly(['coming', 'shopping', 'todos', 'meals', 'due']) &&
+            isOptionalScrollFlag(layout.scroll, 'coming') &&
+            isOptionalScrollFlag(layout.scroll, 'shopping') &&
+            isOptionalScrollFlag(layout.scroll, 'todos') &&
+            isOptionalScrollFlag(layout.scroll, 'meals') &&
+            isOptionalScrollFlag(layout.scroll, 'due'))));
+    }
+
+    function isOptionalScrollFlag(scroll, key) {
+      return !(key in scroll) || scroll[key] is bool;
+    }
+
     function isValidBoolean(val) {
       return val is bool;
     }
@@ -1346,13 +1370,11 @@ service cloud.firestore {
                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeenAt', 'appVersion', 'layout']) &&
                          (request.resource.data.get('lastSeenAt', null) == null || request.resource.data.lastSeenAt is timestamp) &&
                          isValidOptionalString(request.resource.data.get('appVersion', null), 40) &&
-                         (request.resource.data.get('layout', null) == null ||
-                           (request.resource.data.layout is map &&
-                            request.resource.data.layout.keys().hasOnly(['modules', 'day']) &&
-                            request.resource.data.layout.modules is list &&
-                            request.resource.data.layout.modules.size() <= 2 &&
-                            (request.resource.data.layout.get('day', null) == null ||
-                              (request.resource.data.layout.day is string && request.resource.data.layout.day.size() <= 20))));
+                         isValidWallLayout(request.resource.data.get('layout', null));
+        // Any member arranges a wall from phone Settings → Wall display: its layout only.
+        allow update: if isMemberOf(householdId) &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['layout']) &&
+                         isValidWallLayout(request.resource.data.get('layout', null));
       }
 
       // Household wall settings (single doc `config`). Any member edits it from

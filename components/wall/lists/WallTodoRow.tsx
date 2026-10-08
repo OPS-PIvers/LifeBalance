@@ -10,6 +10,8 @@ interface WallTodoRowProps {
   people: WallPeople;
   /** Person / day / overdue text after the label. */
   meta: React.ReactNode;
+  /** Off in a panel module: a sideways swipe there switches the module. */
+  swipeToDelete?: boolean;
 }
 
 /**
@@ -17,14 +19,14 @@ interface WallTodoRowProps {
  * rows under it (WallSubtasks): a habit-linked to-do can't be completed until
  * every step is done. The parent shows "n/m" progress.
  */
-const WallTodoRow: React.FC<WallTodoRowProps> = ({ todo, people, meta }) => {
+const WallTodoRow: React.FC<WallTodoRowProps> = ({ todo, people, meta, swipeToDelete = true }) => {
   const act = useWallListActions();
   const row = (
     <WallSwipeRow
       label={todo.text}
       done={todo.isCompleted}
       onToggle={() => act.toggleTodo(todo)}
-      onDelete={() => act.deleteTodo(todo)}
+      {...(swipeToDelete ? { onDelete: () => act.deleteTodo(todo) } : {})}
       meta={
         <>
           <WallStepCount todo={todo} />

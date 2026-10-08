@@ -160,6 +160,15 @@ describe('normalizeModules / normalizeLayout', () => {
     // Never the same module twice: the panel wins.
     expect(normalizeLayout({ modules: ['coming'], day: 'coming' })).toEqual({ modules: ['coming'] });
   });
+
+  it('keeps auto scroll choices for known modules only', () => {
+    expect(normalizeLayout({ modules: ['coming'], scroll: { coming: true, shopping: false, radio: true, todos: 'yes' } })).toEqual({
+      modules: ['coming'],
+      scroll: { coming: true, shopping: false },
+    });
+    expect(normalizeLayout({ modules: ['coming'], scroll: { radio: true } })).toEqual({ modules: ['coming'] });
+    expect(normalizeLayout({ modules: ['coming'], scroll: 'on' })).toEqual({ modules: ['coming'] });
+  });
 });
 
 describe('effectiveLayout', () => {

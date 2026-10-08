@@ -5,7 +5,8 @@ interface WallSwipeRowProps {
   label: string;
   done: boolean;
   onToggle: () => void;
-  onDelete: () => void;
+  /** Absent: tap only, no swipe (a panel module, where a sideways swipe switches the module). */
+  onDelete?: () => void;
   /** Muted text after the label (quantity, person, day). */
   meta?: React.ReactNode;
 }
@@ -37,6 +38,7 @@ const WallSwipeRow: React.FC<WallSwipeRowProps> = ({ label, done, onToggle, onDe
       ref={rowRef}
       className={['row', done ? 'done' : '', swiped ? 'swiped' : ''].filter(Boolean).join(' ')}
       onPointerDown={e => {
+        if (!onDelete) return;
         start.current = { x: e.clientX, y: e.clientY };
         moved.current = false;
       }}
@@ -56,9 +58,11 @@ const WallSwipeRow: React.FC<WallSwipeRowProps> = ({ label, done, onToggle, onDe
         start.current = null;
       }}
     >
-      <button type="button" className="del" tabIndex={swiped ? 0 : -1} onClick={onDelete}>
-        Delete
-      </button>
+      {onDelete && (
+        <button type="button" className="del" tabIndex={swiped ? 0 : -1} onClick={onDelete}>
+          Delete
+        </button>
+      )}
       <button
         type="button"
         className="in"

@@ -2602,6 +2602,9 @@ describe('wall display identity', () => {
         updateDoc(doc(displayDb(), 'households', H1, 'displays', DID), { layout: { modules: ['coming'], day: 'shopping' } })
       );
       await assertSucceeds(updateDoc(doc(displayDb(), 'households', H1, 'displays', DID), { layout: { modules: ['coming'], day: null } }));
+      await assertSucceeds(
+        updateDoc(doc(displayDb(), 'households', H1, 'displays', DID), { layout: { modules: ['coming'], scroll: { coming: true, shopping: false } } })
+      );
     });
   });
 
@@ -2701,6 +2704,9 @@ describe('wall display identity', () => {
       await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['a', 'b', 'c'] } }));
       await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['coming'], day: 7 } }));
       await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['coming'], extra: true } }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['coming'], scroll: { radio: true } } }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['coming'], scroll: 'on' } }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['coming'], scroll: { coming: 'yes' } } }));
     });
 
     it('a revoked display loses all access immediately', async () => {
@@ -2761,6 +2767,19 @@ describe('wall display identity', () => {
       await assertSucceeds(getDocs(collection(db, 'households', H1, 'wallTravel')));
       await assertSucceeds(getDocs(collection(db, 'households', H1, 'mealPlan')));
       await assertSucceeds(setDoc(doc(db, 'households', H1, 'mealPlan', 'p3'), { date: '2026-10-05', mealId: 'm1' }));
+    });
+
+    it("members arrange a display's layout from Settings, and nothing else on it", async () => {
+      const db = dbFor(BOB);
+      await assertSucceeds(
+        updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['shopping', 'meals'], day: 'due', scroll: { meals: true } } })
+      );
+      await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['a', 'b', 'c'] } }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['coming'], scroll: { radio: true } } }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['coming'], scroll: { meals: { on: true } } } }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { name: 'Renamed' }));
+      await assertFails(updateDoc(doc(db, 'households', H1, 'displays', DID), { layout: { modules: ['coming'] }, lastSeenAt: serverTimestamp() }));
+      await assertFails(updateDoc(doc(dbFor(CAROL), 'households', H1, 'displays', DID), { layout: { modules: ['coming'] } }));
     });
 
     it('a member can create the settings doc on first save (merge write)', async () => {

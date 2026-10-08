@@ -1,4 +1,4 @@
-import { useLayoutEffect, type RefObject } from 'react';
+import { useLayoutEffect, useRef, type RefObject } from 'react';
 import { fitScale } from '@/utils/wall/wallFit';
 
 /**
@@ -48,9 +48,14 @@ export function useWallFit(ref: RefObject<HTMLElement | null>, opts: { on: boole
  * list never ends on half a day (the Week panel's "fill whole days"). The
  * first child always shows. The box needs `position: relative` (children are
  * measured against it) and a height of its own. Unmeasured (0 high, as in
- * tests) → everything shows.
+ * tests) → everything shows. `onCut` hears whether anything was hidden.
  */
-export function useWholeFill(ref: RefObject<HTMLElement | null>): void {
+export function useWholeFill(ref: RefObject<HTMLElement | null>, onCut?: (cut: boolean) => void): void {
+  // Held in a ref so a new callback each render doesn't re-attach the observers.
+  const cutRef = useRef(onCut);
+  useLayoutEffect(() => {
+    cutRef.current = onCut;
+  });
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return undefined;
@@ -68,6 +73,7 @@ export function useWholeFill(ref: RefObject<HTMLElement | null>): void {
           c.hidden = true;
         }
       });
+      cutRef.current?.(cut);
     };
     const later = () => {
       if (!frame) frame = window.requestAnimationFrame(fill);

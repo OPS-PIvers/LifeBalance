@@ -254,17 +254,19 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .today .dslot.natural { flex: none; }
 .wall .today .dslot ~ .foot { margin-top: 0; }
 .wall .dslot .due { border-top: 0; padding-top: 0; }
+/* Due today in its natural place: as tall as its items, like the Arrange-mode slot (.dslot.natural). */
+.wall .today .dnat { flex: none; }
 /* Module rows stay one line: a long to-do ends in an ellipsis, never wraps the list out of step. */
 .wall .mod .row .tx, .wall .mod .sub .tx { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.wall .mh { display: flex; align-items: center; gap: 10px; }
+.wall .mh { display: flex; align-items: center; gap: 10px; min-height: 48px; }
 .wall .mh b { font-family: var(--font-display); font-size: calc(var(--s) * var(--t-title)); font-weight: 600; margin-right: auto; }
 .wall .mh span { font-size: 15px; color: var(--muted); }
 /* Coming up's Week · Month: the vseg look at heading size, so it reads as the module's own. */
 .wall .mseg { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; padding: 3px; border-radius: 12px; background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--line-strong); flex: none; }
 .wall .mseg button { height: 42px; min-width: 84px; padding: 0 14px; border-radius: 9px; font-size: 17px; font-weight: 600; color: var(--fg2); text-align: center; }
 .wall .mseg button[aria-pressed='true'] { background: var(--accent); color: var(--on-accent); }
-/* Month: a denser list that scrolls, the date in a gutter. */
-.wall .mlist { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; display: flex; flex-direction: column; }
+/* Month: a denser list (scrolled, or turned, by its wheel), the date in a gutter. */
+.wall .mlist { display: flex; flex-direction: column; }
 .wall .mlist .mmon { font-family: var(--font-display); font-size: calc(var(--s) * 20px); font-weight: 600; color: var(--muted); padding: 14px 0 6px; }
 .wall .mday { display: grid; grid-template-columns: 46px 1fr; column-gap: 14px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--line); width: 100%; text-align: left; }
 .wall .mday:last-child { border-bottom: 0; }
@@ -275,6 +277,21 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall .mday .r { display: grid; grid-template-columns: 50px 1fr; column-gap: 10px; align-items: baseline; font-size: calc(var(--s) * 18px); line-height: 1.2; }
 .wall .mday .r .tm { font-size: 14px; color: var(--muted); }
 .wall .mday .r .t { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
+/*
+ * A module swipes sideways to switch (useModuleSwipe): the browser keeps
+ * up-and-down panning, the script gets the sideways moves. The new module
+ * slides in from the side the finger went.
+ */
+.wall .swipe { touch-action: pan-y; }
+.wall .swin-next { animation: wall-swin-next 220ms ease-out; }
+.wall .swin-prev { animation: wall-swin-prev 220ms ease-out; }
+@keyframes wall-swin-next { from { opacity: 0; transform: translate3d(60px, 0, 0); } to { opacity: 1; transform: none; } }
+@keyframes wall-swin-prev { from { opacity: 0; transform: translate3d(-60px, 0, 0); } to { opacity: 1; transform: none; } }
+/* Pause / play for a module's auto scroll: the heading switch's size and outline, so the two read as one family. */
+/* Pause / play: a bare muted glyph with a full 48px target, pulled out so the glyph sits on the module's right edge. */
+.wall .mplay { flex: none; width: 48px; height: 48px; margin-right: -16px; border-radius: 12px; display: grid; place-items: center; color: var(--muted); opacity: .65; }
+.wall .mplay:active { opacity: 1; background: color-mix(in srgb, var(--fg) 6%, transparent); }
+.wall .mplay svg { font-size: 16px; }
 .wall .mb { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .wall .mod.top .mb:has(.row) { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
 /*

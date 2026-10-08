@@ -16,9 +16,12 @@ export const MODULE_TITLES: Record<WallModuleKey, string> = {
   due: 'Due today',
 };
 
-/** Rebuilds a layout without writing an `undefined` day (Firestore refuses it). */
-function withDay(modules: WallModuleKey[], day: WallLayout['day']): WallLayout {
-  return day === undefined ? { modules } : { modules, day };
+/**
+ * The layout with new panel modules. Spread, so the day slot and auto-scroll
+ * choices carry over and an absent day stays absent (Firestore refuses `undefined`).
+ */
+function withModules(layout: WallLayout, modules: WallModuleKey[]): WallLayout {
+  return { ...layout, modules };
 }
 
 /**
@@ -40,7 +43,7 @@ export function shownModules(layout: WallLayout): WallModuleKey[] {
 /** Put `key` under today's events (`null` clears the slot). A key the panel shows is refused. */
 export function setDayModule(layout: WallLayout, key: WallModuleKey | null): WallLayout {
   if (key && layout.modules.includes(key)) return layout;
-  return { modules: layout.modules, day: key };
+  return { ...layout, day: key };
 }
 
 /** Put `key` in `slot`. A key already showing elsewhere is refused (the menu disables it). */
@@ -49,20 +52,20 @@ export function switchModule(layout: WallLayout, slot: number, key: WallModuleKe
   if (layout.modules.some((k, i) => k === key && i !== slot) || dayModule(layout) === key) return layout;
   const modules = [...layout.modules];
   modules[slot] = key;
-  return withDay(modules, layout.day);
+  return withModules(layout, modules);
 }
 
 export function addModule(layout: WallLayout, key: WallModuleKey): WallLayout {
   if (layout.modules.length >= 2 || layout.modules.includes(key) || dayModule(layout) === key) return layout;
-  return withDay([...layout.modules, key], layout.day);
+  return withModules(layout, [...layout.modules, key]);
 }
 
 /** Only the bottom module comes out: the panel always shows something on top. */
 export function removeModule(layout: WallLayout, slot: number): WallLayout {
   if (slot < 1 || slot >= layout.modules.length) return layout;
-  return withDay(
-    layout.modules.filter((_, i) => i !== slot),
-    layout.day
+  return withModules(
+    layout,
+    layout.modules.filter((_, i) => i !== slot)
   );
 }
 
@@ -73,7 +76,7 @@ export function removeModule(layout: WallLayout, slot: number): WallLayout {
 export function withTopModule(layout: WallLayout): WallLayout {
   if (layout.modules.length > 0) return layout;
   const top: WallModuleKey = layout.day === 'coming' ? 'shopping' : 'coming';
-  return withDay([top], layout.day);
+  return withModules(layout, [top]);
 }
 
 /**
@@ -95,5 +98,55 @@ export function nextRotation(layout: WallLayout, defaultModules: readonly WallMo
   if (!next || next === current) return layout;
   const modules = [...layout.modules];
   modules[slot] = next;
-  return withDay(modules, layout.day);
+  return withModules(layout, modules);
+}
+
+/** Where a module sits on the Week screen: a panel slot (0 top, 1 bottom) or the day column's slot. */
+export type ModulePlace = number | 'day';
+
+/**
+ * A swipe on a module: the next (dir 1) or previous (dir -1) module in
+ * `WALL_MODULE_KEYS` order, wrapping round, skipping whatever the other slots
+ * show. A default day slot (Due today, absent from the saved layout) is pinned
+ * first, so swiping the panel through To-dos never makes Due today vanish
+ * under today. Unchanged when there's nothing else to show.
+ */
+export function swipeModule(layout: WallLayout, place: ModulePlace, dir: 1 | -1): WallLayout {
+  const pinned: WallLayout = layout.day === undefined ? { ...layout, day: dayModule(layout) } : layout;
+  const current = place === 'day' ? pinned.day : pinned.modules[place];
+  if (!current) return layout;
+  const others = new Set<WallModuleKey>(place === 'day' ? pinned.modules : [...pinned.modules.filter((_, i) => i !== place), ...(pinned.day ? [pinned.day] : [])]);
+  const keys = WALL_MODULE_KEYS;
+  const at = keys.indexOf(current);
+  for (let step = 1; step < keys.length; step++) {
+    const next = keys[(((at + dir * step) % keys.length) + keys.length) % keys.length];
+    if (!next || others.has(next)) continue;
+    if (place === 'day') return { ...pinned, day: next };
+    const modules = [...pinned.modules];
+    modules[place] = next;
+    return { ...pinned, modules };
+  }
+  return layout;
+}
+
+/**
+ * Whether a module's list turns by itself when it's longer than its box. The
+ * lists (Shopping, To-dos, Due today) do unless stopped; Coming up and Dinners
+ * fill whole days unless started, since a cut-off day reads worse than a
+ * short list. Started or stopped on the wall itself, or from the phone.
+ */
+export const DEFAULT_AUTO_SCROLL: Record<WallModuleKey, boolean> = {
+  coming: false,
+  shopping: true,
+  todos: true,
+  meals: false,
+  due: true,
+};
+
+export function autoScrolls(layout: WallLayout, key: WallModuleKey): boolean {
+  return layout.scroll?.[key] ?? DEFAULT_AUTO_SCROLL[key];
+}
+
+export function setAutoScroll(layout: WallLayout, key: WallModuleKey, on: boolean): WallLayout {
+  return { ...layout, scroll: { ...layout.scroll, [key]: on } };
 }
