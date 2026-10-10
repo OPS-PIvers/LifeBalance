@@ -85,12 +85,18 @@
 .wall .bd .li .tt { font-size: 20px; line-height: 1.2; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .wall .bd .li.lead { box-shadow: inset 0 0 0 2.5px var(--hero); }
 /* A lane's to-dos: a dashed rule, "To do · n of m", then big checkboxes in the lane's color. */
-/* The list fills what's left of the lane; rows that don't fit whole hide behind "+N more" (useFittingCount). */
+/*
+ * The list fills what's left of the lane and scrolls on its own with a swipe,
+ * so a long list (or a long run of steps) can be reached and checked off.
+ * No scrollbar on a wall; the edge with more past it fades instead.
+ */
 .wall .bd .ltd { grid-row: 3; align-self: stretch; display: grid; grid-template-rows: auto minmax(0, 1fr); margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line-strong); min-height: 0; overflow: hidden; }
-/* max-content rows: auto rows in an overflowing box shrink to each row's min-height and the text spills into the next row. */
-.wall .bd .ltl { position: relative; display: grid; grid-auto-rows: max-content; align-content: start; min-height: 0; overflow: hidden; }
-.wall .bd .ltk.off { visibility: hidden; }
-.wall .bd .ltl .more { position: absolute; display: flex; align-items: center; min-height: 48px; padding: 0; font-size: 16px; white-space: nowrap; }
+/* max-content rows: auto rows in a box shorter than its list shrink to each row's min-height and the text spills into the next row. */
+.wall .bd .ltl { display: grid; grid-auto-rows: max-content; align-content: start; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; scrollbar-width: none; padding-bottom: 12px; }
+.wall .bd .ltl::-webkit-scrollbar { display: none; }
+.wall .bd .ltl.dn { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 56px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 56px), transparent); }
+.wall .bd .ltl.up { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 40px); mask-image: linear-gradient(to bottom, transparent, #000 40px); }
+.wall .bd .ltl.up.dn { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 40px, #000 calc(100% - 56px), transparent); mask-image: linear-gradient(to bottom, transparent, #000 40px, #000 calc(100% - 56px), transparent); }
 /* Household to-dos only: one band under every lane, its rows across in the lanes' columns. */
 .wall .bd .ltd.all { grid-column: 1 / -1; grid-row: 3; }
 .wall .bd .ltd.all .ltl { grid-template-columns: repeat(var(--n), minmax(0, 1fr)); column-gap: 14px; }

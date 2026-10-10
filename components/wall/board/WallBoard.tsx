@@ -302,12 +302,12 @@ const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string |
     // Only the steps still to do: a lane has no room for finished ones, and the count says how many are done.
     const steps = progress ? (t.subtasks ?? []).filter(s => !s.isDone) : null;
     const isOpen = steps != null && steps.length > 0 && (mode === 'shown' || open.has(t.id));
-    const rows: { key: string; kind: 'todo' | 'pill' | 'step'; node: (off: boolean) => React.ReactNode }[] = [
+    const rows: { key: string; kind: 'todo' | 'pill' | 'step'; node: React.ReactNode }[] = [
       {
         key: t.id,
         kind: 'todo',
-        node: off => (
-          <button type="button" key={t.id} className={['ltk', t.isCompleted ? 'done' : '', steps?.length ? (mode === 'tap' ? 'has cnt' : 'has') : '', off ? 'off' : ''].filter(Boolean).join(' ')} aria-pressed={t.isCompleted} aria-hidden={off || undefined} tabIndex={off ? -1 : undefined} onClick={() => act.toggleTodo(t)}>
+        node: (
+          <button type="button" key={t.id} className={['ltk', t.isCompleted ? 'done' : '', steps?.length ? (mode === 'tap' ? 'has cnt' : 'has') : ''].filter(Boolean).join(' ')} aria-pressed={t.isCompleted} onClick={() => act.toggleTodo(t)}>
             <span className="bx">{t.isCompleted && <Check size="1em" aria-hidden="true" />}</span>
             <span className="tx">
               <b>{t.text}</b>
@@ -327,8 +327,8 @@ const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string |
       rows.push({
         key: `${t.id}:pill`,
         kind: 'pill',
-        node: off => (
-          <button type="button" key={`${t.id}:pill`} className={['ltk', 'sx', isOpen ? 'open' : '', off ? 'off' : ''].filter(Boolean).join(' ')} aria-expanded={isOpen} aria-hidden={off || undefined} tabIndex={off ? -1 : undefined} onClick={() => flip(t.id)}>
+        node: (
+          <button type="button" key={`${t.id}:pill`} className={['ltk', 'sx', isOpen ? 'open' : ''].filter(Boolean).join(' ')} aria-expanded={isOpen} onClick={() => flip(t.id)}>
             <span className="pill" aria-label={`${progress.done} of ${progress.total} steps done, ${isOpen ? 'hide' : 'show'} steps`}>
               <ListChecks size="1em" aria-hidden="true" />
               {progress.done}/{progress.total}
@@ -342,8 +342,8 @@ const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string |
         rows.push({
           key: `${t.id}:${s.id}`,
           kind: 'step',
-          node: off => (
-            <button type="button" key={`${t.id}:${s.id}`} className={['ltk', 'st', s.isDone ? 'done' : '', off ? 'off' : ''].filter(Boolean).join(' ')} aria-pressed={s.isDone} aria-hidden={off || undefined} tabIndex={off ? -1 : undefined} onClick={() => act.toggleSubtask(t, s)}>
+          node: (
+            <button type="button" key={`${t.id}:${s.id}`} className={['ltk', 'st', s.isDone ? 'done' : ''].filter(Boolean).join(' ')} aria-pressed={s.isDone} onClick={() => act.toggleSubtask(t, s)}>
               <span className="bx">{s.isDone && <Check size="1em" aria-hidden="true" />}</span>
               <span className="tx">{s.text}</span>
             </button>
@@ -355,16 +355,8 @@ const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string |
   });
 
   const list = useRef<HTMLDivElement>(null);
+  const edges = useScrollEdges(list);
   const flat = across ? null : units.flatMap(u => u.rows);
-  const count = flat ? flat.length : units.length;
-  const { fit, more } = useFittingCount(list, count, `${mode}:${[...open].join(',')}:${todos.map(t => t.subtasks?.map(s => +s.isDone).join('')).join('|')}`);
-  const hidden = flat ? flat.slice(fit) : units.slice(fit).map(() => ({ kind: 'todo' as const }));
-  const hiddenTodos = hidden.filter(r => r.kind === 'todo').length;
-  const hiddenSteps = hidden.filter(r => r.kind === 'step').length;
-  // Short enough for one line in a quarter-width lane.
-  const stepsWord = hiddenSteps === 1 ? 'step' : 'steps';
-  const moreText =
-    hiddenTodos === 0 ? `+${hiddenSteps} more ${stepsWord}` : hiddenSteps === 0 ? `+${hiddenTodos} more on To-dos` : `+${hiddenSteps} ${stepsWord} · ${hiddenTodos} ${hiddenTodos === 1 ? 'to-do' : 'to-dos'}`;
 
   return (
     <section className={across ? 'ltd all' : 'ltd'} aria-label={across ? 'Household to-dos' : 'To-dos'} style={across ? ({ '--c': 'var(--faint)', '--n': across } as React.CSSProperties) : style}>
@@ -374,20 +366,16 @@ const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string |
           {done} of {todos.length}
         </span>
       </span>
-      <div className="ltl" ref={list}>
+      {/* Swipe up and down to reach the rest; a fade on an edge says there's more past it. */}
+      <div className={['ltl', edges.above ? 'up' : '', edges.below ? 'dn' : ''].filter(Boolean).join(' ')} ref={list}>
         {units.length === 0 && <span className="adn">All done</span>}
         {flat
-          ? flat.map((r, i) => r.node(i >= fit))
-          : units.map((u, i) => (
-              <div key={u.todo.id} className={i >= fit ? 'ltk grp off' : 'ltk grp'} aria-hidden={i >= fit || undefined}>
-                {u.rows.map(r => r.node(false))}
+          ? flat.map(r => r.node)
+          : units.map(u => (
+              <div key={u.todo.id} className="ltk grp">
+                {u.rows.map(r => r.node)}
               </div>
             ))}
-        {more && moreText && (
-          <span className="lm more" style={more}>
-            {moreText}
-          </span>
-        )}
       </div>
     </section>
   );
@@ -399,26 +387,33 @@ const STEPS_OPEN_MS = 2 * 60 * 1000;
 export default WallBoard;
 
 /**
- * How many of a list's rows fit whole in its box. When some don't, the last
- * whole one gives up its place to "+N more" (`more` is that place). Every row
- * stays laid out, only hidden past the count, so the count can grow back.
+ * Whether a scrolling list has more above or below what shows, so its edges
+ * can fade. Measured on scroll and whenever the box or its rows change size.
  */
-function useFittingCount(ref: React.RefObject<HTMLElement | null>, total: number, shape = ''): { fit: number; more: React.CSSProperties | null } {
-  const [state, setState] = useState<{ fit: number; more: React.CSSProperties | null }>({ fit: total, more: null });
+function useScrollEdges(ref: React.RefObject<HTMLElement | null>): { above: boolean; below: boolean } {
+  const [edges, setEdges] = useState({ above: false, below: false });
   useLayoutEffect(() => {
     const box = ref.current;
-    if (!box || typeof ResizeObserver === 'undefined') return;
+    if (!box || typeof ResizeObserver === 'undefined') return undefined;
     const measure = () => {
-      const bottom = box.getBoundingClientRect().bottom;
-      const rows = [...box.querySelectorAll<HTMLElement>(':scope > .ltk')];
-      const whole = rows.findIndex(r => r.getBoundingClientRect().bottom > bottom + 1);
-      const fit = whole === -1 ? rows.length : Math.max(0, whole - 1);
-      const slot = whole === -1 ? undefined : rows[fit];
-      setState({ fit, more: slot ? { top: slot.offsetTop, left: slot.offsetLeft, width: slot.offsetWidth } : null });
+      const above = box.scrollTop > 1;
+      const below = box.scrollTop + box.clientHeight < box.scrollHeight - 1;
+      setEdges(prev => (prev.above === above && prev.below === below ? prev : { above, below }));
     };
     const observer = new ResizeObserver(measure);
     observer.observe(box);
-    return () => observer.disconnect();
-  }, [ref, total, shape]);
-  return { fit: Math.min(state.fit, total), more: state.fit < total ? state.more : null };
+    const mutations = new MutationObserver(() => {
+      for (const child of box.children) observer.observe(child);
+      measure();
+    });
+    for (const child of box.children) observer.observe(child);
+    mutations.observe(box, { childList: true });
+    box.addEventListener('scroll', measure, { passive: true });
+    return () => {
+      observer.disconnect();
+      mutations.disconnect();
+      box.removeEventListener('scroll', measure);
+    };
+  }, [ref]);
+  return edges;
 }
