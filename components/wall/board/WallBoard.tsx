@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Car, Check, ChevronDown, Utensils } from 'lucide-react';
+import { Car, Check, ListChecks, Utensils } from 'lucide-react';
 import type { ToDo, WallEvent, WallLayout, WallModuleKey } from '@/types/schema';
 import { MODULE_TITLES, autoScrolls, setAutoScroll, swipeModule } from '@/utils/wall/wallModules';
 import { boardLayout, boardLayoutToSave } from './boardPreview';
@@ -270,9 +270,9 @@ const LaneItem: React.FC<{ event: WallEvent; time: string; lead: boolean }> = ({
 /**
  * A lane's to-dos for today, under its events: a big checkbox in the lane's
  * color, the wall's usual Undo on every check. A to-do's open steps sit under
- * it, each with its own smaller checkbox; a checked step drops off (Undo
- * brings it back) and checking the last one completes the to-do. MOCKUP:
- * `steps=tap` hides them behind an "n of m done" pill instead, and an opened
+ * it, each with its own smaller checkbox. A checked to-do or step drops off
+ * (Undo brings it back), and checking the last step completes the to-do. MOCKUP:
+ * `steps=tap` hides them behind the phone's "n/m" step count instead, and an opened
  * list closes itself after two minutes.
  */
 const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string | undefined) => string) | undefined; across?: number; style?: React.CSSProperties }> = ({ todos, today, owner, across, style }) => {
@@ -292,10 +292,12 @@ const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string |
       return next;
     });
   const done = todos.filter(t => t.isCompleted).length;
+  // A checked-off to-do leaves the list, as on the phone's To-dos (Undo brings it back); the count keeps it.
+  const openTodos = todos.filter(t => !t.isCompleted);
 
   // One row per fitting unit: a to-do, its steps pill, each shown step. Across
   // the whole board (household to-dos only) a to-do and its steps stay one unit, so they share a column.
-  const units = todos.map(t => {
+  const units = openTodos.map(t => {
     const progress = t.subtasks?.length && !t.isCompleted ? subtaskProgress(t.subtasks) : null;
     // Only the steps still to do: a lane has no room for finished ones, and the count says how many are done.
     const steps = progress ? (t.subtasks ?? []).filter(s => !s.isDone) : null;
@@ -305,7 +307,7 @@ const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string |
         key: t.id,
         kind: 'todo',
         node: off => (
-          <button type="button" key={t.id} className={['ltk', t.isCompleted ? 'done' : '', steps?.length ? 'has' : '', off ? 'off' : ''].filter(Boolean).join(' ')} aria-pressed={t.isCompleted} aria-hidden={off || undefined} tabIndex={off ? -1 : undefined} onClick={() => act.toggleTodo(t)}>
+          <button type="button" key={t.id} className={['ltk', t.isCompleted ? 'done' : '', steps?.length ? (mode === 'tap' ? 'has cnt' : 'has') : '', off ? 'off' : ''].filter(Boolean).join(' ')} aria-pressed={t.isCompleted} aria-hidden={off || undefined} tabIndex={off ? -1 : undefined} onClick={() => act.toggleTodo(t)}>
             <span className="bx">{t.isCompleted && <Check size="1em" aria-hidden="true" />}</span>
             <span className="tx">
               <b>{t.text}</b>
@@ -327,9 +329,9 @@ const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string |
         kind: 'pill',
         node: off => (
           <button type="button" key={`${t.id}:pill`} className={['ltk', 'sx', isOpen ? 'open' : '', off ? 'off' : ''].filter(Boolean).join(' ')} aria-expanded={isOpen} aria-hidden={off || undefined} tabIndex={off ? -1 : undefined} onClick={() => flip(t.id)}>
-            <span className="pill">
-              {progress.done} of {progress.total} steps
-              <ChevronDown size="1em" aria-hidden="true" />
+            <span className="pill" aria-label={`${progress.done} of ${progress.total} steps done, ${isOpen ? 'hide' : 'show'} steps`}>
+              <ListChecks size="1em" aria-hidden="true" />
+              {progress.done}/{progress.total}
             </span>
           </button>
         ),
@@ -373,6 +375,7 @@ const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string |
         </span>
       </span>
       <div className="ltl" ref={list}>
+        {units.length === 0 && <span className="adn">All done</span>}
         {flat
           ? flat.map((r, i) => r.node(i >= fit))
           : units.map((u, i) => (
