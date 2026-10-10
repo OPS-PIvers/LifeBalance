@@ -4,7 +4,7 @@ import type { ToDo, WallEvent, WallLayout, WallModuleKey } from '@/types/schema'
 import { MODULE_TITLES, autoScrolls, setAutoScroll, swipeModule } from '@/utils/wall/wallModules';
 import { boardLayout, boardLayoutToSave } from './boardPreview';
 import { clockText, zonedParts } from '@/utils/wall/wallTime';
-import { dueTodayChecklist, eventTimeText, todayFocus, todayTimeline, type TodayRow } from '@/utils/wall/wallCalendar';
+import { DEFAULT_EVENT_MS, dueTodayChecklist, eventTimeText, todayFocus, todayTimeline, type TodayRow } from '@/utils/wall/wallCalendar';
 import { subtaskProgress } from '@/utils/subtasks';
 import type { WallPeople } from '@/utils/wall/wallPeople';
 import type { WallWeather } from '@/utils/wall/wallWeather';
@@ -64,7 +64,8 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
 
   const lead = focus.lead;
   const leadStart = lead ? Date.parse(lead.event.start ?? '') : NaN;
-  const leadEnd = lead?.event.end ? Date.parse(lead.event.end) : NaN;
+  // No end time: it runs for an hour, as todayFocus counts it, so the countdown agrees with "Now".
+  const leadEnd = lead?.event.end ? Date.parse(lead.event.end) : leadStart + DEFAULT_EVENT_MS;
   const drive = lead ? travel.find(t => t.id === lead.event.id) : undefined;
   const leaveMs = drive?.minutes != null && Number.isFinite(leadStart) ? leadStart - drive.minutes * 60000 - now.getTime() : NaN;
 
