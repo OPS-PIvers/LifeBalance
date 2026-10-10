@@ -1,20 +1,26 @@
-import React, { useMemo } from 'react';
-import { Car, ChevronRight } from 'lucide-react';
-import type { ToDo, WallEvent } from '@/types/schema';
+import React, { useMemo, useState } from 'react';
+import { Car } from 'lucide-react';
+import type { WallEvent, WallLayout, WallModuleKey } from '@/types/schema';
+import { MODULE_TITLES, autoScrolls, setAutoScroll, swipeModule } from '@/utils/wall/wallModules';
+import { boardLayout } from './boardPreview';
 import { clockText, zonedParts } from '@/utils/wall/wallTime';
-import { dueTodayChecklist, eventTimeText, groupComingUp, splitComingUpDay, weekdayName, todayFocus, todayTimeline, type TodayRow } from '@/utils/wall/wallCalendar';
+import { dueTodayChecklist, eventTimeText, todayFocus, todayTimeline, type TodayRow } from '@/utils/wall/wallCalendar';
 import type { WallPeople } from '@/utils/wall/wallPeople';
 import type { WallWeather } from '@/utils/wall/wallWeather';
 import { useWallData } from '@/components/wall/data/wallData';
-import { WallAvatar, WallDot } from '@/components/wall/WallAvatar';
+import { WallAvatar } from '@/components/wall/WallAvatar';
 import { WallWeatherIcon } from '@/components/wall/WallIcons';
 import WallUntimedLine from '@/components/wall/calendar/WallUntimedLine';
+import WallModuleSlot from '@/components/wall/calendar/WallModuleSlot';
+import MealsModule from '@/components/wall/calendar/modules/MealsModule';
+import ShoppingModule from '@/components/wall/calendar/modules/ShoppingModule';
+import { BoardComing, BoardDue, BoardTodos } from './BoardModules';
 import './board.css';
 
-/** Days of Coming up the panel lists (only days with something on them). */
-const COMING_DAYS = 6;
 /** Lanes across the day: Everyone plus up to this many people. */
 const MAX_PEOPLE = 4;
+/** The lane key for people past MAX_PEOPLE (and owners who've left). */
+const OTHERS = 'others';
 /** Upcoming events a lane shows before "+N more". */
 const LANE_AHEAD = 4;
 
@@ -27,8 +33,9 @@ interface WallBoardProps {
   onWeather: () => void;
   onOpenDay: (date: string) => void;
   onOpenMeal: (date: string) => void;
-  onShopping: () => void;
-  onTodos: () => void;
+  /** What the panel shows: the saved layout (or a rotation step). */
+  layout: WallLayout;
+  onLayout: (layout: WallLayout) => void;
 }
 
 /** The hero's big figure: minutes under 100, else hours to the half. */
@@ -45,16 +52,15 @@ const isFamily = (key: string | undefined) => !key || key === 'family';
  * Board (mockup): everything the kitchen needs on one screen, in fixed
  * places. A masthead band (clock, weather now and through the day), the next
  * thing as one bright card with its countdown and leave time, today in one
- * lane per person, and a tinted side panel with the days ahead, who still has
- * to-dos, dinner and the shopping count.
+ * lane per person, and a tinted side panel with two module slots that swipe
+ * between the same modules Week's panel has (Due today, To-dos, Shopping,
+ * Dinners, Coming up).
  */
-const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, weather, onWeather, onOpenDay, onOpenMeal, onShopping, onTodos }) => {
+const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, weather, onWeather, onOpenDay, onOpenMeal, layout, onLayout }) => {
   const { wallEvents, travel, todos, mealPlan, shoppingList } = useWallData();
   const p = zonedParts(now, timeZone);
   const timeline = useMemo(() => todayTimeline(wallEvents, today, now, timeZone), [wallEvents, today, now, timeZone]);
   const focus = useMemo(() => todayFocus(timeline, now), [timeline, now]);
-  const coming = useMemo(() => groupComingUp(wallEvents, today, 14).slice(0, COMING_DAYS), [wallEvents, today]);
-  const due = useMemo(() => dueTodayChecklist(todos, today, timeZone), [todos, today, timeZone]);
 
   const lead = focus.lead;
   const leadStart = lead ? Date.parse(lead.event.start ?? '') : NaN;
@@ -69,34 +75,58 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
       const key = isFamily(row.event.ownerKey) ? 'family' : (row.event.ownerKey ?? 'family');
       byOwner.set(key, [...(byOwner.get(key) ?? []), row]);
     }
-    const keys = ['family', ...people.members.slice(0, MAX_PEOPLE).map(m => m.uid)];
-    return keys.map(key => ({ key, rows: byOwner.get(key) ?? [] }));
+    // Past the cap, the last lane is "Others": everyone left over, plus owners no longer in the household.
+    const overflow = people.members.length > MAX_PEOPLE;
+    const own = people.members.slice(0, overflow ? MAX_PEOPLE - 1 : MAX_PEOPLE).map(m => m.uid);
+    const lanes: { key: string; rows: TodayRow[] }[] = ['family', ...own].map(key => ({ key, rows: byOwner.get(key) ?? [] }));
+    const shown = new Set(['family', ...own]);
+    const rest = timeline.rows.filter(r => !shown.has(isFamily(r.event.ownerKey) ? 'family' : (r.event.ownerKey ?? 'family')));
+    if (overflow || rest.length > 0) lanes.push({ key: OTHERS, rows: rest });
+    return lanes;
   }, [timeline.rows, people.members]);
 
-  // Due today, per person: unassigned to-dos are anyone's.
-  const rings = useMemo(() => {
-    const by = new Map<string, ToDo[]>();
-    for (const t of due) {
-      const key = t.assignedTo ?? 'family';
-      by.set(key, [...(by.get(key) ?? []), t]);
-    }
-    const order = [...people.members.map(m => m.uid), 'family'];
-    return order.filter(k => by.has(k)).map(key => {
-      const list = by.get(key) ?? [];
-      return { key, done: list.filter(t => t.isCompleted).length, total: list.length };
-    });
-  }, [due, people.members]);
-
+  // The panel's two slots: the saved panel modules, the bottom one filled from Week's day module when there isn't one.
+  const board = useMemo(() => boardLayout(layout), [layout]);
+  const slots = board.modules;
+  const [entered, setEntered] = useState<{ place: number; dir: 1 | -1 } | null>(null);
+  const swipe = (place: number, dir: 1 | -1) => {
+    const next = swipeModule(board, place, dir);
+    if (next === board) return;
+    setEntered({ place, dir });
+    onLayout(next);
+  };
+  const due = useMemo(() => dueTodayChecklist(todos, today, timeZone), [todos, today, timeZone]);
+  const toBuy = shoppingList.filter(i => !i.isPurchased).length;
   const dinner = mealPlan.find(m => m.date === today && m.type === 'dinner');
-  // The next planned dinner after tonight, so the tile also answers "and tomorrow?".
-  const nextDinner = useMemo(() => {
-    const later = mealPlan.filter(m => m.type === 'dinner' && m.date > today).sort((a, b) => a.date.localeCompare(b.date))[0];
-    if (!later) return null;
-    return { label: weekdayName(later.date).slice(0, 3), name: later.mealName };
-  }, [mealPlan, today]);
-  const toBuy = shoppingList.filter(i => !i.isPurchased);
 
-  const laneName = (key: string) => (key === 'family' ? 'Everyone' : (people.firstName(key) ?? people.name(key)));
+  const body = (key: WallModuleKey) => {
+    switch (key) {
+      case 'coming':
+        return <BoardComing today={today} timeZone={timeZone} people={people} onOpenDay={onOpenDay} />;
+      case 'due':
+        return <BoardDue today={today} timeZone={timeZone} people={people} />;
+      case 'todos':
+        return <BoardTodos today={today} timeZone={timeZone} people={people} />;
+      case 'shopping':
+        return <ShoppingModule />;
+      case 'meals':
+        return <MealsModule today={today} onOpenMeal={onOpenMeal} />;
+    }
+  };
+  const headExtra = (key: WallModuleKey) => {
+    switch (key) {
+      case 'due':
+        return due.length > 0 ? <span>{due.filter(t => t.isCompleted).length} of {due.length} done</span> : null;
+      case 'shopping':
+        return <span>{toBuy} to buy</span>;
+      case 'meals':
+        return <span>next few nights</span>;
+      default:
+        return null;
+    }
+  };
+
+  const laneName = (key: string) => (key === OTHERS ? 'Others' : key === 'family' ? 'Everyone' : (people.firstName(key) ?? people.name(key)));
 
   return (
     <div className="bd">
@@ -108,6 +138,10 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
           </span>
           {timeline.allDay.length > 0 && <WallUntimedLine events={timeline.allDay} people={people} />}
         </div>
+        <button type="button" className="bdd" onClick={() => onOpenMeal(today)}>
+          <small>Dinner tonight</small>
+          <b>{dinner?.mealName ?? 'Not planned'}</b>
+        </button>
         {weather && (
           <button type="button" className="bdw" onClick={onWeather} aria-label="Five-day forecast">
             <span className="now">
@@ -172,102 +206,43 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
 
       <section className="bdl" aria-label="Today by person">
         {lanes.map(lane => (
-          <button type="button" key={lane.key} className="lane" style={{ '--c': people.color(lane.key) } as React.CSSProperties} onClick={() => onOpenDay(today)}>
+          <button type="button" key={lane.key} className="lane" style={{ '--c': lane.key === OTHERS ? 'var(--faint)' : people.color(lane.key) } as React.CSSProperties} onClick={() => onOpenDay(today)}>
             <span className="lh">
-              <WallAvatar people={people} who={lane.key} small />
+              {lane.key !== OTHERS && <WallAvatar people={people} who={lane.key} small />}
               {laneName(lane.key)}
             </span>
             {lane.rows.length === 0 ? (
               <span className="free">Free today</span>
             ) : (
-              <LaneRows rows={lane.rows} leadId={lead?.event.id} />
+              <LaneRows rows={lane.rows} leadId={lead?.event.id} {...(lane.key === OTHERS ? { owner: (key: string | undefined) => people.firstName(key) ?? people.name(key) } : {})} />
             )}
           </button>
         ))}
       </section>
 
-      <aside className="bdp">
-        <section className="pc" aria-label="Coming up">
-          <h3>Coming up</h3>
-          {coming.length === 0 ? (
-            <span className="none">Nothing in the next two weeks</span>
-          ) : (
-            coming.map(day => {
-              const { untimed, timed } = splitComingUpDay(day);
-              return (
-                <button type="button" key={day.date} className="cr" onClick={() => onOpenDay(day.date)}>
-                  <span className="cdh">
-                    <b>{day.rel ?? day.weekday}</b>
-                    <small>{day.rel ? `${day.weekday} ${day.dayOfMonth}` : day.dayOfMonth}</small>
-                  </span>
-                  <span className="ce">
-                    {timed.slice(0, 2).map(e => (
-                      <span key={e.id} className="ci">
-                        <WallDot people={people} who={e.ownerKey} />
-                        <span className="tm">{eventTimeText(e.start, timeZone)}</span>
-                        <span className="tt">{e.title}</span>
-                      </span>
-                    ))}
-                    {untimed.length > 0 && <WallUntimedLine events={untimed} people={people} />}
-                  </span>
-                </button>
-              );
-            })
-          )}
-        </section>
-
-        <button type="button" className="pd" onClick={onTodos}>
-          <span className="ph">
-            <h3>Due today</h3>
-            <small>
-              {due.filter(t => t.isCompleted).length} of {due.length} done
-            </small>
-            <ChevronRight className="wi" size="1em" aria-hidden="true" />
-          </span>
-          {rings.length === 0 ? (
-            <span className="none">Nothing due</span>
-          ) : (
-            <span className="rings">
-              {rings.map(r => (
-                <span key={r.key} className="prs" style={{ '--c': people.color(r.key) } as React.CSSProperties}>
-                  <Ring done={r.done} total={r.total} />
-                  <small>{r.key === 'family' ? 'Anyone' : (people.firstName(r.key) ?? people.name(r.key))}</small>
-                </span>
-              ))}
-            </span>
-          )}
-        </button>
-
-        <div className="tiles">
-          <button type="button" className="tile" onClick={() => onOpenMeal(today)}>
-            <small>Dinner tonight</small>
-            <b className="meal">{dinner?.mealName ?? 'Not planned'}</b>
-            {nextDinner && (
-              <span className="nd">
-                {nextDinner.label} · {nextDinner.name}
-              </span>
-            )}
-          </button>
-          <button type="button" className="tile" onClick={onShopping}>
-            <small>Shopping</small>
-            <span className="cnt">
-              <b>{toBuy.length}</b>
-              <span>to buy</span>
-            </span>
-            <span className="items">
-              {toBuy.slice(0, 3).map(i => (
-                <span key={i.id}>{i.name}</span>
-              ))}
-            </span>
-          </button>
-        </div>
+      <aside className={`panel bdp n${slots.length}`}>
+        {slots.map((key, i) => (
+          <WallModuleSlot
+            key={key}
+            className={i === 0 ? 'mod top' : 'mod bottom'}
+            title={MODULE_TITLES[key]}
+            extra={headExtra(key)}
+            scrollOn={autoScrolls(board, key)}
+            onScroll={on => onLayout(setAutoScroll(board, key, on))}
+            onSwipe={dir => swipe(i, dir)}
+            swipeable
+            enter={entered?.place === i ? entered.dir : null}
+          >
+            {body(key)}
+          </WallModuleSlot>
+        ))}
       </aside>
     </div>
   );
 };
 
 /** A lane keeps its last finished event (the rest fold into "+N earlier") and up to LANE_AHEAD still to come. */
-const LaneRows: React.FC<{ rows: TodayRow[]; leadId: string | undefined }> = ({ rows, leadId }) => {
+const LaneRows: React.FC<{ rows: TodayRow[]; leadId: string | undefined; owner?: (key: string | undefined) => string }> = ({ rows, leadId, owner }) => {
   const past = rows.filter(r => r.past);
   const ahead = rows.filter(r => !r.past);
   const shown = [...past.slice(-1), ...ahead.slice(0, LANE_AHEAD)];
@@ -277,7 +252,7 @@ const LaneRows: React.FC<{ rows: TodayRow[]; leadId: string | undefined }> = ({ 
     <>
       {earlier > 0 && <span className="lm">+{earlier} earlier</span>}
       {shown.map(row => (
-        <LaneItem key={row.event.id} event={row.event} time={row.time} past={row.past} lead={row.event.id === leadId} />
+        <LaneItem key={row.event.id} event={row.event} time={owner ? `${row.time} · ${owner(row.event.ownerKey)}` : row.time} past={row.past} lead={row.event.id === leadId} />
       ))}
       {more > 0 && <span className="lm">+{more} more</span>}
     </>
@@ -290,23 +265,5 @@ const LaneItem: React.FC<{ event: WallEvent; time: string; past: boolean; lead: 
     <span className="tt">{event.title}</span>
   </span>
 );
-
-/** A to-do progress ring in the person's color, the count inside. */
-const Ring: React.FC<{ done: number; total: number }> = ({ done, total }) => {
-  const r = 30;
-  const c = 2 * Math.PI * r;
-  const frac = total > 0 ? done / total : 0;
-  return (
-    <span className={done === total ? 'rg all' : 'rg'}>
-      <svg viewBox="0 0 72 72" aria-hidden="true">
-        <circle cx="36" cy="36" r={r} className="trk" />
-        {done > 0 && <circle cx="36" cy="36" r={r} className="val" strokeDasharray={`${c * frac} ${c}`} transform="rotate(-90 36 36)" />}
-      </svg>
-      <b>
-        {done}/{total}
-      </b>
-    </span>
-  );
-};
 
 export default WallBoard;

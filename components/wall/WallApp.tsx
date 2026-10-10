@@ -15,7 +15,7 @@ import WallDay from './calendar/WallDay';
 import WallMonth from './calendar/WallMonth';
 import WallWeek from './calendar/WallWeek';
 import WallBoard from './board/WallBoard';
-import { isBoardPreview } from './board/boardPreview';
+import { boardModulesOverride, isBoardPreview } from './board/boardPreview';
 import WallViewPicker, { type CalendarView } from './calendar/WallViewPicker';
 import WallAddSheet, { type AddKind } from './lists/WallAddSheet';
 import WallMeals from './lists/WallMeals';
@@ -419,8 +419,8 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
         onWeather={() => setOverlay('weather')}
         onOpenDay={date => goCalendar('day', date)}
         onOpenMeal={openMeal}
-        onShopping={() => setView('shopping')}
-        onTodos={() => setView('todos')}
+        layout={boardModulesOverride() ?? shownLayout}
+        onLayout={changeLayout}
       />
     );
   } else {
