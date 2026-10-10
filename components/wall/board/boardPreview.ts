@@ -27,6 +27,16 @@ export function boardModulesOverride(): WallLayout | null {
 const BOTTOM_FALLBACK: readonly WallModuleKey[] = ['shopping', 'meals', 'todos', 'coming'];
 
 /**
+ * A Board panel change (a swipe, auto scroll) as the layout to save. The
+ * layout is shared with Week, and Board never shows Week's day column, so the
+ * saved `day` stays whatever it was (absent stays absent: Week's default).
+ */
+export function boardLayoutToSave(next: WallLayout, saved: WallLayout): WallLayout {
+  const { day: _boardDay, ...rest } = next;
+  return saved.day === undefined ? rest : { ...rest, day: saved.day };
+}
+
+/**
  * The Board's panel has two slots. A Week layout with one panel module gets
  * its day module as the second, so switching layouts keeps what the family
  * already picked; except Due today, which the Board's lanes already show,

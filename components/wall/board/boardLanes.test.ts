@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ToDo, WallEvent } from '@/types/schema';
 import type { TodayRow } from '@/utils/wall/wallCalendar';
 import { BOARD_OTHERS, boardLanes } from './boardLanes';
-import { boardLayout } from './boardPreview';
+import { boardLayout, boardLayoutToSave } from './boardPreview';
 
 const row = (id: string, ownerKey?: string): TodayRow => ({ event: { id, title: id, ownerKey } as WallEvent, time: '9:00', past: false });
 const todo = (id: string, assignedTo?: string): ToDo => ({ id, text: id, assignedTo, completeByDate: '2026-10-07', isCompleted: false }) as ToDo;
@@ -42,5 +42,16 @@ describe('boardLayout', () => {
 
   it('keeps a second module the family picked, Due today included', () => {
     expect(boardLayout({ modules: ['coming', 'due'], day: null }).modules).toEqual(['coming', 'due']);
+  });
+});
+
+describe('boardLayoutToSave', () => {
+  it("keeps Week's day column as it was saved, never the Board's null", () => {
+    const next = { modules: ['shopping', 'meals'] as const, day: null };
+    expect(boardLayoutToSave({ ...next, modules: [...next.modules] }, { modules: ['coming'], day: 'meals' })).toEqual({ modules: ['shopping', 'meals'], day: 'meals' });
+    expect(boardLayoutToSave({ ...next, modules: [...next.modules] }, { modules: ['coming'], day: null })).toEqual({ modules: ['shopping', 'meals'], day: null });
+    const absent = boardLayoutToSave({ ...next, modules: [...next.modules] }, { modules: ['coming'] });
+    expect(absent).toEqual({ modules: ['shopping', 'meals'] });
+    expect('day' in absent).toBe(false);
   });
 });

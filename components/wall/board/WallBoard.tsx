@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Car, Check, Utensils } from 'lucide-react';
 import type { ToDo, WallEvent, WallLayout, WallModuleKey } from '@/types/schema';
 import { MODULE_TITLES, autoScrolls, setAutoScroll, swipeModule } from '@/utils/wall/wallModules';
-import { boardLayout } from './boardPreview';
+import { boardLayout, boardLayoutToSave } from './boardPreview';
 import { clockText, zonedParts } from '@/utils/wall/wallTime';
 import { dueTodayChecklist, eventTimeText, todayFocus, todayTimeline, type TodayRow } from '@/utils/wall/wallCalendar';
 import { subtaskProgress } from '@/utils/subtasks';
@@ -79,7 +79,7 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
     const next = swipeModule(board, place, dir);
     if (next === board) return;
     setEntered({ place, dir });
-    onLayout(next);
+    onLayout(boardLayoutToSave(next, layout));
   };
   const toBuy = shoppingList.filter(i => !i.isPurchased).length;
   const dinner = mealPlan.find(m => m.date === today && m.type === 'dinner');
@@ -223,7 +223,7 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
             title={MODULE_TITLES[key]}
             extra={headExtra(key)}
             scrollOn={autoScrolls(board, key)}
-            onScroll={on => onLayout(setAutoScroll(board, key, on))}
+            onScroll={on => onLayout(boardLayoutToSave(setAutoScroll(board, key, on), layout))}
             onSwipe={dir => swipe(i, dir)}
             swipeable
             enter={entered?.place === i ? entered.dir : null}
