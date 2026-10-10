@@ -1,5 +1,5 @@
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Car, Check, Utensils } from 'lucide-react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Car, Check, ChevronDown, Utensils } from 'lucide-react';
 import type { ToDo, WallEvent, WallLayout, WallModuleKey } from '@/types/schema';
 import { MODULE_TITLES, autoScrolls, setAutoScroll, swipeModule } from '@/utils/wall/wallModules';
 import { boardLayout, boardLayoutToSave } from './boardPreview';
@@ -18,6 +18,7 @@ import ShoppingModule from '@/components/wall/calendar/modules/ShoppingModule';
 import { useWallListActions } from '@/components/wall/lists/useWallListActions';
 import { BoardComing, BoardDue, BoardTodos } from './BoardModules';
 import { BOARD_OTHERS as OTHERS, boardLanes } from './boardLanes';
+import { laneStepsMode } from './subtaskMockup';
 import './board.css';
 
 /** Upcoming events a lane shows before "+N more" (the lane's to-dos sit under them). */
@@ -268,14 +269,101 @@ const LaneItem: React.FC<{ event: WallEvent; time: string; lead: boolean }> = ({
 
 /**
  * A lane's to-dos for today, under its events: a big checkbox in the lane's
- * color, the wall's usual Undo on every check. Steps show as "n of m steps";
- * they're checked off from the To-dos screen.
+ * color, the wall's usual Undo on every check. A to-do's open steps sit under
+ * it, each with its own smaller checkbox; a checked step drops off (Undo
+ * brings it back) and checking the last one completes the to-do. MOCKUP:
+ * `steps=tap` hides them behind an "n of m done" pill instead, and an opened
+ * list closes itself after two minutes.
  */
 const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string | undefined) => string) | undefined; across?: number; style?: React.CSSProperties }> = ({ todos, today, owner, across, style }) => {
   const act = useWallListActions();
+  const mode = laneStepsMode();
+  const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
+  useEffect(() => {
+    if (open.size === 0) return undefined;
+    const timer = setTimeout(() => setOpen(new Set()), STEPS_OPEN_MS);
+    return () => clearTimeout(timer);
+  }, [open]);
+  const flip = (id: string) =>
+    setOpen(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const done = todos.filter(t => t.isCompleted).length;
+
+  // One row per fitting unit: a to-do, its steps pill, each shown step. Across
+  // the whole board (household to-dos only) a to-do and its steps stay one unit, so they share a column.
+  const units = todos.map(t => {
+    const progress = t.subtasks?.length && !t.isCompleted ? subtaskProgress(t.subtasks) : null;
+    // Only the steps still to do: a lane has no room for finished ones, and the count says how many are done.
+    const steps = progress ? (t.subtasks ?? []).filter(s => !s.isDone) : null;
+    const isOpen = steps != null && steps.length > 0 && (mode === 'shown' || open.has(t.id));
+    const rows: { key: string; kind: 'todo' | 'pill' | 'step'; node: (off: boolean) => React.ReactNode }[] = [
+      {
+        key: t.id,
+        kind: 'todo',
+        node: off => (
+          <button type="button" key={t.id} className={['ltk', t.isCompleted ? 'done' : '', steps?.length ? 'has' : '', off ? 'off' : ''].filter(Boolean).join(' ')} aria-pressed={t.isCompleted} aria-hidden={off || undefined} tabIndex={off ? -1 : undefined} onClick={() => act.toggleTodo(t)}>
+            <span className="bx">{t.isCompleted && <Check size="1em" aria-hidden="true" />}</span>
+            <span className="tx">
+              <b>{t.text}</b>
+              {!t.isCompleted && t.completeByDate < today && <small className="late">Overdue</small>}
+              {progress && mode === 'shown' && (
+                <small>
+                  {progress.done} of {progress.total} steps done
+                </small>
+              )}
+              {owner && <small>{owner(t.assignedTo)}</small>}
+            </span>
+          </button>
+        ),
+      },
+    ];
+    if (steps && steps.length > 0 && progress && mode === 'tap') {
+      rows.push({
+        key: `${t.id}:pill`,
+        kind: 'pill',
+        node: off => (
+          <button type="button" key={`${t.id}:pill`} className={['ltk', 'sx', isOpen ? 'open' : '', off ? 'off' : ''].filter(Boolean).join(' ')} aria-expanded={isOpen} aria-hidden={off || undefined} tabIndex={off ? -1 : undefined} onClick={() => flip(t.id)}>
+            <span className="pill">
+              {progress.done} of {progress.total} steps
+              <ChevronDown size="1em" aria-hidden="true" />
+            </span>
+          </button>
+        ),
+      });
+    }
+    if (steps && isOpen) {
+      for (const s of steps) {
+        rows.push({
+          key: `${t.id}:${s.id}`,
+          kind: 'step',
+          node: off => (
+            <button type="button" key={`${t.id}:${s.id}`} className={['ltk', 'st', s.isDone ? 'done' : '', off ? 'off' : ''].filter(Boolean).join(' ')} aria-pressed={s.isDone} aria-hidden={off || undefined} tabIndex={off ? -1 : undefined} onClick={() => act.toggleSubtask(t, s)}>
+              <span className="bx">{s.isDone && <Check size="1em" aria-hidden="true" />}</span>
+              <span className="tx">{s.text}</span>
+            </button>
+          ),
+        });
+      }
+    }
+    return { todo: t, rows };
+  });
+
   const list = useRef<HTMLDivElement>(null);
-  const { fit, more } = useFittingCount(list, todos.length);
+  const flat = across ? null : units.flatMap(u => u.rows);
+  const count = flat ? flat.length : units.length;
+  const { fit, more } = useFittingCount(list, count, `${mode}:${[...open].join(',')}:${todos.map(t => t.subtasks?.map(s => +s.isDone).join('')).join('|')}`);
+  const hidden = flat ? flat.slice(fit) : units.slice(fit).map(() => ({ kind: 'todo' as const }));
+  const hiddenTodos = hidden.filter(r => r.kind === 'todo').length;
+  const hiddenSteps = hidden.filter(r => r.kind === 'step').length;
+  // Short enough for one line in a quarter-width lane.
+  const stepsWord = hiddenSteps === 1 ? 'step' : 'steps';
+  const moreText =
+    hiddenTodos === 0 ? `+${hiddenSteps} more ${stepsWord}` : hiddenSteps === 0 ? `+${hiddenTodos} more on To-dos` : `+${hiddenSteps} ${stepsWord} · ${hiddenTodos} ${hiddenTodos === 1 ? 'to-do' : 'to-dos'}`;
+
   return (
     <section className={across ? 'ltd all' : 'ltd'} aria-label={across ? 'Household to-dos' : 'To-dos'} style={across ? ({ '--c': 'var(--faint)', '--n': across } as React.CSSProperties) : style}>
       <span className="sh">
@@ -285,34 +373,25 @@ const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string |
         </span>
       </span>
       <div className="ltl" ref={list}>
-      {todos.map((t, i) => {
-        const steps = t.subtasks?.length ? subtaskProgress(t.subtasks) : null;
-        const off = i >= fit;
-        return (
-          <button type="button" key={t.id} className={['ltk', t.isCompleted ? 'done' : '', off ? 'off' : ''].filter(Boolean).join(' ')} aria-pressed={t.isCompleted} aria-hidden={off || undefined} tabIndex={off ? -1 : undefined} onClick={() => act.toggleTodo(t)}>
-            <span className="bx">{t.isCompleted && <Check size="1em" aria-hidden="true" />}</span>
-            <span className="tx">
-              <b>{t.text}</b>
-              {!t.isCompleted && t.completeByDate < today && <small className="late">Overdue</small>}
-              {!t.isCompleted && steps && (
-                <small>
-                  {steps.done} of {steps.total} steps
-                </small>
-              )}
-              {owner && <small>{owner(t.assignedTo)}</small>}
-            </span>
-          </button>
-        );
-      })}
-        {more && (
+        {flat
+          ? flat.map((r, i) => r.node(i >= fit))
+          : units.map((u, i) => (
+              <div key={u.todo.id} className={i >= fit ? 'ltk grp off' : 'ltk grp'} aria-hidden={i >= fit || undefined}>
+                {u.rows.map(r => r.node(false))}
+              </div>
+            ))}
+        {more && moreText && (
           <span className="lm more" style={more}>
-            +{todos.length - fit} more on To-dos
+            {moreText}
           </span>
         )}
       </div>
     </section>
   );
 };
+
+/** Tap mode: an opened step list folds away again after this long, so the wall goes back to its resting look. */
+const STEPS_OPEN_MS = 2 * 60 * 1000;
 
 export default WallBoard;
 
@@ -321,7 +400,7 @@ export default WallBoard;
  * whole one gives up its place to "+N more" (`more` is that place). Every row
  * stays laid out, only hidden past the count, so the count can grow back.
  */
-function useFittingCount(ref: React.RefObject<HTMLElement | null>, total: number): { fit: number; more: React.CSSProperties | null } {
+function useFittingCount(ref: React.RefObject<HTMLElement | null>, total: number, shape = ''): { fit: number; more: React.CSSProperties | null } {
   const [state, setState] = useState<{ fit: number; more: React.CSSProperties | null }>({ fit: total, more: null });
   useLayoutEffect(() => {
     const box = ref.current;
@@ -337,6 +416,6 @@ function useFittingCount(ref: React.RefObject<HTMLElement | null>, total: number
     const observer = new ResizeObserver(measure);
     observer.observe(box);
     return () => observer.disconnect();
-  }, [ref, total]);
+  }, [ref, total, shape]);
   return { fit: Math.min(state.fit, total), more: state.fit < total ? state.more : null };
 }

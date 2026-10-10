@@ -1,3 +1,4 @@
+import { subtaskMockTodos } from '@/components/wall/board/subtaskMockup';
 import React, { useState, ReactNode, useCallback, useMemo, useRef } from 'react';
 import { Info, PartyPopper, Gift, Sparkles } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
@@ -963,7 +964,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // the completeToDo → kid-points credit path are walkable. assignedTo targets the
   // seeded managed kid and points:5 is the explicit chore reward. Inert (credits
   // nothing) for a normal, non-managed assignee — see utils/todoPoints.ts.
-  const [todos, setTodos] = useState<ToDo[]>(() => [
+  const [todos, setTodos] = useState<ToDo[]>(() => subtaskMockTodos(getLocalDateString()) ?? [
     {
       id: 'todo_kid_1',
       text: 'Make your bed',
