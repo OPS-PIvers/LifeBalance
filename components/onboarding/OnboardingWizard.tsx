@@ -380,7 +380,7 @@ const OnboardingWizard: React.FC = () => {
                 shared `HomeWidgetOrder` Settings renders too, so there's only
                 one implementation of that list to keep in sync. */}
             {currentUser ? (
-              <div className="max-h-72 overflow-y-auto -mx-1 px-1">
+              <div className="max-h-72 overflow-y-auto overscroll-contain -mx-1 px-1">
                 <MyViewSettings
                   member={currentUser}
                   settings={householdSettings}

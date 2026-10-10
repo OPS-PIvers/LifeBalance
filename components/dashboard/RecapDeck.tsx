@@ -825,7 +825,7 @@ export const RecapDeck: React.FC<RecapDeckProps> = ({ deck, recap, householdName
   return (
     <div className="-mx-4">
       <div className="relative overflow-hidden rounded-card bg-brand-50 dark:bg-brand-800/60">
-        <div className="relative h-[clamp(390px,56vh,520px)]">
+        <div className="relative h-[clamp(390px,56svh,520px)]">
           <motion.div
             key={card?.id ?? index}
             ref={cardRef}

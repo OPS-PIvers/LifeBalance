@@ -246,7 +246,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
         </div>
       ) : (
         /* List */
-        <div className="p-4 bg-brand-50/30 dark:bg-brand-700/20 min-h-[50vh]">
+        <div className="p-4 bg-brand-50/30 dark:bg-brand-700/20 min-h-[50dvh]">
             {filteredCatalog.length === 0 ? (
               <EmptyState
                 icon={<ShoppingCart size={28} />}

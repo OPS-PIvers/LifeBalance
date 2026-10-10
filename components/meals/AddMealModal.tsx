@@ -116,7 +116,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
   const title = editingPlanItemId ? 'Edit Meal Plan' : targetDate ? `Plan for ${format(parseISO(targetDate), 'MMM d')}` : 'Add Meal';
 
   const content = (
-    <div className="flex flex-col h-full max-h-[80vh] sm:max-h-[calc(100dvh-10rem)]">
+    <div className="flex flex-col h-full max-h-[80dvh] sm:max-h-[calc(100dvh-10rem)]">
         {/* px-4 matches the Drawer header/footer gutter so labels/fields share
             one left edge with the title. */}
         <div className="flex-1 scroll-contain-y px-4 py-5 space-y-6 overflow-y-auto overscroll-contain">

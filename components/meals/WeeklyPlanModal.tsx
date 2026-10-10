@@ -231,7 +231,7 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
       isOpen={isOpen}
       onClose={handleClose}
       title={title}
-      className="max-h-[92vh]"
+      className="max-h-[92dvh]"
       footer={footer}
     >
       {/* Choose */}
