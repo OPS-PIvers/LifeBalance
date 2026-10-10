@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Car, Check, Utensils } from 'lucide-react';
 import type { ToDo, WallEvent, WallLayout, WallModuleKey } from '@/types/schema';
 import { MODULE_TITLES, autoScrolls, setAutoScroll, swipeModule } from '@/utils/wall/wallModules';
@@ -71,6 +71,8 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
 
   const due = useMemo(() => dueTodayChecklist(todos, today, timeZone), [todos, today, timeZone]);
   const lanes = useMemo(() => boardLanes(timeline.rows, due, people.members.map(m => m.uid)), [timeline.rows, due, people.members]);
+  // Only household to-dos today: they spread across under every lane rather than stacking in Everyone's narrow column.
+  const householdOnly = lanes.length > 1 && (lanes[0]?.todos.length ?? 0) > 0 && lanes.slice(1).every(l => l.todos.length === 0);
 
   // The panel's two slots: the saved panel modules, the bottom one filled from Week's day module when there isn't one.
   const board = useMemo(() => boardLayout(layout), [layout]);
@@ -197,9 +199,9 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
         </div>
       )}
 
-      <section className="bdl" aria-label="Today by person">
-        {lanes.map(lane => (
-          <div key={lane.key} className="lane" style={{ '--c': lane.key === OTHERS ? 'var(--faint)' : people.color(lane.key) } as React.CSSProperties}>
+      <section className="bdl" aria-label="Today by person" style={{ gridTemplateColumns: `repeat(${lanes.length}, minmax(0, 1fr))` }}>
+        {lanes.map((lane, i) => (
+          <div key={lane.key} className="lane" style={{ '--c': lane.key === OTHERS ? 'var(--faint)' : people.color(lane.key), gridColumn: i + 1 } as React.CSSProperties}>
             <span className="lh">
               {lane.key !== OTHERS && <WallAvatar people={people} who={lane.key} small />}
               {laneName(lane.key)}
@@ -211,9 +213,10 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
                 <LaneRows rows={lane.rows} leadId={lead?.event.id} {...(lane.key === OTHERS ? { owner: (key: string | undefined) => people.firstName(key) ?? people.name(key) } : {})} />
               )}
             </button>
-            {lane.todos.length > 0 ? <LaneTodos todos={lane.todos} today={today} owner={lane.key === OTHERS ? (key: string | undefined) => people.firstName(key) ?? people.name(key) : undefined} /> : <span />}
+            {lane.todos.length > 0 && !householdOnly ? <LaneTodos todos={lane.todos} today={today} owner={lane.key === OTHERS ? (key: string | undefined) => people.firstName(key) ?? people.name(key) : undefined} /> : <span />}
           </div>
         ))}
+        {householdOnly && <LaneTodos todos={lanes[0]?.todos ?? []} today={today} owner={undefined} across={lanes.length} />}
       </section>
 
       <aside className={`panel bdp n${slots.length}`}>
@@ -267,21 +270,25 @@ const LaneItem: React.FC<{ event: WallEvent; time: string; past: boolean; lead: 
  * color, the wall's usual Undo on every check. Steps show as "n of m steps";
  * they're checked off from the To-dos screen.
  */
-const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string | undefined) => string) | undefined }> = ({ todos, today, owner }) => {
+const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string | undefined) => string) | undefined; across?: number }> = ({ todos, today, owner, across }) => {
   const act = useWallListActions();
   const done = todos.filter(t => t.isCompleted).length;
+  const list = useRef<HTMLDivElement>(null);
+  const { fit, more } = useFittingCount(list, todos.length);
   return (
-    <section className="ltd" aria-label="To-dos">
+    <section className={across ? 'ltd all' : 'ltd'} aria-label={across ? 'Household to-dos' : 'To-dos'} style={across ? ({ '--c': 'var(--faint)', '--n': across } as React.CSSProperties) : undefined}>
       <span className="sh">
-        <span>To do</span>
+        <span>{across ? 'To do · Everyone' : 'To do'}</span>
         <span>
           {done} of {todos.length}
         </span>
       </span>
-      {todos.map(t => {
+      <div className="ltl" ref={list}>
+      {todos.map((t, i) => {
         const steps = t.subtasks?.length ? subtaskProgress(t.subtasks) : null;
+        const off = i >= fit;
         return (
-          <button type="button" key={t.id} className={t.isCompleted ? 'ltk done' : 'ltk'} aria-pressed={t.isCompleted} onClick={() => act.toggleTodo(t)}>
+          <button type="button" key={t.id} className={['ltk', t.isCompleted ? 'done' : '', off ? 'off' : ''].filter(Boolean).join(' ')} aria-pressed={t.isCompleted} aria-hidden={off || undefined} tabIndex={off ? -1 : undefined} onClick={() => act.toggleTodo(t)}>
             <span className="bx">{t.isCompleted && <Check size="1em" aria-hidden="true" />}</span>
             <span className="tx">
               <b>{t.text}</b>
@@ -296,8 +303,39 @@ const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string |
           </button>
         );
       })}
+        {more && (
+          <span className="lm more" style={more}>
+            +{todos.length - fit} more on To-dos
+          </span>
+        )}
+      </div>
     </section>
   );
 };
 
 export default WallBoard;
+
+/**
+ * How many of a list's rows fit whole in its box. When some don't, the last
+ * whole one gives up its place to "+N more" (`more` is that place). Every row
+ * stays laid out, only hidden past the count, so the count can grow back.
+ */
+function useFittingCount(ref: React.RefObject<HTMLElement | null>, total: number): { fit: number; more: React.CSSProperties | null } {
+  const [state, setState] = useState<{ fit: number; more: React.CSSProperties | null }>({ fit: total, more: null });
+  useLayoutEffect(() => {
+    const box = ref.current;
+    if (!box || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      const bottom = box.getBoundingClientRect().bottom;
+      const rows = [...box.querySelectorAll<HTMLElement>(':scope > .ltk')];
+      const whole = rows.findIndex(r => r.getBoundingClientRect().bottom > bottom + 1);
+      const fit = whole === -1 ? rows.length : Math.max(0, whole - 1);
+      const slot = whole === -1 ? undefined : rows[fit];
+      setState({ fit, more: slot ? { top: slot.offsetTop, left: slot.offsetLeft, width: slot.offsetWidth } : null });
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [ref, total]);
+  return { fit: Math.min(state.fit, total), more: state.fit < total ? state.more : null };
+}

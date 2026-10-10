@@ -66,7 +66,7 @@
  * (subgrid), so every lane's "To do" starts on the same line.
  */
 .wall .bd .bdl { grid-column: 1; grid-row: 3; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); column-gap: 14px; min-height: 0; }
-.wall .bd .lane { display: grid; grid-row: span 3; grid-template-rows: subgrid; min-height: 0; overflow: hidden; padding-top: 12px; border-top: 4px solid var(--c); text-align: left; }
+.wall .bd .lane { display: grid; grid-row: 1 / span 3; grid-template-rows: subgrid; min-height: 0; overflow: hidden; padding-top: 12px; border-top: 4px solid var(--c); text-align: left; }
 .wall .bd .lane .lh { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 19px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wall .bd .lane .lev { display: flex; flex-direction: column; gap: 8px; align-items: stretch; text-align: left; }
 .wall .bd .lane .lev > * { flex: none; }
@@ -80,7 +80,14 @@
 .wall .bd .li.past .tt { font-size: 17px; -webkit-line-clamp: 1; text-decoration: line-through; text-decoration-thickness: 1px; }
 .wall .bd .li.lead { box-shadow: inset 0 0 0 2.5px var(--hero); }
 /* A lane's to-dos: a dashed rule, "To do · n of m", then big checkboxes in the lane's color. */
-.wall .bd .ltd { align-self: start; display: grid; margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line-strong); min-height: 0; overflow: hidden; }
+/* The list fills what's left of the lane; rows that don't fit whole hide behind "+N more" (useFittingCount). */
+.wall .bd .ltd { display: grid; grid-template-rows: auto minmax(0, 1fr); margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line-strong); min-height: 0; overflow: hidden; }
+.wall .bd .ltl { position: relative; display: grid; align-content: start; min-height: 0; overflow: hidden; }
+.wall .bd .ltk.off { visibility: hidden; }
+.wall .bd .ltl .more { position: absolute; display: flex; align-items: center; min-height: 48px; padding: 0; font-size: 16px; }
+/* Household to-dos only: one band under every lane, its rows across in the lanes' columns. */
+.wall .bd .ltd.all { grid-column: 1 / -1; grid-row: 3; }
+.wall .bd .ltd.all .ltl { grid-template-columns: repeat(var(--n), minmax(0, 1fr)); column-gap: 14px; }
 .wall .bd .ltd .sh { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 14px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
 .wall .bd .ltd .sh span:last-child { font-weight: 600; letter-spacing: 0; text-transform: none; }
 .wall .bd .ltk { display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 48px; padding: 8px 0; text-align: left; }
