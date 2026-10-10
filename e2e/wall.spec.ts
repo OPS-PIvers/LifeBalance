@@ -209,14 +209,21 @@ test.describe('Wall display shell (Test Mode)', () => {
     await expect(recipe.getByText('On the list')).toHaveCount(3);
   });
 
-  test('Board: dinner and weather in the masthead, and a to-do checked off in its person\u2019s lane', async ({ page }) => {
+  test('Board: dinner and weather in the masthead, and a to-do and a step checked off in a person\u2019s lane', async ({ page }) => {
     await openWall(page, '15:15:00', '?board=1');
     await expect(page.getByRole('button', { name: /Tacos/ })).toContainText('Dinner tonight');
     await expect(page.getByRole('button', { name: /54 degrees/ })).toContainText('54°');
     const lanes = page.getByRole('region', { name: 'Today by person' });
     await lanes.getByRole('button', { name: /Make your bed/ }).click();
     await expect(page.getByRole('status')).toContainText('Completed Make your bed');
-    await expect(lanes.getByRole('button', { name: /Make your bed/ })).toHaveAttribute('aria-pressed', 'true');
+    // A checked-off to-do leaves its lane, as on the phone's To-dos; Undo brings it back.
+    await expect(lanes.getByRole('button', { name: /Make your bed/ })).toHaveCount(0);
+    await page.getByRole('status').getByRole('button', { name: 'Undo' }).click();
+    await expect(lanes.getByRole('button', { name: /Make your bed/ })).toBeVisible();
+    // A to-do's open steps are listed under it and checked off right there.
+    await lanes.getByRole('button', { name: 'Compare coverage' }).click();
+    await expect(page.getByRole('status')).toContainText('Checked off Compare coverage');
+    await expect(lanes.getByRole('button', { name: 'Compare coverage' })).toHaveCount(0);
   });
 
   test('the gear menu leads back to the app', async ({ page }) => {
