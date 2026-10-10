@@ -169,7 +169,7 @@ const App: React.FC = () => {
   // If test mode is active but providers aren't loaded yet, show loading state
   if (isTestMode && !MockProviders) {
     return (
-      <div className="min-h-dvh bg-brand-50 dark:bg-brand-900 flex items-center justify-center">
+      <div className="min-h-screen bg-brand-50 dark:bg-brand-900 flex items-center justify-center">
         <div className="text-brand-600 dark:text-brand-400 font-medium">Loading test mode...</div>
       </div>
     );
@@ -180,7 +180,13 @@ const App: React.FC = () => {
       <ThemeProvider>
       <AuthProviderComponent>
         <HouseholdOrWallProvider household={HouseholdProviderComponent}>
-          <div className="min-h-dvh bg-brand-50 dark:bg-brand-900 font-sans text-brand-800 dark:text-brand-100 transition-colors">
+          {/* min-h-screen (100vh) on purpose, NOT dvh/svh: in the iOS Home Screen
+              app, a root document only as tall as the dynamic viewport makes
+              WebKit lay the page out INSIDE the safe areas while env() still
+              reports the insets, so the toolbar and nav pad twice (a dead band
+              under the status bar and another under the nav). See
+              docs/DECISIONS.md "root height". */}
+          <div className="min-h-screen bg-brand-50 dark:bg-brand-900 font-sans text-brand-800 dark:text-brand-100 transition-colors">
             {isTestMode && (
               <div className="bg-warm-600 text-white text-xs font-bold text-center px-2 py-1 fixed top-0 left-0 right-0 z-banner shadow-raised">
                 TEST MODE - MOCK DATA (Development Only)
