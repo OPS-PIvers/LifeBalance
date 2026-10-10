@@ -376,6 +376,8 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     .filter(Boolean)
     .join(' ');
 
+  // The resting calendar screen: Board unless Settings picks Week (`?board=1` forces it).
+  const showingBoard = data.settings.home === 'board' || isBoardPreview();
   let body: React.ReactNode;
   if (!data.ready) {
     body = (
@@ -408,7 +410,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     );
   } else if (calView === 'month') {
     body = <WallMonth today={today} timeZone={runtime.timeZone} people={people} onOpenDay={date => goCalendar('day', date)} />;
-  } else if (data.settings.home === 'board' || isBoardPreview()) {
+  } else if (showingBoard) {
     body = (
       <WallBoard
         today={today}
@@ -557,7 +559,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
                     },
                   }
                 : {})}
-              {...(data.settings.home === 'week'
+              {...(!showingBoard
                 ? {
                     onArrange: () => {
                       goCalendar('week');
