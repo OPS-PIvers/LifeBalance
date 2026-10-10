@@ -14,6 +14,8 @@ import { WallToastContext, useWallToastController, type WallToaster } from './wa
 import WallDay from './calendar/WallDay';
 import WallMonth from './calendar/WallMonth';
 import WallWeek from './calendar/WallWeek';
+import WallBoard from './board/WallBoard';
+import { isBoardPreview } from './board/boardPreview';
 import WallViewPicker, { type CalendarView } from './calendar/WallViewPicker';
 import WallAddSheet, { type AddKind } from './lists/WallAddSheet';
 import WallMeals from './lists/WallMeals';
@@ -406,6 +408,21 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     );
   } else if (calView === 'month') {
     body = <WallMonth today={today} timeZone={runtime.timeZone} people={people} onOpenDay={date => goCalendar('day', date)} />;
+  } else if (isBoardPreview()) {
+    body = (
+      <WallBoard
+        today={today}
+        now={runtime.now}
+        timeZone={runtime.timeZone}
+        people={people}
+        weather={runtime.weather}
+        onWeather={() => setOverlay('weather')}
+        onOpenDay={date => goCalendar('day', date)}
+        onOpenMeal={openMeal}
+        onShopping={() => setView('shopping')}
+        onTodos={() => setView('todos')}
+      />
+    );
   } else {
     body = (
       <WallWeek

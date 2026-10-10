@@ -1,0 +1,120 @@
+/*
+ * Board (mockup, #/wall?board=1): one screen, fixed places. Masthead band
+ * across the top, the next thing as the one bright card, today in a lane per
+ * person, and a tinted side panel. Same tokens and type scale as Week.
+ */
+.wall .bd {
+  --k: var(--s);
+  --ink: #1b1a17;
+  --hero: var(--color-warm-300);
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 392px;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 22px 26px;
+  padding: 26px 30px 26px 40px;
+  overflow: hidden;
+}
+.wall.dark .bd { --hero: #d9a75c; }
+
+/* Masthead band: the clock and date, then the weather now and through the day. */
+.wall .bd .bdm { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 36px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.wall .bd .bdt { display: grid; gap: 12px; justify-items: start; }
+.wall .bd .bdt .clock { font-size: 120px; }
+.wall .bd .bdt .dd { font-size: 28px; }
+.wall .bd .bdw { justify-self: end; display: grid; grid-template-columns: auto auto; align-items: center; column-gap: 30px; row-gap: 10px; padding: 6px 10px; margin-right: -10px; border-radius: 14px; color: var(--fg2); font-variant-numeric: tabular-nums; }
+.wall .bd .bdw .now { display: grid; grid-template-columns: auto auto; column-gap: 14px; align-items: center; }
+.wall .bd .bdw .now svg { grid-row: span 2; font-size: 62px; color: var(--warm); }
+.wall .bd .bdw .now svg.r { color: var(--rain); }
+.wall .bd .bdw .now b { font-family: var(--font-display); font-size: 68px; font-weight: 500; line-height: 0.9; color: var(--fg); letter-spacing: -0.02em; }
+.wall .bd .bdw .hl { font-size: 18px; color: var(--muted); }
+.wall .bd .bdw .strip { display: flex; padding-left: 28px; border-left: 1px solid var(--line-strong); }
+.wall .bd .bdw .wb { display: grid; justify-items: center; gap: 6px; width: 104px; }
+.wall .bd .bdw .wb small { font-size: 15px; font-weight: 600; color: var(--muted); }
+.wall .bd .bdw .wb svg { font-size: 30px; color: var(--warm); }
+.wall .bd .bdw .wb svg.r, .wall .bd .bdw .wb.r b { color: var(--rain); }
+.wall .bd .bdw .wb b { font-size: 22px; font-weight: 600; color: var(--fg); }
+.wall .bd .bdw em { grid-column: 1 / -1; justify-self: end; font-style: normal; font-size: 18px; font-weight: 600; color: var(--rain); }
+
+/* Next up: the one bright thing on the wall. Title left, the countdown big on the right. */
+.wall .bd .bdn { grid-column: 1; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto auto 1fr; column-gap: 24px; row-gap: 8px; align-content: start; padding: 24px 30px 24px 32px; border-radius: 20px; background: var(--hero); color: var(--ink); text-align: left; }
+.wall .bd .bdn > :not(.cd) { grid-column: 1; }
+.wall .bd .bdn .k { font-size: 16px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.78; }
+.wall .bd .bdn .t { font-family: var(--font-display); font-size: var(--t-display); font-weight: 500; line-height: 1.05; letter-spacing: -0.015em; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.wall .bd .bdn .w { font-size: 21px; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wall .bd .bdn .go { justify-self: start; align-self: end; margin-top: 10px; display: inline-flex; align-items: center; gap: 10px; height: 50px; padding: 0 20px; border-radius: 25px; background: var(--ink); color: var(--hero); font-size: 19px; font-weight: 700; }
+.wall .bd .bdn .go svg { font-size: 24px; }
+.wall .bd .bdn .go .dm { font-weight: 500; opacity: 0.75; }
+.wall .bd .bdn .cd { grid-column: 2; grid-row: 1 / -1; align-self: center; display: grid; justify-items: center; line-height: 1; font-variant-numeric: tabular-nums; }
+.wall .bd .bdn .cd b { font-family: var(--font-display); font-size: 128px; font-weight: 600; letter-spacing: -0.04em; line-height: 0.85; }
+.wall .bd .bdn .cd small { margin-top: 10px; font-size: 18px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.wall .bd .bdn.quiet { background: var(--surface); color: var(--fg); }
+
+/* Today, one lane per person: a colored rule and name on top, the day's events as tinted cards. */
+.wall .bd .bdl { grid-column: 1; grid-row: 3; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 14px; min-height: 0; }
+.wall .bd .lane { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow: hidden; padding-top: 12px; border-top: 4px solid var(--c); text-align: left; align-items: stretch; }
+.wall .bd .lane .lh { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; font-size: 19px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wall .bd .lane > * { flex: none; }
+.wall .bd .lane .lm { font-size: 15px; font-weight: 600; color: var(--faint); padding: 0 4px; }
+.wall .bd .lane .free { font-size: 18px; color: var(--faint); padding: 6px 2px; }
+.wall .bd .li { display: grid; gap: 2px; padding: 10px 14px 11px; border-radius: 12px; background: color-mix(in srgb, var(--c) 11%, var(--card)); }
+.wall .bd .li .tm { font-size: 15px; font-weight: 600; color: var(--muted); }
+.wall .bd .li .tt { font-size: 20px; line-height: 1.2; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.wall .bd .li.past { background: transparent; box-shadow: inset 0 0 0 1px var(--line); color: var(--faint); padding-block: 6px 7px; }
+.wall .bd .li.past .tm { color: var(--faint); }
+.wall .bd .li.past .tt { font-size: 17px; -webkit-line-clamp: 1; text-decoration: line-through; text-decoration-thickness: 1px; }
+.wall .bd .li.lead { box-shadow: inset 0 0 0 2.5px var(--hero); }
+
+/* The side panel: tinted like Week's, in three fixed parts. */
+.wall .bd .bdp { grid-column: 2; grid-row: 2 / 4; display: flex; flex-direction: column; gap: 16px; min-height: 0; padding: 22px 24px; border-radius: 20px; background: var(--surface); }
+.wall .bd .bdp h3 { margin: 0; font-family: var(--font-display); font-size: calc(var(--s) * 24px); font-weight: 600; }
+.wall .bd .bdp .none { font-size: 18px; color: var(--muted); }
+.wall .bd .pc { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.wall .bd .pc h3 { margin-bottom: 4px; }
+.wall .bd .cr { display: grid; grid-template-columns: 120px minmax(0, 1fr); column-gap: 12px; align-items: baseline; padding: 9px 0; border-top: 1px solid var(--line-strong); text-align: left; }
+.wall .bd .cr:first-of-type { border-top: 0; }
+.wall .bd .cdh { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; line-height: 1.15; }
+.wall .bd .cdh b { font-family: var(--font-display); font-size: 21px; font-weight: 600; }
+.wall .bd .cdh small { font-size: 15px; color: var(--muted); }
+.wall .bd .ce { display: grid; gap: 4px; min-width: 0; }
+.wall .bd .ci { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 18px; line-height: 1.2; }
+.wall .bd .ci .dot { transform: translateY(-1px); }
+.wall .bd .ci .tm { font-size: 15px; color: var(--muted); }
+.wall .bd .ci .tt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wall .bd .ce .untimed { font-size: 15px; }
+
+.wall .bd .pd { flex: none; display: grid; gap: 14px; padding-top: 14px; border-top: 1px solid var(--line-strong); text-align: left; }
+.wall .bd .ph { display: flex; align-items: baseline; gap: 10px; }
+.wall .bd .ph h3 { margin-right: auto; }
+.wall .bd .ph small { font-size: 15px; color: var(--muted); }
+.wall .bd .ph svg { font-size: 18px; color: var(--faint); align-self: center; }
+.wall .bd .rings { display: flex; gap: 18px; }
+.wall .bd .prs { display: grid; justify-items: center; gap: 6px; width: 72px; }
+.wall .bd .prs small { font-size: 15px; font-weight: 600; color: var(--fg2); white-space: nowrap; }
+.wall .bd .rg { position: relative; width: 68px; height: 68px; display: grid; place-items: center; }
+.wall .bd .rg svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.wall .bd .rg circle { fill: none; stroke-width: 7; }
+.wall .bd .rg .trk { stroke: color-mix(in srgb, var(--c) 18%, transparent); }
+.wall .bd .rg .val { stroke: var(--c); stroke-linecap: round; }
+.wall .bd .rg b { position: relative; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.wall .bd .tiles { flex: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.wall .bd .tile { display: flex; flex-direction: column; gap: 6px; min-height: 148px; padding: 14px 16px; border-radius: 14px; background: var(--card); text-align: left; }
+.wall .bd .tile > small { font-size: 15px; font-weight: 600; color: var(--muted); }
+.wall .bd .tile .meal { font-family: var(--font-display); font-size: 28px; font-weight: 500; line-height: 1.1; }
+.wall .bd .tile .nd { margin-top: auto; font-size: 15px; line-height: 1.25; color: var(--muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.wall .bd .tile .cnt { display: flex; align-items: baseline; gap: 8px; }
+.wall .bd .tile .cnt b { font-family: var(--font-display); font-size: 44px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.wall .bd .tile .cnt span { font-size: 16px; color: var(--muted); }
+.wall .bd .tile .items { display: grid; gap: 1px; font-size: 15px; color: var(--fg2); }
+.wall .bd .tile .items span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Portrait: same pieces, stacked; the panel moves under the lanes. */
+@media (orientation: portrait) {
+  .wall .bd { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto; }
+  .wall .bd .bdm { grid-template-columns: 1fr; row-gap: 18px; }
+  .wall .bd .bdw { justify-self: start; margin-left: -10px; }
+  .wall .bd .bdp { grid-column: 1; grid-row: 4; display: grid; grid-template-columns: 1fr 1fr; }
+  .wall .bd .tiles { grid-column: 1 / -1; }
+}
