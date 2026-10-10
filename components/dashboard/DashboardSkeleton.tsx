@@ -7,7 +7,7 @@ import { Skeleton, SkeletonText } from '@/components/ui/Skeleton';
  * page doesn't reflow when data arrives.
  */
 export const DashboardSkeleton: React.FC = () => (
-  <div className="min-h-dvh bg-brand-50 dark:bg-brand-900 pb-32" aria-busy="true" aria-live="polite">
+  <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-32" aria-busy="true" aria-live="polite">
     <span className="sr-only">Loading your dashboard…</span>
 
     {/* Greeting header */}
