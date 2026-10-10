@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Car, Check, Utensils } from 'lucide-react';
+import { Car, Utensils } from 'lucide-react';
 import type { ToDo, WallEvent, WallLayout, WallModuleKey } from '@/types/schema';
 import { MODULE_TITLES, autoScrolls, setAutoScroll, swipeModule } from '@/utils/wall/wallModules';
 import { boardLayout, boardLayoutToSave } from './boardPreview';
@@ -268,14 +268,47 @@ const LaneItem: React.FC<{ event: WallEvent; time: string; lead: boolean }> = ({
 
 /**
  * A lane's to-dos for today, under its events: a big checkbox in the lane's
- * color, the wall's usual Undo on every check. Steps show as "n of m steps";
- * they're checked off from the To-dos screen.
+ * color, the wall's usual Undo on every check. A to-do's open steps sit under
+ * it, each with its own smaller checkbox. A checked to-do or step drops off,
+ * as on the phone's To-dos (Undo brings it back), and checking the last step
+ * completes the to-do. The list scrolls on its own with a swipe.
  */
 const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string | undefined) => string) | undefined; across?: number; style?: React.CSSProperties }> = ({ todos, today, owner, across, style }) => {
   const act = useWallListActions();
-  const done = todos.filter(t => t.isCompleted).length;
   const list = useRef<HTMLDivElement>(null);
-  const { fit, more } = useFittingCount(list, todos.length);
+  const edges = useScrollEdges(list);
+  const done = todos.filter(t => t.isCompleted).length;
+  const left = todos.filter(t => !t.isCompleted);
+
+  const rows = (t: ToDo) => {
+    const progress = t.subtasks?.length ? subtaskProgress(t.subtasks) : null;
+    // Only the steps still to do; the count under the title says how many are done.
+    const steps = (t.subtasks ?? []).filter(s => !s.isDone);
+    return (
+      <>
+        <button type="button" className={steps.length > 0 ? 'ltk has' : 'ltk'} aria-pressed={false} onClick={() => act.toggleTodo(t)}>
+          <span className="bx" />
+          <span className="tx">
+            <b>{t.text}</b>
+            {t.completeByDate < today && <small className="late">Overdue</small>}
+            {progress && (
+              <small>
+                {progress.done} of {progress.total} steps done
+              </small>
+            )}
+            {owner && <small>{owner(t.assignedTo)}</small>}
+          </span>
+        </button>
+        {steps.map(s => (
+          <button type="button" key={s.id} className="ltk st" aria-pressed={false} onClick={() => act.toggleSubtask(t, s)}>
+            <span className="bx" />
+            <span className="tx">{s.text}</span>
+          </button>
+        ))}
+      </>
+    );
+  };
+
   return (
     <section className={across ? 'ltd all' : 'ltd'} aria-label={across ? 'Household to-dos' : 'To-dos'} style={across ? ({ '--c': 'var(--faint)', '--n': across } as React.CSSProperties) : style}>
       <span className="sh">
@@ -284,30 +317,18 @@ const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string |
           {done} of {todos.length}
         </span>
       </span>
-      <div className="ltl" ref={list}>
-      {todos.map((t, i) => {
-        const steps = t.subtasks?.length ? subtaskProgress(t.subtasks) : null;
-        const off = i >= fit;
-        return (
-          <button type="button" key={t.id} className={['ltk', t.isCompleted ? 'done' : '', off ? 'off' : ''].filter(Boolean).join(' ')} aria-pressed={t.isCompleted} aria-hidden={off || undefined} tabIndex={off ? -1 : undefined} onClick={() => act.toggleTodo(t)}>
-            <span className="bx">{t.isCompleted && <Check size="1em" aria-hidden="true" />}</span>
-            <span className="tx">
-              <b>{t.text}</b>
-              {!t.isCompleted && t.completeByDate < today && <small className="late">Overdue</small>}
-              {!t.isCompleted && steps && (
-                <small>
-                  {steps.done} of {steps.total} steps
-                </small>
-              )}
-              {owner && <small>{owner(t.assignedTo)}</small>}
-            </span>
-          </button>
-        );
-      })}
-        {more && (
-          <span className="lm more" style={more}>
-            +{todos.length - fit} more on To-dos
-          </span>
+      {/* Swipe up and down to reach the rest; a fade on an edge says there's more past it. */}
+      <div className={['ltl', edges.above ? 'up' : '', edges.below ? 'dn' : ''].filter(Boolean).join(' ')} ref={list}>
+        {left.length === 0 && <span className="adn">All done</span>}
+        {/* Across the whole board (household to-dos only) a to-do and its steps stay together in one column. */}
+        {left.map(t =>
+          across ? (
+            <div key={t.id} className="grp">
+              {rows(t)}
+            </div>
+          ) : (
+            <React.Fragment key={t.id}>{rows(t)}</React.Fragment>
+          )
         )}
       </div>
     </section>
@@ -317,26 +338,37 @@ const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string |
 export default WallBoard;
 
 /**
- * How many of a list's rows fit whole in its box. When some don't, the last
- * whole one gives up its place to "+N more" (`more` is that place). Every row
- * stays laid out, only hidden past the count, so the count can grow back.
+ * Whether a scrolling list has more above or below what shows, so its edges
+ * can fade. Measured on scroll and whenever the box or its rows change size.
  */
-function useFittingCount(ref: React.RefObject<HTMLElement | null>, total: number): { fit: number; more: React.CSSProperties | null } {
-  const [state, setState] = useState<{ fit: number; more: React.CSSProperties | null }>({ fit: total, more: null });
+function useScrollEdges(ref: React.RefObject<HTMLElement | null>): { above: boolean; below: boolean } {
+  const [edges, setEdges] = useState({ above: false, below: false });
   useLayoutEffect(() => {
     const box = ref.current;
-    if (!box || typeof ResizeObserver === 'undefined') return;
+    if (!box || typeof ResizeObserver === 'undefined') return undefined;
     const measure = () => {
-      const bottom = box.getBoundingClientRect().bottom;
-      const rows = [...box.querySelectorAll<HTMLElement>(':scope > .ltk')];
-      const whole = rows.findIndex(r => r.getBoundingClientRect().bottom > bottom + 1);
-      const fit = whole === -1 ? rows.length : Math.max(0, whole - 1);
-      const slot = whole === -1 ? undefined : rows[fit];
-      setState({ fit, more: slot ? { top: slot.offsetTop, left: slot.offsetLeft, width: slot.offsetWidth } : null });
+      const above = box.scrollTop > 1;
+      const below = box.scrollTop + box.clientHeight < box.scrollHeight - 1;
+      setEdges(prev => (prev.above === above && prev.below === below ? prev : { above, below }));
     };
     const observer = new ResizeObserver(measure);
     observer.observe(box);
-    return () => observer.disconnect();
-  }, [ref, total]);
-  return { fit: Math.min(state.fit, total), more: state.fit < total ? state.more : null };
+    // Rows come and go as things are checked off; watch the new ones and let go of the removed ones.
+    const mutations = new MutationObserver(records => {
+      for (const record of records) {
+        for (const node of record.removedNodes) if (node instanceof Element) observer.unobserve(node);
+        for (const node of record.addedNodes) if (node instanceof Element) observer.observe(node);
+      }
+      measure();
+    });
+    for (const child of box.children) observer.observe(child);
+    mutations.observe(box, { childList: true });
+    box.addEventListener('scroll', measure, { passive: true });
+    return () => {
+      observer.disconnect();
+      mutations.disconnect();
+      box.removeEventListener('scroll', measure);
+    };
+  }, [ref]);
+  return edges;
 }
