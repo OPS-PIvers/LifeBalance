@@ -1,5 +1,5 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Car, Check, ListChecks, Utensils } from 'lucide-react';
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Car, Utensils } from 'lucide-react';
 import type { ToDo, WallEvent, WallLayout, WallModuleKey } from '@/types/schema';
 import { MODULE_TITLES, autoScrolls, setAutoScroll, swipeModule } from '@/utils/wall/wallModules';
 import { boardLayout, boardLayoutToSave } from './boardPreview';
@@ -18,7 +18,6 @@ import ShoppingModule from '@/components/wall/calendar/modules/ShoppingModule';
 import { useWallListActions } from '@/components/wall/lists/useWallListActions';
 import { BoardComing, BoardDue, BoardTodos } from './BoardModules';
 import { BOARD_OTHERS as OTHERS, boardLanes } from './boardLanes';
-import { laneStepsMode } from './subtaskMockup';
 import './board.css';
 
 /** Upcoming events a lane shows before "+N more" (the lane's to-dos sit under them). */
@@ -270,93 +269,45 @@ const LaneItem: React.FC<{ event: WallEvent; time: string; lead: boolean }> = ({
 /**
  * A lane's to-dos for today, under its events: a big checkbox in the lane's
  * color, the wall's usual Undo on every check. A to-do's open steps sit under
- * it, each with its own smaller checkbox. A checked to-do or step drops off
- * (Undo brings it back), and checking the last step completes the to-do. MOCKUP:
- * `steps=tap` hides them behind the phone's "n/m" step count instead, and an opened
- * list closes itself after two minutes.
+ * it, each with its own smaller checkbox. A checked to-do or step drops off,
+ * as on the phone's To-dos (Undo brings it back), and checking the last step
+ * completes the to-do. The list scrolls on its own with a swipe.
  */
 const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string | undefined) => string) | undefined; across?: number; style?: React.CSSProperties }> = ({ todos, today, owner, across, style }) => {
   const act = useWallListActions();
-  const mode = laneStepsMode();
-  const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
-  useEffect(() => {
-    if (open.size === 0) return undefined;
-    const timer = setTimeout(() => setOpen(new Set()), STEPS_OPEN_MS);
-    return () => clearTimeout(timer);
-  }, [open]);
-  const flip = (id: string) =>
-    setOpen(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  const done = todos.filter(t => t.isCompleted).length;
-  // A checked-off to-do leaves the list, as on the phone's To-dos (Undo brings it back); the count keeps it.
-  const openTodos = todos.filter(t => !t.isCompleted);
-
-  // One row per fitting unit: a to-do, its steps pill, each shown step. Across
-  // the whole board (household to-dos only) a to-do and its steps stay one unit, so they share a column.
-  const units = openTodos.map(t => {
-    const progress = t.subtasks?.length && !t.isCompleted ? subtaskProgress(t.subtasks) : null;
-    // Only the steps still to do: a lane has no room for finished ones, and the count says how many are done.
-    const steps = progress ? (t.subtasks ?? []).filter(s => !s.isDone) : null;
-    const isOpen = steps != null && steps.length > 0 && (mode === 'shown' || open.has(t.id));
-    const rows: { key: string; kind: 'todo' | 'pill' | 'step'; node: React.ReactNode }[] = [
-      {
-        key: t.id,
-        kind: 'todo',
-        node: (
-          <button type="button" key={t.id} className={['ltk', t.isCompleted ? 'done' : '', steps?.length ? (mode === 'tap' ? 'has cnt' : 'has') : ''].filter(Boolean).join(' ')} aria-pressed={t.isCompleted} onClick={() => act.toggleTodo(t)}>
-            <span className="bx">{t.isCompleted && <Check size="1em" aria-hidden="true" />}</span>
-            <span className="tx">
-              <b>{t.text}</b>
-              {!t.isCompleted && t.completeByDate < today && <small className="late">Overdue</small>}
-              {progress && mode === 'shown' && (
-                <small>
-                  {progress.done} of {progress.total} steps done
-                </small>
-              )}
-              {owner && <small>{owner(t.assignedTo)}</small>}
-            </span>
-          </button>
-        ),
-      },
-    ];
-    if (steps && steps.length > 0 && progress && mode === 'tap') {
-      rows.push({
-        key: `${t.id}:pill`,
-        kind: 'pill',
-        node: (
-          <button type="button" key={`${t.id}:pill`} className={['ltk', 'sx', isOpen ? 'open' : ''].filter(Boolean).join(' ')} aria-expanded={isOpen} onClick={() => flip(t.id)}>
-            <span className="pill" aria-label={`${progress.done} of ${progress.total} steps done, ${isOpen ? 'hide' : 'show'} steps`}>
-              <ListChecks size="1em" aria-hidden="true" />
-              {progress.done}/{progress.total}
-            </span>
-          </button>
-        ),
-      });
-    }
-    if (steps && isOpen) {
-      for (const s of steps) {
-        rows.push({
-          key: `${t.id}:${s.id}`,
-          kind: 'step',
-          node: (
-            <button type="button" key={`${t.id}:${s.id}`} className={['ltk', 'st', s.isDone ? 'done' : ''].filter(Boolean).join(' ')} aria-pressed={s.isDone} onClick={() => act.toggleSubtask(t, s)}>
-              <span className="bx">{s.isDone && <Check size="1em" aria-hidden="true" />}</span>
-              <span className="tx">{s.text}</span>
-            </button>
-          ),
-        });
-      }
-    }
-    return { todo: t, rows };
-  });
-
   const list = useRef<HTMLDivElement>(null);
   const edges = useScrollEdges(list);
-  const flat = across ? null : units.flatMap(u => u.rows);
+  const done = todos.filter(t => t.isCompleted).length;
+  const left = todos.filter(t => !t.isCompleted);
+
+  const rows = (t: ToDo) => {
+    const progress = t.subtasks?.length ? subtaskProgress(t.subtasks) : null;
+    // Only the steps still to do; the count under the title says how many are done.
+    const steps = (t.subtasks ?? []).filter(s => !s.isDone);
+    return (
+      <>
+        <button type="button" className={steps.length > 0 ? 'ltk has' : 'ltk'} aria-pressed={false} onClick={() => act.toggleTodo(t)}>
+          <span className="bx" />
+          <span className="tx">
+            <b>{t.text}</b>
+            {t.completeByDate < today && <small className="late">Overdue</small>}
+            {progress && (
+              <small>
+                {progress.done} of {progress.total} steps done
+              </small>
+            )}
+            {owner && <small>{owner(t.assignedTo)}</small>}
+          </span>
+        </button>
+        {steps.map(s => (
+          <button type="button" key={s.id} className="ltk st" aria-pressed={false} onClick={() => act.toggleSubtask(t, s)}>
+            <span className="bx" />
+            <span className="tx">{s.text}</span>
+          </button>
+        ))}
+      </>
+    );
+  };
 
   return (
     <section className={across ? 'ltd all' : 'ltd'} aria-label={across ? 'Household to-dos' : 'To-dos'} style={across ? ({ '--c': 'var(--faint)', '--n': across } as React.CSSProperties) : style}>
@@ -368,21 +319,21 @@ const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string |
       </span>
       {/* Swipe up and down to reach the rest; a fade on an edge says there's more past it. */}
       <div className={['ltl', edges.above ? 'up' : '', edges.below ? 'dn' : ''].filter(Boolean).join(' ')} ref={list}>
-        {units.length === 0 && <span className="adn">All done</span>}
-        {flat
-          ? flat.map(r => r.node)
-          : units.map(u => (
-              <div key={u.todo.id} className="ltk grp">
-                {u.rows.map(r => r.node)}
-              </div>
-            ))}
+        {left.length === 0 && <span className="adn">All done</span>}
+        {/* Across the whole board (household to-dos only) a to-do and its steps stay together in one column. */}
+        {left.map(t =>
+          across ? (
+            <div key={t.id} className="grp">
+              {rows(t)}
+            </div>
+          ) : (
+            <React.Fragment key={t.id}>{rows(t)}</React.Fragment>
+          )
+        )}
       </div>
     </section>
   );
 };
-
-/** Tap mode: an opened step list folds away again after this long, so the wall goes back to its resting look. */
-const STEPS_OPEN_MS = 2 * 60 * 1000;
 
 export default WallBoard;
 
