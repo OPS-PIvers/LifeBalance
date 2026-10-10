@@ -99,7 +99,8 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall svg.wi { width: 1em; height: 1em; flex: none; display: inline-block; vertical-align: -0.125em; }
 
 /* Rail: icons with small labels; the current screen sits on a tinted tile. */
-.wall .rail { border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; padding: 30px 0 22px; gap: 8px; min-height: 0; }
+/* The top 84px stays clear: Safari's full-screen close button floats over the top-left corner. */
+.wall .rail { border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; padding: 84px 0 22px; gap: 8px; min-height: 0; }
 .wall .rail .nav { position: relative; display: grid; justify-items: center; gap: 4px; width: 84px; padding: 10px 0 8px; border-radius: 12px; color: var(--faint); font-size: 14px; font-weight: 600; text-align: center; }
 .wall .rail .nav svg { font-size: 28px; }
 .wall .rail .nav[aria-current='page'] { background: var(--surface); color: var(--fg); }
@@ -133,11 +134,10 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall.rail-float .rail .gear { margin: 0; }
 .wall.rail-float.rail-open .main :is(.toast, .vb) { bottom: 140px; }
 /*
- * Safari's full screen (display menu → Full screen) floats its own close
- * button over the top-left corner. Keep the rail's first button and, with no
- * rail, the clock and headers out from under it.
+ * Safari's full screen floats its own close button over the top-left corner.
+ * The rail always keeps clear of it (above); with no rail, the clock and
+ * headers move out from under it.
  */
-.wall:is(:fullscreen, :-webkit-full-screen):not(.rail-float) .rail { padding-top: 84px; }
 .wall:is(:fullscreen, :-webkit-full-screen):is(.no-rail, .rail-float) .main { padding-left: 56px; }
 /* The clock is held to open the display menu: no iPadOS callout or magnifier. */
 .wall .mast .clock, .wall .hdr .hclk > b { -webkit-touch-callout: none; }

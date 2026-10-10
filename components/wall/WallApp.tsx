@@ -14,6 +14,8 @@ import { WallToastContext, useWallToastController, type WallToaster } from './wa
 import WallDay from './calendar/WallDay';
 import WallMonth from './calendar/WallMonth';
 import WallWeek from './calendar/WallWeek';
+import WallBoard from './board/WallBoard';
+import { boardModulesOverride, isBoardPreview } from './board/boardPreview';
 import WallViewPicker, { type CalendarView } from './calendar/WallViewPicker';
 import WallAddSheet, { type AddKind } from './lists/WallAddSheet';
 import WallMeals from './lists/WallMeals';
@@ -374,6 +376,8 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     .filter(Boolean)
     .join(' ');
 
+  // The resting calendar screen: Board unless Settings picks Week (`?board=1` forces it).
+  const showingBoard = data.settings.home === 'board' || isBoardPreview();
   let body: React.ReactNode;
   if (!data.ready) {
     body = (
@@ -406,6 +410,21 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     );
   } else if (calView === 'month') {
     body = <WallMonth today={today} timeZone={runtime.timeZone} people={people} onOpenDay={date => goCalendar('day', date)} />;
+  } else if (showingBoard) {
+    body = (
+      <WallBoard
+        today={today}
+        now={runtime.now}
+        timeZone={runtime.timeZone}
+        people={people}
+        weather={runtime.weather}
+        onWeather={() => setOverlay('weather')}
+        onOpenDay={date => goCalendar('day', date)}
+        onOpenMeal={openMeal}
+        layout={boardModulesOverride() ?? shownLayout}
+        onLayout={changeLayout}
+      />
+    );
   } else {
     body = (
       <WallWeek
@@ -540,11 +559,15 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
                     },
                   }
                 : {})}
-              onArrange={() => {
-                goCalendar('week');
-                setArranging(true);
-                setOverlay('none');
-              }}
+              {...(!showingBoard
+                ? {
+                    onArrange: () => {
+                      goCalendar('week');
+                      setArranging(true);
+                      setOverlay('none');
+                    },
+                  }
+                : {})}
               onClose={() => setOverlay('none')}
               onReload={() => window.location.reload()}
               onUnpair={onLeave}

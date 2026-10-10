@@ -1,0 +1,145 @@
+/*
+ * Board (the resting screen unless Settings picks Week): one screen, fixed
+ * places. Masthead band across the top, the next thing as the one bright
+ * card, today in a lane per person, and a tinted side panel. Same tokens and
+ * type scale as Week.
+ */
+.wall .bd {
+  --k: var(--s);
+  /* Next up / Now: the light brand green, dark ink on it. */
+  --hero: var(--color-accent-200);
+  --ink: #12201a;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 22px 26px;
+  padding: 26px 30px 26px 40px;
+  overflow: hidden;
+}
+.wall.dark .bd { --hero: #8fbfa5; }
+
+/*
+ * Masthead band: the clock and date; dinner tonight and the weather now as a
+ * matched pair of centered columns between rules (icon + value, one plain line
+ * under each, no headers); the rest of the day's weather on the right.
+ */
+.wall .bd .bdm { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.wall .bd .bdm.nowx { grid-template-columns: auto minmax(0, 1fr); }
+.wall .bd .bdt { display: grid; gap: 12px; justify-items: start; padding-right: 40px; }
+.wall .bd .bdt .clock { font-size: 120px; }
+.wall .bd .bdt .dd { font-size: 28px; }
+.wall .bd .mc { align-self: stretch; display: grid; grid-template-rows: 1fr auto auto 1fr; justify-items: center; row-gap: 8px; min-width: 0; padding: 4px 32px 20px; margin: -4px 0 -20px; border-left: 1px solid var(--line-strong); text-align: center; }
+.wall .bd .mc .tv { grid-row: 2; display: inline-flex; align-items: center; gap: 12px; max-width: 100%; }
+.wall .bd .mc .tv svg { flex: none; font-size: 40px; color: var(--warm); }
+.wall .bd .mc.dn .tv svg { font-size: 34px; }
+.wall .bd .mc .tv b { font-family: var(--font-display); font-size: 44px; font-weight: 500; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wall .bd .mc i { grid-row: 3; font-style: normal; font-size: 21px; font-weight: 500; color: var(--fg2); white-space: nowrap; }
+.wall .bd .mc.wn { border-right: 1px solid var(--line-strong); font-variant-numeric: tabular-nums; }
+.wall .bd .bdw { align-self: center; display: grid; justify-items: end; row-gap: 10px; padding: 6px 0 6px 28px; color: var(--fg2); font-variant-numeric: tabular-nums; }
+.wall .bd .bdw .strip { display: flex; }
+.wall .bd .bdw .wb { display: grid; justify-items: center; gap: 6px; width: 88px; }
+.wall .bd .bdw .wb small { font-size: 15px; font-weight: 600; color: var(--muted); }
+.wall .bd .bdw .wb svg { font-size: 30px; color: var(--warm); }
+.wall .bd .bdw .wb svg.r, .wall .bd .bdw .wb.r b { color: var(--rain); }
+.wall .bd .bdw .wb b { font-size: 22px; font-weight: 600; color: var(--fg); }
+.wall .bd .bdw em { font-style: normal; font-size: 18px; font-weight: 600; color: var(--rain); }
+
+/* Next up: the one bright thing on the wall. Title left, the countdown big on the right. */
+.wall .bd .bdn { grid-column: 1; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto auto 1fr; column-gap: 24px; row-gap: 8px; align-content: start; padding: 24px 30px 24px 32px; border-radius: 20px; background: var(--hero); color: var(--ink); text-align: left; }
+.wall .bd .bdn > :not(.cd) { grid-column: 1; }
+.wall .bd .bdn .k { font-size: 16px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.78; }
+.wall .bd .bdn .t { font-family: var(--font-display); font-size: var(--t-display); font-weight: 500; line-height: 1.05; letter-spacing: -0.015em; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.wall .bd .bdn .w { font-size: 21px; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wall .bd .bdn .go { justify-self: start; align-self: end; margin-top: 10px; display: inline-flex; align-items: center; gap: 10px; height: 50px; padding: 0 20px; border-radius: 25px; background: var(--ink); color: var(--hero); font-size: 19px; font-weight: 700; }
+.wall .bd .bdn .go svg { font-size: 24px; }
+.wall .bd .bdn .go .dm { font-weight: 500; opacity: 0.75; }
+.wall .bd .bdn .cd { grid-column: 2; grid-row: 1 / -1; align-self: center; display: grid; justify-items: center; line-height: 1; font-variant-numeric: tabular-nums; }
+.wall .bd .bdn .cd b { font-family: var(--font-display); font-size: 128px; font-weight: 600; letter-spacing: -0.04em; line-height: 0.85; }
+.wall .bd .bdn .cd small { margin-top: 10px; font-size: 18px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.wall .bd .bdn.quiet { background: var(--surface); color: var(--fg); }
+
+/*
+ * Today, one lane per person: a colored rule and name on top, the day's events
+ * as tinted cards, then that person's to-dos. The lanes share row tracks
+ * (subgrid), so every lane's "To do" starts on the same line.
+ */
+.wall .bd .bdl { grid-column: 1; grid-row: 3; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); column-gap: 14px; min-height: 0; }
+.wall .bd .lane { display: grid; grid-row: 1 / span 3; grid-template-rows: subgrid; min-height: 0; overflow: hidden; padding-top: 12px; border-top: 4px solid var(--c); text-align: left; }
+.wall .bd .lane .lh { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 19px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wall .bd .lane .lev { display: flex; flex-direction: column; gap: 8px; align-items: stretch; text-align: left; }
+.wall .bd .lane .lev > * { flex: none; }
+.wall .bd .lane .lm { font-size: 15px; font-weight: 600; color: var(--faint); padding: 0 4px; }
+.wall .bd .lane .free { font-size: 18px; color: var(--faint); padding: 6px 2px; }
+.wall .bd .li { display: grid; gap: 2px; padding: 10px 14px 11px; border-radius: 12px; background: color-mix(in srgb, var(--c) 11%, var(--card)); }
+.wall .bd .li .tm { font-size: 15px; font-weight: 600; color: var(--muted); }
+.wall .bd .li .tt { font-size: 20px; line-height: 1.2; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.wall .bd .li.past { background: transparent; box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--faint); padding-block: 6px 7px; }
+.wall .bd .li.past .tm { color: var(--faint); }
+.wall .bd .li.past .tt { font-size: 17px; -webkit-line-clamp: 1; text-decoration: line-through; text-decoration-thickness: 1px; }
+.wall .bd .li.lead { box-shadow: inset 0 0 0 2.5px var(--hero); }
+/* A lane's to-dos: a dashed rule, "To do · n of m", then big checkboxes in the lane's color. */
+/* The list fills what's left of the lane; rows that don't fit whole hide behind "+N more" (useFittingCount). */
+.wall .bd .ltd { display: grid; grid-template-rows: auto minmax(0, 1fr); margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line-strong); min-height: 0; overflow: hidden; }
+.wall .bd .ltl { position: relative; display: grid; align-content: start; min-height: 0; overflow: hidden; }
+.wall .bd .ltk.off { visibility: hidden; }
+.wall .bd .ltl .more { position: absolute; display: flex; align-items: center; min-height: 48px; padding: 0; font-size: 16px; }
+/* Household to-dos only: one band under every lane, its rows across in the lanes' columns. */
+.wall .bd .ltd.all { grid-column: 1 / -1; grid-row: 3; }
+.wall .bd .ltd.all .ltl { grid-template-columns: repeat(var(--n), minmax(0, 1fr)); column-gap: 14px; }
+.wall .bd .ltd .sh { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 14px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
+.wall .bd .ltd .sh span:last-child { font-weight: 600; letter-spacing: 0; text-transform: none; }
+.wall .bd .ltk { display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 48px; padding: 8px 0; text-align: left; }
+.wall .bd .ltk .bx { width: 28px; height: 28px; border-color: var(--c); color: var(--bg); font-size: 18px; }
+.wall .bd .ltk.done .bx { background: var(--c); border-color: var(--c); color: var(--bg); }
+.wall .bd .ltk .tx { display: grid; gap: 2px; min-width: 0; padding-top: 2px; }
+.wall .bd .ltk .tx b { font-size: 18px; font-weight: 500; line-height: 1.2; }
+.wall .bd .ltk .tx small { font-size: 14px; font-weight: 600; color: var(--muted); }
+.wall .bd .ltk .tx small.late { color: var(--warm); }
+.wall .bd .ltk.done .tx b { color: var(--faint); text-decoration: line-through; text-decoration-thickness: 1px; }
+
+/* The side panel: Week's tinted panel as a card, two module slots of equal height, the same modules. */
+.wall .bd .bdp.panel { grid-column: 2; grid-row: 2 / 4; padding: 20px 24px 18px; border-radius: 20px; gap: 14px; }
+.wall .bd .bdp .mod.top, .wall .bd .bdp .mod.bottom { flex: 1 1 0; gap: 8px; }
+.wall .bd .bdp .mod.bottom { padding-top: 12px; }
+.wall .bd .bdp .mh { min-height: 44px; }
+.wall .bd .bdp .mh b { font-size: calc(var(--s) * 24px); }
+.wall .bd .bdp .empty { padding: 20px 0; font-size: 18px; }
+
+/* Coming up, Board size. */
+.wall .bd .cr { display: grid; grid-template-columns: 112px minmax(0, 1fr); column-gap: 12px; align-items: baseline; padding: 9px 0; border-top: 1px solid var(--line-strong); text-align: left; width: 100%; }
+.wall .bd .cr:first-child { border-top: 0; padding-top: 2px; }
+.wall .bd .cdh { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; line-height: 1.15; }
+.wall .bd .cdh b { font-family: var(--font-display); font-size: 21px; font-weight: 600; }
+.wall .bd .cdh small { font-size: 15px; color: var(--muted); }
+.wall .bd .ce { display: grid; gap: 4px; min-width: 0; }
+.wall .bd .ci { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 18px; line-height: 1.2; }
+.wall .bd .ci .dot { transform: translateY(-1px); }
+.wall .bd .ci .tm { font-size: 15px; color: var(--muted); }
+.wall .bd .ci .tt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wall .bd .ce .cm { font-size: 15px; font-weight: 600; color: var(--faint); }
+.wall .bd .ce .untimed { font-size: 15px; }
+
+/* Due today, Board size: a ring per person (tap to show only theirs), then the checklist. */
+.wall .bd .bdue { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+.wall .bd .rings { flex: none; display: flex; gap: 6px; margin: 0 -8px; }
+.wall .bd .prs { display: grid; justify-items: center; gap: 4px; min-width: 76px; padding: 6px 8px 8px; border-radius: 14px; text-align: center; }
+.wall .bd .prs[aria-pressed='true'] { background: color-mix(in srgb, var(--c) 16%, transparent); }
+.wall .bd .prs small { font-size: 15px; font-weight: 600; color: var(--fg2); white-space: nowrap; }
+.wall .bd .rg { position: relative; width: 60px; height: 60px; display: grid; place-items: center; }
+.wall .bd .rg svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.wall .bd .rg circle { fill: none; stroke-width: 7; }
+.wall .bd .rg .trk { stroke: color-mix(in srgb, var(--c) 22%, transparent); }
+.wall .bd .rg .val { stroke: var(--c); stroke-linecap: round; }
+.wall .bd .rg b { position: relative; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.wall .bd .bdp .row .dot { margin-left: 6px; }
+
+/* Portrait: same pieces, stacked; the panel's two modules sit side by side under the lanes. */
+@media (orientation: portrait) {
+  .wall .bd { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) 380px; }
+  .wall .bd .bdm { grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); row-gap: 18px; }
+  .wall .bd .bdw { grid-column: 1 / -1; justify-self: start; padding-left: 0; }
+  .wall .bd .bdp.panel { grid-column: 1; grid-row: 4; flex-direction: row; }
+  .wall .bd .bdp .mod.bottom { border-top: 0; padding-top: 0; padding-left: 20px; border-left: 1px solid var(--line-strong); }
+}

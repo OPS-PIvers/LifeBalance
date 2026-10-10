@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '@/firebase.config';
+import { isBoardPreview } from '@/components/wall/board/boardPreview';
 import { useHouseholdCore, useMealPlan, useShopping, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { wallCalendarFeedConverter, wallEventConverter, wallSettingsConverter, wallTravelConverter } from '@/utils/firestoreConverters';
 import { DEFAULT_WALL_SETTINGS, effectiveLayout, normalizeLayout } from '@/utils/wall/wallSettings';
-import type { Meal, MealPlanItem, WallCalendarFeed, WallEvent, WallLayout, WallSettings, WallTravel } from '@/types/schema';
+import type { Meal, MealPlanItem, ShoppingItem, WallCalendarFeed, WallEvent, WallLayout, WallSettings, WallTravel } from '@/types/schema';
 import { syncWallCalendarsNow, synthesizeWallSpeech } from '@/components/wall/wallCalendarService';
 import { WallDataContext, type WallData, type WallDataActions } from './wallData';
 import { readWakeFile } from './wakeFile';
@@ -39,6 +40,7 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [travel, setTravel] = useState<WallTravel[]>([]);
   const [extrasReady, setExtrasReady] = useState(false);
   const [fixtureMeals, setFixtureMeals] = useState<{ meals: Meal[]; mealPlan: MealPlanItem[] } | null>(null);
+  const [fixtureShopping, setFixtureShopping] = useState<ShoppingItem[]>([]);
   const [localLayout, setLocalLayout] = useState<WallLayout | undefined>(readLocalLayout);
 
   useEffect(() => {
@@ -53,12 +55,13 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ) {
       void import('./wallFixtures').then(({ wallTestFixtures }) => {
         if (cancelled) return;
-        const fx = wallTestFixtures(new Date(), sessionStorage.getItem('LIFEBALANCE_WALL_THEME') === 'dark' ? 'dark' : 'light');
+        const fx = wallTestFixtures(new Date(), sessionStorage.getItem('LIFEBALANCE_WALL_THEME') === 'dark' ? 'dark' : 'light', isBoardPreview());
         setWallEvents(fx.events);
         setCalendarFeeds(fx.feeds);
         setTravel(fx.travel);
         setSettings(fx.settings);
         setFixtureMeals({ meals: fx.meals, mealPlan: fx.mealPlan });
+        setFixtureShopping(fx.shopping);
         setExtrasReady(true);
       });
       return () => {
@@ -167,7 +170,7 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       calendarFeeds,
       travel,
       todos: todoSlice.todos,
-      shoppingList: shopping.shoppingList,
+      shoppingList: fixtureShopping.length > 0 ? [...fixtureShopping, ...shopping.shoppingList] : shopping.shoppingList,
       groceryCatalog: shopping.groceryCatalog,
       meals: fixtureMeals?.meals ?? mealSlice.meals,
       mealPlan: fixtureMeals?.mealPlan ?? mealSlice.mealPlan,
@@ -176,7 +179,7 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ready: !core.isLoading && extrasReady,
       actions,
     };
-  }, [householdId, core.household, core.members, core.isLoading, wallEvents, calendarFeeds, travel, todoSlice.todos, shopping.shoppingList, shopping.groceryCatalog, mealSlice.meals, mealSlice.mealPlan, fixtureMeals, settings, localLayout, extrasReady, actions]);
+  }, [householdId, core.household, core.members, core.isLoading, wallEvents, calendarFeeds, travel, todoSlice.todos, shopping.shoppingList, fixtureShopping, shopping.groceryCatalog, mealSlice.meals, mealSlice.mealPlan, fixtureMeals, settings, localLayout, extrasReady, actions]);
 
   if (!value) return null;
   return <WallDataContext.Provider value={value}>{children}</WallDataContext.Provider>;

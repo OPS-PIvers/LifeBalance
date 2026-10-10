@@ -99,7 +99,7 @@ export function todayTimeline(events: readonly WallEvent[], today: string, now: 
 }
 
 /** Without an end time, an event counts as running for an hour. */
-const DEFAULT_EVENT_MS = 60 * 60 * 1000;
+export const DEFAULT_EVENT_MS = 60 * 60 * 1000;
 
 export interface TodayFocus {
   /** The hero: the event running now, else the next one to start. */

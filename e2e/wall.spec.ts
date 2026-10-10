@@ -39,13 +39,13 @@ async function stubWeather(page: Page) {
   });
 }
 
-async function openWall(page: Page, time: string) {
+async function openWall(page: Page, time: string, query = '') {
   await page.clock.install({ time: new Date(`${DAY}T${time}`) });
   await stubWeather(page);
   await page.goto('/#/login?test=true');
   await expect(page.getByText(/TEST MODE - MOCK DATA/i)).toBeVisible();
   await expect(page).not.toHaveURL(/#\/login/);
-  await page.goto('/#/wall');
+  await page.goto(`/#/wall${query}`);
 }
 
 /**
@@ -207,6 +207,16 @@ test.describe('Wall display shell (Test Mode)', () => {
     await recipe.getByRole('button', { name: 'Add 3 missing to Shopping' }).click();
     await expect(page.getByRole('status')).toContainText('Added 3 items to Shopping');
     await expect(recipe.getByText('On the list')).toHaveCount(3);
+  });
+
+  test('Board: dinner and weather in the masthead, and a to-do checked off in its person\u2019s lane', async ({ page }) => {
+    await openWall(page, '15:15:00', '?board=1');
+    await expect(page.getByRole('button', { name: /Tacos/ })).toContainText('Dinner tonight');
+    await expect(page.getByRole('button', { name: /54 degrees/ })).toContainText('54°');
+    const lanes = page.getByRole('region', { name: 'Today by person' });
+    await lanes.getByRole('button', { name: /Make your bed/ }).click();
+    await expect(page.getByRole('status')).toContainText('Completed Make your bed');
+    await expect(lanes.getByRole('button', { name: /Make your bed/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('the gear menu leads back to the app', async ({ page }) => {
