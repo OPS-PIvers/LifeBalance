@@ -83,9 +83,6 @@
 .wall .bd .li { display: grid; gap: 2px; padding: 10px 14px 11px; border-radius: 12px; background: color-mix(in srgb, var(--c) 11%, var(--card)); }
 .wall .bd .li .tm { font-size: 15px; font-weight: 600; color: var(--muted); }
 .wall .bd .li .tt { font-size: 20px; line-height: 1.2; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-.wall .bd .li.past { background: transparent; box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--faint); padding-block: 6px 7px; }
-.wall .bd .li.past .tm { color: var(--faint); }
-.wall .bd .li.past .tt { font-size: 17px; -webkit-line-clamp: 1; text-decoration: line-through; text-decoration-thickness: 1px; }
 .wall .bd .li.lead { box-shadow: inset 0 0 0 2.5px var(--hero); }
 /* A lane's to-dos: a dashed rule, "To do · n of m", then big checkboxes in the lane's color. */
 /* The list fills what's left of the lane; rows that don't fit whole hide behind "+N more" (useFittingCount). */

@@ -211,8 +211,8 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
                 {laneName(lane.key)}
               </span>
               <button type="button" className="lev" style={col} onClick={() => onOpenDay(today)} aria-label={`${laneName(lane.key)}'s day`}>
-                {lane.rows.length === 0 ? (
-                  <span className="free">Free today</span>
+                {lane.rows.every(r => r.past) ? (
+                  <span className="free">{lane.rows.length === 0 ? 'Free today' : 'Nothing else today'}</span>
                 ) : (
                   <LaneRows rows={lane.rows} leadId={lead?.event.id} {...(lane.key === OTHERS ? { owner: (key: string | undefined) => people.firstName(key) ?? people.name(key) } : {})} />
                 )}
@@ -245,26 +245,22 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
   );
 };
 
-/** A lane keeps its last finished event (the rest fold into "+N earlier") and up to LANE_AHEAD still to come. */
+/** A lane is a stream of what's still to come: finished events drop off, and past LANE_AHEAD the rest fold into "+N more". */
 const LaneRows: React.FC<{ rows: TodayRow[]; leadId: string | undefined; owner?: (key: string | undefined) => string }> = ({ rows, leadId, owner }) => {
-  const past = rows.filter(r => r.past);
   const ahead = rows.filter(r => !r.past);
-  const shown = [...past.slice(-1), ...ahead.slice(0, LANE_AHEAD)];
-  const earlier = past.length - Math.min(1, past.length);
   const more = ahead.length - Math.min(LANE_AHEAD, ahead.length);
   return (
     <>
-      {earlier > 0 && <span className="lm">+{earlier} earlier</span>}
-      {shown.map(row => (
-        <LaneItem key={row.event.id} event={row.event} time={owner ? `${row.time} · ${owner(row.event.ownerKey)}` : row.time} past={row.past} lead={row.event.id === leadId} />
+      {ahead.slice(0, LANE_AHEAD).map(row => (
+        <LaneItem key={row.event.id} event={row.event} time={owner ? `${row.time} · ${owner(row.event.ownerKey)}` : row.time} lead={row.event.id === leadId} />
       ))}
       {more > 0 && <span className="lm">+{more} more</span>}
     </>
   );
 };
 
-const LaneItem: React.FC<{ event: WallEvent; time: string; past: boolean; lead: boolean }> = ({ event, time, past, lead }) => (
-  <span className={['li', past ? 'past' : '', lead ? 'lead' : ''].filter(Boolean).join(' ')}>
+const LaneItem: React.FC<{ event: WallEvent; time: string; lead: boolean }> = ({ event, time, lead }) => (
+  <span className={lead ? 'li lead' : 'li'}>
     <span className="tm">{time}</span>
     <span className="tt">{event.title}</span>
   </span>
