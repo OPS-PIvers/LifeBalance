@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { Car } from 'lucide-react';
-import type { WallEvent, WallLayout, WallModuleKey } from '@/types/schema';
+import { Car, Check, Utensils } from 'lucide-react';
+import type { ToDo, WallEvent, WallLayout, WallModuleKey } from '@/types/schema';
 import { MODULE_TITLES, autoScrolls, setAutoScroll, swipeModule } from '@/utils/wall/wallModules';
 import { boardLayout } from './boardPreview';
 import { clockText, zonedParts } from '@/utils/wall/wallTime';
 import { dueTodayChecklist, eventTimeText, todayFocus, todayTimeline, type TodayRow } from '@/utils/wall/wallCalendar';
+import { subtaskProgress } from '@/utils/subtasks';
 import type { WallPeople } from '@/utils/wall/wallPeople';
 import type { WallWeather } from '@/utils/wall/wallWeather';
 import { useWallData } from '@/components/wall/data/wallData';
@@ -14,15 +15,13 @@ import WallUntimedLine from '@/components/wall/calendar/WallUntimedLine';
 import WallModuleSlot from '@/components/wall/calendar/WallModuleSlot';
 import MealsModule from '@/components/wall/calendar/modules/MealsModule';
 import ShoppingModule from '@/components/wall/calendar/modules/ShoppingModule';
+import { useWallListActions } from '@/components/wall/lists/useWallListActions';
 import { BoardComing, BoardDue, BoardTodos } from './BoardModules';
+import { BOARD_OTHERS as OTHERS, boardLanes } from './boardLanes';
 import './board.css';
 
-/** Lanes across the day: Everyone plus up to this many people. */
-const MAX_PEOPLE = 4;
-/** The lane key for people past MAX_PEOPLE (and owners who've left). */
-const OTHERS = 'others';
-/** Upcoming events a lane shows before "+N more". */
-const LANE_AHEAD = 4;
+/** Upcoming events a lane shows before "+N more" (the lane's to-dos sit under them). */
+const LANE_AHEAD = 3;
 
 interface WallBoardProps {
   today: string;
@@ -49,12 +48,13 @@ function countdown(ms: number): { n: string; unit: string } {
 const isFamily = (key: string | undefined) => !key || key === 'family';
 
 /**
- * Board (mockup): everything the kitchen needs on one screen, in fixed
- * places. A masthead band (clock, weather now and through the day), the next
- * thing as one bright card with its countdown and leave time, today in one
- * lane per person, and a tinted side panel with two module slots that swipe
- * between the same modules Week's panel has (Due today, To-dos, Shopping,
- * Dinners, Coming up).
+ * Board: everything the kitchen needs on one screen, in fixed places. A
+ * masthead band (clock; dinner tonight and the weather now as a matched pair
+ * of columns; the rest of the day's weather), the next thing as one bright
+ * card with its countdown and leave time, today in one lane per person with
+ * that person's to-dos under their events (unassigned ones under Everyone),
+ * and a tinted side panel with two module slots that swipe between the same
+ * modules Week's panel has.
  */
 const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, weather, onWeather, onOpenDay, onOpenMeal, layout, onLayout }) => {
   const { wallEvents, travel, todos, mealPlan, shoppingList } = useWallData();
@@ -68,22 +68,8 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
   const drive = lead ? travel.find(t => t.id === lead.event.id) : undefined;
   const leaveMs = drive?.minutes != null && Number.isFinite(leadStart) ? leadStart - drive.minutes * 60000 - now.getTime() : NaN;
 
-  // One lane per person, in roster order, so everyone is always in the same place; Everyone first.
-  const lanes = useMemo(() => {
-    const byOwner = new Map<string, TodayRow[]>();
-    for (const row of timeline.rows) {
-      const key = isFamily(row.event.ownerKey) ? 'family' : (row.event.ownerKey ?? 'family');
-      byOwner.set(key, [...(byOwner.get(key) ?? []), row]);
-    }
-    // Past the cap, the last lane is "Others": everyone left over, plus owners no longer in the household.
-    const overflow = people.members.length > MAX_PEOPLE;
-    const own = people.members.slice(0, overflow ? MAX_PEOPLE - 1 : MAX_PEOPLE).map(m => m.uid);
-    const lanes: { key: string; rows: TodayRow[] }[] = ['family', ...own].map(key => ({ key, rows: byOwner.get(key) ?? [] }));
-    const shown = new Set(['family', ...own]);
-    const rest = timeline.rows.filter(r => !shown.has(isFamily(r.event.ownerKey) ? 'family' : (r.event.ownerKey ?? 'family')));
-    if (overflow || rest.length > 0) lanes.push({ key: OTHERS, rows: rest });
-    return lanes;
-  }, [timeline.rows, people.members]);
+  const due = useMemo(() => dueTodayChecklist(todos, today, timeZone), [todos, today, timeZone]);
+  const lanes = useMemo(() => boardLanes(timeline.rows, due, people.members.map(m => m.uid)), [timeline.rows, due, people.members]);
 
   // The panel's two slots: the saved panel modules, the bottom one filled from Week's day module when there isn't one.
   const board = useMemo(() => boardLayout(layout), [layout]);
@@ -95,7 +81,6 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
     setEntered({ place, dir });
     onLayout(next);
   };
-  const due = useMemo(() => dueTodayChecklist(todos, today, timeZone), [todos, today, timeZone]);
   const toBuy = shoppingList.filter(i => !i.isPurchased).length;
   const dinner = mealPlan.find(m => m.date === today && m.type === 'dinner');
 
@@ -130,7 +115,7 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
 
   return (
     <div className="bd">
-      <header className="mast bdm">
+      <header className={weather ? 'mast bdm' : 'mast bdm nowx'}>
         <div className="bdt">
           <span className="clock">{clockText(p.hour, p.minute)}</span>
           <span className="dd">
@@ -138,30 +123,37 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
           </span>
           {timeline.allDay.length > 0 && <WallUntimedLine events={timeline.allDay} people={people} />}
         </div>
-        <button type="button" className="bdd" onClick={() => onOpenMeal(today)}>
-          <small>Dinner tonight</small>
-          <b>{dinner?.mealName ?? 'Not planned'}</b>
+        <button type="button" className="mc dn" onClick={() => onOpenMeal(today)}>
+          <span className="tv">
+            <Utensils className="wi" size="1em" aria-hidden="true" />
+            <b>{dinner?.mealName ?? 'Not planned'}</b>
+          </span>
+          <i>Dinner tonight</i>
         </button>
         {weather && (
-          <button type="button" className="bdw" onClick={onWeather} aria-label="Five-day forecast">
-            <span className="now">
-              <WallWeatherIcon icon={weather.current.icon} />
-              <b>{weather.current.temp}°</b>
-              <span className="hl">
-                H {weather.high}° · L {weather.low}°
+          <>
+            <button type="button" className="mc wn" onClick={onWeather} aria-label={`${weather.current.temp} degrees, high ${weather.high}, low ${weather.low}. Five-day forecast`}>
+              <span className="tv">
+                <WallWeatherIcon icon={weather.current.icon} />
+                <b>{weather.current.temp}°</b>
               </span>
-            </span>
-            <span className="strip">
-              {weather.blocks.map(b => (
-                <span key={b.label} className={b.rainy ? 'wb r' : 'wb'}>
-                  <small>{b.label}</small>
-                  <WallWeatherIcon icon={b.icon} />
-                  <b>{b.temp}°</b>
-                </span>
-              ))}
-            </span>
-            {weather.rainNote && <em>{weather.rainNote}</em>}
-          </button>
+              <i>
+                H {weather.high}° · L {weather.low}°
+              </i>
+            </button>
+            <button type="button" className="bdw" onClick={onWeather} aria-label="Five-day forecast">
+              <span className="strip">
+                {weather.blocks.map(b => (
+                  <span key={b.label} className={b.rainy ? 'wb r' : 'wb'}>
+                    <small>{b.label}</small>
+                    <WallWeatherIcon icon={b.icon} />
+                    <b>{b.temp}°</b>
+                  </span>
+                ))}
+              </span>
+              {weather.rainNote && <em>{weather.rainNote}</em>}
+            </button>
+          </>
         )}
       </header>
 
@@ -206,17 +198,20 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
 
       <section className="bdl" aria-label="Today by person">
         {lanes.map(lane => (
-          <button type="button" key={lane.key} className="lane" style={{ '--c': lane.key === OTHERS ? 'var(--faint)' : people.color(lane.key) } as React.CSSProperties} onClick={() => onOpenDay(today)}>
+          <div key={lane.key} className="lane" style={{ '--c': lane.key === OTHERS ? 'var(--faint)' : people.color(lane.key) } as React.CSSProperties}>
             <span className="lh">
               {lane.key !== OTHERS && <WallAvatar people={people} who={lane.key} small />}
               {laneName(lane.key)}
             </span>
-            {lane.rows.length === 0 ? (
-              <span className="free">Free today</span>
-            ) : (
-              <LaneRows rows={lane.rows} leadId={lead?.event.id} {...(lane.key === OTHERS ? { owner: (key: string | undefined) => people.firstName(key) ?? people.name(key) } : {})} />
-            )}
-          </button>
+            <button type="button" className="lev" onClick={() => onOpenDay(today)} aria-label={`${laneName(lane.key)}'s day`}>
+              {lane.rows.length === 0 ? (
+                <span className="free">Free today</span>
+              ) : (
+                <LaneRows rows={lane.rows} leadId={lead?.event.id} {...(lane.key === OTHERS ? { owner: (key: string | undefined) => people.firstName(key) ?? people.name(key) } : {})} />
+              )}
+            </button>
+            {lane.todos.length > 0 ? <LaneTodos todos={lane.todos} today={today} owner={lane.key === OTHERS ? (key: string | undefined) => people.firstName(key) ?? people.name(key) : undefined} /> : <span />}
+          </div>
         ))}
       </section>
 
@@ -265,5 +260,43 @@ const LaneItem: React.FC<{ event: WallEvent; time: string; past: boolean; lead: 
     <span className="tt">{event.title}</span>
   </span>
 );
+
+/**
+ * A lane's to-dos for today, under its events: a big checkbox in the lane's
+ * color, the wall's usual Undo on every check. Steps show as "n of m steps";
+ * they're checked off from the To-dos screen.
+ */
+const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string | undefined) => string) | undefined }> = ({ todos, today, owner }) => {
+  const act = useWallListActions();
+  const done = todos.filter(t => t.isCompleted).length;
+  return (
+    <section className="ltd" aria-label="To-dos">
+      <span className="sh">
+        <span>To do</span>
+        <span>
+          {done} of {todos.length}
+        </span>
+      </span>
+      {todos.map(t => {
+        const steps = t.subtasks?.length ? subtaskProgress(t.subtasks) : null;
+        return (
+          <button type="button" key={t.id} className={t.isCompleted ? 'ltk done' : 'ltk'} aria-pressed={t.isCompleted} onClick={() => act.toggleTodo(t)}>
+            <span className="bx">{t.isCompleted && <Check size="1em" aria-hidden="true" />}</span>
+            <span className="tx">
+              <b>{t.text}</b>
+              {!t.isCompleted && t.completeByDate < today && <small className="late">Overdue</small>}
+              {!t.isCompleted && steps && (
+                <small>
+                  {steps.done} of {steps.total} steps
+                </small>
+              )}
+              {owner && <small>{owner(t.assignedTo)}</small>}
+            </span>
+          </button>
+        );
+      })}
+    </section>
+  );
+};
 
 export default WallBoard;

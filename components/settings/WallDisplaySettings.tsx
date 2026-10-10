@@ -30,7 +30,7 @@ import {
   parseGeocode,
   type GeocodeResult,
 } from '@/utils/wall/wallSettingsView';
-import type { HouseholdMember, WallDisplay, WallLayout, WallRailMode, WallSettings } from '@/types/schema';
+import type { HouseholdMember, WallDisplay, WallHome, WallLayout, WallRailMode, WallSettings } from '@/types/schema';
 import { WallDisplayLayout } from './WallLayoutSettings';
 import WallCalendarSettings from './WallCalendarSettings';
 import WallVoiceSettings from './WallVoiceSettings';
@@ -60,6 +60,12 @@ async function callable<Req, Res>(name: string, data: Req): Promise<Res> {
 /** Settings' two pickers → the stored list ('none' drops a slot). */
 // The panel always has a top module; 'none' (only the bottom has it) is dropped by normalizeModules.
 const startingModules = (top: string, bottom: string) => normalizeModules([top, bottom]);
+
+/** What each Home screen choice shows. */
+const HOME_NOTES: Record<WallHome, string> = {
+  board: 'Clock, dinner and weather across the top, next up, and today in a lane per person with their to-dos',
+  week: 'Today down the left, the week and a module panel beside it',
+};
 
 /** What each Side buttons choice does on the wall. */
 const RAIL_NOTES: Record<WallRailMode, string> = {
@@ -424,6 +430,22 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
               ]}
               value={settings.textSize}
               onChange={textSize => void save({ textSize })}
+            />
+          </Row>
+          <Row className="flex-col items-stretch gap-2">
+            <div>
+              <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Home screen</p>
+              <p className="text-xs text-brand-500 dark:text-brand-400">{HOME_NOTES[settings.home]}</p>
+            </div>
+            <SegmentedControl
+              name="Wall home screen"
+              size="sm"
+              options={[
+                { value: 'board', label: 'Board' },
+                { value: 'week', label: 'Week' },
+              ]}
+              value={settings.home}
+              onChange={home => void save({ home })}
             />
           </Row>
           <Row className="flex-col items-stretch gap-2">

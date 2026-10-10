@@ -408,7 +408,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     );
   } else if (calView === 'month') {
     body = <WallMonth today={today} timeZone={runtime.timeZone} people={people} onOpenDay={date => goCalendar('day', date)} />;
-  } else if (isBoardPreview()) {
+  } else if (data.settings.home === 'board' || isBoardPreview()) {
     body = (
       <WallBoard
         today={today}
@@ -557,11 +557,15 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
                     },
                   }
                 : {})}
-              onArrange={() => {
-                goCalendar('week');
-                setArranging(true);
-                setOverlay('none');
-              }}
+              {...(data.settings.home === 'week'
+                ? {
+                    onArrange: () => {
+                      goCalendar('week');
+                      setArranging(true);
+                      setOverlay('none');
+                    },
+                  }
+                : {})}
               onClose={() => setOverlay('none')}
               onReload={() => window.location.reload()}
               onUnpair={onLeave}

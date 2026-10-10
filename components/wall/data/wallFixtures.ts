@@ -11,7 +11,10 @@ export function wallTestFixtures(
   today = new Date(),
   /** The wall's theme; the screenshot spec sets dark through the session flag the provider reads. */
   theme: WallSettings['theme'] = 'light',
-  /** The Board layout mockup (#/wall?board=1): a fuller household day, so each person's lane has something in it. */
+  /**
+   * `#/wall?board=1`: the Board with a fuller household day, so each person's lane has something in it.
+   * Without it Test Mode shows Week, which the e2e specs drive.
+   */
   board = false
 ): {
   events: WallEvent[];
@@ -83,5 +86,5 @@ export function wallTestFixtures(
         isPurchased: false,
       }))
     : [];
-  return { events, feeds, travel, meals, mealPlan, shopping, settings: { ...DEFAULT_WALL_SETTINGS, theme, weather: { lat: 44.97, lon: -93.59, label: 'Test City' } } };
+  return { events, feeds, travel, meals, mealPlan, shopping, settings: { ...DEFAULT_WALL_SETTINGS, theme, home: board ? 'board' : 'week', weather: { lat: 44.97, lon: -93.59, label: 'Test City' } } };
 }

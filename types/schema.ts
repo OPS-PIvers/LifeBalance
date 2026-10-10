@@ -2231,6 +2231,9 @@ export interface WallSoundSettings {
 
 export type WallRailMode = 'shown' | 'tap' | 'hidden';
 
+/** The resting calendar screen: Board (masthead, next up, a lane per person) or the classic Week. */
+export type WallHome = 'board' | 'week';
+
 export interface WallSettings {
   defaultModules: WallModuleKey[];
   rotation: { enabled: boolean; intervalSec: number };
@@ -2240,6 +2243,8 @@ export interface WallSettings {
   textSize: 'normal' | 'large';
   /** The left rail of view buttons: always shown, shown on a tap, or never (hold the clock for the display menu). */
   rail: WallRailMode;
+  /** The resting screen's layout (absent ⇒ Board). */
+  home: WallHome;
   showBills: boolean;
   holidaysEnabled: boolean;
   voice: WallVoiceEngine;
