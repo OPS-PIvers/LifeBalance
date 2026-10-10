@@ -200,22 +200,27 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
       )}
 
       <section className="bdl" aria-label="Today by person" style={{ gridTemplateColumns: `repeat(${lanes.length}, minmax(0, 1fr))` }}>
-        {lanes.map((lane, i) => (
-          <div key={lane.key} className="lane" style={{ '--c': lane.key === OTHERS ? 'var(--faint)' : people.color(lane.key), gridColumn: i + 1 } as React.CSSProperties}>
-            <span className="lh">
-              {lane.key !== OTHERS && <WallAvatar people={people} who={lane.key} small />}
-              {laneName(lane.key)}
-            </span>
-            <button type="button" className="lev" onClick={() => onOpenDay(today)} aria-label={`${laneName(lane.key)}'s day`}>
-              {lane.rows.length === 0 ? (
-                <span className="free">Free today</span>
-              ) : (
-                <LaneRows rows={lane.rows} leadId={lead?.event.id} {...(lane.key === OTHERS ? { owner: (key: string | undefined) => people.firstName(key) ?? people.name(key) } : {})} />
-              )}
-            </button>
-            {lane.todos.length > 0 && !householdOnly ? <LaneTodos todos={lane.todos} today={today} owner={lane.key === OTHERS ? (key: string | undefined) => people.firstName(key) ?? people.name(key) : undefined} /> : <span />}
-          </div>
-        ))}
+        {lanes.map((lane, i) => {
+          // A lane's name, events and to-dos are each the lanes grid's own
+          // items in its column, so every lane's rows line up (see board.css).
+          const col = { '--c': lane.key === OTHERS ? 'var(--faint)' : people.color(lane.key), gridColumn: i + 1 } as React.CSSProperties;
+          return (
+            <React.Fragment key={lane.key}>
+              <span className="lh" style={col}>
+                {lane.key !== OTHERS && <WallAvatar people={people} who={lane.key} small />}
+                {laneName(lane.key)}
+              </span>
+              <button type="button" className="lev" style={col} onClick={() => onOpenDay(today)} aria-label={`${laneName(lane.key)}'s day`}>
+                {lane.rows.length === 0 ? (
+                  <span className="free">Free today</span>
+                ) : (
+                  <LaneRows rows={lane.rows} leadId={lead?.event.id} {...(lane.key === OTHERS ? { owner: (key: string | undefined) => people.firstName(key) ?? people.name(key) } : {})} />
+                )}
+              </button>
+              {lane.todos.length > 0 && !householdOnly && <LaneTodos todos={lane.todos} today={today} owner={lane.key === OTHERS ? (key: string | undefined) => people.firstName(key) ?? people.name(key) : undefined} style={col} />}
+            </React.Fragment>
+          );
+        })}
         {householdOnly && <LaneTodos todos={lanes[0]?.todos ?? []} today={today} owner={undefined} across={lanes.length} />}
       </section>
 
@@ -270,13 +275,13 @@ const LaneItem: React.FC<{ event: WallEvent; time: string; past: boolean; lead: 
  * color, the wall's usual Undo on every check. Steps show as "n of m steps";
  * they're checked off from the To-dos screen.
  */
-const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string | undefined) => string) | undefined; across?: number }> = ({ todos, today, owner, across }) => {
+const LaneTodos: React.FC<{ todos: ToDo[]; today: string; owner: ((key: string | undefined) => string) | undefined; across?: number; style?: React.CSSProperties }> = ({ todos, today, owner, across, style }) => {
   const act = useWallListActions();
   const done = todos.filter(t => t.isCompleted).length;
   const list = useRef<HTMLDivElement>(null);
   const { fit, more } = useFittingCount(list, todos.length);
   return (
-    <section className={across ? 'ltd all' : 'ltd'} aria-label={across ? 'Household to-dos' : 'To-dos'} style={across ? ({ '--c': 'var(--faint)', '--n': across } as React.CSSProperties) : undefined}>
+    <section className={across ? 'ltd all' : 'ltd'} aria-label={across ? 'Household to-dos' : 'To-dos'} style={across ? ({ '--c': 'var(--faint)', '--n': across } as React.CSSProperties) : style}>
       <span className="sh">
         <span>{across ? 'To do · Everyone' : 'To do'}</span>
         <span>

@@ -327,7 +327,7 @@ html:has(.wall.dark) body { background: #1b1a17; }
 .wall :is(.panel, .dslot) .mrow { display: grid; grid-template-columns: 46px 1fr; column-gap: 12px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--line); width: 100%; text-align: left; }
 .wall :is(.panel, .dslot) .mrow:last-child { border-bottom: 0; }
 .wall :is(.panel, .dslot) .mrow .d { font-size: 15px; font-weight: 600; color: var(--muted); text-align: right; }
-.wall :is(.panel, .dslot) .mrow .n { font-family: var(--font-display); font-size: calc(var(--s) * 20px); font-weight: 500; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wall :is(.panel, .dslot) .mrow .n { font-family: var(--font-display); font-size: calc(var(--s) * 20px); font-weight: 500; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-bottom: 0.1em; margin-bottom: -0.1em; }
 .wall :is(.panel, .dslot) .mrow .n.none { font-family: var(--font-sans); font-size: 16px; color: var(--faint); }
 .wall .cols2 { display: grid; grid-template-columns: 1fr; gap: 0; }
 .wall .panel .row .in { background: var(--surface); }
