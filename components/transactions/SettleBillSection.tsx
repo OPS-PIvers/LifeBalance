@@ -170,7 +170,7 @@ export const SettleBillSection: React.FC<SettleBillSectionProps> = ({
               No unpaid bills found in the last/next month.
             </p>
           ) : (
-            <div className="max-h-56 space-y-1.5 overflow-y-auto">
+            <div className="max-h-56 space-y-1.5 overflow-y-auto overscroll-contain">
               {billCandidates.map(bill => (
                 <Button
                   key={bill.id}

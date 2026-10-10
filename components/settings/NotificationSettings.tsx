@@ -539,6 +539,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                   <span className="text-sm text-brand-500 dark:text-brand-400">$</span>
                   <input
                     type="number"
+                    inputMode="numeric"
                     min="0"
                     step="10"
                     value={preferences.budgetAlerts.threshold ?? 100}
@@ -614,6 +615,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                   <span className="text-sm text-brand-600 dark:text-brand-300">Remind:</span>
                   <input
                     type="number"
+                    inputMode="numeric"
                     min="1"
                     max="7"
                     value={preferences.billReminders.daysBeforeDue}

@@ -212,7 +212,7 @@ const GridCell = React.memo(function GridCell({ quadrant, items, parkedItems, on
           {countLabel}
         </span>
       </header>
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
         {items.length === 0 && parkedItems.length === 0 ? (
           <p className="px-2.5 py-3 text-xs text-brand-400 dark:text-brand-450">Nothing here</p>
         ) : (

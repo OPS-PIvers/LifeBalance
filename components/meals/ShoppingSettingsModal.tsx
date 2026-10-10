@@ -656,7 +656,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                     )}
                   </div>
 
-                  <SurfaceList className="max-h-72 overflow-y-auto">
+                  <SurfaceList className="max-h-72 overflow-y-auto overscroll-contain">
                     {groceryCatalog
                       .filter(item =>
                          !itemSearch || item.name.toLowerCase().includes(itemSearch.toLowerCase())

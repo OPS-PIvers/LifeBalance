@@ -134,7 +134,7 @@ export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({
     <div className="flex flex-col h-full">
         {/* px-4 matches the Drawer header/footer gutter so labels, fields, and
             the "Edit item" title all share one left edge. */}
-        <div className="px-4 py-5 space-y-4 flex-1 overflow-y-auto">
+        <div className="px-4 py-5 space-y-4 flex-1 overflow-y-auto overscroll-contain">
             <Input
                 label="Item name"
                 type="text"
