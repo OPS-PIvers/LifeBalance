@@ -48,14 +48,14 @@ export const BoardComing: React.FC<{ today: string; timeZone: string; people: Wa
   );
 };
 
-/** Who has to-dos due today, done / total, in roster order; unassigned ones are anyone's. */
+/** Who has to-dos due today, done / total: unassigned (anyone's) first like the lanes, then roster order. */
 function dueByPerson(due: readonly ToDo[], people: WallPeople): { key: string; done: number; total: number }[] {
   const by = new Map<string, ToDo[]>();
   for (const t of due) {
     const key = t.assignedTo ?? 'family';
     by.set(key, [...(by.get(key) ?? []), t]);
   }
-  return [...people.members.map(m => m.uid), 'family']
+  return ['family', ...people.members.map(m => m.uid)]
     .filter(k => by.has(k))
     .map(key => {
       const list = by.get(key) ?? [];
