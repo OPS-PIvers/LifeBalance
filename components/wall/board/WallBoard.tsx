@@ -353,8 +353,12 @@ function useScrollEdges(ref: React.RefObject<HTMLElement | null>): { above: bool
     };
     const observer = new ResizeObserver(measure);
     observer.observe(box);
-    const mutations = new MutationObserver(() => {
-      for (const child of box.children) observer.observe(child);
+    // Rows come and go as things are checked off; watch the new ones and let go of the removed ones.
+    const mutations = new MutationObserver(records => {
+      for (const record of records) {
+        for (const node of record.removedNodes) if (node instanceof Element) observer.unobserve(node);
+        for (const node of record.addedNodes) if (node instanceof Element) observer.observe(node);
+      }
       measure();
     });
     for (const child of box.children) observer.observe(child);
