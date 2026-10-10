@@ -741,7 +741,7 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
                   No unpaid bills found in the last/next month.
                 </p>
               ) : (
-                <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                <div className="space-y-1.5 max-h-56 overflow-y-auto overscroll-contain">
                   {billCandidates.map(bill => (
                     <Button
                       key={bill.id}

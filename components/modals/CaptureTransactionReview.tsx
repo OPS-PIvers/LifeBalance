@@ -47,7 +47,7 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
         </button>
       </div>
 
-      <div className="space-y-3 max-h-[35vh] min-h-[120px] scroll-contain-y">
+      <div className="space-y-3 max-h-[35dvh] min-h-[120px] scroll-contain-y">
         {parsedTransactions.map(tx => (
           <div
             key={tx.id}

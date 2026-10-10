@@ -247,6 +247,7 @@ const RewardManagerPanel: React.FC<RewardManagerPanelProps> = ({ kids, kidModeEn
             <Input
               label="Cost (points)"
               type="number"
+              inputMode="numeric"
               min={0}
               value={draft.cost}
               placeholder="50"
@@ -276,6 +277,7 @@ const RewardManagerPanel: React.FC<RewardManagerPanelProps> = ({ kids, kidModeEn
             <Input
               label="Allowance amount ($)"
               type="number"
+              inputMode="decimal"
               min={0}
               step="0.01"
               value={draft.allowanceDollars}

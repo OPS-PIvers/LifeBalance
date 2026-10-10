@@ -549,6 +549,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                   <Input
                     label="Count"
                     type="number"
+                    inputMode="numeric"
                     value={formCount}
                     onChange={(e) => setFormCount(e.target.value)}
                     min="1"
@@ -725,6 +726,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
             <Input
               label="Count"
               type="number"
+              inputMode="numeric"
               value={formCount}
               onChange={(e) => setFormCount(e.target.value)}
               min="1"

@@ -884,6 +884,7 @@ const BudgetCalendar: React.FC = () => {
              <Input
                label="Amount"
                type="number"
+               inputMode="decimal"
                placeholder="Amount"
                value={amount}
                onChange={e => setAmount(e.target.value)}

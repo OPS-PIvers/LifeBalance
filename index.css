@@ -5,6 +5,22 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
+  Hover only where a real pointer can hover. Tailwind v4's stock `hover:` is
+  gated on (hover: hover) alone, which some Android phones and stylus devices
+  report while having no mouse — a tapped control then keeps its hover state
+  until the next tap elsewhere. Requiring (pointer: fine) as well keeps every
+  `hover:` utility (and `group-hover:` / `peer-hover:`, which compose on it)
+  off touch screens; touch feedback is `:active`'s job (see below).
+*/
+@custom-variant hover {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      @slot;
+    }
+  }
+}
+
+/*
   Self-hosted web fonts (previously loaded from the Google Fonts CDN).
   Besley, Schibsted Grotesk, and Spline Sans Mono are all variable fonts, so a
   single woff2 per subset covers every weight via the `font-weight` range.
@@ -296,6 +312,67 @@ html.app-shell body {
   }
   ::-webkit-datetime-edit {
     padding: 0;
+  }
+}
+
+/*
+  Mobile platform baseline — the CSS that stops the app reading as "a website
+  in a browser" on a phone.
+
+  - No tap-highlight flash: iOS/Android paint a translucent gray box over any
+    tapped element with a click handler, on top of our own press states.
+  - No font inflation when a phone rotates to landscape.
+  - touch-action: manipulation on controls: the element never double-tap
+    zooms, so the browser fires `click` without waiting to see if a second
+    tap is coming. Pinch-zoom is untouched.
+  - Controls are not text: a long press on a button must not select its
+    label or pop the copy/share callout. Content (body text, inputs) stays
+    selectable — this is scoped to controls only.
+*/
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  button,
+  a[href],
+  summary,
+  label,
+  select,
+  [role='button'],
+  [role='tab'],
+  [role='switch'],
+  [role='checkbox'],
+  [role='menuitem'],
+  [role='option'] {
+    touch-action: manipulation;
+  }
+  button,
+  summary,
+  [role='button'],
+  [role='tab'],
+  [role='switch'],
+  [role='menuitem'] {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+}
+
+/*
+  Press feedback for every control that doesn't design its own. With the tap
+  highlight gone, a plain <button> whose only feedback is `hover:` would give
+  a touch user nothing at all between finger-down and the result. Native
+  iOS controls dim while held, so that is the fallback: instant on press,
+  gone on release. Anything that declares an `active:` utility (Button's
+  scale, the nav's tint, …) keeps exactly its own design and is skipped, as
+  is the wall, which owns its press states. :where() keeps this at zero
+  specificity so any utility on the element still wins.
+*/
+@layer base {
+  :where(button, a[href], summary, [role='button'], [role='tab'], [role='menuitem'], [role='option']):where(:not(:disabled, [aria-disabled='true'], [class*='active:'], .wall *)):active {
+    opacity: 0.6;
   }
 }
 
