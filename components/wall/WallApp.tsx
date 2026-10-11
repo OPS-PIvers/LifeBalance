@@ -30,6 +30,7 @@ import WallToast from './WallToast';
 import WallUpdateToast from './WallUpdateToast';
 import WallHeader from './WallHeader';
 import WallVoiceBanner from './voice/WallVoiceBanner';
+import { useMissFollowUp } from './voice/useMissFollowUp';
 import { useWallVoice, type WallVoiceFeedback, type WallVoiceMissReport } from './voice/useWallVoice';
 import WallSoundChip from './sound/WallSoundChip';
 import WallAlertCard from './alerts/WallAlertCard';
@@ -244,6 +245,10 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   useEffect(() => {
     viewRef.current = view === 'calendar' ? `calendar:${calView}` : view;
   });
+  // Held briefly so what's typed in right after (the word that was meant) rides along.
+  const writeMiss = useMissFollowUp({ shoppingList: data.shoppingList, todos: data.todos }, miss => {
+    data.actions.logVoiceMiss(miss).catch(error => console.error('[wall] voice miss log failed:', error));
+  });
   const logMiss = (m: WallVoiceMissReport) => {
     const storage = (() => {
       try {
@@ -253,9 +258,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
       }
     })();
     if (!takeMissSlot(storage, today)) return;
-    data.actions
-      .logVoiceMiss(buildVoiceMiss({ ...m, view: viewRef.current, appVersion: APP_VERSION, now: new Date() }))
-      .catch(error => console.error('[wall] voice miss log failed:', error));
+    writeMiss(buildVoiceMiss({ ...m, view: viewRef.current, appVersion: APP_VERSION, now: new Date() }));
   };
 
   // Hands-free only on a paired display (never a member's phone preview), never

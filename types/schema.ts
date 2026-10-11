@@ -2185,6 +2185,12 @@ export interface WallVoiceMiss {
   view: string;
   /** For `undo`: what the undone command did ("Added to Shopping: milk"). */
   did?: string;
+  /**
+   * For `unparsed`/`undo`/`cancel`: what was added or renamed on Shopping and
+   * To-dos in the 2 minutes after ("Added to Shopping: Windex"), i.e. what was
+   * probably meant. Absent when nothing was.
+   */
+  after?: string;
   displayId: string;
   appVersion: string;
   /** ISO time it happened. */
