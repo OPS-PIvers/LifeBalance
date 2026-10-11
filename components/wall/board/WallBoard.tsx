@@ -47,6 +47,12 @@ function countdown(ms: number): { n: string; unit: string } {
 
 const isFamily = (key: string | undefined) => !key || key === 'family';
 
+/** The dinner title's length and longest word, which its CSS sizes it by (see board.css). */
+function titleFit(name: string): React.CSSProperties {
+  const word = Math.max(...name.split(/\s+/).map(w => w.length));
+  return { '--len': name.length, '--word': word } as React.CSSProperties;
+}
+
 /**
  * Board: everything the kitchen needs on one screen, in fixed places. A
  * masthead band (clock; dinner tonight and the weather now as a matched pair
@@ -130,7 +136,7 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
           </span>
           {timeline.allDay.length > 0 && <WallUntimedLine events={timeline.allDay} people={people} />}
         </div>
-        <button type="button" className="mc dn" onClick={() => onOpenMeal(today)} style={{ '--len': (dinner?.mealName ?? 'Not planned').length } as React.CSSProperties}>
+        <button type="button" className="mc dn" onClick={() => onOpenMeal(today)} style={titleFit(dinner?.mealName ?? 'Not planned')}>
           <span className="tv">
             <Utensils className="wi" size="1em" aria-hidden="true" />
             <b>{dinner?.mealName ?? 'Not planned'}</b>

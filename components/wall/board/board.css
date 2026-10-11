@@ -36,12 +36,20 @@
 .wall .bd .mc .tv { grid-row: 2; display: inline-flex; align-items: center; gap: 12px; max-width: 100%; min-width: 0; }
 .wall .bd .mc .tv svg { flex: none; font-size: calc(var(--b) * 42px); color: var(--warm); }
 /*
- * A long dinner name shrinks to fit its column (by its length, about half an
- * em a letter), down to 30px; past that it wraps to a second line rather
- * than ending in "…" or running into the weather.
+ * A long dinner name shrinks to fit two lines of its column (by its length,
+ * about half an em a letter) and never past its longest word, from 46px down
+ * to 28px; past that it takes a third and fourth line (room the clock column
+ * already holds, so the masthead does not grow), and only then ends in "…". No
+ * padding on the clamped box: padding below the last line let the top of the
+ * hidden next line show through as a cut-off sliver.
  */
 .wall .bd .mc.dn { container-type: inline-size; }
-.wall .bd .mc.dn .tv b { font-size: max(calc(var(--b) * 30px), min(calc(var(--b) * 46px), calc((100cqw - var(--b) * 48px) * 1.9 / var(--len, 1)))); white-space: normal; text-align: left; line-height: 1.05; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; text-wrap: balance; }
+.wall .bd .mc.dn .tv b {
+  --avail: calc(100cqw - var(--b) * 48px);
+  font-size: max(calc(var(--b) * 28px), min(calc(var(--b) * 46px), calc(var(--avail) * 2.4 / var(--len, 1)), calc(var(--avail) * 1.7 / var(--word, 1))));
+  white-space: normal; text-align: left; line-height: 1.12; padding-block: 0; margin-block: 0;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; text-wrap: balance;
+}
 .wall .bd .mc.dn .tv svg { font-size: calc(var(--b) * 36px); }
 .wall .bd .mc .tv b { min-width: 0; font-family: var(--font-display); font-size: calc(var(--b) * 46px); font-weight: 500; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-block: 0.1em 0.2em; margin-block: -0.1em -0.2em; }
 .wall .bd .mc i { grid-row: 3; font-style: normal; font-size: calc(var(--b) * 23px); font-weight: 500; color: var(--fg2); white-space: nowrap; }
