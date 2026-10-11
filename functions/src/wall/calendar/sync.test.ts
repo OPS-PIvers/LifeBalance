@@ -105,7 +105,7 @@ vi.mock("./icsFetch", async (importOriginal) => ({
 
 import { FeedFetchError } from "./icsFetch";
 import { householdsWithActiveWalls, removeFeedEverywhere, syncHouseholdCalendars } from "./sync";
-import { STALE_AFTER_MS, US_HOLIDAYS_ICS_URL } from "./syncLogic";
+import { STALE_AFTER_MS } from "./syncLogic";
 
 const HID = "h1";
 const NOW = new Date("2026-10-04T17:00:00Z");
@@ -118,7 +118,6 @@ const ics = (...events: [uid: string, date: string, title: string][]) =>
     "END:VCALENDAR",
   ].join("\r\n");
 
-const HOLIDAYS = ics(["thx", "20261126", "Thanksgiving"]);
 let feedBody = ics(["a", "20261010", "Game"], ["b", "20261011", "Recital"]);
 
 const events = () =>
@@ -134,7 +133,7 @@ beforeEach(() => {
   send.mockClear();
   fetchMock.mockReset();
   feedBody = ics(["a", "20261010", "Game"], ["b", "20261011", "Recital"]);
-  fetchMock.mockImplementation(async (url: string) => ({ status: "ok", text: url === US_HOLIDAYS_ICS_URL ? HOLIDAYS : feedBody, etag: '"e1"' }));
+  fetchMock.mockImplementation(async () => ({ status: "ok", text: feedBody, etag: '"e1"' }));
   const s = fake.store;
   s.set(`households/${HID}/wallSettings/config`, { timeZone: "America/Chicago" });
   s.set(`households/${HID}/members/admin1`, { role: "admin", fcmTokens: ["tok"] });
@@ -149,10 +148,23 @@ describe("syncHouseholdCalendars", () => {
     const summary = await syncHouseholdCalendars(db, HID, { now: NOW });
     expect(summary.feeds.map((f) => [f.feedId, f.ok, f.eventCount])).toEqual([
       ["f1", true, 2],
-      ["holidays", true, 1],
+      ["holidays", true, 10],
     ]);
     expect(titles("feed")).toEqual(["Game", "Recital"]);
-    expect(titles("holiday")).toEqual(["Thanksgiving"]);
+    // Computed, never fetched: Sep 1 2026 → Jan 31 2027.
+    expect(titles("holiday")).toEqual([
+      "Labor Day",
+      "Indigenous Peoples' Day",
+      "Halloween",
+      "Veterans Day",
+      "Thanksgiving",
+      "Christmas Eve",
+      "Christmas Day",
+      "New Year's Eve",
+      "New Year's Day",
+      "Martin Luther King Jr. Day",
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     // Sep 1 2026 → Jan 31 2027: five rent occurrences.
     expect(titles("bill")).toEqual(["Rent", "Rent", "Rent", "Rent", "Rent"]);
     expect(events().find((e) => e.title === "Game")).toMatchObject({ ownerKey: "admin1", feedId: "f1", date: "2026-10-10" });
@@ -168,7 +180,7 @@ describe("syncHouseholdCalendars", () => {
     fake.writes.length = 0;
     await syncHouseholdCalendars(db, HID, { now: NOW });
     expect(fake.writes.filter((p) => p.includes("/wallEvents/"))).toEqual([]);
-    expect(fetchMock).toHaveBeenLastCalledWith(US_HOLIDAYS_ICS_URL, { etag: '"e1"' });
+    expect(fetchMock).toHaveBeenLastCalledWith("https://cal.example.com/p.ics", { etag: '"e1"' });
   });
 
   it("applies a changed feed as a diff", async () => {
@@ -200,7 +212,7 @@ describe("syncHouseholdCalendars", () => {
     const dayLater = new Date(NOW.getTime() + STALE_AFTER_MS + 60_000);
     await syncHouseholdCalendars(db, HID, { now: dayLater });
     expect(feed("f1").stale).toBe(true);
-    expect(send).toHaveBeenCalledTimes(2); // f1 and the holidays feed, to the one admin
+    expect(send).toHaveBeenCalledTimes(1); // f1 only: the computed holidays can't fail
     expect(send.mock.calls[0]).toEqual([
       ["tok"],
       expect.any(String),
@@ -210,7 +222,7 @@ describe("syncHouseholdCalendars", () => {
       { householdId: HID, recipientUid: "admin1", type: "calendar_feed_stale" },
     ]);
     await syncHouseholdCalendars(db, HID, { now: new Date(dayLater.getTime() + 60_000) });
-    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledTimes(1);
 
     fetchMock.mockResolvedValue({ status: "ok", text: feedBody });
     await syncHouseholdCalendars(db, HID, { now: new Date(dayLater.getTime() + 120_000) });
@@ -269,7 +281,20 @@ describe("removeFeedEverywhere", () => {
     await syncHouseholdCalendars(db, HID, { now: NOW });
     await removeFeedEverywhere(db, HID, "f1");
     expect(titles("feed")).toEqual([]);
-    expect(titles("holiday")).toEqual(["Thanksgiving"]);
+    // Computed, never fetched: Sep 1 2026 → Jan 31 2027.
+    expect(titles("holiday")).toEqual([
+      "Labor Day",
+      "Indigenous Peoples' Day",
+      "Halloween",
+      "Veterans Day",
+      "Thanksgiving",
+      "Christmas Eve",
+      "Christmas Day",
+      "New Year's Eve",
+      "New Year's Day",
+      "Martin Luther King Jr. Day",
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fake.store.has(`households/${HID}/calendarFeeds/f1`)).toBe(false);
     expect(fake.store.has(`households/${HID}/calendarFeedSecrets/f1`)).toBe(false);
   });

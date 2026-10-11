@@ -15,10 +15,10 @@ import { createHash } from "crypto";
 import { sendNotificationToUser } from "../../shared/notifications";
 import { FeedFetchError, fetchIcs, type IcsFetchResult } from "./icsFetch";
 import { IcsParseError, expandIcs, type WallEventRow } from "./icsParse";
+import { usHolidaysIcs } from "./usHolidays";
 import {
   BILLS_INDEX_ID,
   HOLIDAYS_FEED_ID,
-  US_HOLIDAYS_ICS_URL,
   diffEvents,
   parseEventIndex,
   projectBillRows,
@@ -157,18 +157,20 @@ async function syncFeed(
   const nowTs = admin.firestore.Timestamp.fromDate(ctx.now);
 
   try {
-    if (typeof secret.url !== "string") throw new FeedFetchError("This calendar's link is missing. Remove it and add it again.");
-    const result =
-      prefetched ??
-      (await fetchIcs(
-        secret.url,
-        sameKey
-          ? {
-              ...(typeof secret.etag === "string" ? { etag: secret.etag } : {}),
-              ...(typeof secret.lastModified === "string" ? { lastModified: secret.lastModified } : {}),
-            }
-          : {}
-      ));
+    const holidays = feed.kind === "holidays";
+    const url = typeof secret.url === "string" ? secret.url : null;
+    if (!holidays && url === null) throw new FeedFetchError("This calendar's link is missing. Remove it and add it again.");
+    const validators = sameKey
+      ? {
+          ...(typeof secret.etag === "string" ? { etag: secret.etag } : {}),
+          ...(typeof secret.lastModified === "string" ? { lastModified: secret.lastModified } : {}),
+        }
+      : {};
+    // The holidays are computed, never fetched (see usHolidays.ts).
+    const result: IcsFetchResult =
+      holidays || url === null
+        ? { status: "ok", text: usHolidaysIcs(ctx.window) }
+        : prefetched ?? (await fetchIcs(url, validators));
 
     let eventCount = typeof feed.eventCount === "number" ? feed.eventCount : 0;
     let truncated = feed.truncated === true;
@@ -179,7 +181,7 @@ async function syncFeed(
         const expanded = expandIcs(result.text, {
           feedId,
           ownerKey,
-          source: feed.kind === "holidays" ? "holiday" : "feed",
+          source: holidays ? "holiday" : "feed",
           timeZone: ctx.timeZone,
           windowStart: ctx.window.start,
           windowEnd: ctx.window.end,
@@ -240,7 +242,6 @@ async function reconcileHolidays(ctx: HouseholdContext, enabled: boolean): Promi
       eventCount: 0,
       stale: false,
     });
-    batch.set(ctx.db.doc(`households/${ctx.hid}/calendarFeedSecrets/${HOLIDAYS_FEED_ID}`), { url: US_HOLIDAYS_ICS_URL });
     await batch.commit();
   } else if (!enabled && existing.exists) {
     await removeFeedEverywhere(ctx.db, ctx.hid, HOLIDAYS_FEED_ID);
