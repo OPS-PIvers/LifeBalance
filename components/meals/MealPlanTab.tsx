@@ -9,7 +9,7 @@ import { decideMealCookedHabitToggle } from '@/utils/mealCookedHabit';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { calculateWeeklyMealCost } from '@/utils/mealCost';
 import toast from 'react-hot-toast';
-import { format, startOfWeek, addDays, parseISO, differenceInCalendarDays } from 'date-fns';
+import { format, startOfWeek, addDays, parseISO, differenceInCalendarDays, isSameMonth } from 'date-fns';
 import { IngredientSelectorModal } from './IngredientSelectorModal';
 import { CookbookModal } from './CookbookModal';
 import { RecipeModal } from './RecipeModal';
@@ -32,9 +32,8 @@ import { MealPlanPhotoImportDrawer } from '@/components/modals/MealPlanPhotoImpo
 import { haptic } from '@/utils/haptics';
 import { useDeepLinkHighlight } from '@/hooks/useDeepLinkHighlight';
 import clsx from 'clsx';
-import { groupMealPlanByDay } from '@/utils/mealPlanFormatter';
-import { groupShoppingListByStore } from '@/utils/shoppingListFormatter';
-import { buildPrintWeekHtml } from '@/utils/printWeekHtml';
+import { buildPrintWeekHtml, fitPrintSheet } from '@/utils/printWeekHtml';
+import { buildPrintWeek } from '@/utils/printWeekModel';
 import { initialStripWindow, extendStripWindowTo, type StripWindow } from '@/utils/dateStripWindow';
 
 // Scrollable date-strip range, in weeks either side of the current week. The
@@ -453,21 +452,22 @@ const MealPlanTab: React.FC = () => {
 
   const handlePrintWeek = () => {
     const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-    const weekEndStr = format(addDays(weekStart, 6), 'yyyy-MM-dd');
+    const weekEnd = addDays(weekStart, 6);
+    const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
 
-    const dayLabels = new Map(
-      Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)).map(date => [
-        format(date, 'yyyy-MM-dd'),
-        format(date, 'EEEE, MMM d'),
-      ])
-    );
+    const weekDates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)).map(date => ({
+      date: format(date, 'yyyy-MM-dd'),
+      weekday: format(date, 'EEE'),
+      dayOfMonth: format(date, 'd'),
+    }));
 
     const weekPlanItems = mealPlan.filter(item => item.date >= weekStartStr && item.date <= weekEndStr);
-    const mealDays = groupMealPlanByDay(weekPlanItems, mealsById, dayLabels);
-    const shoppingStores = groupShoppingListByStore(shoppingList.filter(item => !item.isPurchased));
-    const weekRangeLabel = `${format(weekStart, 'MMM d')} – ${format(addDays(weekStart, 6), 'MMM d, yyyy')}`;
+    const week = buildPrintWeek(weekDates, weekPlanItems, mealsById, shoppingList);
+    const weekRangeLabel = isSameMonth(weekStart, weekEnd)
+      ? `${format(weekStart, 'MMM d')} – ${format(weekEnd, 'd, yyyy')}`
+      : `${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d, yyyy')}`;
 
-    const html = buildPrintWeekHtml(weekRangeLabel, mealDays, shoppingStores);
+    const html = buildPrintWeekHtml(weekRangeLabel, week);
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -478,8 +478,14 @@ const MealPlanTab: React.FC = () => {
     printWindow.document.write(html);
     printWindow.document.close();
     printWindow.focus();
-    // Give the popup's fonts/layout a moment to settle before invoking print.
-    printWindow.onload = () => printWindow.print();
+    // Wait for the popup's fonts (they set the line heights), shrink a busy
+    // week onto its one Letter page, then print.
+    printWindow.onload = () => {
+      void printWindow.document.fonts.ready.then(() => {
+        fitPrintSheet(printWindow.document);
+        printWindow.print();
+      });
+    };
   };
 
   const handleCopyLastWeek = () => {
