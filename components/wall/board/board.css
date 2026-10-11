@@ -119,14 +119,14 @@
 .wall .bd .ltk .tx small { font-size: calc(var(--b) * 17px); font-weight: 600; color: var(--muted); }
 .wall .bd .ltk .tx small.late { color: var(--warm); }
 /*
- * A to-do's steps, under it: a smaller rounded box centered under the to-do's
- * circle and the step's text on the to-do's text edge, so a narrow lane loses
- * no width to an indent; the smaller box, smaller lighter text and tight rows
- * say they belong to the to-do above. A to-do with its steps showing gives up
- * most of its bottom padding so the steps read as its own.
+ * A to-do's steps, under it and indented a little: a smaller rounded box
+ * starting under the right half of the to-do's circle, so the steps read as
+ * the to-do's own without costing a narrow lane much width; smaller, lighter
+ * text and tight rows say the same. A to-do with its steps showing gives up
+ * most of its bottom padding so the steps sit close under it.
  */
 .wall .bd .ltk.has { padding-bottom: 4px; }
-.wall .bd .ltk.st { align-items: flex-start; min-height: 46px; padding: 9px 0 9px calc(var(--b) * 4px); gap: calc(var(--b) * 16px); }
+.wall .bd .ltk.st { align-items: flex-start; min-height: 46px; padding: 9px 0 9px calc(var(--b) * 20px); gap: calc(var(--b) * 12px); }
 .wall .bd .ltk.st .bx { width: calc(var(--b) * 26px); height: calc(var(--b) * 26px); margin-top: -1px; border-width: 2px; border-radius: 8px; border-color: color-mix(in srgb, var(--c) 75%, transparent); font-size: calc(var(--b) * 17px); }
 .wall .bd .ltk.st .tx { display: block; padding-top: 1px; font-size: calc(var(--b) * 20px); line-height: 1.25; text-wrap: pretty; color: var(--fg2); }
 .wall .bd .ltl .adn { padding: 10px 0; font-size: calc(var(--b) * 21px); color: var(--faint); }
