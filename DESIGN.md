@@ -367,7 +367,7 @@ These are the "generic AI slop" markers the redesign removed:
 The wall is a separate surface with its own rules: a 1366×1024 iPad on the wall, read from across the kitchen. **The October 2026 redesign review `docs/plans/wall-redesign-review.html` is its source of truth** (the reasons are in docs/DECISIONS.md "Wall redesign"), and everything above applies only where this section doesn't override it.
 
 - **Styles live in `components/wall/wall.css`**, scoped under `.wall` and lazy-loaded with the wall. They're plain CSS, not Tailwind utilities, because the sizes are fixed for one device and come straight from the prototype. Colors come from the app tokens (`--color-brand-*`, `accent-*`, `warm-*`) wherever the prototype matches one.
-- **Theme and size come from `wallSettings`, not the device:** `.wall.dark` and `.wall.large` (`--s: 1.15`, which multiplies body text). Don't make the wall follow `html.dark`. A member previewing `#/wall` on a phone must not have their app theme changed.
+- **Theme and size come from `wallSettings`, not the device:** `.wall.dark` and `.wall.large` (`--s: 1.15`, which multiplies body text). The Board writes its sizes as they render on Large (`--b: calc(var(--s) / 1.15)` in `board/board.css`), so every Board text size moves with the setting and Normal is the same layout about 13% smaller. Don't make the wall follow `html.dark`. A member previewing `#/wall` on a phone must not have their app theme changed.
 - **Scale:**
   - one five-step type scale on `.wall`: `--t-hero` (the clock, 132 px; 92 px in portrait), `--t-display` (46 px, the Next title), `--t-title` (28 px, section heads), `--t-item` (22 px, rows), `--t-meta` (16 px). Use them, not one-off sizes;
   - touch targets are at least 56 px;
