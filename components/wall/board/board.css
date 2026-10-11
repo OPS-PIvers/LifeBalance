@@ -62,18 +62,21 @@
  * padding is under the gap to a third line's ascenders, so it never shows one.
  */
 
-/* Next up: the one bright thing on the wall. Title left, the countdown big on the right. */
+/*
+ * Next up: the one bright thing on the wall. Title left, the countdown on the
+ * right. The card's height is its text's: the figure is sized to sit inside
+ * the label-title-time stack (about 1.7x the title, its unit in the label's
+ * style), never to set the card's height on its own.
+ */
 .wall .bd .bdn { grid-column: 1; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto auto 1fr; column-gap: 24px; row-gap: 8px; align-content: start; padding: 24px 30px 24px 32px; border-radius: 20px; background: var(--hero); color: var(--ink); text-align: left; }
 .wall .bd .bdn > :not(.cd) { grid-column: 1; }
 .wall .bd .bdn .k { font-size: calc(var(--b) * 17px); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.78; }
 .wall .bd .bdn .t { font-family: var(--font-display); font-size: calc(var(--b) * 44px); font-weight: 500; line-height: 1.12; letter-spacing: -0.015em; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; padding-bottom: 0.16em; margin-bottom: -0.08em; }
 .wall .bd .bdn .w { font-size: calc(var(--b) * 23px); opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.wall .bd .bdn .go { justify-self: start; align-self: end; margin-top: 10px; display: inline-flex; align-items: center; gap: 10px; height: 50px; padding: 0 20px; border-radius: 25px; background: var(--ink); color: var(--hero); font-size: 19px; font-weight: 700; }
-.wall .bd .bdn .go svg { font-size: 24px; }
-.wall .bd .bdn .go .dm { font-weight: 500; opacity: 0.75; }
 .wall .bd .bdn .cd { grid-column: 2; grid-row: 1 / -1; align-self: center; display: grid; justify-items: center; line-height: 1; font-variant-numeric: tabular-nums; }
-.wall .bd .bdn .cd b { font-family: var(--font-display); font-size: 128px; font-weight: 600; letter-spacing: -0.04em; line-height: 0.85; }
-.wall .bd .bdn .cd small { margin-top: 10px; font-size: calc(var(--b) * 20px); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.wall .bd .bdn .cd b { font-family: var(--font-display); font-size: calc(var(--b) * 76px); font-weight: 600; letter-spacing: -0.04em; line-height: 0.85; }
+.wall .bd .bdn .cd small { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: calc(var(--b) * 17px); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.wall .bd .bdn .cd small svg { font-size: 1.5em; }
 .wall .bd .bdn.quiet { background: var(--surface); color: var(--fg); }
 
 /*

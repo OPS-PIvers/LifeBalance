@@ -68,6 +68,10 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
   const leadEnd = lead?.event.end ? Date.parse(lead.event.end) : leadStart + DEFAULT_EVENT_MS;
   const drive = lead ? travel.find(t => t.id === lead.event.id) : undefined;
   const leaveMs = drive?.minutes != null && Number.isFinite(leadStart) ? leadStart - drive.minutes * 60000 - now.getTime() : NaN;
+  // With a drive ahead, when to leave is the number that matters, so it takes the countdown's place.
+  // At leave time the leave alert says so, and the number goes back to counting down to the event.
+  const driveAhead = !focus.leadIsNow && Number.isFinite(leaveMs);
+  const leaving = driveAhead && leaveMs > 0;
 
   const due = useMemo(() => dueTodayChecklist(todos, today, timeZone), [todos, today, timeZone]);
   const lanes = useMemo(() => boardLanes(timeline.rows, due, people.members.map(m => m.uid)), [timeline.rows, due, people.members]);
@@ -172,21 +176,18 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
             {lead.time}
             {lead.event.end ? `–${eventTimeText(lead.event.end, timeZone)}` : ''}
             {lead.event.location ? ` · ${lead.event.location}` : ''}
+            {driveAhead && drive?.minutes != null ? ` · ${drive.minutes} min drive` : ''}
           </span>
-          {Number.isFinite(leaveMs) && (
-            <span className={leaveMs <= 0 ? 'go now' : 'go'}>
-              <Car className="wi" size="1em" aria-hidden="true" />
-              {leaveMs <= 0 ? 'Time to leave' : `Leave in ${Math.ceil(leaveMs / 60000)} min`}
-              {drive?.minutes != null ? <span className="dm">· {drive.minutes} min drive</span> : null}
-            </span>
-          )}
-          <span className="cd" aria-hidden="true">
+          <span className="cd" aria-hidden={leaving ? undefined : true}>
             {(() => {
-              const c = countdown(focus.leadIsNow && Number.isFinite(leadEnd) ? leadEnd - now.getTime() : leadStart - now.getTime());
+              const c = countdown(leaving ? leaveMs : focus.leadIsNow && Number.isFinite(leadEnd) ? leadEnd - now.getTime() : leadStart - now.getTime());
               return (
                 <>
                   <b>{c.n}</b>
-                  <small>{focus.leadIsNow ? `${c.unit} left` : c.unit}</small>
+                  <small>
+                    {leaving && <Car className="wi" size="1em" aria-hidden="true" />}
+                    {leaving ? `${c.unit} to leave` : focus.leadIsNow ? `${c.unit} left` : c.unit}
+                  </small>
                 </>
               );
             })()}
