@@ -13,13 +13,11 @@ const emptyDay = (weekday: string, dayOfMonth: string): PrintDay => ({
 const week = (overrides: Partial<PrintWeek> = {}): PrintWeek => ({
   days: [emptyDay('Mon', '5'), emptyDay('Tue', '6')],
   shopping: [],
-  mealCount: 0,
-  toBuyCount: 0,
   ...overrides,
 });
 
 describe('buildPrintWeekHtml', () => {
-  it('renders meals with to-buy checkboxes, an on-hand line and escaped content', () => {
+  it('renders a Buy line, a Have line and escaped content', () => {
     const html = buildPrintWeekHtml(
       'Oct 5 – 11, 2026',
       week({
@@ -30,66 +28,41 @@ describe('buildPrintWeekHtml', () => {
               {
                 typeLabel: 'Dinner',
                 mealName: 'Mac & Cheese',
-                hasIngredients: true,
                 toBuy: [{ name: 'Cheddar', quantity: '2 cups' }],
                 onHand: [{ name: 'Macaroni' }, { name: '<Butter>' }],
               },
             ],
           },
         ],
-        shopping: [
-          {
-            storeLabel: 'TARGET',
-            categories: [{ display: 'Dairy', items: [{ name: 'Cheddar', quantity: '2 cups', forDays: ['Mon'] }] }],
-          },
-        ],
-        mealCount: 1,
-        toBuyCount: 1,
+        shopping: [{ storeLabel: 'TARGET', items: [{ name: 'Cheddar', quantity: '2 cups' }] }],
       })
     );
 
     expect(html).toContain('<!doctype html>');
     expect(html).toContain('size: letter portrait');
     expect(html).toContain('Mac &amp; Cheese');
-    expect(html).toContain('1 to buy');
-    expect(html).toContain('Macaroni, &lt;Butter&gt;');
+    expect(html).toContain('<dt>Buy</dt><dd class="buy">Cheddar</dd>');
+    expect(html).toContain('<dt>Have</dt><dd>Macaroni, &lt;Butter&gt;</dd>');
     expect(html).toContain('TARGET');
-    expect(html).toContain('<span class="for">Mon</span>');
-    expect(html).toContain('1 meal · 1 item to buy');
+    expect(html).toContain('<span class="qty">2 cups</span>');
     // A week of only dinners doesn't repeat the type label.
     expect(html).not.toContain('class="meal-type"');
   });
 
-  it('collapses an item needed on many days to a count', () => {
-    const html = buildPrintWeekHtml(
-      'Oct 5 – 11, 2026',
-      week({
-        shopping: [
-          {
-            storeLabel: 'OTHER',
-            categories: [{ display: 'Dairy', items: [{ name: 'Eggs', forDays: ['Mon', 'Tue', 'Wed', 'Thu'] }] }],
-          },
-        ],
-      })
-    );
-    expect(html).toContain('<span class="for">4 days</span>');
-  });
-
-  it('marks a meal whose ingredients are all on hand', () => {
+  it('labels meal types when the week mixes them, and omits an empty Buy line', () => {
     const html = buildPrintWeekHtml(
       'Oct 5 – 11, 2026',
       week({
         days: [
           {
             ...emptyDay('Mon', '5'),
-            meals: [{ typeLabel: 'Lunch', mealName: 'Salad', hasIngredients: true, toBuy: [], onHand: [{ name: 'Lettuce' }] }],
+            meals: [{ typeLabel: 'Lunch', mealName: 'Salad', toBuy: [], onHand: [{ name: 'Lettuce' }] }],
           },
         ],
-        mealCount: 1,
       })
     );
-    expect(html).toContain('All on hand');
-    expect(html).toContain('<p class="meal-type">Lunch</p>');
+    expect(html).toContain('<span class="meal-type">Lunch</span>');
+    expect(html).not.toContain('<dt>Buy</dt>');
   });
 
   it('renders a legacy numeric quantity without throwing', () => {
@@ -99,15 +72,14 @@ describe('buildPrintWeekHtml', () => {
     const html = buildPrintWeekHtml(
       'Oct 5 – 11, 2026',
       week({
-        shopping: [{ storeLabel: 'OTHER', categories: [{ display: 'Dairy', items: [{ name: 'Milk', quantity: 2, forDays: [] }] }] }],
+        shopping: [{ storeLabel: 'OTHER', items: [{ name: 'Milk', quantity: 2 }] }],
       })
     );
     expect(html).toContain('<span class="qty">2</span>');
   });
 
-  it('keeps empty days as write-in rows and shows empty-state copy', () => {
+  it('keeps empty days as rows and shows empty-state copy', () => {
     const html = buildPrintWeekHtml('Oct 5 – 11, 2026', week());
-    expect(html).toContain('No meals planned yet');
     expect(html).toContain('Nothing on the list.');
     expect(html.match(/class="day empty-day"/g)).toHaveLength(2);
   });

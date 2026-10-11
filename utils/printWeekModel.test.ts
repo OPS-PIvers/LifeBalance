@@ -46,7 +46,6 @@ describe('buildPrintWeek', () => {
     const tacos = week.days[0]?.meals[0];
     expect(tacos?.toBuy.map(i => i.name)).toEqual(['Ground beef', 'Salsa']);
     expect(tacos?.onHand.map(i => i.name)).toEqual(['Tortillas', 'Cheese']);
-    expect(tacos?.hasIngredients).toBe(true);
   });
 
   it('keeps every day of the week, empty ones included, and orders meal types', () => {
@@ -59,30 +58,23 @@ describe('buildPrintWeek', () => {
     expect(week.days.map(d => d.weekday)).toEqual(['Mon', 'Tue', 'Wed']);
     expect(week.days[0]?.meals).toEqual([]);
     expect(week.days[1]?.meals.map(m => m.mealName)).toEqual(['Oatmeal', 'Pizza night']);
-    expect(week.days[1]?.meals[1]?.hasIngredients).toBe(false);
-    expect(week.mealCount).toBe(2);
+    expect(week.days[1]?.meals[1]?.toBuy).toEqual([]);
   });
 
-  it('tags shopping items with the days whose meals need them, and drops purchased rows', () => {
-    const mealsById = new Map([
-      ['m1', meal('m1', 'Tacos', ['Salsa'])],
-      ['m2', meal('m2', 'Nachos', ['Salsa', 'salsa'])],
-    ]);
+  it('lists only unpurchased items, flattened in category order per store', () => {
+    const mealsById = new Map([['m1', meal('m1', 'Nachos', ['Salsa', 'salsa'])]]);
     const week = buildPrintWeek(
       weekDates,
-      [plan('p1', '2026-10-05', 'm1', 'Tacos'), plan('p2', '2026-10-07', 'm2', 'Nachos')],
+      [plan('p1', '2026-10-07', 'm1', 'Nachos')],
       mealsById,
       [item('Salsa'), item('Windex', false, { category: 'Household' }), item('Milk', true)]
     );
 
     // Duplicate ingredient within one meal is listed once.
     expect(week.days[2]?.meals[0]?.toBuy).toHaveLength(1);
-    const items = week.shopping.flatMap(s => s.categories.flatMap(c => c.items));
-    expect(items.map(i => [i.name, i.forDays])).toEqual([
-      ['Windex', []],
-      ['Salsa', ['Mon', 'Wed']],
+    expect(week.shopping).toEqual([
+      { storeLabel: 'OTHER', items: [{ name: 'Windex', quantity: undefined }, { name: 'Salsa', quantity: undefined }] },
     ]);
-    expect(week.toBuyCount).toBe(2);
   });
 
   it('prefers the linked recipe name over the plan snapshot', () => {

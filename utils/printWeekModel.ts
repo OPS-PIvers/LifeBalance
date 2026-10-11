@@ -20,7 +20,7 @@ const MEAL_TYPE_LABEL: Record<MealPlanItem['type'], string> = {
 export interface PrintWeekDate {
   /** yyyy-MM-dd */
   date: string;
-  /** Short weekday, e.g. "Mon" — also used to tag shopping items. */
+  /** Short weekday, e.g. "Mon". */
   weekday: string;
   /** Day of month, e.g. "5". */
   dayOfMonth: string;
@@ -29,8 +29,6 @@ export interface PrintWeekDate {
 export interface PrintMeal {
   typeLabel: string;
   mealName: string;
-  /** True when the plan item links to a saved recipe that lists ingredients. */
-  hasIngredients: boolean;
   /** Ingredients still on the (unpurchased) shopping list. */
   toBuy: MealIngredient[];
   /** Ingredients not on the unpurchased list — already in the house, or bought. */
@@ -41,23 +39,15 @@ export interface PrintDay extends PrintWeekDate {
   meals: PrintMeal[];
 }
 
-export interface PrintShoppingItem {
-  name: string;
-  quantity?: string | number;
-  /** Weekdays whose planned meals call for this item, in week order. */
-  forDays: string[];
-}
-
 export interface PrintShoppingStore {
   storeLabel: string;
-  categories: { display: string; items: PrintShoppingItem[] }[];
+  /** Category-sorted, so an aisle's items sit together without a subheading. */
+  items: { name: string; quantity?: string | number }[];
 }
 
 export interface PrintWeek {
   days: PrintDay[];
   shopping: PrintShoppingStore[];
-  mealCount: number;
-  toBuyCount: number;
 }
 
 /**
@@ -78,7 +68,6 @@ export const buildPrintWeek = (
 ): PrintWeek => {
   const unpurchased = shoppingList.filter(item => !item.isPurchased);
   const onListKeys = new Set(unpurchased.map(item => normalizeToKey(item.name)));
-  const daysByKey = new Map<string, string[]>();
 
   const days = weekDates.map(weekDate => {
     const meals = planItems
@@ -93,42 +82,19 @@ export const buildPrintWeek = (
           const key = normalizeToKey(ingredient.name);
           if (!key || seen.has(key)) return;
           seen.add(key);
-          if (onListKeys.has(key)) {
-            toBuy.push(ingredient);
-            const forDays = daysByKey.get(key) ?? [];
-            if (!forDays.includes(weekDate.weekday)) forDays.push(weekDate.weekday);
-            daysByKey.set(key, forDays);
-          } else {
-            onHand.push(ingredient);
-          }
+          (onListKeys.has(key) ? toBuy : onHand).push(ingredient);
         });
-        return {
-          typeLabel: MEAL_TYPE_LABEL[item.type],
-          mealName: meal?.name || item.mealName,
-          hasIngredients: seen.size > 0,
-          toBuy,
-          onHand,
-        };
+        return { typeLabel: MEAL_TYPE_LABEL[item.type], mealName: meal?.name || item.mealName, toBuy, onHand };
       });
     return { ...weekDate, meals };
   });
 
   const shopping = groupShoppingListByStore(unpurchased).map(store => ({
     storeLabel: store.storeLabel,
-    categories: store.categories.map(category => ({
-      display: category.display,
-      items: category.items.map(item => ({
-        name: item.name,
-        quantity: item.quantity,
-        forDays: daysByKey.get(normalizeToKey(item.name)) ?? [],
-      })),
-    })),
+    items: store.categories.flatMap(category =>
+      category.items.map(item => ({ name: item.name, quantity: item.quantity }))
+    ),
   }));
 
-  return {
-    days,
-    shopping,
-    mealCount: days.reduce((sum, day) => sum + day.meals.length, 0),
-    toBuyCount: unpurchased.length,
-  };
+  return { days, shopping };
 };
