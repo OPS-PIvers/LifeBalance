@@ -6,6 +6,8 @@
  */
 .wall .bd {
   --k: var(--s);
+  /* Board sizes are written as they render on Large (the setting the wall runs); Normal is 1/1.15 of them. */
+  --b: calc(var(--s) / 1.15);
   /* Next up / Now: the light brand green, dark ink on it. */
   --hero: var(--color-accent-200);
   --ink: #12201a;
@@ -25,26 +27,33 @@
  * matched pair of centered columns between rules (icon + value, one plain line
  * under each, no headers); the rest of the day's weather on the right.
  */
-.wall .bd .bdm { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.wall .bd .bdm { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: end; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
 .wall .bd .bdm.nowx { grid-template-columns: auto minmax(0, 1fr); }
 .wall .bd .bdt { display: grid; gap: 12px; justify-items: start; padding-right: 40px; }
 .wall .bd .bdt .clock { font-size: 120px; }
-.wall .bd .bdt .dd { font-size: 28px; }
-.wall .bd .mc { align-self: stretch; display: grid; grid-template-rows: 1fr auto auto 1fr; justify-items: center; row-gap: 8px; min-width: 0; padding: 4px 32px 20px; margin: -4px 0 -20px; border-left: 1px solid var(--line-strong); text-align: center; }
-.wall .bd .mc .tv { grid-row: 2; display: inline-flex; align-items: center; gap: 12px; max-width: 100%; }
-.wall .bd .mc .tv svg { flex: none; font-size: 40px; color: var(--warm); }
-.wall .bd .mc.dn .tv svg { font-size: 34px; }
-.wall .bd .mc .tv b { font-family: var(--font-display); font-size: 44px; font-weight: 500; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-block: 0.1em 0.2em; margin-block: -0.1em -0.2em; }
-.wall .bd .mc i { grid-row: 3; font-style: normal; font-size: 21px; font-weight: 500; color: var(--fg2); white-space: nowrap; }
+.wall .bd .bdt .dd { font-size: calc(var(--b) * 30px); }
+.wall .bd .mc { align-self: stretch; display: grid; grid-template-rows: 1fr auto auto 1fr; justify-items: center; grid-template-columns: minmax(0, 1fr); row-gap: 8px; min-width: 0; padding: 4px 32px 20px; margin: -4px 0 -20px; border-left: 1px solid var(--line-strong); text-align: center; }
+.wall .bd .mc .tv { grid-row: 2; display: inline-flex; align-items: center; gap: 12px; max-width: 100%; min-width: 0; }
+.wall .bd .mc .tv svg { flex: none; font-size: calc(var(--b) * 42px); color: var(--warm); }
+/*
+ * A long dinner name shrinks to fit its column (by its length, about half an
+ * em a letter), down to 30px; past that it wraps to a second line rather
+ * than ending in "…" or running into the weather.
+ */
+.wall .bd .mc.dn { container-type: inline-size; }
+.wall .bd .mc.dn .tv b { font-size: max(calc(var(--b) * 30px), min(calc(var(--b) * 46px), calc((100cqw - var(--b) * 48px) * 1.9 / var(--len, 1)))); white-space: normal; text-align: left; line-height: 1.05; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; text-wrap: balance; }
+.wall .bd .mc.dn .tv svg { font-size: calc(var(--b) * 36px); }
+.wall .bd .mc .tv b { min-width: 0; font-family: var(--font-display); font-size: calc(var(--b) * 46px); font-weight: 500; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-block: 0.1em 0.2em; margin-block: -0.1em -0.2em; }
+.wall .bd .mc i { grid-row: 3; font-style: normal; font-size: calc(var(--b) * 23px); font-weight: 500; color: var(--fg2); white-space: nowrap; }
 .wall .bd .mc.wn { border-right: 1px solid var(--line-strong); font-variant-numeric: tabular-nums; }
 .wall .bd .bdw { align-self: center; display: grid; justify-items: end; row-gap: 10px; padding: 6px 0 6px 28px; color: var(--fg2); font-variant-numeric: tabular-nums; }
 .wall .bd .bdw .strip { display: flex; }
-.wall .bd .bdw .wb { display: grid; justify-items: center; gap: 6px; width: 88px; }
-.wall .bd .bdw .wb small { font-size: 15px; font-weight: 600; color: var(--muted); }
-.wall .bd .bdw .wb svg { font-size: 30px; color: var(--warm); }
+.wall .bd .bdw .wb { display: grid; justify-items: center; gap: 8px; width: calc(var(--b) * 106px); }
+.wall .bd .bdw .wb small { font-size: calc(var(--b) * 18px); font-weight: 600; color: var(--muted); }
+.wall .bd .bdw .wb svg { font-size: calc(var(--b) * 36px); color: var(--warm); }
 .wall .bd .bdw .wb svg.r, .wall .bd .bdw .wb.r b { color: var(--rain); }
-.wall .bd .bdw .wb b { font-size: 22px; font-weight: 600; color: var(--fg); }
-.wall .bd .bdw em { font-style: normal; font-size: 18px; font-weight: 600; color: var(--rain); }
+.wall .bd .bdw .wb b { font-size: calc(var(--b) * 27px); font-weight: 600; color: var(--fg); }
+.wall .bd .bdw em { font-style: normal; font-size: calc(var(--b) * 21px); font-weight: 600; color: var(--rain); }
 
 /*
  * Besley's descenders reach about 0.2em below a tight line box, so a display
@@ -56,15 +65,15 @@
 /* Next up: the one bright thing on the wall. Title left, the countdown big on the right. */
 .wall .bd .bdn { grid-column: 1; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto auto 1fr; column-gap: 24px; row-gap: 8px; align-content: start; padding: 24px 30px 24px 32px; border-radius: 20px; background: var(--hero); color: var(--ink); text-align: left; }
 .wall .bd .bdn > :not(.cd) { grid-column: 1; }
-.wall .bd .bdn .k { font-size: 16px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.78; }
-.wall .bd .bdn .t { font-family: var(--font-display); font-size: var(--t-display); font-weight: 500; line-height: 1.12; letter-spacing: -0.015em; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; padding-bottom: 0.16em; margin-bottom: -0.08em; }
-.wall .bd .bdn .w { font-size: 21px; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wall .bd .bdn .k { font-size: calc(var(--b) * 17px); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.78; }
+.wall .bd .bdn .t { font-family: var(--font-display); font-size: calc(var(--b) * 44px); font-weight: 500; line-height: 1.12; letter-spacing: -0.015em; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; padding-bottom: 0.16em; margin-bottom: -0.08em; }
+.wall .bd .bdn .w { font-size: calc(var(--b) * 23px); opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wall .bd .bdn .go { justify-self: start; align-self: end; margin-top: 10px; display: inline-flex; align-items: center; gap: 10px; height: 50px; padding: 0 20px; border-radius: 25px; background: var(--ink); color: var(--hero); font-size: 19px; font-weight: 700; }
 .wall .bd .bdn .go svg { font-size: 24px; }
 .wall .bd .bdn .go .dm { font-weight: 500; opacity: 0.75; }
 .wall .bd .bdn .cd { grid-column: 2; grid-row: 1 / -1; align-self: center; display: grid; justify-items: center; line-height: 1; font-variant-numeric: tabular-nums; }
 .wall .bd .bdn .cd b { font-family: var(--font-display); font-size: 128px; font-weight: 600; letter-spacing: -0.04em; line-height: 0.85; }
-.wall .bd .bdn .cd small { margin-top: 10px; font-size: 18px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.wall .bd .bdn .cd small { margin-top: 10px; font-size: calc(var(--b) * 20px); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .wall .bd .bdn.quiet { background: var(--surface); color: var(--fg); }
 
 /*
@@ -74,15 +83,16 @@
  * every name and every "To do" shares one line. Not a subgrid: Safari on the
  * wall iPad didn't share the rows, and each lane's name floated mid-column.
  */
-.wall .bd .bdl { grid-column: 1; grid-row: 3; display: grid; grid-template-rows: auto auto minmax(0, 1fr); column-gap: 14px; min-height: 0; overflow: hidden; text-align: left; }
-.wall .bd .lh { grid-row: 1; display: flex; align-items: center; gap: 10px; min-width: 0; padding: 12px 0; border-top: 4px solid var(--c); font-size: 19px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.wall .bd .lev { grid-row: 2; align-self: start; display: flex; flex-direction: column; justify-content: flex-start; gap: 8px; align-items: stretch; min-width: 0; text-align: left; }
+.wall .bd .bdl { grid-column: 1; grid-row: 3; display: grid; grid-template-rows: auto auto minmax(0, 1fr); column-gap: 22px; min-height: 0; overflow: hidden; text-align: left; }
+.wall .bd .lh { grid-row: 1; display: flex; align-items: center; gap: 12px; min-width: 0; padding: 14px 0 12px; border-top: 4px solid var(--c); font-size: calc(var(--b) * 25px); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wall .bd .lh .av { width: calc(var(--b) * 36px); height: calc(var(--b) * 36px); font-size: calc(var(--b) * 16px); }
+.wall .bd .lev { grid-row: 2; align-self: start; display: flex; flex-direction: column; justify-content: flex-start; gap: 10px; align-items: stretch; min-width: 0; text-align: left; }
 .wall .bd .lev > * { flex: none; }
-.wall .bd .lev .lm { font-size: 15px; font-weight: 600; color: var(--faint); padding: 0 4px; }
-.wall .bd .lev .free { font-size: 18px; color: var(--faint); padding: 6px 2px; }
-.wall .bd .li { display: grid; gap: 2px; padding: 10px 14px 11px; border-radius: 12px; background: color-mix(in srgb, var(--c) 11%, var(--card)); }
-.wall .bd .li .tm { font-size: 15px; font-weight: 600; color: var(--muted); }
-.wall .bd .li .tt { font-size: 20px; line-height: 1.2; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.wall .bd .lev .lm { font-size: calc(var(--b) * 18px); font-weight: 600; color: var(--faint); padding: 0 4px; }
+.wall .bd .lev .free { font-size: calc(var(--b) * 21px); color: var(--faint); padding: 4px 0; }
+.wall .bd .li { display: grid; gap: 3px; padding: 12px 16px 13px; border-radius: 12px; background: color-mix(in srgb, var(--c) 11%, var(--card)); }
+.wall .bd .li .tm { font-size: calc(var(--b) * 17px); font-weight: 600; color: var(--muted); }
+.wall .bd .li .tt { font-size: calc(var(--b) * 23px); line-height: 1.2; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .wall .bd .li.lead { box-shadow: inset 0 0 0 2.5px var(--hero); }
 /* A lane's to-dos: a dashed rule, "To do · n of m", then big checkboxes in the lane's color. */
 /*
@@ -90,7 +100,7 @@
  * so a long list (or a long run of steps) can be reached and checked off.
  * No scrollbar on a wall; the edge with more past it fades instead.
  */
-.wall .bd .ltd { grid-row: 3; align-self: stretch; display: grid; grid-template-rows: auto minmax(0, 1fr); margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line-strong); min-height: 0; overflow: hidden; }
+.wall .bd .ltd { grid-row: 3; align-self: stretch; display: grid; grid-template-rows: auto minmax(0, 1fr); margin-top: 18px; padding-top: 12px; border-top: 1px dashed var(--line-strong); min-height: 0; overflow: hidden; }
 /* max-content rows: auto rows in a box shorter than its list shrink to each row's min-height and the text spills into the next row. */
 .wall .bd .ltl { display: grid; grid-auto-rows: max-content; align-content: start; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; scrollbar-width: none; padding-bottom: 12px; }
 .wall .bd .ltl::-webkit-scrollbar { display: none; }
@@ -99,14 +109,14 @@
 .wall .bd .ltl.up.dn { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 40px, #000 calc(100% - 56px), transparent); mask-image: linear-gradient(to bottom, transparent, #000 40px, #000 calc(100% - 56px), transparent); }
 /* Household to-dos only: one band under every lane, its rows across in the lanes' columns. */
 .wall .bd .ltd.all { grid-column: 1 / -1; grid-row: 3; }
-.wall .bd .ltd.all .ltl { grid-template-columns: repeat(var(--n), minmax(0, 1fr)); column-gap: 14px; }
-.wall .bd .ltd .sh { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 14px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
+.wall .bd .ltd.all .ltl { grid-template-columns: repeat(var(--n), minmax(0, 1fr)); column-gap: 22px; }
+.wall .bd .ltd .sh { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: calc(var(--b) * 16px); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
 .wall .bd .ltd .sh span:last-child { font-weight: 600; letter-spacing: 0; text-transform: none; }
-.wall .bd .ltk { display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 48px; padding: 8px 0; text-align: left; }
-.wall .bd .ltk .bx { width: 28px; height: 28px; border-color: var(--c); color: var(--bg); font-size: 18px; }
-.wall .bd .ltk .tx { display: grid; gap: 2px; min-width: 0; padding-top: 2px; }
-.wall .bd .ltk .tx b { font-size: 18px; font-weight: 500; line-height: 1.2; }
-.wall .bd .ltk .tx small { font-size: 14px; font-weight: 600; color: var(--muted); }
+.wall .bd .ltk { display: flex; align-items: flex-start; gap: 12px; width: 100%; min-height: 56px; padding: 10px 0; text-align: left; }
+.wall .bd .ltk .bx { width: calc(var(--b) * 34px); height: calc(var(--b) * 34px); border-color: var(--c); color: var(--bg); font-size: calc(var(--b) * 22px); }
+.wall .bd .ltk .tx { display: grid; gap: 3px; min-width: 0; padding-top: 2px; }
+.wall .bd .ltk .tx b { font-size: calc(var(--b) * 24px); font-weight: 500; line-height: 1.22; text-wrap: pretty; }
+.wall .bd .ltk .tx small { font-size: calc(var(--b) * 17px); font-weight: 600; color: var(--muted); }
 .wall .bd .ltk .tx small.late { color: var(--warm); }
 /*
  * A to-do's steps, under it: a smaller rounded box centered under the to-do's
@@ -115,11 +125,11 @@
  * say they belong to the to-do above. A to-do with its steps showing gives up
  * most of its bottom padding so the steps read as its own.
  */
-.wall .bd .ltk.has { padding-bottom: 2px; }
-.wall .bd .ltk.st { align-items: flex-start; min-height: 40px; padding: 9px 0 9px 3px; gap: 13px; }
-.wall .bd .ltk.st .bx { width: 22px; height: 22px; margin-top: -1px; border-width: 2px; border-radius: 7px; border-color: color-mix(in srgb, var(--c) 75%, transparent); font-size: 14px; }
-.wall .bd .ltk.st .tx { display: block; padding-top: 1px; font-size: 16px; line-height: 1.25; color: var(--fg2); }
-.wall .bd .ltl .adn { padding: 10px 0; font-size: 18px; color: var(--faint); }
+.wall .bd .ltk.has { padding-bottom: 4px; }
+.wall .bd .ltk.st { align-items: flex-start; min-height: 46px; padding: 9px 0 9px calc(var(--b) * 4px); gap: calc(var(--b) * 16px); }
+.wall .bd .ltk.st .bx { width: calc(var(--b) * 26px); height: calc(var(--b) * 26px); margin-top: -1px; border-width: 2px; border-radius: 8px; border-color: color-mix(in srgb, var(--c) 75%, transparent); font-size: calc(var(--b) * 17px); }
+.wall .bd .ltk.st .tx { display: block; padding-top: 1px; font-size: calc(var(--b) * 20px); line-height: 1.25; text-wrap: pretty; color: var(--fg2); }
+.wall .bd .ltl .adn { padding: 10px 0; font-size: calc(var(--b) * 21px); color: var(--faint); }
 .wall .bd .ltl .grp { min-width: 0; }
 
 /* The side panel: Week's tinted panel as a card, two module slots of equal height, the same modules. */
@@ -127,22 +137,25 @@
 .wall .bd .bdp .mod.top, .wall .bd .bdp .mod.bottom { flex: 1 1 0; gap: 8px; }
 .wall .bd .bdp .mod.bottom { padding-top: 12px; }
 .wall .bd .bdp .mh { min-height: 44px; }
-.wall .bd .bdp .mh b { font-size: calc(var(--s) * 24px); }
+.wall .bd .bdp .mh b { font-size: calc(var(--b) * 28px); }
+.wall .bd .bdp .mh span { font-size: calc(var(--b) * 16px); }
+.wall .bd .bdp .row { min-height: calc(var(--b) * 64px); }
+.wall .bd .bdp .row .tx { font-size: calc(var(--b) * 25px); }
 .wall .bd .bdp .empty { padding: 20px 0; font-size: 18px; }
 
 /* Coming up, Board size. */
-.wall .bd .cr { display: grid; grid-template-columns: 112px minmax(0, 1fr); column-gap: 12px; align-items: baseline; padding: 9px 0; border-top: 1px solid var(--line-strong); text-align: left; width: 100%; }
+.wall .bd .cr { display: grid; grid-template-columns: calc(var(--b) * 124px) minmax(0, 1fr); column-gap: 14px; align-items: baseline; padding: 12px 0; border-top: 1px solid var(--line-strong); text-align: left; width: 100%; }
 .wall .bd .cr:first-child { border-top: 0; padding-top: 2px; }
 .wall .bd .cdh { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; line-height: 1.15; }
-.wall .bd .cdh b { font-family: var(--font-display); font-size: 21px; font-weight: 600; }
-.wall .bd .cdh small { font-size: 15px; color: var(--muted); }
-.wall .bd .ce { display: grid; gap: 4px; min-width: 0; }
-.wall .bd .ci { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 18px; line-height: 1.2; }
-.wall .bd .ci .dot { transform: translateY(-1px); }
-.wall .bd .ci .tm { font-size: 15px; color: var(--muted); }
-.wall .bd .ci .tt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.wall .bd .ce .cm { font-size: 15px; font-weight: 600; color: var(--faint); }
-.wall .bd .ce .untimed { font-size: 15px; }
+.wall .bd .cdh b { font-family: var(--font-display); font-size: calc(var(--b) * 23px); font-weight: 600; }
+.wall .bd .cdh small { font-size: calc(var(--b) * 17px); color: var(--muted); }
+.wall .bd .ce { display: grid; gap: 7px; min-width: 0; }
+.wall .bd .ci { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: calc(var(--b) * 21px); line-height: 1.22; }
+.wall .bd .ci .dot { align-self: flex-start; margin-top: 0.37em; }
+.wall .bd .ci .tm { flex: none; font-size: calc(var(--b) * 17px); color: var(--muted); }
+.wall .bd .ci .tt { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.wall .bd .ce .cm { font-size: calc(var(--b) * 17px); font-weight: 600; color: var(--faint); }
+.wall .bd .ce .untimed { font-size: calc(var(--b) * 17px); gap: 4px 16px; }
 
 /* Due today, Board size: a ring per person (tap to show only theirs), then the checklist. */
 .wall .bd .bdue { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 6px; }

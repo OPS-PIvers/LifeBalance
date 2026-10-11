@@ -126,7 +126,7 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
           </span>
           {timeline.allDay.length > 0 && <WallUntimedLine events={timeline.allDay} people={people} />}
         </div>
-        <button type="button" className="mc dn" onClick={() => onOpenMeal(today)}>
+        <button type="button" className="mc dn" onClick={() => onOpenMeal(today)} style={{ '--len': (dinner?.mealName ?? 'Not planned').length } as React.CSSProperties}>
           <span className="tv">
             <Utensils className="wi" size="1em" aria-hidden="true" />
             <b>{dinner?.mealName ?? 'Not planned'}</b>
