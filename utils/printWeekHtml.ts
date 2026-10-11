@@ -1,3 +1,4 @@
+import { MealIngredient } from '@/types/schema';
 import { PrintDay, PrintMeal, PrintShoppingStore, PrintWeek } from '@/utils/printWeekModel';
 
 // Accepts `string | number` because `ShoppingItem.quantity` is typed `string`
@@ -19,19 +20,25 @@ const escapeHtml = (value: string | number): string =>
 const qtyHtml = (quantity: string | number | undefined): string =>
   quantity || quantity === 0 ? ` <span class="qty">${escapeHtml(quantity)}</span>` : '';
 
-const names = (ingredients: { name: string }[]): string => ingredients.map(ing => escapeHtml(ing.name)).join(', ');
+const ingredientList = (ingredients: MealIngredient[], kind: 'need' | 'have'): string =>
+  ingredients.length
+    ? `<ul class="ings ${kind}">${ingredients
+        .map(
+          ing =>
+            `<li><span class="box${kind === 'have' ? ' checked' : ''}"></span><span>${escapeHtml(ing.name)}${
+              kind === 'need' ? qtyHtml(ing.quantity) : ''
+            }</span></li>`
+        )
+        .join('')}</ul>`
+    : '';
 
-const mealHtml = (meal: PrintMeal, showType: boolean): string => {
-  const rows = [
-    meal.toBuy.length ? `<dt>Buy</dt><dd class="buy">${names(meal.toBuy)}</dd>` : '',
-    meal.onHand.length ? `<dt>Have</dt><dd>${names(meal.onHand)}</dd>` : '',
-  ].join('');
-  return `
+// Still-to-buy ingredients come first as open checkboxes; on-hand ones follow
+// as a second, pre-checked group in grey.
+const mealHtml = (meal: PrintMeal, showType: boolean): string => `
           <article class="meal">
             <h3>${escapeHtml(meal.mealName)}${showType ? ` <span class="meal-type">${escapeHtml(meal.typeLabel)}</span>` : ''}</h3>
-            ${rows ? `<dl>${rows}</dl>` : ''}
+            ${ingredientList(meal.toBuy, 'need')}${ingredientList(meal.onHand, 'have')}
           </article>`;
-};
 
 const dayHtml = (day: PrintDay, showType: boolean): string => `
         <section class="day${day.meals.length ? '' : ' empty-day'}">
@@ -57,8 +64,8 @@ const shoppingHtml = (stores: PrintShoppingStore[]): string =>
 /**
  * Builds a standalone, chrome-free HTML document for the fridge-friendly
  * "Print week" view: one US Letter page with the seven days down the left
- * (each meal's ingredients as a "Buy" line and a "Have" line) and the
- * shopping list, the only thing with checkboxes, down the right.
+ * (each meal's ingredients as a three-column checklist: still-to-buy open,
+ * on-hand pre-checked beneath) and the shopping list down the right.
  * Self-contained (inline `<style>`, no external stylesheet) so it renders
  * correctly in the popup window it's opened into. Sizes are in rem so
  * `fitPrintSheet` can shrink a busy week onto the one page.
@@ -163,17 +170,25 @@ export const buildPrintWeekHtml = (weekRangeLabel: string, week: PrintWeek): str
     line-height: 1.25;
   }
   .meal-type { font-family: 'Schibsted Grotesk', system-ui, sans-serif; font-size: 0.85rem; font-weight: 400; color: var(--muted); }
-  dl {
+  .ings {
     display: grid;
-    grid-template-columns: 2.6rem minmax(0, 1fr);
-    row-gap: 0.15rem;
-    margin: 0.3rem 0 0;
-    font-size: 0.92rem;
-    line-height: 1.4;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: 0.9rem;
+    margin-top: 0.3rem;
   }
-  dt { color: var(--muted); }
-  dd { margin: 0; color: var(--muted); }
-  dd.buy { color: var(--ink); }
+  .ings.have { margin-top: 0.2rem; color: var(--muted); }
+  .box.checked { border-color: var(--faint); position: relative; }
+  .box.checked::after {
+    content: '';
+    position: absolute;
+    left: 0.2rem;
+    top: 0.04rem;
+    width: 0.18rem;
+    height: 0.36rem;
+    border: solid var(--muted);
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+  }
 
   /* The shopping list: the one place with checkboxes */
   .list { border-left: 1px solid var(--rule); padding: 0.7rem 0 0 0.3in; }
@@ -203,7 +218,7 @@ export const buildPrintWeekHtml = (weekRangeLabel: string, week: PrintWeek): str
     border-radius: 2px;
     transform: translateY(0.05rem);
   }
-  .qty { color: var(--muted); }
+  .qty { color: var(--muted); white-space: nowrap; }
   .empty { margin: 0; font-size: 0.92rem; color: var(--muted); }
 
   @media print {

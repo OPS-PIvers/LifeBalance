@@ -17,7 +17,7 @@ const week = (overrides: Partial<PrintWeek> = {}): PrintWeek => ({
 });
 
 describe('buildPrintWeekHtml', () => {
-  it('renders a Buy line, a Have line and escaped content', () => {
+  it('renders still-to-buy and pre-checked on-hand checklists with escaped content', () => {
     const html = buildPrintWeekHtml(
       'Oct 5 – 11, 2026',
       week({
@@ -41,15 +41,16 @@ describe('buildPrintWeekHtml', () => {
     expect(html).toContain('<!doctype html>');
     expect(html).toContain('size: letter portrait');
     expect(html).toContain('Mac &amp; Cheese');
-    expect(html).toContain('<dt>Buy</dt><dd class="buy">Cheddar</dd>');
-    expect(html).toContain('<dt>Have</dt><dd>Macaroni, &lt;Butter&gt;</dd>');
+    expect(html).toContain('<ul class="ings need"><li><span class="box"></span><span>Cheddar <span class="qty">2 cups</span></span></li></ul>');
+    expect(html).toContain('<ul class="ings have">');
+    expect(html).toContain('<span class="box checked"></span><span>&lt;Butter&gt;</span>');
     expect(html).toContain('TARGET');
     expect(html).toContain('<span class="qty">2 cups</span>');
     // A week of only dinners doesn't repeat the type label.
     expect(html).not.toContain('class="meal-type"');
   });
 
-  it('labels meal types when the week mixes them, and omits an empty Buy line', () => {
+  it('labels meal types when the week mixes them, and omits an empty to-buy group', () => {
     const html = buildPrintWeekHtml(
       'Oct 5 – 11, 2026',
       week({
@@ -62,7 +63,7 @@ describe('buildPrintWeekHtml', () => {
       })
     );
     expect(html).toContain('<span class="meal-type">Lunch</span>');
-    expect(html).not.toContain('<dt>Buy</dt>');
+    expect(html).not.toContain('ings need');
   });
 
   it('renders a legacy numeric quantity without throwing', () => {
