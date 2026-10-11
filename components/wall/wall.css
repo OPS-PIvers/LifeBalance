@@ -622,8 +622,12 @@ html:has(.wall.dark) body { background: #1b1a17; }
 @keyframes wall-spot-in { from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); } to { opacity: 1; transform: translate(-50%, -50%); } }
 @media (prefers-reduced-motion: reduce) { .wall .spot { animation: none; } }
 
-/* "Tap to turn on sound": iPadOS keeps audio locked until a touch */
-.wall .sndchip { position: absolute; left: 128px; bottom: 24px; z-index: 29; display: inline-flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 20px; border-radius: 26px; background: var(--card); border: 1px solid var(--line-strong); box-shadow: var(--shadow); font-size: 19px; font-weight: 600; color: var(--fg2); }
+/* One-tap chips along the bottom, on the Board's left edge: "Full screen" (a Safari tab that isn't) and
+   "Tap to turn on sound" (iPadOS keeps audio locked until a touch) */
+.wall .chips { position: absolute; left: 40px; bottom: 24px; z-index: 29; display: flex; gap: 12px; }
+.wall.rail-float.rail-open .main .chips { bottom: 140px; }
+.wall .fschip { display: inline-flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 22px; border-radius: 26px; background: var(--accent); border: 1px solid var(--accent); box-shadow: var(--shadow); font-size: 19px; font-weight: 600; color: var(--on-accent); }
+.wall .sndchip { display: inline-flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 20px; border-radius: 26px; background: var(--card); border: 1px solid var(--line-strong); box-shadow: var(--shadow); font-size: 19px; font-weight: 600; color: var(--fg2); }
 /* An alert during the night window sits above the black night screen, dimmed */
 .wall .spot-scrim.night { z-index: 45; background: rgba(0, 0, 0, 0.5); }
 .wall .spot.night { z-index: 46; background: #1b1a17; color: #b9b3a8; box-shadow: none; border: 1px solid #36332e; }

@@ -9,7 +9,7 @@ import { useWallData } from './data/wallData';
 import { APP_VERSION, useWallRuntime } from './runtime/useWallRuntime';
 import { useWallViewport } from './runtime/useWallViewport';
 import { useWallRail } from './runtime/useWallRail';
-import { canFullscreen, isFullscreen, toggleFullscreen } from './runtime/wallFullscreen';
+import { canFullscreen, toggleFullscreen, useIsFullscreen } from './runtime/wallFullscreen';
 import { WallToastContext, useWallToastController, type WallToaster } from './wallToast';
 import WallDay from './calendar/WallDay';
 import WallMonth from './calendar/WallMonth';
@@ -33,6 +33,7 @@ import WallVoiceBanner from './voice/WallVoiceBanner';
 import { useMissFollowUp } from './voice/useMissFollowUp';
 import { useWallVoice, type WallVoiceFeedback, type WallVoiceMissReport } from './voice/useWallVoice';
 import WallSoundChip from './sound/WallSoundChip';
+import WallFullscreenChip from './WallFullscreenChip';
 import WallAlertCard from './alerts/WallAlertCard';
 import { useWallAlerts } from './alerts/useWallAlerts';
 import { alertWords } from '@/utils/wall/wallAlerts';
@@ -63,6 +64,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   const data = useWallData();
   const rootRef = useRef<HTMLDivElement>(null);
   useWallViewport(rootRef);
+  const fullscreen = useIsFullscreen();
   const { toast, dismiss, toaster: slotToaster } = useWallToastController();
   // The voice banner and the toast share one slot: a new toast replaces the banner.
   const cancelVoiceRef = useRef<() => void>(() => undefined);
@@ -379,6 +381,10 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     .filter(Boolean)
     .join(' ');
 
+  // Full screen is only for a paired display in a Safari tab (a Home Screen app already is).
+  const canGoFullscreen = data.isDisplay && canFullscreen();
+  const offerFullscreen = canGoFullscreen && !fullscreen && overlay !== 'gear';
+
   // The resting calendar screen: Board unless Settings picks Week (`?board=1` forces it).
   const showingBoard = data.settings.home === 'board' || isBoardPreview();
   let body: React.ReactNode;
@@ -416,6 +422,9 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   } else if (showingBoard) {
     body = (
       <WallBoard
+        // Idle return remounts it too: lanes scroll back to the top, so nobody
+        // flicks them back up (a swipe down also leaves Safari's full screen).
+        key={runtime.idleEpoch}
         today={today}
         now={runtime.now}
         timeZone={runtime.timeZone}
@@ -519,7 +528,12 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
             {overlay === 'weather' && runtime.weather && (
               <WallForecastSheet weather={runtime.weather} place={data.settings.weather?.label} onClose={() => setOverlay('none')} />
             )}
-            {soundState === 'locked' && data.ready && !runtime.nightShowing && <WallSoundChip />}
+            {data.ready && !runtime.nightShowing && (offerFullscreen || soundState === 'locked') && (
+              <div className="chips">
+                {offerFullscreen && <WallFullscreenChip onTap={() => toggleFullscreen(rootRef.current)} />}
+                {soundState === 'locked' && <WallSoundChip />}
+              </div>
+            )}
             {brief.state && <WallBriefCard state={brief.state} people={people} onClose={brief.close} />}
           {voice.state ? (
               <WallVoiceBanner
@@ -553,9 +567,9 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
                 setRotation(!rotating);
                 setOverlay('none');
               }}
-              {...(data.isDisplay && canFullscreen()
+              {...(canGoFullscreen
                 ? {
-                    fullscreen: isFullscreen(),
+                    fullscreen,
                     onToggleFullscreen: () => {
                       toggleFullscreen(rootRef.current);
                       setOverlay('none');
