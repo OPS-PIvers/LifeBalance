@@ -1256,7 +1256,7 @@ service cloud.firestore {
       match /voiceMisses/{missId} {
         allow read, update, delete: if false;
         allow create: if isDisplayOf(householdId) &&
-          request.resource.data.keys().hasOnly(['kind', 'heard', 'free', 'alternative', 'engine', 'view', 'did', 'displayId', 'appVersion', 'at', 'expireAt']) &&
+          request.resource.data.keys().hasOnly(['kind', 'heard', 'free', 'alternative', 'engine', 'view', 'did', 'after', 'displayId', 'appVersion', 'at', 'expireAt']) &&
           request.resource.data.keys().hasAll(['kind', 'heard', 'free', 'alternative', 'engine', 'view', 'displayId', 'appVersion', 'at', 'expireAt']) &&
           request.resource.data.kind in ['unparsed', 'undo', 'cancel', 'no-speech', 'ai'] &&
           request.resource.data.engine in ['device', 'speech', 'audio'] &&
@@ -1266,6 +1266,7 @@ service cloud.firestore {
           request.resource.data.alternative is string && request.resource.data.alternative.size() <= 300 &&
           request.resource.data.view is string && request.resource.data.view.size() <= 300 &&
           request.resource.data.get('did', '') is string && request.resource.data.get('did', '').size() <= 300 &&
+          request.resource.data.get('after', '') is string && request.resource.data.get('after', '').size() <= 300 &&
           request.resource.data.appVersion is string && request.resource.data.appVersion.size() <= 300 &&
           request.resource.data.at is string && request.resource.data.at.size() <= 40 &&
           request.resource.data.expireAt is timestamp &&

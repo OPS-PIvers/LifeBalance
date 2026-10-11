@@ -12,9 +12,10 @@ describe("voice miss export", () => {
       })
     ).toEqual({
       id: "m1", kind: "undo", heard: "show dinner", free: "jarvis show dinner", alternative: "show dinner", engine: "device",
-      view: "calendar:week", did: "Showed meals", displayId: "d1", appVersion: "wall-4", at: "2026-10-06T12:00:00.000Z",
+      view: "calendar:week", did: "Showed meals", after: null, displayId: "d1", appVersion: "wall-4", at: "2026-10-06T12:00:00.000Z",
     });
-    expect(toExportedMiss("m2", { heard: 5 })).toMatchObject({ heard: "", did: null, kind: "" });
+    expect(toExportedMiss("m2", { heard: 5 })).toMatchObject({ heard: "", did: null, after: null, kind: "" });
+    expect(toExportedMiss("m3", { kind: "undo", did: "Added to Shopping: Window", after: "Added to Shopping: Windex" }).after).toBe("Added to Shopping: Windex");
   });
 
   it("knows an expired miss, and never treats a missing expiry as expired", () => {

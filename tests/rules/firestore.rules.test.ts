@@ -2590,6 +2590,9 @@ describe('wall display identity', () => {
       await assertSucceeds(setDoc(doc(displayDb(), 'households', H1, 'voiceMisses', 'vm1'), voiceMiss()));
       await assertSucceeds(setDoc(doc(displayDb(), 'households', H1, 'voiceMisses', 'vm2'), voiceMiss({ kind: 'undo', did: 'Showed meals' })));
       await assertSucceeds(setDoc(doc(displayDb(), 'households', H1, 'voiceMisses', 'vm3'), voiceMiss({ kind: 'ai', did: 'Added to Shopping: Milk' })));
+      await assertSucceeds(
+        setDoc(doc(displayDb(), 'households', H1, 'voiceMisses', 'vm4'), voiceMiss({ kind: 'undo', did: 'Added to Shopping: Window', after: 'Added to Shopping: Windex' }))
+      );
     });
 
     it('heartbeats and saves its own layout', async () => {
@@ -2633,6 +2636,8 @@ describe('wall display identity', () => {
       await assertFails(setDoc(doc(db, 'households', H1, 'voiceMisses', 'a'), voiceMiss({ displayId: 'd2' })));
       await assertFails(setDoc(doc(db, 'households', H1, 'voiceMisses', 'b'), voiceMiss({ audio: 'base64…' })));
       await assertFails(setDoc(doc(db, 'households', H1, 'voiceMisses', 'c'), voiceMiss({ heard: 'x'.repeat(301) })));
+      await assertFails(setDoc(doc(db, 'households', H1, 'voiceMisses', 'c2'), voiceMiss({ after: 'x'.repeat(301) })));
+      await assertFails(setDoc(doc(db, 'households', H1, 'voiceMisses', 'c3'), voiceMiss({ after: ['Added to Shopping: Windex'] })));
       await assertFails(setDoc(doc(db, 'households', H1, 'voiceMisses', 'd'), voiceMiss({ kind: 'other' })));
       await assertFails(setDoc(doc(db, 'households', H1, 'voiceMisses', 'e'), voiceMiss({ expireAt: Timestamp.fromMillis(Date.now() + 90 * 86_400_000) })));
       await assertFails(setDoc(doc(db, 'households', H2, 'voiceMisses', 'f'), voiceMiss()));

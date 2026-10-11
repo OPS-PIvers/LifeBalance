@@ -16,6 +16,8 @@ export interface ExportedVoiceMiss {
   engine: string;
   view: string;
   did: string | null;
+  /** What was added or renamed by hand right after (unparsed/undo/cancel), or null. */
+  after: string | null;
   displayId: string;
   appVersion: string;
   at: string;
@@ -43,6 +45,7 @@ export function isExpired(data: Record<string, unknown>, nowMs: number): boolean
 
 export function toExportedMiss(id: string, data: Record<string, unknown>): ExportedVoiceMiss {
   const did = str(data.did);
+  const after = str(data.after);
   return {
     id,
     kind: str(data.kind),
@@ -52,6 +55,7 @@ export function toExportedMiss(id: string, data: Record<string, unknown>): Expor
     engine: str(data.engine),
     view: str(data.view),
     did: did || null,
+    after: after || null,
     displayId: str(data.displayId),
     appVersion: str(data.appVersion),
     at: str(data.at),
