@@ -19,9 +19,6 @@ export const MANUAL_SYNC_COOLDOWN_MS = 2 * 60 * 1000;
 export const MAX_FEEDS_PER_HOUSEHOLD = 20;
 export const DEFAULT_WALL_TIME_ZONE = "America/Chicago";
 export const HOLIDAYS_FEED_ID = "holidays";
-/** Google's public US holidays calendar. */
-export const US_HOLIDAYS_ICS_URL =
-  "https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics";
 /** `calendarFeedSecrets/{id}` doc that holds the bills' event index (server-only collection). */
 export const BILLS_INDEX_ID = "_bills";
 
