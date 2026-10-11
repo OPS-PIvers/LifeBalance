@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import { isPWA } from '@/utils/platform';
 
 /** iPadOS Safari before 16.4 only has the prefixed names. */
@@ -20,6 +21,10 @@ interface FullscreenElement {
  * box, never the page: going full screen on the page's first touch turned a
  * to-do tap into Safari's full-screen transition, after which iPadOS drew the
  * wall four times over and took no more touches until a reload.
+ *
+ * iPadOS leaves full screen on any quick one-finger swipe down, wherever it
+ * lands (WebKit's own gesture, which a page can't cancel), so flicking a list
+ * back up leaves it. The wall's Full screen chip makes coming back one tap.
  */
 export function canFullscreen(): boolean {
   if (typeof Element === 'undefined' || isPWA()) return false;
@@ -47,4 +52,18 @@ export function toggleFullscreen(el: Element | null): void {
   } catch {
     // Refused; the wall carries on with the address bar showing.
   }
+}
+
+function subscribe(onChange: () => void): () => void {
+  document.addEventListener('fullscreenchange', onChange);
+  document.addEventListener('webkitfullscreenchange', onChange);
+  return () => {
+    document.removeEventListener('fullscreenchange', onChange);
+    document.removeEventListener('webkitfullscreenchange', onChange);
+  };
+}
+
+/** Whether the wall is full screen right now, kept current as Safari enters and leaves it. */
+export function useIsFullscreen(): boolean {
+  return useSyncExternalStore(subscribe, isFullscreen, () => false);
 }

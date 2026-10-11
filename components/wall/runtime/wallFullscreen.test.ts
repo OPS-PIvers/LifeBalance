@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
+import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { canFullscreen, isFullscreen, toggleFullscreen } from './wallFullscreen';
+import { canFullscreen, isFullscreen, toggleFullscreen, useIsFullscreen } from './wallFullscreen';
 
 type Fs = { requestFullscreen?: () => Promise<void>; exitFullscreen?: () => Promise<void> };
 const proto = Element.prototype as unknown as Fs;
@@ -49,5 +50,21 @@ describe('wallFullscreen', () => {
     document.body.dispatchEvent(new Event('touchend', { bubbles: true }));
     document.body.click();
     expect(request).not.toHaveBeenCalled();
+  });
+
+  it('keeps the wall told when Safari enters and leaves full screen (a swipe down leaves it)', () => {
+    const { result } = renderHook(() => useIsFullscreen());
+    expect(result.current).toBe(false);
+    const wall = document.createElement('div');
+    act(() => {
+      Object.defineProperty(document, 'fullscreenElement', { value: wall, configurable: true });
+      document.dispatchEvent(new Event('fullscreenchange'));
+    });
+    expect(result.current).toBe(true);
+    act(() => {
+      Object.defineProperty(document, 'fullscreenElement', { value: null, configurable: true });
+      document.dispatchEvent(new Event('webkitfullscreenchange'));
+    });
+    expect(result.current).toBe(false);
   });
 });
