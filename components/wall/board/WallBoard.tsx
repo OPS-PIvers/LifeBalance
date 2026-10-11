@@ -69,7 +69,9 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
   const drive = lead ? travel.find(t => t.id === lead.event.id) : undefined;
   const leaveMs = drive?.minutes != null && Number.isFinite(leadStart) ? leadStart - drive.minutes * 60000 - now.getTime() : NaN;
   // With a drive ahead, when to leave is the number that matters, so it takes the countdown's place.
-  const leaving = !focus.leadIsNow && Number.isFinite(leaveMs);
+  // At leave time the leave alert says so, and the number goes back to counting down to the event.
+  const driveAhead = !focus.leadIsNow && Number.isFinite(leaveMs);
+  const leaving = driveAhead && leaveMs > 0;
 
   const due = useMemo(() => dueTodayChecklist(todos, today, timeZone), [todos, today, timeZone]);
   const lanes = useMemo(() => boardLanes(timeline.rows, due, people.members.map(m => m.uid)), [timeline.rows, due, people.members]);
@@ -174,21 +176,10 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
             {lead.time}
             {lead.event.end ? `–${eventTimeText(lead.event.end, timeZone)}` : ''}
             {lead.event.location ? ` · ${lead.event.location}` : ''}
-            {leaving && drive?.minutes != null ? ` · ${drive.minutes} min drive` : ''}
+            {driveAhead && drive?.minutes != null ? ` · ${drive.minutes} min drive` : ''}
           </span>
           <span className="cd" aria-hidden={leaving ? undefined : true}>
             {(() => {
-              if (leaving && leaveMs <= 0) {
-                return (
-                  <>
-                    <b>Go</b>
-                    <small>
-                      <Car className="wi" size="1em" aria-hidden="true" />
-                      Time to leave
-                    </small>
-                  </>
-                );
-              }
               const c = countdown(leaving ? leaveMs : focus.leadIsNow && Number.isFinite(leadEnd) ? leadEnd - now.getTime() : leadStart - now.getTime());
               return (
                 <>
