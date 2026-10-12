@@ -517,14 +517,14 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
               without sound.
             </p>
             <p className="text-sm text-brand-700 dark:text-brand-300">
-              An event can say when to leave in its description: “leave at 5:15”, “20 min drive” or “arrive 15 min early”. Apple
-              Calendar’s Travel Time works too.
+              An event can say when to leave in its description: “arrive by 4:45”, “leave at 5:15” or “20 min drive”. Apple
+              Calendar’s Travel Time works too. Otherwise the wall times it to get you there as it starts.
             </p>
           </Row>
           <Row className="flex-col items-stretch gap-2">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Arrive early by</p>
-              <p className="text-xs text-brand-500 dark:text-brand-400">Leave in time to get there this much before it starts</p>
+              <p className="text-xs text-brand-500 dark:text-brand-400">For events that don’t say when to arrive</p>
             </div>
             <SegmentedControl
               name="Arrive early by"

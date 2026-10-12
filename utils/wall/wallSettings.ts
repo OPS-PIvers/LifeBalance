@@ -79,7 +79,7 @@ export const DEFAULT_WALL_SETTINGS: WallSettings = {
   wakeWord: true,
   wakeModel: DEFAULT_WAKE_MODEL,
   sound: { confirm: 'speak', alerts: 'speak', volume: 0.7 },
-  alerts: { leadMin: 10, earlyMin: 10 },
+  alerts: { leadMin: 10, earlyMin: 0 },
 };
 
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
