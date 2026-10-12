@@ -118,7 +118,7 @@ export function parseLeaveHints(description: string | null | undefined, startMs:
   if (trip !== null && trip >= 1 && trip <= MAX_TRAVEL_MIN) hints.travelMin = trip;
 
   // "arrive 15 min early", "be there 10 minutes early", "15 min early" — or "arrive by 4:45", "be there at 4:45"
-  const earlyMin = firstDuration(text, String.raw`${DURATION}\s+(?:early|before(?: it starts| the start| start)?)\b`);
+  const earlyMin = firstDuration(text, String.raw`${DURATION}\s+(?:early|before (?:it starts|the start|start|kickoff|game time))\b`);
   if (earlyMin !== null && earlyMin <= MAX_EARLY_MIN) {
     hints.earlyMin = earlyMin;
   } else {

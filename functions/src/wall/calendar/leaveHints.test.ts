@@ -58,6 +58,9 @@ describe("parseLeaveHints", () => {
     expect(hints("Bring water and shin guards. Game is 60 minutes.")).toEqual({});
     expect(hints("Zoom link: https://zoom.us/j/123 · we'll leave the doc open")).toEqual({});
     expect(parseLeaveHints(null, START, TZ)).toEqual({});
+    // "before" about something else isn't how early to arrive.
+    expect(hints("Pickup is 10 min before the carpool line")).toEqual({});
+    expect(hints("Be there 15 min before the start").earlyMin).toBe(15);
   });
 
   it("skips a bare 'early' with no number for a later one that has it", () => {

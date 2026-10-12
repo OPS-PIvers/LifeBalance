@@ -178,8 +178,8 @@ function isPrivate(component: IcalComponent): boolean {
  * Leave-time hints for a timed occurrence: Apple's Travel Time field, then the
  * description. A private event's description stays unread, like its title.
  */
-function leaveHintsFor(component: IcalComponent, item: IcalEvent, startMs: number, timeZone: string): LeaveHints {
-  const hints = parseLeaveHints(typeof item.description === "string" ? item.description : null, startMs, timeZone);
+function leaveHintsFor(component: IcalComponent, description: string, startMs: number, timeZone: string): LeaveHints {
+  const hints = parseLeaveHints(description, startMs, timeZone);
   const apple = isoDurationMinutes(component.getFirstPropertyValue("x-apple-travel-duration"));
   return apple !== null ? { ...hints, travelMin: apple } : hints;
 }
@@ -203,6 +203,8 @@ function rowsFor(occ: Occurrence, uid: string, opts: ExpandOptions, ctx: ZoneCon
   const hidden = isPrivate(component);
   const title = hidden ? "Busy" : cleanText(occ.item.summary) || "(No title)";
   const location = hidden ? "" : cleanText(occ.item.location);
+  // Read for leave hints only; never written to a row.
+  const description = hidden ? "" : typeof occ.item.description === "string" ? occ.item.description : "";
   const base = {
     source: opts.source,
     feedId: opts.feedId,
@@ -236,7 +238,7 @@ function rowsFor(occ: Occurrence, uid: string, opts: ExpandOptions, ctx: ZoneCon
   const date = formatInTimeZone(start, ctx.householdZone, "yyyy-MM-dd");
   if (date < opts.windowStart || date > opts.windowEnd) return [];
   const iso = (d: Date): string => formatInTimeZone(d, ctx.householdZone, "yyyy-MM-dd'T'HH:mm:ssXXX");
-  const leave = hidden ? {} : leaveHintsFor(component, occ.item, start.getTime(), ctx.householdZone);
+  const leave = hidden ? {} : leaveHintsFor(component, description, start.getTime(), ctx.householdZone);
   return [
     {
       ...base,
