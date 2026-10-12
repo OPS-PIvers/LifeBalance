@@ -79,21 +79,21 @@ function timeBefore(hourText: string, minuteText: string | undefined, meridiem: 
   let hour = Number(hourText);
   const minute = Number(minuteText ?? 0);
   if (hour < 0 || hour > 23 || minute > 59) return null;
-  const date = formatInTimeZone(new Date(startMs), timeZone, "yyyy-MM-dd");
-  const at = (h: number): number => fromZonedTime(`${date}T${String(h).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`, timeZone).getTime();
+  // The start's day, then the evening before (an early-morning flight left for at 11:30 pm).
+  const days = [formatInTimeZone(new Date(startMs), timeZone, "yyyy-MM-dd"), formatInTimeZone(new Date(startMs - 86_400_000), timeZone, "yyyy-MM-dd")];
+  const hm = (h: number): string => `${String(h).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
   const fits = (ms: number): boolean => ms < startMs && startMs - ms <= LEAVE_WINDOW_MS;
   if (meridiem) {
     if (hour < 1 || hour > 12) return null;
-    const pm = meridiem.startsWith("p");
-    hour = (hour % 12) + (pm ? 12 : 0);
-    const ms = at(hour);
-    return fits(ms) ? ms : null;
+    hour = (hour % 12) + (meridiem.startsWith("p") ? 12 : 0);
   }
-  // 24-hour times (17:15) are what they say; otherwise the latest fit wins.
-  const options = hour > 12 || hour === 0 ? [hour] : [hour % 12 + 12, hour % 12];
-  for (const h of options) {
-    const ms = at(h);
-    if (fits(ms)) return ms;
+  // 24-hour times (17:15) and am/pm times are what they say; otherwise the latest fit wins.
+  const hours = meridiem || hour > 12 || hour === 0 ? [hour] : [(hour % 12) + 12, hour % 12];
+  for (const day of days) {
+    for (const h of hours) {
+      const ms = fromZonedTime(`${day}T${hm(h)}`, timeZone).getTime();
+      if (fits(ms)) return ms;
+    }
   }
   return null;
 }

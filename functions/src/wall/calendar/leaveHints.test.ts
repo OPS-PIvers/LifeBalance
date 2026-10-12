@@ -50,6 +50,12 @@ describe("parseLeaveHints", () => {
     expect(hints(text).earlyMin).toBe(min);
   });
 
+  it("finds a leave time the evening before an early-morning start", () => {
+    const early = Date.parse("2026-10-15T01:30:00-05:00");
+    expect(parseLeaveHints("Leave at 11:30 pm", early, TZ).leaveAt).toBe("2026-10-14T23:30:00-05:00");
+    expect(parseLeaveHints("Arrive by 12:45", early, TZ).earlyMin).toBe(45);
+  });
+
   it("reads several hints from one description", () => {
     expect(hints("Away game. 30 min drive, arrive 20 minutes early.")).toEqual({ travelMin: 30, earlyMin: 20 });
   });
