@@ -2258,8 +2258,12 @@ export interface WallSettings {
   wakeWord: boolean;
   wakeModel: WallWakeModel;
   sound: WallSoundSettings;
-  /** Starting-soon alerts: minutes ahead for an event with no travel time. */
-  alerts: { leadMin: number };
+  /**
+   * Starting-soon alerts. `leadMin`: minutes ahead for an event with no travel
+   * time. `earlyMin`: minutes to arrive before the start, so leave time is
+   * start − trip − earlyMin (an event's own "arrive 15 min early" wins).
+   */
+  alerts: { leadMin: number; earlyMin: number };
   /** Server-written: a home address is saved (the address itself is server-only). */
   homeAddressSet?: boolean;
   /** Server-written: why travel times aren't working, worded for the admin. */
@@ -2327,4 +2331,13 @@ export interface WallEvent {
   start?: string; // ISO with offset, timed events only
   end?: string;
   location?: string;
+  /**
+   * When to leave, as the event itself says (read from its description and
+   * Apple's Travel Time at sync; the description never reaches the wall).
+   * `leaveAt`: a set leave time (ISO). `travelMin`: the trip, in place of the
+   * measured route. `earlyMin`: how early to arrive, in place of the wall's.
+   */
+  leaveAt?: string;
+  travelMin?: number;
+  earlyMin?: number;
 }

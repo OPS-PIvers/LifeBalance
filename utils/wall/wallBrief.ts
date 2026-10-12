@@ -1,6 +1,7 @@
 import type { WallEvent, WallTravel } from '@/types/schema';
 import { longDateText } from './wallCalendar';
 import { eventsOn } from './wallSelectors';
+import { leavePlan, routeFor } from './wallLeave';
 import { spokenTime } from './wallSpeech';
 import type { WallWeather, WeatherIcon } from './wallWeather';
 
@@ -91,6 +92,8 @@ export interface BriefInput {
   date: string;
   events: readonly WallEvent[];
   travel: readonly WallTravel[];
+  /** Minutes to arrive early (wall setting), for "leave by". */
+  earlyMin: number;
   weather: WallWeather | null;
   /** Wall clock, for skipping what's already over today. */
   now: number;
@@ -103,7 +106,7 @@ export interface BriefInput {
   todosDue?: number;
 }
 
-export function composeBrief({ day, date, events, travel, weather, now, timeZone, person, dinner, todosDue }: BriefInput): WallBrief {
+export function composeBrief({ day, date, events, travel, earlyMin, weather, now, timeZone, person, dinner, todosDue }: BriefInput): WallBrief {
   const lines: BriefLine[] = [];
   const w = weatherLine(day, date, weather);
   if (w) lines.push(w);
@@ -134,8 +137,8 @@ export function composeBrief({ day, date, events, travel, weather, now, timeZone
   for (const e of timed.slice(0, MAX_EVENTS)) {
     const at = spokenTime(e.start ?? '', timeZone);
     const who = person(e.ownerKey);
-    const t = minutes.get(e.id);
-    const leaveBy = t && t.start === e.start && t.minutes !== null ? spokenTime(new Date(Date.parse(e.start ?? '') - t.minutes * 60_000).toISOString(), timeZone) : null;
+    const plan = leavePlan(e, routeFor(e, minutes), earlyMin);
+    const leaveBy = plan ? spokenTime(new Date(plan.at).toISOString(), timeZone) : null;
     lines.push({
       kind: 'event',
       text: `${at} · ${e.title}${who ? ` · ${who}` : ''}${leaveBy ? ` · leave by ${leaveBy}` : ''}`,

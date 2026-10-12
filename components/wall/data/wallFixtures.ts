@@ -41,7 +41,7 @@ export function wallTestFixtures(
     { id: 'fx4', source: 'bill', ownerKey: 'family', title: 'Water bill', allDay: true, date: day(1) },
     { id: 'fx5', source: 'feed', ownerKey: 'test-user-id', title: 'Dentist', allDay: false, date: day(1), start: at(1, '08:00'), end: at(1, '09:00') },
     { id: 'fx6', source: 'holiday', ownerKey: 'family', title: 'Columbus Day', allDay: true, date: day(2) },
-    // On the Kids calendar (alerts on) with a 20-minute drive: a heads-up at 4:00, "Time to leave" at 4:10.
+    // On the Kids calendar (alerts on) with a 20-minute drive, arriving 10 min early: a heads-up at 3:50, "Time to leave" at 4:00.
     { id: 'fx8', source: 'feed', feedId: 'kids', ownerKey: 'test-user-id', title: 'Piano lesson', allDay: false, date: day(0), start: at(0, '16:30'), end: at(0, '17:00'), location: 'Lakeside Music, Wayzata' },
   ];
   if (board) {

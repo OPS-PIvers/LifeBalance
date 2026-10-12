@@ -18,6 +18,8 @@ export const WALL_VOLUMES: readonly number[] = [0.4, 0.7, 1];
 export const WALL_RAIL_MODES: readonly WallRailMode[] = ['shown', 'tap', 'hidden'];
 export const WALL_HOMES: readonly WallHome[] = ['board', 'week'];
 export const WALL_ALERT_LEADS: readonly number[] = [5, 10, 15, 30];
+/** How early to arrive: leave time is the start minus the trip minus this. */
+export const WALL_ARRIVE_EARLY: readonly number[] = [0, 5, 10, 15];
 
 /** openWakeWord's pre-trained English wake words the wall ships (public/voice/openwakeword-*). */
 export const WAKE_BUILT_INS: readonly { keyword: string; label: string }[] = [
@@ -77,7 +79,7 @@ export const DEFAULT_WALL_SETTINGS: WallSettings = {
   wakeWord: true,
   wakeModel: DEFAULT_WAKE_MODEL,
   sound: { confirm: 'speak', alerts: 'speak', volume: 0.7 },
-  alerts: { leadMin: 10 },
+  alerts: { leadMin: 10, earlyMin: 10 },
 };
 
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -196,6 +198,7 @@ export function resolveWallSettings(raw: unknown): WallSettings {
     },
     alerts: {
       leadMin: WALL_ALERT_LEADS.includes(Number(alerts['leadMin'])) ? Number(alerts['leadMin']) : def.alerts.leadMin,
+      earlyMin: typeof alerts['earlyMin'] === 'number' && WALL_ARRIVE_EARLY.includes(alerts['earlyMin']) ? alerts['earlyMin'] : def.alerts.earlyMin,
     },
   };
   if (

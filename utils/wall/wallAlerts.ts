@@ -1,10 +1,12 @@
 import type { WallCalendarFeed, WallEvent, WallTravel, WallTravelMode } from '@/types/schema';
 import { spokenDuration, spokenTime } from './wallSpeech';
+import { leavePlan, routeFor } from './wallLeave';
 
 /**
  * Starting-soon alerts (docs/plans/wall-display-kiosk.md §12 "Alerts").
  *
- * Only timed events from calendars with alerts on. With a travel time: a
+ * Only timed events from calendars with alerts on. With a leave time
+ * (./wallLeave.ts: the event's own, or start − trip − how early to arrive): a
  * heads-up 10 min before leave-by, then "Time to leave" at leave-by. Without
  * one (no location, no home address, no route): one alert `leadMin` before
  * the start.
@@ -20,6 +22,8 @@ export interface WallAlert {
   /** When it fires (ms). */
   at: number;
   start: number;
+  /** When to leave (ms), or null for a plain starting-soon alert. */
+  leaveBy: number | null;
   travelMin: number | null;
   mode: WallTravelMode;
 }
@@ -37,7 +41,8 @@ export function planAlerts(
   events: readonly WallEvent[],
   feeds: readonly WallCalendarFeed[],
   travel: readonly WallTravel[],
-  leadMin: number
+  leadMin: number,
+  earlyMin: number
 ): WallAlert[] {
   const modes = new Map(feeds.filter(f => f.alerts === true).map(f => [f.id, f.travelMode ?? 'drive']));
   const minutes = new Map(travel.map(t => [t.id, t]));
@@ -47,14 +52,12 @@ export function planAlerts(
     if (!mode || event.allDay || event.source !== 'feed' || !event.start) continue;
     const start = Date.parse(event.start);
     if (Number.isNaN(start)) continue;
-    const t = minutes.get(event.id);
-    const travelMin = t && t.start === event.start && t.minutes !== null ? t.minutes : null;
-    const base = { event, start, travelMin, mode: t?.mode ?? mode };
+    const plan = leavePlan(event, routeFor(event, minutes), earlyMin);
+    const base = { event, start, leaveBy: plan?.at ?? null, travelMin: plan?.travelMin ?? null, mode: minutes.get(event.id)?.mode ?? mode };
     const key = (kind: AlertKind) => `${event.id}|${event.start}|${kind}`;
-    if (travelMin !== null) {
-      const leaveBy = start - travelMin * MIN;
-      out.push({ ...base, key: key('heads-up'), kind: 'heads-up', at: leaveBy - ALERT_HEADS_UP_MIN * MIN });
-      out.push({ ...base, key: key('leave'), kind: 'leave', at: leaveBy });
+    if (plan) {
+      out.push({ ...base, key: key('heads-up'), kind: 'heads-up', at: plan.at - ALERT_HEADS_UP_MIN * MIN });
+      out.push({ ...base, key: key('leave'), kind: 'leave', at: plan.at });
     } else {
       out.push({ ...base, key: key('soon'), kind: 'soon', at: start - leadMin * MIN });
     }
@@ -97,7 +100,8 @@ export function alertWords(alert: WallAlert, now: number, timeZone: string, pers
   const trip = travelMin !== null ? `${spokenDuration(travelMin).replace(/minutes\b/, 'minute').replace(/hours\b/, 'hour')} ${MODE_NOUN[alert.mode]}` : '';
   const tripShort = travelMin !== null ? `${travelMin} min ${MODE_NOUN[alert.mode]}` : '';
   const detail = [at, person, tripShort].filter(Boolean).join(' · ');
-  const leaveByMs = travelMin !== null ? alert.start - travelMin * MIN : alert.start;
+  const leaveByMs = alert.leaveBy ?? alert.start;
+  const tripLine = trip ? ` It's a ${trip}.` : '';
   const lower = title.charAt(0).toLowerCase() + title.slice(1);
   // "Leo, time to leave…" or, for Family, "Time to leave…"
   const say = (rest: string) => (person ? `${person}, ${rest}` : rest.charAt(0).toUpperCase() + rest.slice(1));
@@ -107,7 +111,7 @@ export function alertWords(alert: WallAlert, now: number, timeZone: string, pers
       title,
       detail,
       leaveBy: '',
-      speech: say(`time to leave for ${lower}. It's a ${trip}.`),
+      speech: say(`time to leave for ${lower}.${tripLine}`),
     };
   }
   if (alert.kind === 'heads-up') {
@@ -117,7 +121,7 @@ export function alertWords(alert: WallAlert, now: number, timeZone: string, pers
       title,
       detail,
       leaveBy: `Leave by ${spokenTime(new Date(leaveByMs).toISOString(), timeZone)}`,
-      speech: say(`${lower} at ${at}. Leave in ${spokenDuration(left)}. It's a ${trip}.`),
+      speech: say(`${lower} at ${at}. Leave in ${spokenDuration(left)}.${tripLine}`),
     };
   }
   const left = Math.max(1, Math.round((alert.start - now) / MIN));

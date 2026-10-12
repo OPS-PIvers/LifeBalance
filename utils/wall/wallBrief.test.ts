@@ -50,19 +50,28 @@ describe('composeBrief', () => {
   const travel = [{ id: 'b', minutes: 20, mode: 'drive' as const, start: '2026-10-05T16:30:00-05:00', checkedAt: '' }];
 
   it('reads today: weather, what’s left, bills, and leave-by times', () => {
-    const brief = composeBrief({ day: 'today', date: TODAY, events, travel, weather, now: NOW, timeZone: TZ, person });
+    const brief = composeBrief({ day: 'today', date: TODAY, events, travel, earlyMin: 10, weather, now: NOW, timeZone: TZ, person });
     expect(brief.lines.map(l => l.speech)).toEqual([
       "It's 54 degrees and partly cloudy, with a high of 61. Rain likely 6 to 8 pm.",
       'You have 2 things left today.',
       'The water bill is due.',
-      'At 4:30 PM, Leo has piano lesson. Leave by 4:10 PM.',
+      'At 4:30 PM, Leo has piano lesson. Leave by 4 PM.',
       'At 5 PM, dinner at Grandma’s.',
     ]);
-    expect(brief.lines[3]).toMatchObject({ text: '4:30 PM · Piano lesson · Leo · leave by 4:10 PM', ownerKey: 'leo' });
+    expect(brief.lines[3]).toMatchObject({ text: '4:30 PM · Piano lesson · Leo · leave by 4 PM', ownerKey: 'leo' });
+  });
+
+  it('uses a leave time the event states, and its own trip and arrive-early minutes', () => {
+    const stated = [
+      ev('b', 'Piano lesson', '2026-10-05T16:30:00-05:00', { leaveAt: '2026-10-05T15:55:00-05:00' }),
+      ev('c', 'Away game', '2026-10-05T17:00:00-05:00', { travelMin: 30, earlyMin: 15 }),
+    ];
+    const brief = composeBrief({ day: 'today', date: TODAY, events: stated, travel, earlyMin: 10, weather: null, now: NOW, timeZone: TZ, person });
+    expect(brief.lines.map(l => l.speech).slice(1)).toEqual(['At 4:30 PM, piano lesson. Leave by 3:55 PM.', 'At 5 PM, away game. Leave by 4:15 PM.']);
   });
 
   it('reads tomorrow with its forecast', () => {
-    const brief = composeBrief({ day: 'tomorrow', date: TOMORROW, events, travel, weather, now: NOW, timeZone: TZ, person });
+    const brief = composeBrief({ day: 'tomorrow', date: TOMORROW, events, travel, earlyMin: 10, weather, now: NOW, timeZone: TZ, person });
     expect(brief.lines.map(l => l.speech)).toEqual([
       "Tomorrow looks rainy, with a high of 58 and a low of 41. There's an 80 percent chance of rain.",
       'You have 1 thing tomorrow.',
@@ -71,12 +80,12 @@ describe('composeBrief', () => {
   });
 
   it('says so when the day is empty, and works without weather', () => {
-    const brief = composeBrief({ day: 'today', date: TODAY, events: [], travel: [], weather: null, now: NOW, timeZone: TZ, person });
+    const brief = composeBrief({ day: 'today', date: TODAY, events: [], travel: [], earlyMin: 10, weather: null, now: NOW, timeZone: TZ, person });
     expect(brief.lines).toEqual([{ kind: 'count', text: 'Nothing else on the calendar today', speech: 'Nothing else is on the calendar today.' }]);
   });
 
   it('ends with dinner and the to-dos when they are given', () => {
-    const base = { date: TODAY, events: [], travel: [], weather: null, now: NOW, timeZone: TZ, person };
+    const base = { date: TODAY, events: [], travel: [], earlyMin: 10, weather: null, now: NOW, timeZone: TZ, person };
     expect(composeBrief({ ...base, day: 'today', dinner: 'Tacos', todosDue: 3 }).lines.slice(1).map(l => l.speech)).toEqual([
       'Dinner tonight is Tacos.',
       'There are 3 to-dos due today.',
@@ -89,13 +98,13 @@ describe('composeBrief', () => {
   });
 
   it('titles its card by the day', () => {
-    const brief = composeBrief({ day: 'tomorrow', date: TOMORROW, events: [], travel: [], weather: null, now: NOW, timeZone: TZ, person });
+    const brief = composeBrief({ day: 'tomorrow', date: TOMORROW, events: [], travel: [], earlyMin: 10, weather: null, now: NOW, timeZone: TZ, person });
     expect(brief).toMatchObject({ title: 'Tomorrow', label: 'Tomorrow', icon: 'calendar', kicker: 'Tuesday, October 6' });
   });
 
   it('caps a busy day', () => {
     const many = Array.from({ length: 11 }, (_, i) => ev(`m${i}`, `Thing ${i}`, `2026-10-06T${String(8 + i).padStart(2, '0')}:00:00-05:00`));
-    const brief = composeBrief({ day: 'tomorrow', date: TOMORROW, events: many, travel: [], weather: null, now: NOW, timeZone: TZ, person });
+    const brief = composeBrief({ day: 'tomorrow', date: TOMORROW, events: many, travel: [], earlyMin: 10, weather: null, now: NOW, timeZone: TZ, person });
     expect(brief.lines.filter(l => l.kind === 'event')).toHaveLength(8);
     expect(brief.lines.at(-1)?.text).toBe('and 3 more');
   });

@@ -116,6 +116,8 @@ export async function updateHouseholdTravel(
     const destination = routableLocation(typeof e.location === "string" ? e.location : undefined);
     const startMs = typeof e.start === "string" ? Date.parse(e.start) : NaN;
     if (!mode || !destination || e.allDay === true || Number.isNaN(startMs)) continue;
+    // The event says when to leave or how long the trip is: no route needed.
+    if (typeof e.leaveAt === "string" || typeof e.travelMin === "number") continue;
     const prev = existing.get(doc.id);
     const same = prev && prev.start === e.start && prev.mode === mode && prev.homeKey === homeKey && prev.location === homeKeyOf(destination);
     const last = same && typeof prev.checkedAt === "string" ? Date.parse(prev.checkedAt) : null;
