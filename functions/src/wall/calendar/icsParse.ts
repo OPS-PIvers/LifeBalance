@@ -29,6 +29,12 @@ export interface WallEventRow {
   source: WallEventSource;
   feedId?: string;
   ownerKey: string;
+  /**
+   * Set when a family event names two or more members: the wall shows it in
+   * each of their lanes. `ownerKey` stays "family" for those (one named member
+   * becomes the `ownerKey` instead).
+   */
+  ownerKeys?: string[];
   title: string;
   allDay: boolean;
   date: string; // yyyy-MM-dd in the household zone
@@ -44,6 +50,8 @@ export interface WallEventRow {
 export interface ExpandOptions {
   feedId: string;
   ownerKey: string;
+  /** Who an event is for, read from its title and description (ownerMatch.ts). Family feeds only. */
+  owners?: (title: string, description: string) => string[];
   source: "feed" | "holiday";
   /** Household IANA zone; timed events land on this zone's dates. */
   timeZone: string;
@@ -203,12 +211,14 @@ function rowsFor(occ: Occurrence, uid: string, opts: ExpandOptions, ctx: ZoneCon
   const hidden = isPrivate(component);
   const title = hidden ? "Busy" : cleanText(occ.item.summary) || "(No title)";
   const location = hidden ? "" : cleanText(occ.item.location);
-  // Read for leave hints only; never written to a row.
+  // Read for leave hints and for who the event names; never written to a row.
   const description = hidden ? "" : typeof occ.item.description === "string" ? occ.item.description : "";
+  const named = hidden || !opts.owners ? [] : opts.owners(title, description.slice(0, 4000));
   const base = {
     source: opts.source,
     feedId: opts.feedId,
-    ownerKey: opts.ownerKey,
+    ownerKey: named.length === 1 ? named[0] ?? opts.ownerKey : opts.ownerKey,
+    ...(named.length > 1 ? { ownerKeys: named } : {}),
     title,
     ...(location ? { location } : {}),
   };

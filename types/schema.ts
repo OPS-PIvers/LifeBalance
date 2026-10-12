@@ -2325,6 +2325,13 @@ export interface WallEvent {
   feedId?: string;
   /** A member uid or 'family'. */
   ownerKey: string;
+  /**
+   * A shared-calendar event that names two or more members ("Pick up Leo and
+   * Mia"): it shows in each of their lanes, and `ownerKey` stays 'family'. One
+   * named member is written as the `ownerKey` instead. Server-written
+   * (functions/src/wall/calendar/ownerMatch.ts).
+   */
+  ownerKeys?: string[];
   title: string;
   allDay: boolean;
   date: string;   // yyyy-MM-dd, local

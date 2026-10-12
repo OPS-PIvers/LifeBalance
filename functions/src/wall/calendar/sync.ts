@@ -15,6 +15,7 @@ import { createHash } from "crypto";
 import { sendNotificationToUser } from "../../shared/notifications";
 import { FeedFetchError, fetchIcs, type IcsFetchResult } from "./icsFetch";
 import { IcsParseError, expandIcs, type WallEventRow } from "./icsParse";
+import { eventOwners, memberNames, namesKey, type MemberName } from "./ownerMatch";
 import { usHolidaysIcs } from "./usHolidays";
 import {
   BILLS_INDEX_ID,
@@ -67,6 +68,21 @@ interface HouseholdContext {
   timeZone: string;
   window: WallWindow;
   now: Date;
+  /** Household first names for family feeds, read once per sync when first needed. */
+  names?: Promise<MemberName[]>;
+}
+
+function householdNames(ctx: HouseholdContext): Promise<MemberName[]> {
+  ctx.names ??= ctx.db
+    .collection(`households/${ctx.hid}/members`)
+    .get()
+    .then((snap) => memberNames(snap.docs.map((d) => ({ uid: d.id, displayName: d.data().displayName }))))
+    .catch((error: unknown) => {
+      // Without names every family event stays under Everyone, as before.
+      logger.warn("wall calendar: couldn't read member names", { hid: ctx.hid, error: String(error) });
+      return [];
+    });
+  return ctx.names;
 }
 
 const toMillis = (v: unknown): number | null =>
@@ -152,7 +168,9 @@ async function syncFeed(
   const secretSnap = await secretRef.get();
   const secret = secretSnap.data() ?? {};
   const ownerKey = typeof feed.ownerKey === "string" ? feed.ownerKey : "family";
-  const key = syncKey(ctx.window, ctx.timeZone, ownerKey);
+  // A shared calendar's events go to whoever they name; see ownerMatch.ts.
+  const names = ownerKey === "family" && feed.kind !== "holidays" ? await householdNames(ctx) : [];
+  const key = names.length > 0 ? `${syncKey(ctx.window, ctx.timeZone, ownerKey)}|${namesKey(names)}` : syncKey(ctx.window, ctx.timeZone, ownerKey);
   const sameKey = secret.syncKey === key && parseEventIndex(secret.eventIndex) !== null;
   const nowTs = admin.firestore.Timestamp.fromDate(ctx.now);
 
@@ -181,6 +199,7 @@ async function syncFeed(
         const expanded = expandIcs(result.text, {
           feedId,
           ownerKey,
+          ...(names.length > 0 ? { owners: (title: string, description: string) => eventOwners(title, description, names) } : {}),
           source: holidays ? "holiday" : "feed",
           timeZone: ctx.timeZone,
           windowStart: ctx.window.start,

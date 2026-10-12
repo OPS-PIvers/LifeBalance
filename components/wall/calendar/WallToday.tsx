@@ -1,6 +1,6 @@
 import React, { useMemo, useRef } from 'react';
 import { eventTimeText, todayFocus, todayTimeline, untilText } from '@/utils/wall/wallCalendar';
-import type { WallPeople } from '@/utils/wall/wallPeople';
+import { eventOwnerKeys, type WallPeople } from '@/utils/wall/wallPeople';
 import type { WallWeather } from '@/utils/wall/wallWeather';
 import { useWallData } from '@/components/wall/data/wallData';
 import { useWallFit } from '@/components/wall/useWallFit';
@@ -61,7 +61,9 @@ const WallToday: React.FC<WallTodayProps> = ({ today, now, timeZone, people, wea
             <span className="tm">{lead.time}</span>
             <span className="sep" aria-hidden="true">·</span>
             <WallAvatar people={people} who={lead.event.ownerKey} small />
-            {lead.event.ownerKey === 'family' || !lead.event.ownerKey ? 'Everyone' : people.name(lead.event.ownerKey)}
+            {lead.event.ownerKey === 'family' || !lead.event.ownerKey
+              ? lead.event.ownerKeys?.length ? eventOwnerKeys(lead.event).map(people.firstName).filter(Boolean).join(' & ') || 'Everyone' : 'Everyone'
+              : people.name(lead.event.ownerKey)}
           </span>
         </div>
       ) : (
