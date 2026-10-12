@@ -1,4 +1,4 @@
-import type { HouseholdMember } from '@/types/schema';
+import type { HouseholdMember, WallEvent } from '@/types/schema';
 import { FAMILY_COLOR, buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 
 /**
@@ -33,4 +33,9 @@ export function makeWallPeople(members: readonly HouseholdMember[], dark: boolea
     },
     members: members.map(m => ({ uid: m.uid, name: names.get(m.uid) ?? 'Someone' })),
   };
+}
+
+/** Everyone an event is for: its named members, else its single owner. */
+export function eventOwnerKeys(event: Pick<WallEvent, 'ownerKey' | 'ownerKeys'>): string[] {
+  return event.ownerKeys && event.ownerKeys.length > 0 ? event.ownerKeys : [event.ownerKey];
 }

@@ -175,6 +175,27 @@ describe("syncHouseholdCalendars", () => {
     expect(JSON.stringify(feed("f1"))).not.toContain("cal.example.com");
   });
 
+  it("files a shared calendar's events under the members they name, and re-reads it when names change", async () => {
+    fake.store.set(`households/${HID}/members/admin1`, { role: "admin", displayName: "Paul Ivers" });
+    fake.store.set(`households/${HID}/members/kid_leo`, { role: "member", displayName: "Leo", isManaged: true });
+    fake.store.set(`households/${HID}/calendarFeeds/f1`, { label: "Family", ownerKey: "family", kind: "ics", createdAt: fake.Timestamp.fromDate(NOW) });
+    feedBody = ics(["a", "20261010", "Leo soccer"], ["b", "20261011", "Paul + Leo haircut"], ["c", "20261012", "Pumpkin patch"]);
+    await syncHouseholdCalendars(db, HID, { now: NOW });
+    const owner = (title: string) => events().find((e) => e.title === title);
+    expect(owner("Leo soccer")).toMatchObject({ ownerKey: "kid_leo" });
+    expect(owner("Paul + Leo haircut")).toMatchObject({ ownerKey: "family", ownerKeys: ["admin1", "kid_leo"] });
+    expect(owner("Pumpkin patch")).toMatchObject({ ownerKey: "family" });
+    expect(owner("Pumpkin patch")).not.toHaveProperty("ownerKeys");
+    // Holidays are never matched.
+    expect(events().filter((e) => e.source === "holiday").every((e) => e.ownerKey === "family")).toBe(true);
+
+    // A rename re-reads the feed even though its body is unchanged.
+    fake.store.set(`households/${HID}/members/kid_leo`, { role: "member", displayName: "Leonard", isManaged: true });
+    await syncHouseholdCalendars(db, HID, { now: NOW });
+    expect(owner("Leo soccer")).toMatchObject({ ownerKey: "family" });
+    expect(owner("Paul + Leo haircut")).toMatchObject({ ownerKey: "admin1" });
+  });
+
   it("re-syncs an unchanged feed without touching wallEvents, sending its ETag", async () => {
     await syncHouseholdCalendars(db, HID, { now: NOW });
     fake.writes.length = 0;

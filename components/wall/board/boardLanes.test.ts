@@ -19,6 +19,15 @@ describe('boardLanes', () => {
     expect(by['jordan']).toEqual({ rows: [], todos: [] });
   });
 
+  it('puts an event naming several people in each of their lanes, once', () => {
+    const both = { ...row('pickup', 'family'), event: { id: 'pickup', title: 'pickup', ownerKey: 'family', ownerKeys: ['leo', 'alex'] } as WallEvent };
+    const lanes = boardLanes([both], [], ['alex', 'jordan', 'leo']);
+    const by = Object.fromEntries(lanes.map(l => [l.key, l.rows.map(r => r.event.id)]));
+    expect(by).toEqual({ family: [], alex: ['pickup'], jordan: [], leo: ['pickup'] });
+    const gone = { ...both, event: { ...both.event, ownerKeys: ['old1', 'old2'] } };
+    expect(boardLanes([gone], [], ['alex']).at(-1)?.rows.map(r => r.event.id)).toEqual(['pickup']);
+  });
+
   it('sends a former member\'s to-dos to Others rather than dropping them', () => {
     const lanes = boardLanes([], [todo('old', 'gone')], ['alex']);
     expect(keys(lanes)).toEqual(['family', 'alex', BOARD_OTHERS]);

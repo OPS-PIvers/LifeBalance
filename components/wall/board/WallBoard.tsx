@@ -6,7 +6,7 @@ import { boardLayout, boardLayoutToSave } from './boardPreview';
 import { clockText, zonedParts } from '@/utils/wall/wallTime';
 import { DEFAULT_EVENT_MS, dueTodayChecklist, eventTimeText, todayFocus, todayTimeline, type TodayRow } from '@/utils/wall/wallCalendar';
 import { subtaskProgress } from '@/utils/subtasks';
-import type { WallPeople } from '@/utils/wall/wallPeople';
+import { eventOwnerKeys, type WallPeople } from '@/utils/wall/wallPeople';
 import type { WallWeather } from '@/utils/wall/wallWeather';
 import { useWallData } from '@/components/wall/data/wallData';
 import { WallAvatar } from '@/components/wall/WallAvatar';
@@ -173,7 +173,7 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
           <span className="k">
             {focus.leadIsNow ? 'Now' : 'Next up'}
             <span aria-hidden="true"> · </span>
-            {laneName(isFamily(lead.event.ownerKey) ? 'family' : (lead.event.ownerKey ?? 'family'))}
+            {eventOwnerKeys(lead.event).map(key => laneName(isFamily(key) ? 'family' : key)).join(' & ')}
           </span>
           <b className="t">{lead.event.title}</b>
           <span className="w">
@@ -257,7 +257,7 @@ const LaneRows: React.FC<{ rows: TodayRow[]; leadId: string | undefined; owner?:
   return (
     <>
       {ahead.slice(0, LANE_AHEAD).map(row => (
-        <LaneItem key={row.event.id} event={row.event} time={owner ? `${row.time} · ${owner(row.event.ownerKey)}` : row.time} lead={row.event.id === leadId} />
+        <LaneItem key={row.event.id} event={row.event} time={owner ? `${row.time} · ${eventOwnerKeys(row.event).map(owner).join(' & ')}` : row.time} lead={row.event.id === leadId} />
       ))}
       {more > 0 && <span className="lm">+{more} more</span>}
     </>

@@ -189,6 +189,40 @@ describe("expandIcs", () => {
     expect(row?.location).toBeUndefined();
   });
 
+  it("files a family event under the members it names, and never reads a private one", () => {
+    const text = cal(
+      ...[
+        ["n1", "Leo soccer", ""],
+        ["n2", "Dentist", "For Mia"],
+        ["n3", "Pick up Leo and Mia", ""],
+        ["n4", "Farmers market", ""],
+      ].flatMap(([uid, summary, description], i) => [
+        "BEGIN:VEVENT",
+        `UID:${uid}`,
+        `DTSTART:2026110${i + 1}T150000Z`,
+        `SUMMARY:${summary}`,
+        ...(description ? [`DESCRIPTION:${description}`] : []),
+        "END:VEVENT",
+      ]),
+      "BEGIN:VEVENT",
+      "UID:n5",
+      "DTSTART:20261106T150000Z",
+      "CLASS:PRIVATE",
+      "SUMMARY:Leo doctor",
+      "END:VEVENT"
+    );
+    const owners = (title: string, description: string): string[] =>
+      [["leo", "Leo"], ["mia", "Mia"]].filter(([, n]) => `${title} ${description}`.includes(n ?? "")).map(([uid]) => uid ?? "");
+    const rows = expandIcs(text, opts({ ownerKey: "family", owners })).rows;
+    expect(rows.map((r) => [r.title, r.ownerKey, r.ownerKeys])).toEqual([
+      ["Leo soccer", "leo", undefined],
+      ["Dentist", "mia", undefined],
+      ["Pick up Leo and Mia", "family", ["leo", "mia"]],
+      ["Farmers market", "family", undefined],
+      ["Busy", "family", undefined],
+    ]);
+  });
+
   it("caps the rows and reports truncation", () => {
     const text = cal(
       "BEGIN:VEVENT",
