@@ -7,6 +7,8 @@ interface Options {
   feeds: readonly WallCalendarFeed[];
   travel: readonly WallTravel[];
   leadMin: number;
+  /** Minutes to arrive early (wall setting). */
+  earlyMin: number;
   /** The wall's minute clock. */
   now: Date;
 }
@@ -15,8 +17,8 @@ interface Options {
  * Starting-soon alerts (plan §12): on each minute tick, the next due alert
  * that hasn't been shown (remembered across reloads) comes up for a minute.
  */
-export function useWallAlerts({ events, feeds, travel, leadMin, now }: Options) {
-  const plans = useMemo(() => planAlerts(events, feeds, travel, leadMin), [events, feeds, travel, leadMin]);
+export function useWallAlerts({ events, feeds, travel, leadMin, earlyMin, now }: Options) {
+  const plans = useMemo(() => planAlerts(events, feeds, travel, leadMin, earlyMin), [events, feeds, travel, leadMin, earlyMin]);
   const [seen, setSeen] = useState<ReadonlySet<string>>(readSeenAlerts);
   const [alert, setAlert] = useState<WallAlert | null>(null);
 

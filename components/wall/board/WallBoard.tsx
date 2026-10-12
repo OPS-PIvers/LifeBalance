@@ -8,6 +8,7 @@ import { DEFAULT_EVENT_MS, dueTodayChecklist, eventTimeText, todayFocus, todayTi
 import { subtaskProgress } from '@/utils/subtasks';
 import { eventOwnerKeys, type WallPeople } from '@/utils/wall/wallPeople';
 import type { WallWeather } from '@/utils/wall/wallWeather';
+import { leavePlan, routeFor } from '@/utils/wall/wallLeave';
 import { useWallData } from '@/components/wall/data/wallData';
 import { WallAvatar } from '@/components/wall/WallAvatar';
 import { WallWeatherIcon } from '@/components/wall/WallIcons';
@@ -58,7 +59,7 @@ const isFamily = (key: string | undefined) => !key || key === 'family';
  * modules Week's panel has.
  */
 const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, weather, onWeather, onOpenDay, onOpenMeal, layout, onLayout }) => {
-  const { wallEvents, travel, todos, mealPlan, shoppingList } = useWallData();
+  const { wallEvents, travel, todos, mealPlan, shoppingList, settings } = useWallData();
   const p = zonedParts(now, timeZone);
   const timeline = useMemo(() => todayTimeline(wallEvents, today, now, timeZone), [wallEvents, today, now, timeZone]);
   const focus = useMemo(() => todayFocus(timeline, now), [timeline, now]);
@@ -67,8 +68,9 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
   const leadStart = lead ? Date.parse(lead.event.start ?? '') : NaN;
   // No end time: it runs for an hour, as todayFocus counts it, so the countdown agrees with "Now".
   const leadEnd = lead?.event.end ? Date.parse(lead.event.end) : leadStart + DEFAULT_EVENT_MS;
-  const drive = lead ? travel.find(t => t.id === lead.event.id) : undefined;
-  const leaveMs = drive?.minutes != null && Number.isFinite(leadStart) ? leadStart - drive.minutes * 60000 - now.getTime() : NaN;
+  // When to leave: the event's own leave time, or start − trip − arrive-early (utils/wall/wallLeave.ts).
+  const plan = lead ? leavePlan(lead.event, routeFor(lead.event, travel), settings.alerts.earlyMin) : null;
+  const leaveMs = plan ? plan.at - now.getTime() : NaN;
   // With a drive ahead, when to leave is the number that matters, so it takes the countdown's place.
   // At leave time the leave alert says so, and the number goes back to counting down to the event.
   const driveAhead = !focus.leadIsNow && Number.isFinite(leaveMs);
@@ -180,7 +182,7 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
             {lead.time}
             {lead.event.end ? `–${eventTimeText(lead.event.end, timeZone)}` : ''}
             {lead.event.location ? ` · ${lead.event.location}` : ''}
-            {driveAhead && drive?.minutes != null ? ` · ${drive.minutes} min drive` : ''}
+            {driveAhead && plan?.travelMin != null ? ` · ${plan.travelMin} min drive` : ''}
           </span>
           <span className="cd" aria-hidden={leaving ? undefined : true}>
             {(() => {

@@ -93,6 +93,19 @@ describe("updateHouseholdTravel", () => {
     expect(JSON.stringify(store.get(`${H}/wallTravel/soccer`))).not.toMatch(/Home St|Orono Fields/);
   });
 
+  it("skips the route when the event already says when to leave or how long the trip is", async () => {
+    const { db, store } = fakeDb(
+      seed({
+        [`${H}/wallEvents/soccer`]: { feedId: "kids", date: "2026-10-05", allDay: false, start: "2026-10-05T16:00:00-05:00", location: "Orono Fields", travelMin: 25 },
+        [`${H}/wallEvents/game`]: { feedId: "kids", date: "2026-10-05", allDay: false, start: "2026-10-05T17:00:00-05:00", location: "Wayzata HS", leaveAt: "2026-10-05T16:15:00-05:00" },
+      })
+    );
+    const deps = routes({ status: 200, body: { routes: [{ duration: "1320s" }] } });
+    await expect(updateHouseholdTravel(db, "h1", NOW, deps)).resolves.toEqual({ checked: 0 });
+    expect(deps.calls).not.toHaveBeenCalled();
+    expect(store.has(`${H}/wallTravel/game`)).toBe(false);
+  });
+
   it("doesn't ask again until the event is close, then rechecks once", async () => {
     const { db } = fakeDb(seed());
     const deps = routes({ status: 200, body: { routes: [{ duration: "600s" }] } });
