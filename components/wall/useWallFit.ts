@@ -92,3 +92,37 @@ export function useWholeFill(ref: RefObject<HTMLElement | null>, onCut?: (cut: b
     };
   }, [ref]);
 }
+
+/**
+ * Shrinks the type inside `ref` just enough that its longest word fits on one
+ * line, so a narrow box shrinks a word like "Cheeseburger" instead of cutting
+ * it off. Writes `--words` (1 when every word fits); its CSS multiplies its
+ * font size by it. The box must not be wider than its column allows (a
+ * `min-width: 0` flex or grid item), or a long word just widens it.
+ */
+export function useWholeWords(ref: RefObject<HTMLElement | null>, text: string): void {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    let frame = 0;
+    const fit = () => {
+      frame = 0;
+      el.style.setProperty('--words', '1');
+      // A word wider than the box overflows it sideways; the longest word scales with the font.
+      const over = el.clientWidth ? el.scrollWidth / el.clientWidth : 1;
+      el.style.setProperty('--words', over > 1 ? String(Math.floor(100 / over) / 100) : '1');
+    };
+    const later = () => {
+      if (!frame) frame = window.requestAnimationFrame(fit);
+    };
+    fit();
+    // A rotation, a wider clock or weather column, or the display font arriving.
+    const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(later);
+    resize?.observe(el);
+    if ('fonts' in document) void document.fonts.ready.then(later);
+    return () => {
+      resize?.disconnect();
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [ref, text]);
+}
