@@ -41,6 +41,9 @@ describe("parseLeaveHints", () => {
     ["Arrive 15 min early", 15],
     ["Be there 10 minutes early for warmups", 10],
     ["Please be there by 5:00", 30],
+    ["Arrive by 5:00", 30],
+    ["arrive by 4:45pm", 45],
+    ["Tournament. Arrive by 3:00 for check-in", 150],
     ["Warm-ups at 5:10", 20],
     ["Check-in: 5:15pm", 15],
   ])("reads how early to arrive from %j", (text, min) => {

@@ -56,6 +56,8 @@ describe('planAlerts', () => {
     expect(at({ travelMin: 35 })).toEqual([45]);
     expect(at({ earlyMin: 0 })).toEqual([20]);
     expect(at({ travelMin: 15, earlyMin: 5 }, [])).toEqual([20]);
+    // "Arrive by 3:45" (synced as 45 min early) with the 20 min route: leave at 3:25.
+    expect(at({ earlyMin: 45 })).toEqual([65]);
     // A stated leave time after the start is no leave time at all.
     expect(at({ leaveAt: '2026-10-05T17:00:00-05:00' })).toEqual([30]);
   });

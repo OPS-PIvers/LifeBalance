@@ -126,7 +126,8 @@ export function parseLeaveHints(description: string | null | undefined, startMs:
     if (arrive?.[1]) {
       const ms = timeBefore(arrive[1], arrive[2], arrive[3], startMs, timeZone);
       const min = ms === null ? null : Math.round((startMs - ms) / 60_000);
-      if (min !== null && min <= MAX_EARLY_MIN) hints.earlyMin = min;
+      // A stated arrival time is believed as far ahead as a stated leave time.
+      if (min !== null) hints.earlyMin = min;
     }
   }
   return hints;
