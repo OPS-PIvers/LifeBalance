@@ -214,8 +214,14 @@ describe('WallDisplaySettings → Sound', () => {
 describe('WallDisplaySettings → Starting-soon alerts', () => {
   it('sets the lead time', () => {
     renderIt();
-    fireEvent.click(screen.getByRole('radio', { name: '15 min' }));
-    expect(saved()).toMatchObject({ alerts: { leadMin: 15 } });
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Alert lead time' })).getByRole('radio', { name: '15 min' }));
+    expect(saved()).toMatchObject({ alerts: { leadMin: 15, earlyMin: 10 } });
+  });
+
+  it('sets how early to arrive, keeping the lead time', () => {
+    renderIt();
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Arrive early by' })).getByRole('radio', { name: 'On time' }));
+    expect(saved()).toMatchObject({ alerts: { leadMin: 10, earlyMin: 0 } });
   });
 
   it('saves the home address through the server, never to settings', async () => {
