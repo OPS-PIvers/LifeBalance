@@ -34,6 +34,33 @@ const opts = (over: Partial<ExpandOptions> = {}): ExpandOptions => ({
 });
 
 describe("expandIcs", () => {
+  it("carries the event's own leave hints: Apple's Travel Time and the description", () => {
+    const text = cal(
+      "BEGIN:VEVENT",
+      "UID:game@icloud.com",
+      "DTSTART;TZID=America/Chicago:20261014T173000",
+      "DTEND;TZID=America/Chicago:20261014T190000",
+      "SUMMARY:Away game",
+      "LOCATION:Wayzata High School",
+      "DESCRIPTION:Arrive 20 min early\\nBring a water bottle",
+      "X-APPLE-TRAVEL-DURATION;VALUE=DURATION:PT35M",
+      "END:VEVENT",
+      "BEGIN:VEVENT",
+      "UID:private@icloud.com",
+      "DTSTART;TZID=America/Chicago:20261014T090000",
+      "SUMMARY:Doctor",
+      "CLASS:PRIVATE",
+      "DESCRIPTION:Leave at 8:30",
+      "END:VEVENT"
+    );
+    const { rows } = expandIcs(text, opts());
+    const game = rows.find((r) => r.title === "Away game");
+    expect(game).toMatchObject({ travelMin: 35, earlyMin: 20 });
+    expect(game?.leaveAt).toBeUndefined();
+    const hidden = rows.find((r) => r.title === "Busy");
+    expect(hidden?.leaveAt).toBeUndefined();
+  });
+
   it("keeps a weekly Google series at 9:00 local across the November DST change", () => {
     // Google secret-address style: VTIMEZONE + IANA TZID.
     const text = cal(

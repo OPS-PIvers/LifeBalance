@@ -14,6 +14,7 @@ import { MODULE_TITLES } from '@/utils/wall/wallModules';
 import {
   DEFAULT_WALL_SETTINGS,
   WALL_ALERT_LEADS,
+  WALL_ARRIVE_EARLY,
   WALL_IDLE_RETURN_OPTIONS,
   WALL_MODULE_KEYS,
   WALL_ROTATION_INTERVALS,
@@ -515,6 +516,23 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
               leave (live traffic from home), then “Time to leave”. Others alert before they start. During night hours alerts show
               without sound.
             </p>
+            <p className="text-sm text-brand-700 dark:text-brand-300">
+              An event can say when to leave in its description: “arrive by 4:45”, “leave at 5:15” or “20 min drive”. Apple
+              Calendar’s Travel Time works too. Otherwise the wall times it to get you there as it starts.
+            </p>
+          </Row>
+          <Row className="flex-col items-stretch gap-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">Arrive early by</p>
+              <p className="text-xs text-brand-500 dark:text-brand-400">For events that don’t say when to arrive</p>
+            </div>
+            <SegmentedControl
+              name="Arrive early by"
+              size="sm"
+              options={WALL_ARRIVE_EARLY.map(m => ({ value: String(m), label: m === 0 ? 'On time' : `${m} min` }))}
+              value={String(settings.alerts.earlyMin)}
+              onChange={v => void save({ alerts: { ...settings.alerts, earlyMin: Number(v) } })}
+            />
           </Row>
           <Row className="flex-col items-stretch gap-2">
             <div className="flex-1 min-w-0">
@@ -526,7 +544,7 @@ const WallDisplaySettings: React.FC<WallDisplaySettingsProps> = ({ householdId, 
               size="sm"
               options={WALL_ALERT_LEADS.map(m => ({ value: String(m), label: `${m} min` }))}
               value={String(settings.alerts.leadMin)}
-              onChange={v => void save({ alerts: { leadMin: Number(v) } })}
+              onChange={v => void save({ alerts: { ...settings.alerts, leadMin: Number(v) } })}
             />
           </Row>
           <Row className="flex-col items-stretch gap-2">

@@ -178,6 +178,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
     feeds: data.calendarFeeds,
     travel: data.travel,
     leadMin: data.settings.alerts.leadMin,
+    earlyMin: data.settings.alerts.earlyMin,
     now: runtime.now,
   });
   const alert = alerts.alert;
@@ -216,6 +217,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
         todosDue: day === 'today' ? badge : data.todos.filter(t => !t.isCompleted && t.completeByDate === date).length,
         events: data.wallEvents,
         travel: data.travel,
+        earlyMin: data.settings.alerts.earlyMin,
         weather: runtime.weather,
         now: runtime.now.getTime(),
         timeZone: runtime.timeZone,

@@ -19,6 +19,7 @@ import ICAL from "ical.js";
 import { createHash } from "crypto";
 import { addDays, format, parseISO } from "date-fns";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { isoDurationMinutes, parseLeaveHints, type LeaveHints } from "./leaveHints";
 
 export type WallEventSource = "feed" | "bill" | "holiday";
 
@@ -34,6 +35,10 @@ export interface WallEventRow {
   start?: string; // ISO with offset, timed only
   end?: string;
   location?: string;
+  /** When to leave, as the event itself says (./leaveHints.ts). Timed only. */
+  leaveAt?: string;
+  travelMin?: number;
+  earlyMin?: number;
 }
 
 export interface ExpandOptions {
@@ -169,6 +174,16 @@ function isPrivate(component: IcalComponent): boolean {
   return typeof cls === "string" && (cls.toUpperCase() === "PRIVATE" || cls.toUpperCase() === "CONFIDENTIAL");
 }
 
+/**
+ * Leave-time hints for a timed occurrence: Apple's Travel Time field, then the
+ * description. A private event's description stays unread, like its title.
+ */
+function leaveHintsFor(component: IcalComponent, description: string, startMs: number, timeZone: string): LeaveHints {
+  const hints = parseLeaveHints(description, startMs, timeZone);
+  const apple = isoDurationMinutes(component.getFirstPropertyValue("x-apple-travel-duration"));
+  return apple !== null ? { ...hints, travelMin: apple } : hints;
+}
+
 export function eventRowId(...parts: string[]): string {
   return createHash("sha1").update(parts.join("\u0000")).digest("hex");
 }
@@ -188,6 +203,8 @@ function rowsFor(occ: Occurrence, uid: string, opts: ExpandOptions, ctx: ZoneCon
   const hidden = isPrivate(component);
   const title = hidden ? "Busy" : cleanText(occ.item.summary) || "(No title)";
   const location = hidden ? "" : cleanText(occ.item.location);
+  // Read for leave hints only; never written to a row.
+  const description = hidden ? "" : typeof occ.item.description === "string" ? occ.item.description : "";
   const base = {
     source: opts.source,
     feedId: opts.feedId,
@@ -221,9 +238,11 @@ function rowsFor(occ: Occurrence, uid: string, opts: ExpandOptions, ctx: ZoneCon
   const date = formatInTimeZone(start, ctx.householdZone, "yyyy-MM-dd");
   if (date < opts.windowStart || date > opts.windowEnd) return [];
   const iso = (d: Date): string => formatInTimeZone(d, ctx.householdZone, "yyyy-MM-dd'T'HH:mm:ssXXX");
+  const leave = hidden ? {} : leaveHintsFor(component, description, start.getTime(), ctx.householdZone);
   return [
     {
       ...base,
+      ...leave,
       id: eventRowId(opts.feedId, uid, occ.recurrenceKey),
       allDay: false,
       date,
