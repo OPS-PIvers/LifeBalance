@@ -37,16 +37,17 @@
 .wall .bd .mc .tv svg { flex: none; font-size: calc(var(--b) * 42px); color: var(--warm); }
 /*
  * A long dinner name shrinks to fit two lines of its column (by its length,
- * about half an em a letter) and never past its longest word, from 46px down
- * to 28px; past that it takes a third and fourth line (room the clock column
- * already holds, so the masthead does not grow), and only then ends in "…". No
- * padding on the clamped box: padding below the last line let the top of the
- * hidden next line show through as a cut-off sliver.
+ * about half an em a letter), from 46px down to 28px; past that it takes a
+ * third and fourth line (room the clock column already holds, so the masthead
+ * does not grow), and only then ends in "…". `--words` (useWholeWords) shrinks
+ * it further when its longest word would not fit on one line, so a narrow
+ * column never cuts a word like "Cheeseburger". No padding on the clamped
+ * box: padding below the last line let the top of the hidden next line show
+ * through as a cut-off sliver.
  */
 .wall .bd .mc.dn { container-type: inline-size; }
 .wall .bd .mc.dn .tv b {
-  --avail: calc(100cqw - var(--b) * 48px);
-  font-size: max(calc(var(--b) * 28px), min(calc(var(--b) * 46px), calc(var(--avail) * 2.4 / var(--len, 1)), calc(var(--avail) * 1.7 / var(--word, 1))));
+  font-size: calc(max(calc(var(--b) * 28px), min(calc(var(--b) * 46px), calc((100cqw - var(--b) * 48px) * 2.4 / var(--len, 1)))) * var(--words, 1));
   white-space: normal; text-align: left; line-height: 1.12; padding-block: 0; margin-block: 0;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; text-wrap: balance;
 }

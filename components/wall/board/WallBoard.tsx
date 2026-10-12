@@ -16,6 +16,7 @@ import WallModuleSlot from '@/components/wall/calendar/WallModuleSlot';
 import MealsModule from '@/components/wall/calendar/modules/MealsModule';
 import ShoppingModule from '@/components/wall/calendar/modules/ShoppingModule';
 import { useWallListActions } from '@/components/wall/lists/useWallListActions';
+import { useWholeWords } from '@/components/wall/useWallFit';
 import { BoardComing, BoardDue, BoardTodos } from './BoardModules';
 import { BOARD_OTHERS as OTHERS, boardLanes } from './boardLanes';
 import './board.css';
@@ -46,12 +47,6 @@ function countdown(ms: number): { n: string; unit: string } {
 }
 
 const isFamily = (key: string | undefined) => !key || key === 'family';
-
-/** The dinner title's length and longest word, which its CSS sizes it by (see board.css). */
-function titleFit(name: string): React.CSSProperties {
-  const word = Math.max(...name.split(/\s+/).map(w => w.length));
-  return { '--len': name.length, '--word': word } as React.CSSProperties;
-}
 
 /**
  * Board: everything the kitchen needs on one screen, in fixed places. A
@@ -96,6 +91,9 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
   };
   const toBuy = shoppingList.filter(i => !i.isPurchased).length;
   const dinner = mealPlan.find(m => m.date === today && m.type === 'dinner');
+  const dinnerTitle = dinner?.mealName ?? 'Not planned';
+  const dinnerRef = useRef<HTMLElement>(null);
+  useWholeWords(dinnerRef, dinnerTitle);
 
   const body = (key: WallModuleKey) => {
     switch (key) {
@@ -136,10 +134,10 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
           </span>
           {timeline.allDay.length > 0 && <WallUntimedLine events={timeline.allDay} people={people} />}
         </div>
-        <button type="button" className="mc dn" onClick={() => onOpenMeal(today)} style={titleFit(dinner?.mealName ?? 'Not planned')}>
+        <button type="button" className="mc dn" onClick={() => onOpenMeal(today)} style={{ '--len': dinnerTitle.length } as React.CSSProperties}>
           <span className="tv">
             <Utensils className="wi" size="1em" aria-hidden="true" />
-            <b>{dinner?.mealName ?? 'Not planned'}</b>
+            <b ref={dinnerRef}>{dinnerTitle}</b>
           </span>
           <i>Dinner tonight</i>
         </button>
