@@ -28,7 +28,7 @@ const shortMonth = (date: string) => monthName(Number(date.slice(5, 7))).slice(0
 
 /**
  * The days after today (today itself is the day column's). Week shows the
- * next seven days as whole days that fit, a free day as one quiet line;
+ * next seven days as whole days that fit, a day with no plans as one quiet line;
  * Month is a denser list of the next 30 days that scrolls. With auto scroll
  * started, both turn like the lists. A tap opens that day.
  */
