@@ -202,7 +202,7 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
       ) : (
         <div className="bdn quiet">
           <span className="k">Today</span>
-          <b className="t">{timeline.rows.length > 0 ? 'Nothing else today' : 'A free day'}</b>
+          <b className="t">{timeline.rows.length > 0 ? 'Nothing else today' : 'No plans'}</b>
         </div>
       )}
 
