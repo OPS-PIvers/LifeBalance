@@ -128,13 +128,12 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
 
   return (
     <div className="bd">
-      <header className={weather ? 'mast bdm' : 'mast bdm nowx'}>
+      <header className={`mast bdm${weather ? '' : ' nowx'}${timeline.allDay.length > 0 ? ' ut' : ''}`}>
         <div className="bdt">
           <span className="clock">{clockText(p.hour, p.minute)}</span>
           <span className="dd">
             {p.weekday}, {p.monthName} {p.day}
           </span>
-          {timeline.allDay.length > 0 && <WallUntimedLine events={timeline.allDay} people={people} />}
         </div>
         <button type="button" className="mc dn" onClick={() => onOpenMeal(today)} style={{ '--len': dinnerTitle.length } as React.CSSProperties}>
           <span className="tv">
@@ -168,6 +167,7 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
             </button>
           </>
         )}
+        {timeline.allDay.length > 0 && <WallUntimedLine events={timeline.allDay} people={people} lines={2} onMore={() => onOpenDay(today)} />}
       </header>
 
       {lead ? (
