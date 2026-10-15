@@ -6,7 +6,7 @@ import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseho
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { pastClosedWeeks } from '@/utils/recapWeek';
 import { shiftDay } from '@/utils/recapAssembly';
-import { rollRecurringAnchorForward, isRecurringId, parseRecurringId } from '@/utils/calendarRecurrence';
+import { rollRecurringAnchorForward, isRecurringId, parseRecurringId, semiMonthlyDaysFor } from '@/utils/calendarRecurrence';
 import { BUDGETED_IN_CALENDAR } from '@/utils/categories';
 import { hashKidPin } from '@/utils/kidPin';
 import { computeTodoCompletionCredit, buildUncompleteCreditReversal } from '@/utils/todoPoints';
@@ -3267,7 +3267,15 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       if (i.id !== item.id) return i;
       if (item.isRecurring && item.frequency &&
           (!i.isRecurring || i.date !== item.date || i.frequency !== item.frequency)) {
-        return { ...item, date: rollRecurringAnchorForward(item.date, item.frequency, getLocalDateString()) };
+        const semiMonthlyDays = item.frequency === 'semi-monthly' ? semiMonthlyDaysFor(item) : undefined;
+        return {
+          ...item,
+          semiMonthlyDays,
+          date: rollRecurringAnchorForward(item.date, item.frequency, getLocalDateString(), {
+            semiMonthlyDays,
+            weekendShift: item.weekendShift,
+          }),
+        };
       }
       return item;
     }));

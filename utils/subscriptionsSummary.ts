@@ -39,6 +39,8 @@ function toMonthlyEquivalent(amount: number, frequency: CalendarItem['frequency'
       return roundMoney(amount * WEEKS_PER_MONTH);
     case 'bi-weekly':
       return roundMoney(amount * BIWEEKLY_CYCLES_PER_MONTH);
+    case 'semi-monthly':
+      return roundMoney(amount * 2);
     case 'monthly':
       return roundMoney(amount);
     default:

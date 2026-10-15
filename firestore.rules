@@ -799,6 +799,20 @@ service cloud.firestore {
       match /calendarItems/{itemId} {
         allow read: if isMemberOf(householdId);
 
+        // Twice-a-month days, the weekend rule and whose paycheck it is — all
+        // optional. Days are a pair of whole numbers 1–31 (the client clamps a
+        // day past a short month's end); earnerId is a member uid.
+        function isValidCalendarSchedule(data) {
+          return (data.get('semiMonthlyDays', null) == null ||
+                   (data.semiMonthlyDays is list &&
+                    data.semiMonthlyDays.size() == 2 &&
+                    data.semiMonthlyDays[0] is int && data.semiMonthlyDays[1] is int &&
+                    data.semiMonthlyDays[0] >= 1 && data.semiMonthlyDays[0] <= 31 &&
+                    data.semiMonthlyDays[1] >= 1 && data.semiMonthlyDays[1] <= 31)) &&
+                 (data.get('weekendShift', null) == null || data.weekendShift in ['before', 'after']) &&
+                 isValidOptionalString(data.get('earnerId', null), 128);
+        }
+
         // Helper to validate the full schema on CREATE (all required fields present)
         function isValidCalendarItemCreate() {
           let data = request.resource.data;
@@ -809,7 +823,8 @@ service cloud.firestore {
                 'title', 'amount', 'date', 'type', 'isPaid',
                 'isRecurring', 'frequency', 'parentRecurringId', 'isDeleted',
                 'createdBy', 'notes', 'createdAt', 'updatedAt', 'accountId', 'bucketId',
-                'isSubscription', 'bankDescriptorAliases'
+                'isSubscription', 'bankDescriptorAliases',
+                'semiMonthlyDays', 'weekendShift', 'earnerId'
               ]) &&
               isValidString(data.title, 100) &&
               isValidNumber(data.amount) &&
@@ -822,6 +837,7 @@ service cloud.firestore {
               isValidOptionalString(data.get('parentRecurringId', null), 50) &&
               (data.get('isDeleted', null) == null || isValidBoolean(data.isDeleted)) &&
               (data.get('isSubscription', null) == null || isValidBoolean(data.isSubscription)) &&
+              isValidCalendarSchedule(data) &&
               // Metadata
               (data.get('createdBy', null) == null || data.createdBy is string) &&
               // Account linking (optional)
@@ -855,7 +871,8 @@ service cloud.firestore {
             'title', 'amount', 'date', 'type', 'isPaid',
             'isRecurring', 'frequency', 'parentRecurringId', 'isDeleted',
             'createdBy', 'notes', 'createdAt', 'updatedAt', 'accountId', 'bucketId',
-            'isSubscription', 'bankDescriptorAliases'
+            'isSubscription', 'bankDescriptorAliases',
+            'semiMonthlyDays', 'weekendShift', 'earnerId'
           ].toSet();
           return (
                  // Block writes to any non-allowlisted field (storage abuse): a key
@@ -874,6 +891,7 @@ service cloud.firestore {
                  (!changed.hasAny(['parentRecurringId']) || isValidOptionalString(data.get('parentRecurringId', null), 50)) &&
                  (!changed.hasAny(['isDeleted']) || data.get('isDeleted', null) == null || isValidBoolean(data.isDeleted)) &&
                  (!changed.hasAny(['isSubscription']) || data.get('isSubscription', null) == null || isValidBoolean(data.isSubscription)) &&
+                 (!changed.hasAny(['semiMonthlyDays', 'weekendShift', 'earnerId']) || isValidCalendarSchedule(data)) &&
                  (!changed.hasAny(['accountId']) || isValidOptionalString(data.get('accountId', null), 50)) &&
                  (!changed.hasAny(['bucketId']) || isValidOptionalString(data.get('bucketId', null), 50)) &&
                  (!changed.hasAny(['notes']) || isValidOptionalString(data.get('notes', null), 500)) &&

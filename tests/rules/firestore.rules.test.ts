@@ -2299,6 +2299,64 @@ describe('calendar items (bill↔transaction alias learning)', () => {
   });
 });
 
+describe('calendar items (twice-a-month schedule, weekend rule, earner)', () => {
+  const PAY = 'pay-seed';
+  const paycheck = {
+    title: 'Paycheck',
+    amount: 5703,
+    date: '2026-01-01',
+    type: 'income',
+    isPaid: false,
+    isRecurring: true,
+    frequency: 'semi-monthly',
+  };
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(asFirestore(ctx.firestore()), 'households', H1, 'calendarItems', PAY), paycheck);
+    });
+  });
+
+  it('a member can create a 1st & 16th paycheck paid the Friday before', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', 'pay-new'), {
+        ...paycheck,
+        semiMonthlyDays: [1, 16],
+        weekendShift: 'before',
+        earnerId: BOB,
+      }),
+    );
+  });
+
+  it('a member can set and clear the schedule fields on an existing item', async () => {
+    const ref = doc(dbFor(BOB), 'households', H1, 'calendarItems', PAY);
+    await assertSucceeds(updateDoc(ref, { semiMonthlyDays: [15, 31], weekendShift: 'after', earnerId: BOB }));
+    await assertSucceeds(
+      updateDoc(ref, { semiMonthlyDays: deleteField(), weekendShift: deleteField(), earnerId: deleteField() }),
+    );
+  });
+
+  it('rejects a day pair that is not two days of the month', async () => {
+    const ref = doc(dbFor(BOB), 'households', H1, 'calendarItems', PAY);
+    await assertFails(updateDoc(ref, { semiMonthlyDays: [1, 16, 28] }));
+    await assertFails(updateDoc(ref, { semiMonthlyDays: [0, 16] }));
+    await assertFails(updateDoc(ref, { semiMonthlyDays: [1, 32] }));
+    await assertFails(updateDoc(ref, { semiMonthlyDays: ['1', '16'] }));
+  });
+
+  it('rejects an unknown weekend rule', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', PAY), { weekendShift: 'nearest' }),
+    );
+  });
+
+  it('rejects an oversized earnerId', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', PAY), { earnerId: 'x'.repeat(129) }),
+    );
+  });
+});
+
 // ---------------------------------------------------------------------------
 // challenges — first coverage for this collection. Three live permission-denied
 // bugs prompted it, ALL of them client-side (the rules were already correct):

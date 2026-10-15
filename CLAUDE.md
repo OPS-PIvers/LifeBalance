@@ -63,6 +63,10 @@ Checking Balance - Unpaid Bills (this paycheck → next) - Pending Spend (this p
 - Money is summed in integer cents (`utils/money.ts`) to avoid floating-point drift — but the helpers take and return **decimal dollars**, which is also how values are stored (`Transaction.amount`, `Account.balance`); never write cents to Firestore
 - Pure calculation lives in [utils/safeToSpendCalculator.ts](utils/safeToSpendCalculator.ts) and is wired into the context in [contexts/FirebaseHouseholdContext.tsx](contexts/FirebaseHouseholdContext.tsx). The context exposes a memoized `safeToSpendBreakdown` so widgets (e.g. `TopToolbar`, `SafeToSpendDetail`) consume it without re-expanding calendar items. Components that need a *different* window of expanded recurring items (e.g. `UpcomingBillsWidget`, `useActionQueue`) share the `useExpandedCalendarItems(start, end)` hook (memoized on `[calendarItems, start, end]`) rather than each calling `expandCalendarItems` in render.
 
+### Recurring Calendar Items
+
+Bills and paychecks repeat weekly, bi-weekly, monthly or **twice a month** (`frequency: 'semi-monthly'` with `semiMonthlyDays`, e.g. `[1, 16]`), and any series can carry a `weekendShift` (`'before'` = the Friday before, `'after'` = the Monday after). The shifted date IS the occurrence's `date` and synthetic id, so paid/deleted instance docs suppress it exactly as before; the expansion-only `nominalDate` keeps the scheduled date (a Sunday Nov 1 paycheck expands to `date: …-10-30, nominalDate: …-11-01`) and is never written. Income items may carry `earnerId` (whose paycheck). **The schedule math exists twice** — `utils/calendarRecurrence.ts` (client) and `functions/src/shared/recurrenceSchedule.ts` (bill reminders, daily briefing, wall bills, bank-sync matcher, ICS feed) — held together by `functions/src/shared/recurrenceSchedule.parity.test.ts`; change both together.
+
 ### Habit Tracking System
 
 Habits support two scoring modes:

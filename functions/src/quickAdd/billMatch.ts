@@ -27,6 +27,7 @@ import {
   addDays,
   subDays,
 } from "date-fns";
+import { scheduledOccurrences, usesScheduledPath, type WeekendShift } from "../shared/recurrenceSchedule";
 
 const MONDAY = 1;
 const MAX_ITERATIONS = 1000;
@@ -41,7 +42,9 @@ export interface BillCalendarItem {
   type: "income" | "expense";
   isPaid: boolean;
   isRecurring?: boolean;
-  frequency?: "weekly" | "bi-weekly" | "monthly";
+  frequency?: "weekly" | "bi-weekly" | "semi-monthly" | "monthly";
+  semiMonthlyDays?: number[];
+  weekendShift?: WeekendShift;
   parentRecurringId?: string;
   isDeleted?: boolean;
 }
@@ -129,6 +132,12 @@ function generateRecurringInstances(
       (isSameDay(itemDate, rangeStart) || isAfter(itemDate, rangeStart)) &&
       (isSameDay(itemDate, rangeEnd) || isBefore(itemDate, rangeEnd));
     return inRange ? [item] : [];
+  }
+
+  if (usesScheduledPath(item.frequency, item)) {
+    return scheduledOccurrences(item.date, item.frequency, item, rangeStart, rangeEnd).map(
+      ({ date }) => ({ ...item, id: generateRecurringId(item.id, date), date })
+    );
   }
 
   const instances: BillCalendarItem[] = [];

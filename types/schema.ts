@@ -667,6 +667,13 @@ export interface TransactionComment {
   createdAt: string; // ISO timestamp
 }
 
+/** Recurrence cadences a calendar item (bill or paycheck) can repeat on.
+ *  `semi-monthly` = twice a month on fixed days (e.g. the 1st and 16th). */
+export type CalendarFrequency = 'weekly' | 'bi-weekly' | 'semi-monthly' | 'monthly';
+
+/** Which way a weekend occurrence moves: to the Friday before or Monday after. */
+export type WeekendShift = 'before' | 'after';
+
 export interface CalendarItem {
   id: string;
   title: string;
@@ -675,7 +682,25 @@ export interface CalendarItem {
   type: 'income' | 'expense';
   isPaid: boolean;
   isRecurring?: boolean;
-  frequency?: 'weekly' | 'bi-weekly' | 'monthly';
+  frequency?: CalendarFrequency;
+  /** `semi-monthly` only: the two days of the month the series falls on,
+   *  ascending, each 1–31 (a day past a short month's end clamps to its last
+   *  day). When a semi-monthly template lacks it, the pair is derived from the
+   *  anchor (`semiMonthlyDaysFor` in utils/calendarRecurrence.ts). */
+  semiMonthlyDays?: number[];
+  /** When an occurrence lands on a Saturday or Sunday, move it to the Friday
+   *  before (`'before'`) or the Monday after (`'after'`). Absent = no shift.
+   *  The shifted date IS the occurrence's `date` (and its synthetic id), so
+   *  paid/deleted instance docs match it exactly as they do today. */
+  weekendShift?: WeekendShift;
+  /** Income only: uid of the household member this paycheck belongs to.
+   *  Absent = unassigned (every paycheck written before earners existed). */
+  earnerId?: string;
+  /** Set on EXPANDED occurrences only, never persisted: the scheduled date
+   *  before `weekendShift` moved it (a Nov 1 paycheck paid Fri Oct 30 carries
+   *  `date: '2026-10-30'`, `nominalDate: '2026-11-01'`). Absent when the
+   *  occurrence wasn't moved. */
+  nominalDate?: string;
   parentRecurringId?: string; // If this is a paid instance of a recurring event, points to parent
   isDeleted?: boolean; // If this is a deleted instance of a recurring event, prevents it from appearing
   accountId?: string;

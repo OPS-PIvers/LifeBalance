@@ -1,4 +1,5 @@
 import { addMonths, differenceInCalendarDays, format, parseISO } from "date-fns";
+import { scheduledOccurrences, usesScheduledPath, type WeekendShift } from "./recurrenceSchedule";
 
 /**
  * Shape of the calendarItems docs the bill-facing jobs care about. Recurring
@@ -18,6 +19,8 @@ export interface BillCalendarItem {
   date: string;
   isRecurring?: boolean;
   frequency?: string;
+  semiMonthlyDays?: number[];
+  weekendShift?: WeekendShift;
   isPaid?: boolean;
   isDeleted?: boolean;
   parentRecurringId?: string;
@@ -83,8 +86,11 @@ export function findBillsDueOnDate(
     // Instance docs only exist to mark an occurrence paid/deleted — never due.
     if (item.parentRecurringId || item.isDeleted) return false;
     if (item.isRecurring && item.frequency) {
+      const falls = usesScheduledPath(item.frequency, item)
+        ? scheduledOccurrences(item.date, item.frequency, item, parseISO(targetDateStr), parseISO(targetDateStr)).length > 0
+        : recurrenceFallsOn(item.date, item.frequency, targetDateStr);
       return (
-        recurrenceFallsOn(item.date, item.frequency, targetDateStr) &&
+        falls &&
         !coveredDates.get(item.id)?.has(targetDateStr)
       );
     }

@@ -22,7 +22,7 @@ import type { MutationOpts } from '@/contexts/household/types';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { BUDGETED_IN_CALENDAR } from '@/utils/categories';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
-import { parseRecurringId, isRecurringId, rollRecurringAnchorForward } from '@/utils/calendarRecurrence';
+import { parseRecurringId, isRecurringId, rollRecurringAnchorForward, semiMonthlyDaysFor } from '@/utils/calendarRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { appendActivityLog, composeSummary } from '@/utils/activityLog';
 import { emitPayPeriodCeremony, type PayPeriodCeremonyEvent } from '@/utils/payPeriodCeremony';
@@ -62,8 +62,15 @@ export function makeAddCalendarItem(deps: {
 
     try {
       // Exclude 'id' field - it's not stored in Firestore (document ID is separate)
-      const { id: _id, ...itemWithoutId } = item;
-      const sanitizedItem = sanitizeFirestoreData(itemWithoutId);
+      // and the expansion-only `nominalDate`. A semi-monthly series stores its
+      // day pair explicitly so a later anchor roll can't change it.
+      const { id: _id, nominalDate: _nominal, ...itemWithoutId } = item;
+      const sanitizedItem = sanitizeFirestoreData({
+        ...itemWithoutId,
+        ...(item.isRecurring && item.frequency === 'semi-monthly'
+          ? { semiMonthlyDays: semiMonthlyDaysFor(item) }
+          : {}),
+      });
 
       await addDoc(collection(db, `households/${householdId}/calendarItems`), {
         ...sanitizedItem,
@@ -114,9 +121,15 @@ export function makeUpdateCalendarItem(deps: {
           !!existing &&
           (!existing.isRecurring ||
             existing.date !== item.date ||
-            existing.frequency !== item.frequency);
+            existing.frequency !== item.frequency ||
+            existing.weekendShift !== item.weekendShift ||
+            (item.frequency === 'semi-monthly' &&
+              semiMonthlyDaysFor(existing).join() !== semiMonthlyDaysFor(item).join()));
         if (scheduleChanged) {
-          effectiveDate = rollRecurringAnchorForward(item.date, item.frequency, getLocalDateString());
+          effectiveDate = rollRecurringAnchorForward(item.date, item.frequency, getLocalDateString(), {
+            semiMonthlyDays: item.frequency === 'semi-monthly' ? semiMonthlyDaysFor(item) : undefined,
+            weekendShift: item.weekendShift,
+          });
         }
       }
 
@@ -136,6 +149,16 @@ export function makeUpdateCalendarItem(deps: {
         // Explicitly delete the frequency field when toggling off recurring
         updates.frequency = deleteField();
       }
+
+      // Schedule detail: a semi-monthly series always stores its day pair
+      // (derived from the ORIGINAL anchor, before any roll moved it); the
+      // weekend rule rides any recurring series. Both clear when not in use.
+      updates.semiMonthlyDays =
+        item.isRecurring && item.frequency === 'semi-monthly' ? semiMonthlyDaysFor(item) : deleteField();
+      updates.weekendShift = item.isRecurring && item.weekendShift ? item.weekendShift : deleteField();
+
+      // Whose paycheck: income only.
+      updates.earnerId = item.type === 'income' && item.earnerId ? item.earnerId : deleteField();
 
       // Subscription flag: store true or remove the field entirely (keeps
       // legacy docs clean and lets the rules treat it as optional).
