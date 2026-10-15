@@ -1,5 +1,14 @@
 import { format, parseISO, subMonths } from 'date-fns';
-import { Account, CalendarItem, HalfAllocation, HalfPlan } from '@/types/schema';
+import {
+  Account,
+  BudgetBucket,
+  CalendarItem,
+  CREDIT_CARD_CATEGORY,
+  HalfAllocation,
+  HalfPlan,
+  INCOME_CATEGORY,
+  Transaction,
+} from '@/types/schema';
 import { sumMoney } from '@/utils/money';
 
 /**
@@ -177,4 +186,79 @@ export function balancingPlan(plan: HalfPlan, summary: HalfSummary, newId: () =>
     ? plan.allocations.map(a => (a === existing ? { ...a, amount: sumMoney([a.amount, amount]) } : a))
     : [...plan.allocations, { id: newId(), kind, label: gap < 0 ? 'From savings' : 'Leftover to savings', amount }];
   return { ...plan, allocations };
+}
+
+/**
+ * What each bucket has actually spent during a half: transactions dated in
+ * the half whose category names the bucket (the same name matching, income
+ * and credit-card exclusions as `calculateBucketSpent`), verified and pending
+ * alike. Keyed by bucket id.
+ */
+export function halfBucketActuals(
+  buckets: BudgetBucket[],
+  transactions: Transaction[],
+  range: { start: string; end: string }
+): Map<string, number> {
+  const idsByName = new Map<string, string[]>();
+  for (const b of buckets) {
+    const key = b.name.toLowerCase();
+    idsByName.set(key, [...(idsByName.get(key) ?? []), b.id]);
+  }
+  const amounts = new Map<string, number[]>();
+  for (const tx of transactions) {
+    if (!tx.category || tx.category === INCOME_CATEGORY || tx.category === CREDIT_CARD_CATEGORY) continue;
+    if (tx.date < range.start || tx.date > range.end) continue;
+    for (const id of idsByName.get(tx.category.toLowerCase()) ?? []) {
+      amounts.set(id, [...(amounts.get(id) ?? []), tx.amount]);
+    }
+  }
+  return new Map(buckets.map(b => [b.id, sumMoney(amounts.get(b.id) ?? [])]));
+}
+
+/** A way to fix a budget that ran over, keeping Left to assign where it was. */
+export interface OverrunFix {
+  /** 'savings' covers it from savings; 'bucket' moves room from `fromBucketId`. */
+  kind: 'savings' | 'bucket';
+  fromBucketId?: string;
+  plan: HalfPlan;
+}
+
+/**
+ * The fixes on offer when `bucketId` has spent more than planned this half.
+ * Each raises that budget by the overrun and funds it — from savings (a
+ * "From savings" line) or from another budget with at least that much
+ * planned and unspent — so the half stays exactly as assigned as it was.
+ */
+export function overrunFixes(
+  plan: HalfPlan,
+  bucketId: string,
+  actuals: ReadonlyMap<string, number>,
+  newId: () => string
+): OverrunFix[] {
+  const planned = plan.budgets[bucketId] ?? 0;
+  const over = sumMoney([actuals.get(bucketId) ?? 0, -planned]);
+  if (over <= 0) return [];
+  const raised = { ...plan.budgets, [bucketId]: sumMoney([planned, over]) };
+
+  const existing = plan.allocations.find(a => a.kind === 'from-savings' && !a.done);
+  const fromSavings: OverrunFix = {
+    kind: 'savings',
+    plan: {
+      ...plan,
+      budgets: raised,
+      allocations: existing
+        ? plan.allocations.map(a => (a === existing ? { ...a, amount: sumMoney([a.amount, over]) } : a))
+        : [...plan.allocations, { id: newId(), kind: 'from-savings', label: 'From savings', amount: over }],
+    },
+  };
+
+  const fromBuckets = Object.entries(plan.budgets)
+    .filter(([id, amount]) => id !== bucketId && sumMoney([amount, -(actuals.get(id) ?? 0)]) >= over)
+    .map(([id, amount]): OverrunFix => ({
+      kind: 'bucket',
+      fromBucketId: id,
+      plan: { ...plan, budgets: { ...raised, [id]: sumMoney([amount, -over]) } },
+    }));
+
+  return [fromSavings, ...fromBuckets];
 }

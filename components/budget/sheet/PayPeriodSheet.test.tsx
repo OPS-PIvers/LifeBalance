@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import type { Account, BudgetBucket, CalendarItem, HalfPlan } from '@/types/schema';
+import type { Account, BudgetBucket, CalendarItem, HalfPlan, Transaction } from '@/types/schema';
 import PayPeriodSheet from './PayPeriodSheet';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 
@@ -59,10 +59,11 @@ const setAllocationDone = vi.fn().mockResolvedValue(undefined);
 const setOccurrenceAmount = vi.fn().mockResolvedValue(undefined);
 const payCalendarItem = vi.fn().mockResolvedValue(undefined);
 
-function setup(halfPlans: HalfPlan[] = []) {
+function setup(halfPlans: HalfPlan[] = [], transactions: Transaction[] = []) {
   vi.mocked(useFinance).mockReturnValue({
     calendarItems: [paycheck, mortgage],
     halfPlans,
+    transactions,
     buckets,
     accounts,
     defaultAccountId: undefined,
@@ -134,6 +135,27 @@ describe('PayPeriodSheet', () => {
     fireEvent.blur(cell);
     fireEvent.click(await screen.findByText('Just October'));
     await waitFor(() => expect(setOccurrenceAmount).toHaveBeenCalledWith('mortgage_instance_2026-10-01', 2200));
+  });
+});
+
+describe('overspending', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('shows what a budget spent and offers to cover an overrun from savings', async () => {
+    const plan: HalfPlan = { id: '2026-10-01', budgets: { grocery: 400 }, allocations: [] };
+    const groceries = { id: 't1', date: '2026-10-05', category: 'Groceries', amount: 450, merchant: 'Lunds', status: 'verified' } as Transaction;
+    setup([plan], [groceries]);
+    expect(screen.getByText('$450.00 spent')).toBeInTheDocument();
+    expect(screen.getByText(/Groceries is \$50.00 over/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cover from savings' }));
+    await waitFor(() =>
+      expect(saveHalfPlan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          budgets: { grocery: 450 },
+          allocations: [expect.objectContaining({ kind: 'from-savings', amount: 50 })],
+        })
+      )
+    );
   });
 });
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Check, Plus, X } from 'lucide-react';
 import { CalendarItem, HalfAllocation, HalfAllocationKind, HalfPlan } from '@/types/schema';
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import MoneyCell from '@/components/budget/sheet/MoneyCell';
 import { cn } from '@/utils/cn';
-import { balancingPlan, dueDays, type HalfSummary } from '@/utils/halfPlan';
+import { balancingPlan, dueDays, halfBucketActuals, overrunFixes, type HalfSummary } from '@/utils/halfPlan';
 import { isRecurringId, parseRecurringId } from '@/utils/calendarRecurrence';
 import { resolveTargetAccount } from '@/utils/accountImpact';
 import { halfTitle, type PayHalf } from '@/utils/payPeriodHalves';
@@ -65,6 +65,7 @@ const HalfSheet: React.FC<HalfSheetProps> = ({ half, plan, isSeed, summary, isCu
     accounts,
     buckets,
     calendarItems,
+    transactions,
     defaultAccountId,
     safeToSpend,
     addCalendarItem,
@@ -86,6 +87,13 @@ const HalfSheet: React.FC<HalfSheetProps> = ({ half, plan, isSeed, summary, isCu
   const [newDate, setNewDate] = useState(half.start);
 
   const save = (next: HalfPlan) => saveHalfPlan(next).catch(() => undefined);
+
+  // Actual spending fills in as transactions arrive.
+  const actuals = useMemo(
+    () => halfBucketActuals(buckets, transactions, half),
+    [buckets, transactions, half]
+  );
+  const bucketName = (id: string) => buckets.find(b => b.id === id)?.name ?? 'another budget';
 
   const payItem = (item: CalendarItem) => {
     const account = resolveTargetAccount(item.accountId, accounts, defaultAccountId);
@@ -324,16 +332,51 @@ const HalfSheet: React.FC<HalfSheetProps> = ({ half, plan, isSeed, summary, isCu
       <Section title="Spending budgets">
         <SurfaceList>
           {buckets.length === 0 && <Row dense className="text-sm text-brand-500">No budget buckets yet.</Row>}
-          {buckets.map(bucket => (
-            <Row dense key={bucket.id} className="gap-2">
-              <span className="min-w-0 flex-1 truncate text-sm">{bucket.name}</span>
-              <MoneyCell
-                label={`${bucket.name} planned for this half`}
-                value={plan.budgets[bucket.id]}
-                onCommit={amount => setBudget(bucket.id, amount)}
-              />
-            </Row>
-          ))}
+          {buckets.map(bucket => {
+            const spent = actuals.get(bucket.id) ?? 0;
+            const planned = plan.budgets[bucket.id];
+            const fixes = isSeed ? [] : overrunFixes(plan, bucket.id, actuals, newId);
+            const over = fixes.length > 0;
+            return (
+              <React.Fragment key={bucket.id}>
+                <Row dense className="gap-2">
+                  <span className="min-w-0 flex-1 truncate text-sm">{bucket.name}</span>
+                  {spent > 0 && (
+                    <span
+                      className={cn(
+                        'shrink-0 font-mono text-xs tabular-nums',
+                        over ? 'font-semibold text-money-neg dark:text-money-negDark' : 'text-brand-500 dark:text-brand-400'
+                      )}
+                    >
+                      {fmt(spent)} spent
+                    </span>
+                  )}
+                  <MoneyCell
+                    label={`${bucket.name} planned for this half`}
+                    value={planned}
+                    onCommit={amount => setBudget(bucket.id, amount)}
+                  />
+                </Row>
+                {over && (
+                  <Row dense className="flex-wrap gap-2 bg-money-bgNeg dark:bg-money-neg/10">
+                    <span className="w-full text-xs text-brand-700 dark:text-brand-200">
+                      {bucket.name} is {fmt(spent - (planned ?? 0))} over this half.
+                    </span>
+                    {fixes.slice(0, 3).map(fix => (
+                      <Button
+                        key={fix.fromBucketId ?? fix.kind}
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => void save(fix.plan)}
+                      >
+                        {fix.kind === 'savings' ? 'Cover from savings' : `Move from ${bucketName(fix.fromBucketId ?? '')}`}
+                      </Button>
+                    ))}
+                  </Row>
+                )}
+              </React.Fragment>
+            );
+          })}
         </SurfaceList>
       </Section>
 

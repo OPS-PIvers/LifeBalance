@@ -1,9 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { parseISO } from 'date-fns';
-import { Account, CalendarItem, HalfAllocation, HalfPlan } from '@/types/schema';
+import { Account, CalendarItem, HalfAllocation, HalfPlan, Transaction } from '@/types/schema';
 import { expandCalendarItems } from '@/utils/calendarRecurrence';
 import { buildPayHalves, findHalfContaining, nominalPaydayOf } from '@/utils/payPeriodHalves';
-import { allocationTransfer, balancingPlan, dueDays, isFullyAssigned, seedHalfPlan, summarizeHalf } from '@/utils/halfPlan';
+import {
+  allocationTransfer,
+  balancingPlan,
+  dueDays,
+  halfBucketActuals,
+  isFullyAssigned,
+  overrunFixes,
+  seedHalfPlan,
+  summarizeHalf,
+} from '@/utils/halfPlan';
 
 // The household's real October 2026 sheet: two paychecks on the 1st and 16th
 // (paid the Friday before a weekend), and their dated bills.
@@ -246,5 +255,44 @@ describe('dueDays and balancingPlan', () => {
 
   it('does nothing for a fully assigned half', () => {
     expect(balancingPlan(plan, { ...summary, leftToAssign: 0 }, () => 'x')).toBeNull();
+  });
+});
+
+describe('half actuals and overrun fixes', () => {
+  const buckets = [
+    { id: 'gas', name: 'Gas', limit: 0, color: 'orange', isVariable: true, isCore: true },
+    { id: 'grocery', name: 'Groceries', limit: 0, color: 'green', isVariable: true, isCore: true },
+  ];
+  const tx = (date: string, category: string, amount: number) =>
+    ({ id: `${date}-${category}-${amount}`, date, category, amount, merchant: 'x', status: 'verified' }) as Transaction;
+  const transactions = [
+    tx('2026-10-02', 'Gas', 80),
+    tx('2026-10-09', 'gas', 70.5),
+    tx('2026-10-20', 'Gas', 999), // next half
+    tx('2026-10-03', 'Groceries', 300),
+    tx('2026-10-04', 'Income', 5000),
+    tx('2026-10-05', 'Credit Card', 400),
+  ];
+  const actuals = halfBucketActuals(buckets, transactions, { start: '2026-10-01', end: '2026-10-15' });
+  const plan: HalfPlan = { id: '2026-10-01', budgets: { gas: 120, grocery: 850 }, allocations: [] };
+
+  it('sums each bucket\'s spending inside the half only', () => {
+    expect(Object.fromEntries(actuals)).toEqual({ gas: 150.5, grocery: 300 });
+  });
+
+  it('offers savings, or a budget with room, and either keeps the half as assigned', () => {
+    const fixes = overrunFixes(plan, 'gas', actuals, () => 'n');
+    expect(fixes.map(f => [f.kind, f.fromBucketId])).toEqual([['savings', undefined], ['bucket', 'grocery']]);
+    expect(fixes[0]?.plan.budgets.gas).toBe(150.5);
+    expect(fixes[0]?.plan.allocations).toEqual([{ id: 'n', kind: 'from-savings', label: 'From savings', amount: 30.5 }]);
+    expect(fixes[1]?.plan.budgets).toEqual({ gas: 150.5, grocery: 819.5 });
+    const before = summarizeHalf(half('2026-10-01'), expanded, plan, BUCKETS).leftToAssign;
+    for (const fix of fixes) {
+      expect(summarizeHalf(half('2026-10-01'), expanded, fix.plan, BUCKETS).leftToAssign).toBe(before);
+    }
+  });
+
+  it('offers nothing for a budget that has not run over', () => {
+    expect(overrunFixes(plan, 'grocery', actuals, () => 'n')).toEqual([]);
   });
 });

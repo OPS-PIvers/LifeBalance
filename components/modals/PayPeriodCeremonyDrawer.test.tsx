@@ -3,21 +3,27 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import PayPeriodCeremonyDrawer from './PayPeriodCeremonyDrawer';
-import { type Account, type BudgetBucket, type BucketPeriodSnapshot } from '@/types/schema';
+import { type Account, type BudgetBucket, type BucketPeriodSnapshot, type CalendarItem, type HalfPlan } from '@/types/schema';
 import { type BucketSpent } from '@/utils/bucketSpentCalculator';
 import { type PayPeriodCeremonyEvent } from '@/utils/payPeriodCeremony';
 
 const mockUseHousehold = vi.fn();
 const saveCeremonyChanges = vi.fn();
 
-vi.mock('@/contexts/FirebaseHouseholdContext', () => {
+vi.mock('@/contexts/FirebaseHouseholdContext', async () => {
+  const { expandCalendarItems } = await vi.importActual<typeof import('@/utils/calendarRecurrence')>('@/utils/calendarRecurrence');
   const value = () => mockUseHousehold();
   return {
     useHousehold: value,
     useFinance: value,
     useHouseholdCore: value,
+    useExpandedCalendarItems: (start: Date, end: Date) =>
+      expandCalendarItems((mockUseHousehold() as { calendarItems: CalendarItem[] }).calendarItems, start, end),
   };
 });
+
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', () => ({ useNavigate: () => mockNavigate }));
 
 // Passthrough Drawer so the test sees the body + the footer buttons.
 vi.mock('@/components/ui/Drawer', () => ({
@@ -89,6 +95,8 @@ const setFinance = (config?: {
   bucketHistory?: BucketPeriodSnapshot[];
   bucketSpentMap?: Map<string, BucketSpent>;
   safeToSpend?: number;
+  halfPlans?: HalfPlan[];
+  calendarItems?: CalendarItem[];
 }) => {
   mockUseHousehold.mockReturnValue({
     accounts: config?.accounts ?? [account({ id: 'chk', name: 'Checking', balance: 1000 })],
@@ -98,6 +106,8 @@ const setFinance = (config?: {
     safeToSpend: config?.safeToSpend ?? 500,
     saveCeremonyChanges,
     householdSettings: { currency: 'USD' },
+    halfPlans: config?.halfPlans ?? [],
+    calendarItems: config?.calendarItems ?? [],
   });
 };
 
@@ -269,5 +279,23 @@ describe('PayPeriodCeremonyDrawer — fit meter', () => {
       bucketLimits: [{ id: 'b1', limit: 900 }],
       accountBalances: [],
     });
+  });
+
+  it('assigns this half on the Sheet once the household plans there', async () => {
+    const paycheck: CalendarItem = {
+      id: 'pay', title: 'Paycheck', amount: 2100, date: '2026-07-17', type: 'income', isPaid: false,
+      isRecurring: true, frequency: 'bi-weekly',
+    };
+    setFinance({
+      calendarItems: [paycheck],
+      halfPlans: [{ id: '2026-07-17', budgets: {}, allocations: [] }],
+    });
+    const onClose = vi.fn();
+    render(<PayPeriodCeremonyDrawer event={event} isOpen onClose={onClose} />);
+    expect(screen.getByText('Assign this half')).toBeInTheDocument();
+    expect(screen.getByText('$2,100.00', { selector: 'span.font-semibold' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Give every dollar a job' }));
+    expect(onClose).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith('/budget', { state: { tab: 'sheet' } });
   });
 });
