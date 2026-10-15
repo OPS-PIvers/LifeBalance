@@ -2080,7 +2080,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeSetOccurrenceAmount({ db, householdId, user, calendarItems }).setOccurrenceAmount(occurrenceId, amount, opts);
   }, [householdId, user, calendarItems]);
 
-  const editCalendarEntry = useCallback(async (id: string, changes: { title?: string; date?: string }) => {
+  const editCalendarEntry = useCallback(async (id: string, changes: { title?: string; date?: string; amount?: number }) => {
     await makeEditCalendarEntry({ db, householdId, user, calendarItems }).editCalendarEntry(id, changes);
   }, [householdId, user, calendarItems]);
 

@@ -326,6 +326,12 @@ export function makeSetOccurrenceAmount(deps: {
  *    the tombstone) and a one-off carrying its amount lands on the new date.
  *  - A stored doc (one-off, or a paid occurrence): updated in place. A paid
  *    row can't move into the future: that money already moved.
+ *
+ * `amount` sets a one-off's amount (unpaid only) or the amount of a moved
+ * occurrence's one-off, in the same write as the rename/move, so an edit
+ * that changes several fields can't be overwritten by a second write. A
+ * repeating series' amount still goes through `setOccurrenceAmount` /
+ * `updateCalendarItem`.
  */
 export function makeEditCalendarEntry(deps: {
   db: Firestore;
@@ -335,7 +341,7 @@ export function makeEditCalendarEntry(deps: {
 }) {
   const { db, householdId, user, calendarItems } = deps;
 
-  const editCalendarEntry = async (id: string, changes: { title?: string; date?: string }) => {
+  const editCalendarEntry = async (id: string, changes: { title?: string; date?: string; amount?: number }) => {
     if (!householdId || !user) return;
     const col = `households/${householdId}/calendarItems`;
     const title = changes.title?.trim().slice(0, 100);
@@ -352,6 +358,7 @@ export function makeEditCalendarEntry(deps: {
         const updates: Record<string, unknown> = {};
         if (title && title !== item.title) updates.title = title;
         if (changes.date && changes.date !== item.date) updates.date = changes.date;
+        if (changes.amount !== undefined && !item.isPaid && changes.amount !== item.amount) updates.amount = changes.amount;
         if (Object.keys(updates).length === 0) return;
         await updateDoc(doc(db, col, id), updates);
         toast.success('Updated');
@@ -384,7 +391,7 @@ export function makeEditCalendarEntry(deps: {
         }
         batch.set(doc(collection(db, col)), {
           title: renamed ?? template.title,
-          amount,
+          amount: changes.amount ?? amount,
           date: changes.date,
           type: template.type,
           isPaid: false,

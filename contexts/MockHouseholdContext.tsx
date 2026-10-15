@@ -155,9 +155,11 @@ const normalizeCategory = (value: string | undefined) => (value ?? '').trim().to
  *     evidence tier — `tx_water_bank` (descriptor) and `tx_electric_bank`
  *     (amount-only). Not seeded by default for the same reason as 'stub' (its
  *     `pending_review` row changes the Money nav link's accessible name).
- *   - 'pay-period-sheet': default seeds + two paychecks paid the 15th and the
- *     last day (the Friday before a weekend) and a month of dated bills, so Money → Sheet
- *     has pay-period halves to show.
+ *   - 'pay-period-sheet': the household's October sheet on the current month:
+ *     two paychecks paid the 15th and the last day (the Friday before a
+ *     weekend), every dated bill, the ones before today paid, Gas / Grocery /
+ *     Childcare budgets and both halves planned, so Money → Sheet shows the
+ *     real totals.
  * Absent/unknown values leave the default seeds untouched.
  */
 const readTestSeedVariant = (): 'fresh' | 'stub' | 'merchant-rules' | 'bill-merge' | 'pay-period-sheet' | null => {
@@ -488,8 +490,32 @@ const SETTLED_ELECTRIC = settledBillPair(
   'electric', 'Xcel Energy (Electric)', 'NSPM UTILITY 8823', SETTLED_ELECTRIC_AMOUNT,
 );
 
-// 'pay-period-sheet' seed: two earners paid the 15th and the last day (the
-// Friday before when that's a weekend) plus monthly bills on their days.
+// 'pay-period-sheet' seed: the household's real October sheet, laid onto the
+// current month — two earners paid the 15th and the last day (the Friday
+// before when that's a weekend), every dated bill on its day, the bills before
+// today already paid, and both halves planned (budgets + allocations) so the
+// totals match the sheet: 1st half −$452.89, 2nd half +$150.57.
+const SHEET_MONTH = getLocalDateString().slice(0, 7);
+const SHEET_TODAY = getLocalDateString();
+const PAY_PERIOD_SHEET_BILLS = ([
+  [1, 'Mortgage', 2166], [1, 'Xcel', 133.53], [1, 'Jen Car', 639], [1, 'Jen tabs', 602],
+  [1, 'Jen Visa Minimum', 72], [1, 'Parkway', 80], [1, 'AT&T', 143.8], [1, 'Haferman Water', 36.56],
+  [1, 'Manny Meds', 108], [2, 'Stella bday gift', 40], [3, 'Auto-Owners Life', 83], [5, 'Jen Hair', 200],
+  [7, 'Parkway', 80], [13, 'Spotify Premium', 22], [14, 'Parkway', 80],
+  [16, 'Heloc', 400], [16, 'Paul Car', 498], [16, 'Paul Visa Min', 50], [16, 'Ferry Ride', 160],
+  [16, 'Fidelity', 100], [16, 'Easton 529', 50], [17, 'Comcast', 158], [18, 'American Express', 735],
+  [19, 'Auto-Owners Car/Home', 225], [19, 'Camp Bow Wow', 300], [19, 'Airport Parking', 100], [19, 'Parkway', 80],
+  [23, 'Paul Hockey', 219], [26, 'Parkway', 80], [26, 'Centerpoint', 38.75], [28, 'Xcel', 98.68],
+] as const).map(([day, title, amount], i): CalendarItem => ({
+  id: `seed-bill-${i}`,
+  title,
+  amount,
+  date: `2026-01-${String(day).padStart(2, '0')}`,
+  type: 'expense',
+  isPaid: false,
+  isRecurring: true,
+  frequency: 'monthly',
+}));
 const PAY_PERIOD_SHEET_CALENDAR_ITEMS: CalendarItem[] = [
   ...(['Paul', 'Jen'] as const).map((earner): CalendarItem => ({
     id: `seed-pay-${earner.toLowerCase()}`,
@@ -503,20 +529,31 @@ const PAY_PERIOD_SHEET_CALENDAR_ITEMS: CalendarItem[] = [
     semiMonthlyDays: [15, 31],
     weekendShift: 'before',
   })),
-  ...([
-    [1, 'Mortgage', 2166], [1, 'Xcel', 133.53], [1, 'AT&T', 143.8], [3, 'Auto-Owners Life', 83],
-    [13, 'Spotify Premium', 22], [16, 'Heloc', 400], [16, 'Fidelity', 100], [16, 'Easton 529', 50],
-    [17, 'Comcast', 158], [18, 'American Express', 735], [23, 'Paul Hockey', 219], [28, 'Xcel', 98.68],
-  ] as const).map(([day, title, amount], i): CalendarItem => ({
-    id: `seed-bill-${i}`,
-    title,
-    amount,
-    date: `2026-01-${String(day).padStart(2, '0')}`,
-    type: 'expense',
-    isPaid: false,
-    isRecurring: true,
-    frequency: 'monthly',
-  })),
+  ...PAY_PERIOD_SHEET_BILLS,
+  // This month's bills before today, paid at what they were planned at.
+  ...PAY_PERIOD_SHEET_BILLS.flatMap((bill): CalendarItem[] => {
+    const date = `${SHEET_MONTH}-${bill.date.slice(8)}`;
+    return date < SHEET_TODAY
+      ? [{ ...bill, id: `${bill.id}_paid_${date}`, date, isPaid: true, isRecurring: false, frequency: undefined, parentRecurringId: bill.id }]
+      : [];
+  }),
+];
+const PAY_PERIOD_SHEET_BUCKETS: BudgetBucket[] = [
+  { id: 'b4', name: 'Gas', limit: 150, color: 'orange', isVariable: true, isCore: true },
+  { id: 'b-grocery', name: 'Grocery / Misc', limit: 850, color: 'green', isVariable: true, isCore: true },
+  { id: 'b-childcare', name: 'Childcare', limit: 400, color: 'blue', isVariable: false, isCore: true },
+];
+const PAY_PERIOD_SHEET_HALF_PLANS: HalfPlan[] = [
+  {
+    id: `${SHEET_MONTH}-01`,
+    budgets: { b4: 120, 'b-grocery': 850 },
+    allocations: [{ id: 'seed-amex', kind: 'card-extra', label: 'AmEx extra payment', amount: 700, accountId: 'acc3' }],
+  },
+  {
+    id: `${SHEET_MONTH}-16`,
+    budgets: { b4: 110, 'b-grocery': 850, 'b-childcare': 400 },
+    allocations: [{ id: 'seed-leftover', kind: 'to-savings', label: 'Leftover to savings', amount: 900 }],
+  },
 ];
 
 const BILL_MERGE_CALENDAR_ITEMS: CalendarItem[] = [
@@ -931,9 +968,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // Apple Pay $0 stub to the default seeds (review-drawer e2e).
   const isFresh = TEST_SEED_VARIANT === 'fresh';
   const [accounts, setAccounts] = useState<Account[]>(isFresh ? [] : SEED_ACCOUNTS);
-  const [buckets, setBuckets] = useState<BudgetBucket[]>(isFresh ? [] : SEED_BUCKETS);
+  const [buckets, setBuckets] = useState<BudgetBucket[]>(
+    isFresh ? [] : TEST_SEED_VARIANT === 'pay-period-sheet' ? PAY_PERIOD_SHEET_BUCKETS : SEED_BUCKETS
+  );
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>(isFresh ? [] : SEED_SAVINGS_GOALS);
-  const [halfPlans, setHalfPlans] = useState<HalfPlan[]>([]);
+  const [halfPlans, setHalfPlans] = useState<HalfPlan[]>(
+    TEST_SEED_VARIANT === 'pay-period-sheet' ? PAY_PERIOD_SHEET_HALF_PLANS : []
+  );
   const [transactions, setTransactions] = useState<Transaction[]>(
     isFresh
       ? []
@@ -3413,11 +3454,20 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   // Mirrors makeEditCalendarEntry (rename the series / move one occurrence).
-  const editCalendarEntry = useCallback(async (id: string, changes: { title?: string; date?: string }) => {
+  const editCalendarEntry = useCallback(async (id: string, changes: { title?: string; date?: string; amount?: number }) => {
     const parsed = parseRecurringId(id);
     setCalendarItems(prev => {
       if (!parsed) {
-        return prev.map(i => (i.id === id ? { ...i, ...(changes.title ? { title: changes.title } : {}), ...(changes.date ? { date: changes.date } : {}) } : i));
+        return prev.map(i =>
+          i.id === id
+            ? {
+                ...i,
+                ...(changes.title ? { title: changes.title } : {}),
+                ...(changes.date ? { date: changes.date } : {}),
+                ...(changes.amount !== undefined && !i.isPaid ? { amount: changes.amount } : {}),
+              }
+            : i
+        );
       }
       const template = prev.find(i => i.id === parsed.templateId);
       if (!template) return prev;
@@ -3428,7 +3478,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         next = [
           ...next,
           { id: generateId(), title: template.title, amount, date: parsed.date, type: template.type, isPaid: false, isRecurring: false, isDeleted: true, parentRecurringId: template.id },
-          { id: generateId(), title: changes.title ?? template.title, amount, date: changes.date, type: template.type, isPaid: false, isRecurring: false },
+          { id: generateId(), title: changes.title ?? template.title, amount: changes.amount ?? amount, date: changes.date, type: template.type, isPaid: false, isRecurring: false },
         ];
       }
       return next;

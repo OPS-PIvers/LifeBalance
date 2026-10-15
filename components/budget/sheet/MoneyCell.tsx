@@ -12,22 +12,25 @@ interface MoneyCellProps {
   label: string;
   disabled?: boolean;
   className?: string;
+  /** Called after Enter saves the cell (the sheet adds a row on that day). */
+  onEnter?: () => void;
 }
 
-/** Resting display: grouped, two decimals (2,851.50). */
+/** Resting display: dollars, grouped, two decimals ($2,851.50). */
 const show = (value: number | undefined) =>
   value === undefined
     ? ''
-    : roundMoney(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    : `$${roundMoney(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 /** While typing: the bare number, nothing to delete around it. */
 const raw = (value: number | undefined) => (value === undefined ? '' : String(roundMoney(value)));
 
 /**
  * A spreadsheet-style amount cell: type straight into it, Enter or leaving
- * the cell saves, Escape puts the old value back. Plain numbers, no currency
- * symbol inside the input, so typing is never fighting a formatter.
+ * the cell saves, Escape puts the old value back. At rest it reads like the
+ * sheet ($2,166.00); while typing it is the bare number, so typing is never
+ * fighting a formatter.
  */
-const MoneyCell: React.FC<MoneyCellProps> = ({ value, onCommit, label, disabled, className }) => {
+const MoneyCell: React.FC<MoneyCellProps> = ({ value, onCommit, label, disabled, className, onEnter }) => {
   const [draft, setDraft] = useState<string | null>(null);
   // Escape blurs the cell, and blur commits — this tells that commit to skip.
   const cancelled = useRef(false);
@@ -69,7 +72,10 @@ const MoneyCell: React.FC<MoneyCellProps> = ({ value, onCommit, label, disabled,
       onChange={e => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={e => {
-        if (e.key === 'Enter') e.currentTarget.blur();
+        if (e.key === 'Enter') {
+          e.currentTarget.blur();
+          onEnter?.();
+        }
         if (e.key === 'Escape') {
           cancelled.current = true;
           e.currentTarget.blur();

@@ -819,6 +819,24 @@ describe('makeEditCalendarEntry', () => {
     expect(capturedSets).toEqual([]);
   });
 
+  it('writes a one-off bill\'s new name, date and amount in one update', async () => {
+    const water: CalendarItem = { id: 'water', title: 'Water', amount: 36.56, date: '2026-10-01', type: 'expense', isPaid: false };
+    const { editCalendarEntry } = makeEditCalendarEntry({ db, householdId: HOUSEHOLD_ID, user, calendarItems: [water] });
+    await editCalendarEntry('water', { title: 'City water', date: '2026-10-03', amount: 40 });
+    expect(writtenUpdates()).toEqual({ title: 'City water', date: '2026-10-03', amount: 40 });
+    expect(updateDoc).toHaveBeenCalledTimes(1);
+  });
+
+  it('moves an occurrence at a new amount without touching the series', async () => {
+    const { editCalendarEntry } = makeEditCalendarEntry({ db, householdId: HOUSEHOLD_ID, user, calendarItems: [xcel] });
+    await editCalendarEntry('xcel_instance_2026-10-28', { date: '2026-10-30', amount: 131.2 });
+    expect(capturedSets.map(w => w.data)).toEqual([
+      expect.objectContaining({ isDeleted: true, amount: 120, date: '2026-10-28' }),
+      expect.objectContaining({ amount: 131.2, date: '2026-10-30', isRecurring: false }),
+    ]);
+    expect(capturedUpdates).toEqual([]);
+  });
+
   it("re-dates a paid row in place, but never into the future", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 9, 15, 12));

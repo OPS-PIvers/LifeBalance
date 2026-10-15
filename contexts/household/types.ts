@@ -384,7 +384,7 @@ export interface HouseholdContextType {
    *  `templateId_instance_yyyy-MM-dd` id) without touching the series. */
   setOccurrenceAmount: (occurrenceId: string, amount: number, opts?: MutationOpts) => Promise<void>;
   /** Rename a calendar row or move it to another date (see makeEditCalendarEntry). */
-  editCalendarEntry: (id: string, changes: { title?: string; date?: string }) => Promise<void>;
+  editCalendarEntry: (id: string, changes: { title?: string; date?: string; amount?: number }) => Promise<void>;
   deleteCalendarItem: (id: string, opts?: MutationOpts) => Promise<void>;
   /** Mark a calendar item paid/received. Optional `actualAmount` records what
    *  was really paid (variable bills) — it drives the balance delta and the

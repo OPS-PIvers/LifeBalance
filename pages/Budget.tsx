@@ -249,7 +249,7 @@ const Budget: React.FC = () => {
   }
 
   return (
-    <div className="bg-brand-50 dark:bg-brand-900 pb-nav-safe">
+    <div className="bg-brand-50 dark:bg-brand-900 pb-nav-safe" data-sheet-host>
       <PageHeader title="Budget" subtitle="Your accounts, bills, and spending." />
 
       <Tabs value={activeTab} onValueChange={selectTab}>
@@ -262,7 +262,7 @@ const Budget: React.FC = () => {
             with the widest sub-view label ("Transactions ▾") + carets. The
             relative wrapper is the anchor container for TabSubViewMenu; the
             capture handler intercepts multi-view taps before Tabs sees them. */}
-        <div className="px-4 pt-3 pb-2 sticky top-0 z-30 bg-brand-50 dark:bg-brand-900 border-b border-brand-200 dark:border-brand-800">
+        <div data-sticky-tabs className="px-4 pt-3 pb-2 sticky top-0 z-30 bg-brand-50 dark:bg-brand-900 border-b border-brand-200 dark:border-brand-800">
           <div ref={tabBarRef} className="relative" onClickCapture={handleTabBarClickCapture}>
             <TabsList equalWidth>
               {nav.groups.map((group) => {
