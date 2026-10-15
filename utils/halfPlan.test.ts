@@ -3,7 +3,7 @@ import { parseISO } from 'date-fns';
 import { Account, CalendarItem, HalfAllocation, HalfPlan } from '@/types/schema';
 import { expandCalendarItems } from '@/utils/calendarRecurrence';
 import { buildPayHalves, findHalfContaining, nominalPaydayOf } from '@/utils/payPeriodHalves';
-import { allocationTransfer, isFullyAssigned, seedHalfPlan, summarizeHalf } from '@/utils/halfPlan';
+import { allocationTransfer, balancingPlan, dueDays, isFullyAssigned, seedHalfPlan, summarizeHalf } from '@/utils/halfPlan';
 
 // The household's real October 2026 sheet: two paychecks on the 1st and 16th
 // (paid the Friday before a weekend), and their dated bills.
@@ -213,5 +213,38 @@ describe('allocationTransfer', () => {
   it('moves nothing for an "other" line, and says what is missing', () => {
     expect(allocationTransfer(line('other'), accounts, undefined, true)).toEqual({ kind: 'none' });
     expect(allocationTransfer(line('to-savings'), [acct('chk', 'checking')], undefined, true)).toEqual({ kind: 'missing', reason: 'Add a savings account first' });
+  });
+});
+
+describe('dueDays and balancingPlan', () => {
+  const plan: HalfPlan = {
+    id: '2026-10-01',
+    budgets: { gas: 120, grocery: 850 },
+    allocations: [{ id: 'a1', kind: 'card-extra', label: 'AmEx extra payment', amount: 700 }],
+  };
+  const summary = summarizeHalf(half('2026-10-01'), expanded, plan, BUCKETS);
+
+  it('lists only the days that have bills, in order', () => {
+    const days = dueDays(summary);
+    expect(days.map(d => d.date)).toEqual(['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-05', '2026-10-07', '2026-10-13', '2026-10-14']);
+    expect(days[0]?.bills).toHaveLength(9);
+  });
+
+  it('covers a short half from savings, landing on $0', () => {
+    const balanced = balancingPlan(plan, summary, () => 'n1');
+    expect(balanced?.allocations.at(-1)).toEqual({ id: 'n1', kind: 'from-savings', label: 'From savings', amount: 452.89 });
+    expect(balanced && summarizeHalf(half('2026-10-01'), expanded, balanced, BUCKETS).leftToAssign).toBe(0);
+  });
+
+  it('grows an existing unchecked line instead of adding another', () => {
+    const extra: HalfPlan = { ...plan, allocations: [...plan.allocations, { id: 's', kind: 'to-savings', label: 'Leftover to savings', amount: 100 }] };
+    const noPlan = summarizeHalf(half('2026-10-01'), expanded, { ...extra, budgets: {}, allocations: [extra.allocations[1]!] }, BUCKETS);
+    const balanced = balancingPlan(extra, noPlan, () => 'n2');
+    expect(balanced?.allocations.find(a => a.id === 's')?.amount).toBe(1217.11);
+    expect(balanced?.allocations).toHaveLength(2);
+  });
+
+  it('does nothing for a fully assigned half', () => {
+    expect(balancingPlan(plan, { ...summary, leftToAssign: 0 }, () => 'x')).toBeNull();
   });
 });

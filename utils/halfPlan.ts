@@ -145,3 +145,36 @@ export function allocationTransfer(
     ? { kind: 'move', deltas: { [checking.id]: -x, [savings.id]: x } }
     : { kind: 'move', deltas: { [savings.id]: -x, [checking.id]: x } };
 }
+
+/** One due day on the sheet: a date and the bills that land on it. */
+export interface SheetDay {
+  date: string;
+  bills: CalendarItem[];
+}
+
+/** The half's bills grouped by date — only days that have one (phone layout B). */
+export function dueDays(summary: HalfSummary): SheetDay[] {
+  const byDate = new Map<string, CalendarItem[]>();
+  for (const bill of summary.bills) {
+    byDate.set(bill.date, [...(byDate.get(bill.date) ?? []), bill]);
+  }
+  return [...byDate.entries()].map(([date, bills]) => ({ date, bills }));
+}
+
+/**
+ * The line that brings Left to assign to $0: a short half is covered from
+ * savings, a long one sends the rest to savings. When the plan already has a
+ * line of that kind, it grows instead of a second one appearing. Null when
+ * the half is already fully assigned.
+ */
+export function balancingPlan(plan: HalfPlan, summary: HalfSummary, newId: () => string): HalfPlan | null {
+  const gap = summary.leftToAssign;
+  if (gap === 0) return null;
+  const kind: HalfAllocation['kind'] = gap < 0 ? 'from-savings' : 'to-savings';
+  const amount = Math.abs(gap);
+  const existing = plan.allocations.find(a => a.kind === kind && !a.done);
+  const allocations = existing
+    ? plan.allocations.map(a => (a === existing ? { ...a, amount: sumMoney([a.amount, amount]) } : a))
+    : [...plan.allocations, { id: newId(), kind, label: gap < 0 ? 'From savings' : 'Leftover to savings', amount }];
+  return { ...plan, allocations };
+}

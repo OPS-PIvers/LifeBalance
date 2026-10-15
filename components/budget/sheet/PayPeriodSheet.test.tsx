@@ -1,0 +1,138 @@
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import type { Account, BudgetBucket, CalendarItem, HalfPlan } from '@/types/schema';
+import PayPeriodSheet from './PayPeriodSheet';
+import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+
+vi.mock('@/contexts/FirebaseHouseholdContext', async () => {
+  const { expandCalendarItems } = await vi.importActual<typeof import('@/utils/calendarRecurrence')>('@/utils/calendarRecurrence');
+  const fn = vi.fn();
+  return {
+    useFinance: fn,
+    useHouseholdCore: fn,
+    useExpandedCalendarItems: (start: Date, end: Date) => {
+      const { calendarItems } = fn() as { calendarItems: CalendarItem[] };
+      return expandCalendarItems(calendarItems, start, end);
+    },
+  };
+});
+vi.mock('@/hooks/useFormatCurrency', () => ({
+  useFormatCurrency: () => (n: number) => `$${n.toFixed(2)}`,
+}));
+vi.mock('@/hooks/useMediaQuery', () => ({ useMediaQuery: () => false }));
+vi.mock('@/utils/dateHelpers', async () => ({
+  ...(await vi.importActual<object>('@/utils/dateHelpers')),
+  getLocalDateString: () => '2026-10-08',
+}));
+
+const paycheck: CalendarItem = {
+  id: 'pay',
+  title: 'Paycheck',
+  amount: 2851.5,
+  date: '2026-01-01',
+  type: 'income',
+  isPaid: false,
+  isRecurring: true,
+  frequency: 'semi-monthly',
+  semiMonthlyDays: [1, 16],
+  weekendShift: 'before',
+  earnerId: 'jen',
+};
+const mortgage: CalendarItem = {
+  id: 'mortgage',
+  title: 'Mortgage',
+  amount: 2166,
+  date: '2026-01-01',
+  type: 'expense',
+  isPaid: false,
+  isRecurring: true,
+  frequency: 'monthly',
+};
+const accounts: Account[] = [
+  { id: 'chk', name: 'Checking', type: 'checking', balance: 3000, lastUpdated: '' },
+  { id: 'sav', name: 'Savings', type: 'savings', balance: 9000, lastUpdated: '' },
+];
+const buckets = [{ id: 'grocery', name: 'Groceries', limit: 850, color: 'green', isVariable: true, isCore: true }] satisfies BudgetBucket[];
+
+const saveHalfPlan = vi.fn().mockResolvedValue(undefined);
+const setAllocationDone = vi.fn().mockResolvedValue(undefined);
+const setOccurrenceAmount = vi.fn().mockResolvedValue(undefined);
+const payCalendarItem = vi.fn().mockResolvedValue(undefined);
+
+function setup(halfPlans: HalfPlan[] = []) {
+  vi.mocked(useFinance).mockReturnValue({
+    calendarItems: [paycheck, mortgage],
+    halfPlans,
+    buckets,
+    accounts,
+    defaultAccountId: undefined,
+    safeToSpend: 1234,
+    members: [{ uid: 'jen', displayName: 'Jen' }],
+    saveHalfPlan,
+    setAllocationDone,
+    setOccurrenceAmount,
+    payCalendarItem,
+    updateCalendarItem: vi.fn(),
+    addCalendarItem: vi.fn(),
+  } as unknown as ReturnType<typeof useFinance>);
+  render(<PayPeriodSheet />);
+}
+
+describe('PayPeriodSheet', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('shows the current half: paycheck at the top, bills on their days, Left to assign', () => {
+    setup();
+    expect(screen.getByRole('heading', { name: 'Oct 1 – 15' })).toBeInTheDocument();
+    expect(screen.getByText(/Jen/)).toBeInTheDocument();
+    expect(screen.getByText('Mortgage')).toBeInTheDocument();
+    expect(screen.getByTestId('left-to-assign')).toHaveTextContent('$685.50');
+    expect(screen.getByText(/Safe-to-Spend right now/)).toBeInTheDocument();
+  });
+
+  it('steps to the next half, which starts the Friday before a weekend payday', () => {
+    setup();
+    fireEvent.click(screen.getByLabelText('Next half'));
+    expect(screen.getByRole('heading', { name: 'Oct 16 – 29' })).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Next half'));
+    expect(screen.getByRole('heading', { name: 'Oct 30 – Nov 15' })).toBeInTheDocument();
+    expect(screen.getByText(/November · 1st half/)).toBeInTheDocument();
+  });
+
+  it('saves a planned budget typed into its cell', async () => {
+    setup();
+    const cell = screen.getByLabelText('Groceries planned for this half');
+    fireEvent.change(cell, { target: { value: '850' } });
+    fireEvent.blur(cell);
+    await waitFor(() =>
+      expect(saveHalfPlan).toHaveBeenCalledWith(expect.objectContaining({ id: '2026-10-01', budgets: { grocery: 850 } }))
+    );
+  });
+
+  it('sends what is left to savings in one tap', async () => {
+    setup();
+    fireEvent.click(screen.getByText('Send $685.50 to savings'));
+    await waitFor(() =>
+      expect(saveHalfPlan).toHaveBeenCalledWith(
+        expect.objectContaining({ allocations: [expect.objectContaining({ kind: 'to-savings', amount: 685.5 })] })
+      )
+    );
+  });
+
+  it('checks a saved allocation off through the transfer mutation', () => {
+    const plan: HalfPlan = { id: '2026-10-01', budgets: {}, allocations: [{ id: 's', kind: 'to-savings', label: 'Leftover to savings', amount: 685.5 }] };
+    setup([plan]);
+    expect(screen.getByTestId('left-to-assign')).toHaveTextContent('$0.00');
+    fireEvent.click(screen.getByLabelText('Mark Leftover to savings done'));
+    expect(setAllocationDone).toHaveBeenCalledWith(plan, 's', true);
+  });
+
+  it('asks which months a recurring bill change applies to', async () => {
+    setup();
+    const cell = screen.getByLabelText('Mortgage amount');
+    fireEvent.change(cell, { target: { value: '2200' } });
+    fireEvent.blur(cell);
+    fireEvent.click(await screen.findByText('Just October'));
+    await waitFor(() => expect(setOccurrenceAmount).toHaveBeenCalledWith('mortgage_instance_2026-10-01', 2200));
+  });
+});

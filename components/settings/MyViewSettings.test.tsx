@@ -63,7 +63,7 @@ describe('MyViewSettings — Home + landing screen (2F.2)', () => {
       <MyViewSettings
         member={baseMember({
           homeScreen: 'money',
-          hiddenKeys: ['overview', 'transactions', 'trends', 'calendar', 'subscriptions', 'buckets', 'accounts'],
+          hiddenKeys: ['overview', 'transactions', 'trends', 'calendar', 'sheet', 'subscriptions', 'buckets', 'accounts'],
         })}
         settings={settings}
         onSave={vi.fn()}
@@ -124,7 +124,7 @@ describe('MyViewSettings — Home + landing screen (2F.2)', () => {
   it('hides the landing-screen picker entirely once only one destination remains', () => {
     const allButHome = [
       'track', 'history', 'insights', 'coach', 'rewards', 'challenges',
-      'overview', 'transactions', 'trends', 'calendar', 'subscriptions', 'buckets', 'accounts',
+      'overview', 'transactions', 'trends', 'calendar', 'sheet', 'subscriptions', 'buckets', 'accounts',
       'todos', 'meals', 'shopping',
     ];
     render(

@@ -59,7 +59,7 @@ describe('useLandingRoute', () => {
       hiddenKeys: [
         'home',
         'track', 'history', 'insights', 'coach', 'rewards', 'challenges',
-        'overview', 'transactions', 'trends', 'calendar', 'subscriptions', 'buckets', 'accounts',
+        'overview', 'transactions', 'trends', 'calendar', 'sheet', 'subscriptions', 'buckets', 'accounts',
         'todos', 'meals', 'shopping',
       ],
     });
