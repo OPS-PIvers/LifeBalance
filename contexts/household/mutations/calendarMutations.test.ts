@@ -61,7 +61,7 @@ vi.mock('@/utils/firestoreSanitizer', () => ({
   sanitizeFirestoreData: (d: Record<string, unknown>) => d,
 }));
 
-import { addDoc, updateDoc } from 'firebase/firestore';
+import { addDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import {
   makeAcknowledgeBillPriceChange,
   makeForgetBillDescriptorAlias,
@@ -70,6 +70,8 @@ import {
   makeSettleBillWithTransaction,
   makeAddCalendarItem,
   makeUpdateCalendarItem,
+  makeSetOccurrenceAmount,
+  makeCalendarDeleteMutations,
 } from './calendarMutations';
 import type { Account, CalendarItem, Transaction } from '@/types/schema';
 
@@ -710,5 +712,73 @@ describe('twice-a-month paychecks — schedule fields', () => {
     expect(updates.semiMonthlyDays).toEqual({ __deleteField: true });
     expect(updates.weekendShift).toEqual({ __deleteField: true });
     expect(updates.earnerId).toEqual({ __deleteField: true });
+  });
+});
+
+describe('one-month amount changes', () => {
+  const xcel: CalendarItem = {
+    id: 'xcel',
+    title: 'Xcel',
+    amount: 120,
+    date: '2026-01-28',
+    type: 'expense',
+    isPaid: false,
+    isRecurring: true,
+    frequency: 'monthly',
+  };
+  const override: CalendarItem = {
+    id: 'ovr',
+    title: 'Xcel',
+    amount: 98.68,
+    date: '2026-10-28',
+    type: 'expense',
+    isPaid: false,
+    isRecurring: false,
+    isOverride: true,
+    parentRecurringId: 'xcel',
+  };
+  const user = { uid: 'paul' };
+
+  beforeEach(() => {
+    vi.mocked(updateDoc).mockReset();
+    vi.mocked(addDoc).mockReset();
+    vi.mocked(deleteDoc).mockReset();
+  });
+
+  it('"Just this month" writes an override for that one date', async () => {
+    const { setOccurrenceAmount } = makeSetOccurrenceAmount({ db, householdId: HOUSEHOLD_ID, user, calendarItems: [xcel] });
+    await setOccurrenceAmount('xcel_instance_2026-10-28', 98.684, { silent: true });
+    expect(vi.mocked(addDoc).mock.calls[0]?.[1]).toMatchObject({
+      amount: 98.68,
+      date: '2026-10-28',
+      isOverride: true,
+      isPaid: false,
+      parentRecurringId: 'xcel',
+    });
+  });
+
+  it('changes an existing override, and removes it when set back to the series amount', async () => {
+    const { setOccurrenceAmount } = makeSetOccurrenceAmount({ db, householdId: HOUSEHOLD_ID, user, calendarItems: [xcel, override] });
+    await setOccurrenceAmount('xcel_instance_2026-10-28', 110, { silent: true });
+    expect(writtenUpdates()).toEqual({ amount: 110 });
+    await setOccurrenceAmount('xcel_instance_2026-10-28', 120, { silent: true });
+    expect(vi.mocked(deleteDoc)).toHaveBeenCalledTimes(1);
+    expect(addDoc).not.toHaveBeenCalled();
+  });
+
+  it('"This and future months" keeps what earlier months cost', async () => {
+    const { updateCalendarItem } = makeUpdateCalendarItem({ db, householdId: HOUSEHOLD_ID, calendarItems: [xcel] });
+    await updateCalendarItem({ ...xcel, amount: 135 }, { silent: true, amountFrom: '2026-11-28' });
+    const updates = writtenUpdates();
+    expect(updates.amount).toBe(135);
+    expect(updates.earlierAmounts).toEqual([{ before: '2026-11-28', amount: 120 }]);
+  });
+
+  it('deleting an occurrence with an override turns the override into the tombstone', async () => {
+    const { deleteRecurringInstance } = makeCalendarDeleteMutations({ db, householdId: HOUSEHOLD_ID, user, calendarItems: [xcel, override] });
+    await deleteRecurringInstance('xcel_instance_2026-10-28', { silent: true });
+    expect(writtenUpdates()).toEqual({ isDeleted: true });
+    expect(addDoc).not.toHaveBeenCalled();
+    expect(deleteDoc).not.toHaveBeenCalled();
   });
 });

@@ -127,6 +127,7 @@ import { makeHalfPlanMutations } from '@/contexts/household/mutations/halfPlanMu
 import {
   makeAddCalendarItem,
   makeUpdateCalendarItem,
+  makeSetOccurrenceAmount,
   makeCalendarDeleteMutations,
   makeDeleteCalendarItem,
   makePayCalendarItem,
@@ -234,6 +235,7 @@ import type {
   ListenerReadiness,
   MergeLearnAlias,
   MutationOpts,
+  CalendarUpdateOpts,
   HouseholdContextType,
   FinanceContextValue,
   GamificationContextValue,
@@ -2056,9 +2058,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeAddCalendarItem({ db, householdId, user }).addCalendarItem(item);
   }, [householdId, user]);
 
-  const updateCalendarItem = useCallback(async (item: CalendarItem, opts?: MutationOpts) => {
+  const updateCalendarItem = useCallback(async (item: CalendarItem, opts?: CalendarUpdateOpts) => {
     await makeUpdateCalendarItem({ db, householdId, calendarItems }).updateCalendarItem(item, opts);
   }, [householdId, calendarItems]);
+
+  const setOccurrenceAmount = useCallback(async (occurrenceId: string, amount: number, opts?: MutationOpts) => {
+    await makeSetOccurrenceAmount({ db, householdId, user, calendarItems }).setOccurrenceAmount(occurrenceId, amount, opts);
+  }, [householdId, user, calendarItems]);
 
   const deleteRecurringInstance = useCallback(async (syntheticId: string, opts?: MutationOpts) => {
     await makeCalendarDeleteMutations({ db, householdId, user, calendarItems }).deleteRecurringInstance(syntheticId, opts);
@@ -2903,6 +2909,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     reallocateBucket,
     addCalendarItem,
     updateCalendarItem,
+    setOccurrenceAmount,
     deleteCalendarItem,
     payCalendarItem,
     deferCalendarItem,
@@ -2932,7 +2939,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     defaultAccountId, setDefaultAccountId,
     addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal, saveHalfPlan,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, setBucketLimits, saveCeremonyChanges, reallocateBucket,
-    addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem, linkBankTransactionToBill, settleBillWithTransaction, forgetBillDescriptorAlias, acknowledgeBillPriceChange,
+    addCalendarItem, updateCalendarItem, setOccurrenceAmount, deleteCalendarItem, payCalendarItem, deferCalendarItem, linkBankTransactionToBill, settleBillWithTransaction, forgetBillDescriptorAlias, acknowledgeBillPriceChange,
     addTransaction, addTransactions, updateTransactionCategory, reverseTransactionApproval, updateTransaction, deleteTransaction, splitTransaction,
     setTransactionSplit, markSplitSettled,
     mergeTransactions, keepBothTransactions, getTransactionComments, addTransactionComment, deleteTransactionComment,

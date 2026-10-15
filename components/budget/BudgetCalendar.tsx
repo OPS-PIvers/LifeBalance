@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useFinance, useTodos, useExpandedCalendarItems, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
-import { format, isSameMonth, isSameDay, isToday, addMonths, subMonths, startOfWeek, addDays } from 'date-fns';
+import { format, isSameMonth, isSameDay, isToday, addMonths, subMonths, startOfWeek, addDays, parseISO } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Copy, CheckSquare, Download, MoreVertical, MoreHorizontal, Repeat, CalendarPlus, CalendarDays } from 'lucide-react';
 import { CalendarFrequency, CalendarItem, WeekendShift } from '@/types/schema';
 import { useCalendarGrid } from '@/hooks/useCalendarGrid';
@@ -46,7 +46,7 @@ const STRIP_WEEKS_FORWARD = 12;
 const DAYS_OF_MONTH = Array.from({ length: 31 }, (_, i) => i + 1);
 
 const BudgetCalendar: React.FC = () => {
-  const { calendarItems, addCalendarItem, updateCalendarItem, deleteCalendarItem, forgetBillDescriptorAlias, accounts } = useFinance();
+  const { calendarItems, addCalendarItem, updateCalendarItem, setOccurrenceAmount, deleteCalendarItem, forgetBillDescriptorAlias, accounts } = useFinance();
   const { todos, completeToDo } = useTodos();
   const { members } = useHouseholdCore();
   // Paychecks belong to an adult; managed kid profiles never earn one.
@@ -97,6 +97,12 @@ const BudgetCalendar: React.FC = () => {
    * date; `null` hides the settle affordance entirely.
    */
   const [settleTarget, setSettleTarget] = useState<{ id: string; date: string; title: string } | null>(null);
+  /** The recurring occurrence the drawer was opened from (synthetic id, its
+   *  date and what it costs), so an amount edit can ask "Just this month" or
+   *  "This and future months". Null for one-offs and new items. */
+  const [occurrence, setOccurrence] = useState<{ id: string; date: string; amount: number } | null>(null);
+  /** True while the drawer is asking which months an amount edit applies to. */
+  const [askAmountScope, setAskAmountScope] = useState(false);
   const [activeActionItem, setActiveActionItem] = useState<CalendarItem | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -283,6 +289,8 @@ const BudgetCalendar: React.FC = () => {
     setIsSubscription(false);
     setEditingItem(null);
     setSettleTarget(null);
+    setOccurrence(null);
+    setAskAmountScope(false);
     setIsAddModalOpen(true);
   };
 
@@ -310,6 +318,8 @@ const BudgetCalendar: React.FC = () => {
       !item.isPaid &&
       (isRecurringId(item.id) || !item.isRecurring);
     setSettleTarget(settleable ? { id: item.id, date: item.date, title: item.title } : null);
+    setOccurrence(isInstance(item) && !item.isPaid ? { id: item.id, date: item.date, amount: item.amount } : null);
+    setAskAmountScope(false);
 
     // If this is a recurring instance, edit the original item instead
     if (isInstance(item)) {
@@ -319,7 +329,9 @@ const BudgetCalendar: React.FC = () => {
         return;
       }
       setTitle(originalItem.title);
-      setAmount(originalItem.amount.toString());
+      // This month's amount, which a "Just this month" change may differ from
+      // the series' (handleSave asks which months a change applies to).
+      setAmount(item.amount.toString());
       setType(originalItem.type);
       setDate(originalItem.date);
       setAccountId(originalItem.accountId || '');
@@ -366,8 +378,14 @@ const BudgetCalendar: React.FC = () => {
     });
   };
 
-  const handleSave = async () => {
+  const handleSave = async (amountScope?: 'one' | 'future') => {
     if (!title || !amount || !date) return;
+    const enteredAmount = parseFloat(amount);
+    const amountChanged = occurrence !== null && enteredAmount !== occurrence.amount;
+    if (amountChanged && isRecurring && editingItem?.isRecurring && !amountScope) {
+      setAskAmountScope(true);
+      return;
+    }
     if (isRecurring && frequency === 'semi-monthly' && semiDays[0] === semiDays[1]) {
       toast.error('Pick two different days for a twice-a-month schedule');
       return;
@@ -376,7 +394,8 @@ const BudgetCalendar: React.FC = () => {
     const newItem: CalendarItem = {
       id: editingItem ? editingItem.id : crypto.randomUUID(),
       title,
-      amount: parseFloat(amount),
+      // From an occurrence, the series amount moves only when asked to.
+      amount: occurrence && editingItem && isRecurring && amountScope !== 'future' ? editingItem.amount : enteredAmount,
       date: date,
       type,
       isPaid: editingItem ? editingItem.isPaid : false,
@@ -390,11 +409,17 @@ const BudgetCalendar: React.FC = () => {
     };
 
     try {
-      if (editingItem) {
+      if (editingItem && occurrence && amountScope === 'one') {
+        await updateCalendarItem(newItem, { silent: true });
+        await setOccurrenceAmount(occurrence.id, enteredAmount);
+      } else if (editingItem && occurrence && amountScope === 'future') {
+        await updateCalendarItem(newItem, { amountFrom: occurrence.date });
+      } else if (editingItem) {
         await updateCalendarItem(newItem);
       } else {
         await addCalendarItem(newItem);
       }
+      setAskAmountScope(false);
       setIsAddModalOpen(false);
     } catch (error) {
       console.error("Failed to save calendar item:", error);
@@ -438,6 +463,7 @@ const BudgetCalendar: React.FC = () => {
     if (!title || !amount || !date) return;
 
     setEditingItem(null);
+    setOccurrence(null);
     setIsRecurring(false);
     setFrequency('monthly');
     setWeekendShift('');
@@ -891,7 +917,24 @@ const BudgetCalendar: React.FC = () => {
         // nothing is pending.
         onClose={() => { setIsAddModalOpen(false); cancelSettle(); }}
         title={editingItem ? 'Edit Event' : 'Add Calendar Item'}
-        footer={
+        footer={askAmountScope && occurrence ? (
+          <div className="border-t border-brand-200 dark:border-brand-700 p-4 space-y-2">
+            <p className="text-sm text-brand-600 dark:text-brand-300">
+              Change the amount for which months?
+            </p>
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => handleSave('one')} className="flex-1 py-3 h-auto">
+                Just {format(parseISO(occurrence.date), 'MMMM')}
+              </Button>
+              <Button variant="primary" onClick={() => handleSave('future')} className="flex-1 py-3 h-auto">
+                This and future months
+              </Button>
+            </div>
+            <Button variant="ghost" onClick={() => setAskAmountScope(false)} className="w-full">
+              Back
+            </Button>
+          </div>
+        ) : (
           <div className="flex gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
             {editingItem && (
               <Button
@@ -905,13 +948,13 @@ const BudgetCalendar: React.FC = () => {
             )}
             <Button
               variant="primary"
-              onClick={handleSave}
+              onClick={() => handleSave()}
               className="flex-1 py-3 h-auto"
             >
               {editingItem ? 'Save Changes' : 'Add Event'}
             </Button>
           </div>
-        }
+        )}
       >
           <div className="space-y-4">
              {/* Type Toggle */}

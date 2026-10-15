@@ -810,7 +810,13 @@ service cloud.firestore {
                     data.semiMonthlyDays[0] >= 1 && data.semiMonthlyDays[0] <= 31 &&
                     data.semiMonthlyDays[1] >= 1 && data.semiMonthlyDays[1] <= 31)) &&
                  (data.get('weekendShift', null) == null || data.weekendShift in ['before', 'after']) &&
-                 isValidOptionalString(data.get('earnerId', null), 128);
+                 isValidOptionalString(data.get('earnerId', null), 128) &&
+                 // Amount history ("This and future months") and the "Just this
+                 // month" flag. Rules can't check each entry, so the list is
+                 // bounded by count (24, MAX_EARLIER_AMOUNTS in the client).
+                 (data.get('earlierAmounts', null) == null ||
+                   (data.earlierAmounts is list && data.earlierAmounts.size() <= 24)) &&
+                 (data.get('isOverride', null) == null || isValidBoolean(data.isOverride));
         }
 
         // Helper to validate the full schema on CREATE (all required fields present)
@@ -824,7 +830,7 @@ service cloud.firestore {
                 'isRecurring', 'frequency', 'parentRecurringId', 'isDeleted',
                 'createdBy', 'notes', 'createdAt', 'updatedAt', 'accountId', 'bucketId',
                 'isSubscription', 'bankDescriptorAliases',
-                'semiMonthlyDays', 'weekendShift', 'earnerId'
+                'semiMonthlyDays', 'weekendShift', 'earnerId', 'earlierAmounts', 'isOverride'
               ]) &&
               isValidString(data.title, 100) &&
               isValidNumber(data.amount) &&
@@ -872,7 +878,7 @@ service cloud.firestore {
             'isRecurring', 'frequency', 'parentRecurringId', 'isDeleted',
             'createdBy', 'notes', 'createdAt', 'updatedAt', 'accountId', 'bucketId',
             'isSubscription', 'bankDescriptorAliases',
-            'semiMonthlyDays', 'weekendShift', 'earnerId'
+            'semiMonthlyDays', 'weekendShift', 'earnerId', 'earlierAmounts', 'isOverride'
           ].toSet();
           return (
                  // Block writes to any non-allowlisted field (storage abuse): a key
@@ -891,7 +897,7 @@ service cloud.firestore {
                  (!changed.hasAny(['parentRecurringId']) || isValidOptionalString(data.get('parentRecurringId', null), 50)) &&
                  (!changed.hasAny(['isDeleted']) || data.get('isDeleted', null) == null || isValidBoolean(data.isDeleted)) &&
                  (!changed.hasAny(['isSubscription']) || data.get('isSubscription', null) == null || isValidBoolean(data.isSubscription)) &&
-                 (!changed.hasAny(['semiMonthlyDays', 'weekendShift', 'earnerId']) || isValidCalendarSchedule(data)) &&
+                 (!changed.hasAny(['semiMonthlyDays', 'weekendShift', 'earnerId', 'earlierAmounts', 'isOverride']) || isValidCalendarSchedule(data)) &&
                  (!changed.hasAny(['accountId']) || isValidOptionalString(data.get('accountId', null), 50)) &&
                  (!changed.hasAny(['bucketId']) || isValidOptionalString(data.get('bucketId', null), 50)) &&
                  (!changed.hasAny(['notes']) || isValidOptionalString(data.get('notes', null), 500)) &&

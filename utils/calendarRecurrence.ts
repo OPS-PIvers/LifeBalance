@@ -1,4 +1,5 @@
-import { CalendarFrequency, CalendarItem, WeekendShift } from '@/types/schema';
+import { CalendarFrequency, CalendarItem, EarlierAmount, WeekendShift } from '@/types/schema';
+import { roundMoney } from '@/utils/money';
 import { addDays, addWeeks, addMonths, parseISO, format, isBefore, isAfter, isSameDay, differenceInCalendarWeeks, differenceInCalendarMonths, getDaysInMonth, startOfDay, startOfMonth, subDays } from 'date-fns';
 
 const MONDAY = 1;
@@ -310,6 +311,60 @@ export function rollRecurringAnchorForward(
   return anchor;
 }
 
+/** Most amount steps a series keeps; the oldest (long-past) ones drop first.
+ *  Matches the bound in firestore.rules. */
+export const MAX_EARLIER_AMOUNTS = 24;
+
+/**
+ * What a recurring series costs on `date`, honouring "This and future months"
+ * changes recorded in `earlierAmounts`. A per-occurrence "Just this month"
+ * override is applied separately, by expandCalendarItems.
+ */
+export function seriesAmountOn(series: Pick<CalendarItem, 'amount' | 'earlierAmounts'>, date: string): number {
+  let match: EarlierAmount | undefined;
+  for (const step of series.earlierAmounts ?? []) {
+    if (date < step.before && (!match || step.before < match.before)) match = step;
+  }
+  return match ? match.amount : series.amount;
+}
+
+/**
+ * The template fields after changing a series' amount to `amount` from `from`
+ * onward ("This and future months"). Occurrences before `from` keep exactly
+ * what they cost before; steps that reached past `from` are cut off at it.
+ */
+export function withAmountFrom(
+  series: Pick<CalendarItem, 'amount' | 'earlierAmounts'>,
+  from: string,
+  amount: number
+): { amount: number; earlierAmounts: EarlierAmount[] } {
+  const steps = [...(series.earlierAmounts ?? [])].sort((a, b) => a.before.localeCompare(b.before));
+  const kept = steps.filter(s => s.before <= from);
+  const firstPast = steps.find(s => s.before > from);
+  // Whatever applied just before `from` keeps applying up to it.
+  const priorAmount = firstPast ? firstPast.amount : series.amount;
+  const last = kept[kept.length - 1];
+  const next = last && last.before === from ? kept : [...kept, { before: from, amount: roundMoney(priorAmount) }];
+  // A step costing the same as the one after it says nothing; drop it.
+  const merged = next.filter((s, i) => s.amount !== (next[i + 1]?.amount ?? roundMoney(amount)));
+  return { amount: roundMoney(amount), earlierAmounts: merged.slice(-MAX_EARLIER_AMOUNTS) };
+}
+
+/** The "Just this month" override doc for one occurrence, if any. */
+export function findOccurrenceOverride(items: CalendarItem[], templateId: string, date: string): CalendarItem | undefined {
+  return items.find(
+    i => i.isOverride && i.parentRecurringId === templateId && i.date === date && !i.isPaid && !i.isDeleted
+  );
+}
+
+/** What one occurrence of a series costs: its override, else the series amount on that date. */
+export function occurrenceAmount(items: CalendarItem[], template: CalendarItem, date: string): number {
+  return findOccurrenceOverride(items, template.id, date)?.amount ?? seriesAmountOn(template, date);
+}
+
+/** Key for a per-occurrence "Just this month" override. */
+const overrideKey = (templateId: string, date: string) => `${templateId}|${date}`;
+
 /**
  * Generates recurring instances of a calendar item within a date range.
  * If the item is not recurring, returns just the original item.
@@ -339,6 +394,7 @@ export function generateRecurringInstances(
         ...item,
         id: generateRecurringId(item.id, date),
         date,
+        amount: seriesAmountOn(item, date),
         ...(nominalDate !== date ? { nominalDate } : {}),
       })
     );
@@ -366,6 +422,7 @@ export function generateRecurringInstances(
         ...item,
         id: generateRecurringId(item.id, dateStr), // Use consistent ID generation
         date: dateStr,
+        amount: seriesAmountOn(item, dateStr),
       });
     }
 
@@ -406,6 +463,13 @@ export function expandCalendarItems(
   const paidInstances = items.filter(item => item.isPaid && item.parentRecurringId);
   const deletedInstances = items.filter(item => item.isDeleted && item.parentRecurringId);
   const nonRecurringItems = items.filter(item => !item.isRecurring && !item.parentRecurringId);
+  // "Just this month" amounts, keyed by template + occurrence date.
+  const overrideAmounts = new Map<string, number>();
+  for (const item of items) {
+    if (item.isOverride && item.parentRecurringId && !item.isPaid && !item.isDeleted) {
+      overrideAmounts.set(overrideKey(item.parentRecurringId, item.date), item.amount);
+    }
+  }
 
   // Build sets of paid and deleted dates for each recurring template
   const paidDatesMap = new Map<string, Set<string>>();
@@ -436,10 +500,11 @@ export function expandCalendarItems(
     const deletedDates = deletedDatesMap.get(template.id) || new Set();
 
     // Filter out instances that have been paid or deleted
-    const activeInstances = instances.filter(
-      instance => !paidDates.has(instance.date) && !deletedDates.has(instance.date)
-    );
-    allInstances.push(...activeInstances);
+    for (const instance of instances) {
+      if (paidDates.has(instance.date) || deletedDates.has(instance.date)) continue;
+      const override = overrideAmounts.get(overrideKey(template.id, instance.date));
+      allInstances.push(override === undefined ? instance : { ...instance, amount: override });
+    }
   }
 
   // Add non-recurring items and paid instances that fall within the range.

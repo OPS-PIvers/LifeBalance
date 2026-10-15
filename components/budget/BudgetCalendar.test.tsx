@@ -370,6 +370,58 @@ describe('BudgetCalendar', () => {
     });
   });
 
+  it('asks which months an occurrence amount change applies to', async () => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const series = {
+      id: 'xcel',
+      title: 'Xcel',
+      amount: 120,
+      date: todayStr,
+      type: 'expense',
+      isPaid: false,
+      isRecurring: true,
+      frequency: 'monthly',
+    };
+    const mockSetOccurrenceAmount = vi.fn().mockResolvedValue(undefined);
+    (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      members: [],
+      calendarItems: [series],
+      addCalendarItem: mockAddCalendarItem,
+      updateCalendarItem: mockUpdateCalendarItem,
+      setOccurrenceAmount: mockSetOccurrenceAmount,
+      deleteCalendarItem: mockDeleteCalendarItem,
+      todos: [],
+      completeToDo: vi.fn(),
+      accounts: [],
+      transactions: [],
+    });
+
+    render(<BudgetCalendar />);
+    const occurrenceId = `xcel_instance_${todayStr}`;
+    const month = format(new Date(), 'MMMM');
+
+    // Just this month: the series keeps its amount; one override is written.
+    fireEvent.click(screen.getByLabelText('Edit Xcel'));
+    fireEvent.change(screen.getByPlaceholderText('Amount'), { target: { value: '98.68' } });
+    fireEvent.click(screen.getByText('Save Changes'));
+    fireEvent.click(await screen.findByText(`Just ${month}`));
+    await waitFor(() => expect(mockSetOccurrenceAmount).toHaveBeenCalledWith(occurrenceId, 98.68));
+    expect(mockUpdateCalendarItem).toHaveBeenCalledWith(expect.objectContaining({ id: 'xcel', amount: 120 }), { silent: true });
+
+    // This and future months: the series changes from this occurrence on.
+    mockUpdateCalendarItem.mockClear();
+    fireEvent.click(screen.getByLabelText('Edit Xcel'));
+    fireEvent.change(screen.getByPlaceholderText('Amount'), { target: { value: '135' } });
+    fireEvent.click(screen.getByText('Save Changes'));
+    fireEvent.click(await screen.findByText('This and future months'));
+    await waitFor(() =>
+      expect(mockUpdateCalendarItem).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'xcel', amount: 135 }),
+        { amountFrom: todayStr }
+      )
+    );
+  });
+
   it('deletes a calendar item', () => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const item = {

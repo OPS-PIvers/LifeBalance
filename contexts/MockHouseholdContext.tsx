@@ -6,7 +6,14 @@ import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseho
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { pastClosedWeeks } from '@/utils/recapWeek';
 import { shiftDay } from '@/utils/recapAssembly';
-import { rollRecurringAnchorForward, isRecurringId, parseRecurringId, semiMonthlyDaysFor } from '@/utils/calendarRecurrence';
+import {
+  rollRecurringAnchorForward,
+  isRecurringId,
+  parseRecurringId,
+  semiMonthlyDaysFor,
+  withAmountFrom,
+  seriesAmountOn,
+} from '@/utils/calendarRecurrence';
 import { BUDGETED_IN_CALENDAR } from '@/utils/categories';
 import { hashKidPin } from '@/utils/kidPin';
 import { computeTodoCompletionCredit, buildUncompleteCreditReversal } from '@/utils/todoPoints';
@@ -42,7 +49,7 @@ import { computeBackdatedHabitFire, computeHabitTriggerFire, computeHabitTrigger
 import { evaluateTodoSubtaskGate, TodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import { setSubtaskDone, subtaskProgress } from '@/utils/subtasks';
 import type { TodoSubtaskToggleResult, TodoCompletionOptions, TodoPromotionFields } from '@/contexts/household/mutations/todoMutations';
-import type { MergeLearnAlias } from '@/contexts/household/types';
+import type { CalendarUpdateOpts, MergeLearnAlias } from '@/contexts/household/types';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import { UNCATEGORIZED_HABIT_CATEGORY } from '@/utils/habitCategories';
 import { attributionString, type TriggerSource } from '@/utils/habitTriggers';
@@ -3270,11 +3277,14 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Calendar item added');
   }, []);
 
-  const updateCalendarItem = useCallback(async (item: CalendarItem) => {
+  const updateCalendarItem = useCallback(async (edited: CalendarItem, opts?: CalendarUpdateOpts) => {
     // Mirror Firestore behavior: schedule edits on recurring templates are
     // forward-only (see makeUpdateCalendarItem in calendarMutations.ts).
     setCalendarItems(prev => prev.map(i => {
-      if (i.id !== item.id) return i;
+      if (i.id !== edited.id) return i;
+      const item = opts?.amountFrom && edited.isRecurring
+        ? { ...edited, ...withAmountFrom(i, opts.amountFrom, edited.amount) }
+        : edited;
       if (item.isRecurring && item.frequency &&
           (!i.isRecurring || i.date !== item.date || i.frequency !== item.frequency)) {
         const semiMonthlyDays = item.frequency === 'semi-monthly' ? semiMonthlyDaysFor(item) : undefined;
@@ -3290,6 +3300,32 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       return item;
     }));
     toast.success('Mock: Calendar item updated');
+  }, []);
+
+  // Mirrors makeSetOccurrenceAmount: a "Just this month" override doc.
+  const setOccurrenceAmount = useCallback(async (occurrenceId: string, amount: number) => {
+    const parsed = parseRecurringId(occurrenceId);
+    if (!parsed) return;
+    setCalendarItems(prev => {
+      const template = prev.find(i => i.id === parsed.templateId);
+      if (!template) return prev;
+      const others = prev.filter(
+        i => !(i.isOverride && i.parentRecurringId === template.id && i.date === parsed.date && !i.isPaid && !i.isDeleted)
+      );
+      if (amount === seriesAmountOn(template, parsed.date)) return others;
+      return [...others, {
+        id: generateId(),
+        title: template.title,
+        amount,
+        date: parsed.date,
+        type: template.type,
+        isPaid: false,
+        isRecurring: false,
+        isOverride: true,
+        parentRecurringId: template.id,
+      }];
+    });
+    toast.success('Mock: Changed for this month only');
   }, []);
 
   const deleteCalendarItem = useCallback(async (id: string) => {
@@ -4487,6 +4523,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     deleteTransactionComment,
     addCalendarItem,
     updateCalendarItem,
+    setOccurrenceAmount,
     deleteCalendarItem,
     payCalendarItem: noOp,
     deferCalendarItem: noOp,

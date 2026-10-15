@@ -159,3 +159,70 @@ export function scheduledOccurrences(
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Amounts — mirror seriesAmountOn / expandCalendarItems' overrides in
+// utils/calendarRecurrence.ts.
+// ---------------------------------------------------------------------------
+
+/** One step of a series' amount history: occurrences before `before` cost `amount`. */
+export interface EarlierAmount {
+  before: string;
+  amount: number;
+}
+
+export interface AmountHistory {
+  earlierAmounts?: EarlierAmount[];
+  isOverride?: boolean;
+}
+
+/** Reads the amount-history fields off an untyped Firestore doc, dropping bad values. */
+export function readAmountHistory(data: Record<string, unknown>): AmountHistory {
+  const steps = data.earlierAmounts;
+  const earlierAmounts = Array.isArray(steps)
+    ? steps.filter(
+        (s): s is EarlierAmount =>
+          typeof s === "object" && s !== null &&
+          typeof (s as Record<string, unknown>).before === "string" &&
+          typeof (s as Record<string, unknown>).amount === "number"
+      )
+    : undefined;
+  return {
+    earlierAmounts: earlierAmounts && earlierAmounts.length > 0 ? earlierAmounts : undefined,
+    isOverride: data.isOverride === true ? true : undefined,
+  };
+}
+
+/** What a series costs on `date`, honouring "This and future months" changes. */
+export function seriesAmountOn(
+  series: { amount?: number; earlierAmounts?: EarlierAmount[] },
+  date: string
+): number {
+  let match: EarlierAmount | undefined;
+  for (const step of series.earlierAmounts ?? []) {
+    if (date < step.before && (!match || step.before < match.before)) match = step;
+  }
+  return match ? match.amount : series.amount ?? 0;
+}
+
+/** "Just this month" amounts keyed `${templateId}|${date}`, from unpaid, undeleted override docs. */
+export function overrideAmounts(
+  items: { parentRecurringId?: string; date: string; amount?: number; isOverride?: boolean; isPaid?: boolean; isDeleted?: boolean }[]
+): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const i of items) {
+    if (i.isOverride && i.parentRecurringId && !i.isPaid && !i.isDeleted && typeof i.amount === "number") {
+      out.set(`${i.parentRecurringId}|${i.date}`, i.amount);
+    }
+  }
+  return out;
+}
+
+/** One occurrence's amount: its override, else the series amount on that date. */
+export function occurrenceAmountOn(
+  series: { id: string; amount?: number; earlierAmounts?: EarlierAmount[] },
+  date: string,
+  overrides: ReadonlyMap<string, number>
+): number {
+  return overrides.get(`${series.id}|${date}`) ?? seriesAmountOn(series, date);
+}

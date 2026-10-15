@@ -8,10 +8,13 @@ import { parseISO } from "date-fns";
 // paycheck or bill on one date while reminders, the wall and the bank-sync
 // matcher look for it on another. A failure here is a real defect.
 import {
+  expandCalendarItems as clientExpand,
   scheduledOccurrences as clientOccurrences,
   semiMonthlyDaysFor as clientDays,
+  seriesAmountOn as clientSeriesAmountOn,
 } from "@/utils/calendarRecurrence";
-import { scheduledOccurrences, semiMonthlyDaysFor } from "./recurrenceSchedule";
+import type { CalendarItem } from "@/types/schema";
+import { scheduledOccurrences, semiMonthlyDaysFor, seriesAmountOn } from "./recurrenceSchedule";
 import { findBillsDueOnDate } from "./bills";
 import { expandCalendarItems } from "../quickAdd/billMatch";
 import type { RecurrenceSchedule } from "./recurrenceSchedule";
@@ -75,5 +78,56 @@ describe("server consumers use the schedule", () => {
   it("bank-sync expansion matches the client's dates", () => {
     const dates = expandCalendarItems([paycheck], parseISO("2026-10-01"), parseISO("2026-11-30")).map((i) => i.date);
     expect(dates).toEqual(["2026-10-01", "2026-10-16", "2026-10-30", "2026-11-16"]);
+  });
+});
+
+describe("occurrence amounts — client/server parity", () => {
+  const bill = {
+    id: "xcel",
+    title: "Xcel",
+    amount: 140,
+    date: "2026-01-28",
+    type: "expense" as const,
+    isPaid: false,
+    isRecurring: true,
+    frequency: "monthly" as const,
+    // Cost 120 before Jun, 130 from Jun until Sep, 140 from Sep on.
+    earlierAmounts: [
+      { before: "2026-06-01", amount: 120 },
+      { before: "2026-09-01", amount: 130 },
+    ],
+  };
+  const override = {
+    id: "ovr",
+    title: "Xcel",
+    amount: 98.68,
+    date: "2026-10-28",
+    type: "expense" as const,
+    isPaid: false,
+    isRecurring: false,
+    isOverride: true,
+    parentRecurringId: "xcel",
+  };
+  const items: CalendarItem[] = [bill, override];
+
+  it("prices each date the same on both sides", () => {
+    for (const date of ["2026-01-28", "2026-05-31", "2026-06-01", "2026-08-28", "2026-09-01", "2027-01-28"]) {
+      expect(seriesAmountOn(bill, date)).toBe(clientSeriesAmountOn(bill, date));
+    }
+  });
+
+  it("expands the same amounts, override included", () => {
+    const range = [parseISO("2026-01-01"), parseISO("2026-12-31")] as const;
+    const server = expandCalendarItems(items, ...range).map((i) => [i.date, i.amount]);
+    const client = clientExpand(items, ...range).map((i) => [i.date, i.amount]);
+    expect(server).toEqual(client);
+    expect(new Map(client as [string, number][]).get("2026-10-28")).toBe(98.68);
+    expect(new Map(client as [string, number][]).get("2026-07-28")).toBe(130);
+  });
+
+  it("reminders carry the occurrence's amount", () => {
+    expect(findBillsDueOnDate(items, "2026-10-28")[0]?.amount).toBe(98.68);
+    expect(findBillsDueOnDate(items, "2026-03-28")[0]?.amount).toBe(120);
+    expect(findBillsDueOnDate(items, "2026-11-28")[0]?.amount).toBe(140);
   });
 });

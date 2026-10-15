@@ -31,7 +31,14 @@ import * as crypto from "crypto";
 import * as logger from "firebase-functions/logger";
 import { formatCurrency, DEFAULT_CURRENCY } from "./utils/formatCurrency";
 import { addMonths, subMonths } from "date-fns";
-import { scheduledOccurrences, usesScheduledPath, type WeekendShift } from "./shared/recurrenceSchedule";
+import {
+  occurrenceAmountOn,
+  overrideAmounts,
+  scheduledOccurrences,
+  usesScheduledPath,
+  type EarlierAmount,
+  type WeekendShift,
+} from "./shared/recurrenceSchedule";
 
 /** Minimal subset of the Express/Firebase response object used below. */
 interface HttpResponse {
@@ -68,6 +75,8 @@ export interface FeedCalendarItem {
   weekendShift?: WeekendShift;
   isDeleted?: boolean;
   parentRecurringId?: string;
+  earlierAmounts?: EarlierAmount[];
+  isOverride?: boolean;
 }
 
 /** How far around `now` a semi-monthly or weekend-shifted series is listed
@@ -164,6 +173,10 @@ export function buildIcs(
     }
   }
 
+  // Listed occurrences show what each one costs; an RRULE series can only
+  // show the current amount.
+  const overrides = overrideAmounts(items);
+
   const dtstamp = toIcsDateTimeUtc(now);
   const lines: string[] = [
     "BEGIN:VCALENDAR",
@@ -195,12 +208,14 @@ export function buildIcs(
       );
       for (const { date } of occurrences) {
         if (covered.has(date)) continue;
+        const occurrenceSummary =
+          `${item.title} (${formatCurrency(occurrenceAmountOn(item, date, overrides), { currency })})`;
         lines.push(
           "BEGIN:VEVENT",
           foldIcsLine(`UID:${item.id}-${date}@lifebalance.app`),
           foldIcsLine(`DTSTAMP:${dtstamp}`),
           foldIcsLine(`DTSTART;VALUE=DATE:${toIcsDate(date)}`),
-          foldIcsLine(`SUMMARY:${escapeIcsText(summary)}`),
+          foldIcsLine(`SUMMARY:${escapeIcsText(occurrenceSummary)}`),
           "END:VEVENT"
         );
       }

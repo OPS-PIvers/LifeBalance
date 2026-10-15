@@ -715,6 +715,13 @@ export interface HalfPlan {
   updatedBy?: string;
 }
 
+/** One step of a recurring series' amount history (see `CalendarItem.earlierAmounts`). */
+export interface EarlierAmount {
+  /** yyyy-MM-dd, exclusive: occurrences before this date used `amount`. */
+  before: string;
+  amount: number;
+}
+
 export interface CalendarItem {
   id: string;
   title: string;
@@ -742,6 +749,17 @@ export interface CalendarItem {
    *  `date: '2026-10-30'`, `nominalDate: '2026-11-01'`). Absent when the
    *  occurrence wasn't moved. */
   nominalDate?: string;
+  /** Recurring templates only: what the series cost BEFORE an amount change
+   *  made with "This and future months". An occurrence dated before an
+   *  entry's `before` (and on/after the previous entry's) uses that entry's
+   *  amount; anything later uses `amount`. Ascending by `before`. See
+   *  `seriesAmountOn` / `withAmountFrom` in utils/calendarRecurrence.ts. */
+  earlierAmounts?: EarlierAmount[];
+  /** On an instance doc (with `parentRecurringId`, unpaid, not deleted): this
+   *  occurrence's amount was changed "Just this month". Its `amount` replaces
+   *  the series amount for that one date; paying or deleting the occurrence
+   *  still works through the usual instance docs. */
+  isOverride?: boolean;
   parentRecurringId?: string; // If this is a paid instance of a recurring event, points to parent
   isDeleted?: boolean; // If this is a deleted instance of a recurring event, prevents it from appearing
   accountId?: string;
