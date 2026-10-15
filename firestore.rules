@@ -1324,8 +1324,11 @@ service cloud.firestore {
       // already grants unvalidated member read/write today — this constrains it).
       // Pay-period sheet: one plan per half, id = the half's nominal payday
       // (yyyy-MM-dd). Budgets are a bucketId → dollars map, allocations a
-      // short list of {id, kind, label, amount, accountId?, done?} rows; both
-      // are bounded so the doc can't become storage. Whole-doc writes.
+      // short list of {id, kind, label, amount, accountId?, done?} rows. Rules
+      // can't iterate a map's values or a list's elements, so only the COUNTS
+      // are bounded here (the same limit as bankDescriptorAliases); entry
+      // shapes are enforced by saveHalfPlan and halfPlanConverter drops
+      // malformed rows on read. Members only, whole-doc writes.
       match /halfPlans/{halfId} {
         allow read: if isMemberOf(householdId);
 

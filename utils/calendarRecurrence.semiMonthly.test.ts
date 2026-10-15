@@ -128,6 +128,12 @@ describe('rollRecurringAnchorForward with a schedule', () => {
     expect(rollRecurringAnchorForward('2026-01-01', 'semi-monthly', '2026-10-31', schedule)).toBe('2026-11-16');
   });
 
+  it('never moves a month-end monthly anchor onto a clamped day', () => {
+    // Jan 31 + 1 month clamps to Sat Feb 28 2026 (paid Fri Feb 27); anchoring
+    // there would turn a 31st bill into a 28th bill for good.
+    expect(rollRecurringAnchorForward('2026-01-31', 'monthly', '2026-02-15', { weekendShift: 'before' })).toBe('2026-03-31');
+  });
+
   it('leaves an anchor already in the future alone', () => {
     expect(rollRecurringAnchorForward('2026-12-01', 'semi-monthly', '2026-10-31', schedule)).toBe('2026-12-01');
   });

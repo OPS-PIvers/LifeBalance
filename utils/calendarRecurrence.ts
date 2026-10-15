@@ -283,8 +283,14 @@ export function rollRecurringAnchorForward(
     // after today; its nominal date becomes the anchor. A semi-monthly anchor
     // keeps its pair only because the caller persists `semiMonthlyDays`
     // explicitly — the derived pair would follow the new anchor's day.
+    // As on the plain path below, a monthly anchor never moves onto a
+    // month-end-clamped date (a 31st series' Feb 28): writing that as the
+    // anchor would lose the 31st for every later month.
     const todayDate = startOfDay(parseISO(today));
-    const next = scheduledOccurrences(anchor, frequency, schedule, todayDate, addMonths(todayDate, 13))[0];
+    const anchorDay = parseISO(anchor).getDate();
+    const next = scheduledOccurrences(anchor, frequency, schedule, todayDate, addMonths(todayDate, 13)).find(
+      o => frequency !== 'monthly' || parseISO(o.nominalDate).getDate() === anchorDay
+    );
     return next?.nominalDate ?? anchor;
   }
 
