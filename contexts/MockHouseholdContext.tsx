@@ -106,6 +106,7 @@ import {
   NetWorthSnapshot,
   ActivityLogEntry,
   SavingsGoal,
+  HalfPlan,
   TransactionComment,
   MerchantRule,
   MAX_MERCHANT_RULES,
@@ -888,6 +889,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [accounts, setAccounts] = useState<Account[]>(isFresh ? [] : SEED_ACCOUNTS);
   const [buckets, setBuckets] = useState<BudgetBucket[]>(isFresh ? [] : SEED_BUCKETS);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>(isFresh ? [] : SEED_SAVINGS_GOALS);
+  const [halfPlans, setHalfPlans] = useState<HalfPlan[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>(
     isFresh
       ? []
@@ -1534,6 +1536,14 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       };
     }));
     toast.success('Mock: Contribution added');
+  }, []);
+
+  // Mirrors the Firestore listener's order: newest payday first.
+  const saveHalfPlan = useCallback(async (plan: HalfPlan) => {
+    setHalfPlans(prev =>
+      [...prev.filter(p => p.id !== plan.id), { ...plan, updatedAt: new Date().toISOString() }]
+        .sort((a, b) => b.id.localeCompare(a.id))
+    );
   }, []);
 
   const deleteHousehold = useCallback(async () => {
@@ -4372,6 +4382,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     accounts,
     buckets,
     savingsGoals,
+    halfPlans,
     netWorthHistory,
     transactions,
     calendarItems,
@@ -4452,6 +4463,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateSavingsGoal,
     deleteSavingsGoal,
     contributeToGoal,
+    saveHalfPlan,
     addBucket,
     updateBucket,
     deleteBucket,

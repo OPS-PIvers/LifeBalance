@@ -1605,6 +1605,47 @@ describe('recaps (weekly recap docs — written only by Cloud Functions)', () =>
   });
 });
 
+describe('half plans (pay-period sheet)', () => {
+  const plan = {
+    budgets: { gas: 120, grocery: 850 },
+    allocations: [{ id: 'a1', kind: 'card-extra', label: 'AmEx extra payment', amount: 700 }],
+    updatedAt: '2026-10-01T12:00:00.000Z',
+    updatedBy: BOB,
+  };
+  const ref = (uid: string, id = '2026-10-01', hid = H1) => doc(dbFor(uid), 'households', hid, 'halfPlans', id);
+
+  it('a member can save and read their household\'s plan', async () => {
+    await assertSucceeds(setDoc(ref(BOB), plan));
+    await assertSucceeds(getDoc(ref(BOB)));
+  });
+
+  it('a member of another household can neither read nor write it', async () => {
+    await assertFails(setDoc(ref(CAROL), { ...plan, updatedBy: CAROL }));
+    await assertFails(getDoc(ref(CAROL)));
+  });
+
+  it('the id must be a yyyy-MM-dd payday', async () => {
+    await assertFails(setDoc(ref(BOB, 'october'), plan));
+  });
+
+  it('rejects unknown fields and a forged author', async () => {
+    await assertFails(setDoc(ref(BOB), { ...plan, notes: 'x' }));
+    await assertFails(setDoc(ref(BOB), { ...plan, updatedBy: 'someone-else' }));
+  });
+
+  it('bounds the budgets map and the allocations list', async () => {
+    const budgets = Object.fromEntries(Array.from({ length: 51 }, (_, i) => [`b${i}`, 1]));
+    await assertFails(setDoc(ref(BOB), { ...plan, budgets }));
+    const allocations = Array.from({ length: 31 }, (_, i) => ({ id: `a${i}`, kind: 'other', label: 'x', amount: 1 }));
+    await assertFails(setDoc(ref(BOB), { ...plan, allocations }));
+  });
+
+  it('a member can delete a plan', async () => {
+    await assertSucceeds(setDoc(ref(BOB), plan));
+    await assertSucceeds(deleteDoc(ref(BOB)));
+  });
+});
+
 describe('savings goals (Plan 24 — sinking funds, decoupled from Safe-to-Spend)', () => {
   const GOAL = 'goal-seed';
   const ISO = '2026-06-22T00:00:00.000Z';

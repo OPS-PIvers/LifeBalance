@@ -674,6 +674,47 @@ export type CalendarFrequency = 'weekly' | 'bi-weekly' | 'semi-monthly' | 'month
 /** Which way a weekend occurrence moves: to the Friday before or Monday after. */
 export type WeekendShift = 'before' | 'after';
 
+/**
+ * What an allocation line does with its money. Every kind but `from-savings`
+ * takes money out of the half; `from-savings` brings it back in to cover a
+ * short half.
+ *  - `card-extra`: an extra credit-card payment above the dated minimum
+ *  - `to-savings` / `from-savings`: a transfer between checking and savings
+ *  - `other`: any other planned use of the money
+ */
+export type HalfAllocationKind = 'card-extra' | 'to-savings' | 'from-savings' | 'other';
+
+export interface HalfAllocation {
+  /** Stable within its plan (a short random id), so rows keep identity. */
+  id: string;
+  kind: HalfAllocationKind;
+  label: string;
+  /** Positive decimal dollars; the kind decides the direction. */
+  amount: number;
+  /** The card or savings account the money moves to or from, when known. */
+  accountId?: string;
+  /** Checked off once the payment or transfer has actually been made. */
+  done?: boolean;
+}
+
+/**
+ * The household's plan for one half: one pay period, paycheck to paycheck.
+ * Stored at `households/{id}/halfPlans/{id}`, where the id is the half's
+ * NOMINAL payday (yyyy-MM-dd) — the date the paycheck is scheduled for even
+ * when a weekend moves it earlier, so the Nov 1 half keeps the id
+ * `2026-11-01` though it is paid Fri Oct 30. Dated bills are NOT stored here;
+ * they come from calendar items. See utils/halfPlan.ts for the math.
+ */
+export interface HalfPlan {
+  id: string;
+  /** Planned spending per budget bucket for this half, keyed by bucket id,
+   *  in decimal dollars. A bucket absent from the map is planned at $0. */
+  budgets: Record<string, number>;
+  allocations: HalfAllocation[];
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
 export interface CalendarItem {
   id: string;
   title: string;

@@ -70,6 +70,7 @@ vi.mock('firebase/firestore', () => {
     query: vi.fn((ref: unknown) => ref),
     where: vi.fn(() => ({ __where: true })),
     orderBy: vi.fn(() => ({ __orderBy: true })),
+    documentId: vi.fn(() => '__name__'),
     limit: vi.fn(() => ({ __limit: true })),
     startAfter: vi.fn(() => ({ __startAfter: true })),
     increment: (n: number) => incrementMock(n),

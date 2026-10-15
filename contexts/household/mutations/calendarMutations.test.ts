@@ -653,6 +653,14 @@ describe('makeAcknowledgeBillPriceChange', () => {
   });
 });
 
+// updateDoc's second argument is typed as a union (field path | data); the
+// mutation always passes a data object, so narrow to it for assertions.
+function writtenUpdates(): Record<string, unknown> {
+  const arg: unknown = vi.mocked(updateDoc).mock.calls[0]?.[1];
+  if (typeof arg !== 'object' || arg === null) throw new Error('updateDoc was not called with data');
+  return Object.fromEntries(Object.entries(arg));
+}
+
 describe('twice-a-month paychecks — schedule fields', () => {
   const paycheck: CalendarItem = {
     id: 'pay',
@@ -676,8 +684,8 @@ describe('twice-a-month paychecks — schedule fields', () => {
   it('stores the day pair on create (derived from the date when missing) and never the expansion-only nominalDate', async () => {
     const { addCalendarItem } = makeAddCalendarItem({ db, householdId: HOUSEHOLD_ID, user: { uid: 'paul' } });
     await addCalendarItem({ ...paycheck, semiMonthlyDays: undefined, date: '2026-10-15', nominalDate: '2026-10-15' });
-    const written = vi.mocked(addDoc).mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(written.semiMonthlyDays).toEqual([15, 30]);
+    const written: unknown = vi.mocked(addDoc).mock.calls[0]?.[1];
+    expect(written).toMatchObject({ semiMonthlyDays: [15, 30] });
     expect(written).not.toHaveProperty('nominalDate');
     expect(written).not.toHaveProperty('id');
   });
@@ -686,7 +694,7 @@ describe('twice-a-month paychecks — schedule fields', () => {
     const existing = { ...paycheck, weekendShift: undefined };
     const { updateCalendarItem } = makeUpdateCalendarItem({ db, householdId: HOUSEHOLD_ID, calendarItems: [existing] });
     await updateCalendarItem(paycheck, { silent: true });
-    const updates = vi.mocked(updateDoc).mock.calls[0]?.[1] as Record<string, unknown>;
+    const updates = writtenUpdates();
     expect(updates.semiMonthlyDays).toEqual([1, 16]);
     expect(updates.weekendShift).toBe('before');
     expect(updates.earnerId).toBe('jen');
@@ -698,7 +706,7 @@ describe('twice-a-month paychecks — schedule fields', () => {
   it('clears the schedule fields when a bill stops repeating, and the earner on an expense', async () => {
     const { updateCalendarItem } = makeUpdateCalendarItem({ db, householdId: HOUSEHOLD_ID, calendarItems: [paycheck] });
     await updateCalendarItem({ ...paycheck, type: 'expense', isRecurring: false, frequency: undefined }, { silent: true });
-    const updates = vi.mocked(updateDoc).mock.calls[0]?.[1] as Record<string, unknown>;
+    const updates = writtenUpdates();
     expect(updates.semiMonthlyDays).toEqual({ __deleteField: true });
     expect(updates.weekendShift).toEqual({ __deleteField: true });
     expect(updates.earnerId).toEqual({ __deleteField: true });

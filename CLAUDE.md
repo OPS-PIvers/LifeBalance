@@ -67,6 +67,10 @@ Checking Balance - Unpaid Bills (this paycheck → next) - Pending Spend (this p
 
 Bills and paychecks repeat weekly, bi-weekly, monthly or **twice a month** (`frequency: 'semi-monthly'` with `semiMonthlyDays`, e.g. `[1, 16]`), and any series can carry a `weekendShift` (`'before'` = the Friday before, `'after'` = the Monday after). The shifted date IS the occurrence's `date` and synthetic id, so paid/deleted instance docs suppress it exactly as before; the expansion-only `nominalDate` keeps the scheduled date (a Sunday Nov 1 paycheck expands to `date: …-10-30, nominalDate: …-11-01`) and is never written. Income items may carry `earnerId` (whose paycheck). **The schedule math exists twice** — `utils/calendarRecurrence.ts` (client) and `functions/src/shared/recurrenceSchedule.ts` (bill reminders, daily briefing, wall bills, bank-sync matcher, ICS feed) — held together by `functions/src/shared/recurrenceSchedule.parity.test.ts`; change both together.
 
+### Pay-Period Halves (every dollar gets a job)
+
+The pay-period sheet plans each **half** — one pay period, paycheck to paycheck — as `Left to assign = Paychecks − Dated bills − Spending budgets − Allocations (+ From savings)`, aiming for $0 (`utils/halfPlan.ts`). Halves are split at each REPEATING paycheck by `buildPayHalves` (`utils/payPeriodHalves.ts`); paychecks sharing a nominal payday open one half, and one-off income never starts one. A half's id is its **nominal** payday, so the Nov 1 half keeps id `2026-11-01` though paid Fri Oct 30 (a paid instance doc stores only the paid date; `nominalPaydayOf` recovers the nominal one from the template). The plan — budgets per bucket id plus allocation lines (`card-extra`, `to-savings`, `from-savings`, `other`) — lives at `households/{id}/halfPlans/{payday}` (`HalfPlan`, `halfPlanConverter`, `saveHalfPlan`, newest-first listener bounded by `HALF_PLANS_LIMIT`). Dated bills are never copied into a plan; they come from calendar items. This is the PLAN; Safe-to-Spend stays the separate live figure, and the two are deliberately not merged.
+
 ### Habit Tracking System
 
 Habits support two scoring modes:

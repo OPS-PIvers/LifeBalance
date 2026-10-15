@@ -62,6 +62,7 @@ import {
   MonthlyMoneyRecap,
   ActivityLogEntry,
   SavingsGoal,
+  HalfPlan,
   NetWorthSnapshot,
   DietaryProfile,
   FreezeMode,
@@ -122,6 +123,7 @@ import {
   makeLoadAllBucketHistory,
 } from '@/contexts/household/mutations/financeMutations';
 import { makeSavingsGoalMutations } from '@/contexts/household/mutations/savingsGoalMutations';
+import { makeHalfPlanMutations } from '@/contexts/household/mutations/halfPlanMutations';
 import {
   makeAddCalendarItem,
   makeUpdateCalendarItem,
@@ -444,6 +446,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [buckets, setBuckets] = useState<BudgetBucket[]>([]);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
+  const [halfPlans, setHalfPlans] = useState<HalfPlan[]>([]);
   const [netWorthHistory, setNetWorthHistory] = useState<NetWorthSnapshot[]>([]);
   const bucketsRef = useRef(buckets); // Ref to access latest buckets in listeners
 
@@ -825,6 +828,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setAccounts([]);
     setBuckets([]);
     setSavingsGoals([]);
+    setHalfPlans([]);
     setNetWorthHistory([]);
     setRecentTransactions([]);
     setOlderTransactions([]);
@@ -914,6 +918,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         markListenerReady('calendarItems', householdId);
       },
       setSavingsGoals: (data) => setSavingsGoals(data),
+      setHalfPlans: (data) => setHalfPlans(data),
       setNetWorthHistory: (data) => setNetWorthHistory(data),
     }));
 
@@ -1986,6 +1991,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeSavingsGoalMutations({ db, householdId }).contributeToGoal(id, amount);
   }, [householdId]);
 
+  // --- ACTIONS: HALF PLANS (pay-period sheet) ---
+  const saveHalfPlan = useCallback(async (plan: HalfPlan) => {
+    await makeHalfPlanMutations({ db, householdId, user }).saveHalfPlan(plan);
+  }, [householdId, user]);
+
   // --- ACTIONS: BUCKETS ---
   // (contexts/household/mutations/financeMutations.ts)
 
@@ -2852,6 +2862,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     accounts,
     buckets,
     savingsGoals,
+    halfPlans,
     netWorthHistory,
     calendarItems,
     transactions,
@@ -2882,6 +2893,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateSavingsGoal,
     deleteSavingsGoal,
     contributeToGoal,
+    saveHalfPlan,
     addBucket,
     updateBucket,
     deleteBucket,
@@ -2913,12 +2925,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addTransactionComment,
     deleteTransactionComment,
   }), [
-    safeToSpend, safeToSpendBreakdown, budgetFit, accounts, buckets, savingsGoals, netWorthHistory, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
+    safeToSpend, safeToSpendBreakdown, budgetFit, accounts, buckets, savingsGoals, halfPlans, netWorthHistory, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
     transactionWindowStart, isLoadingOlderTransactions, hasMoreTransactions, loadOlderTransactions, loadAllTransactions,
     isLoadingOlderBucketHistory, hasMoreBucketHistory, loadAllBucketHistory,
     addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, setAccountCardDetails, deleteAccount, archiveAccount, unarchiveAccount, updateAccountOrder, reorderAccounts,
     defaultAccountId, setDefaultAccountId,
-    addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal,
+    addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal, saveHalfPlan,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, setBucketLimits, saveCeremonyChanges, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem, linkBankTransactionToBill, settleBillWithTransaction, forgetBillDescriptorAlias, acknowledgeBillPriceChange,
     addTransaction, addTransactions, updateTransactionCategory, reverseTransactionApproval, updateTransaction, deleteTransaction, splitTransaction,

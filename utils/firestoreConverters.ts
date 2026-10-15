@@ -62,6 +62,9 @@ import type {
   MonthlyMoneyRecap,
   NetWorthSnapshot,
   SavingsGoal,
+  HalfPlan,
+  HalfAllocation,
+  HalfAllocationKind,
   ActivityLogEntry,
   NotificationLogEntry,
   WallCalendarFeed,
@@ -721,5 +724,54 @@ export const wallEventConverter: FirestoreDataConverter<WallEvent> = {
   },
   fromFirestore(snapshot: QueryDocumentSnapshot): WallEvent {
     return { ...snapshot.data(), id: snapshot.id } as WallEvent;
+  },
+};
+
+// HalfPlan — every field is client-written, but a doc can predate a field or be
+// hand-edited, so the shape is normalized: non-numeric budget entries and
+// malformed allocation rows are dropped rather than crashing the sheet's math.
+const HALF_ALLOCATION_KINDS: readonly HalfAllocationKind[] = ['card-extra', 'to-savings', 'from-savings', 'other'];
+
+function readHalfAllocation(raw: unknown): HalfAllocation | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const r = raw as Record<string, unknown>;
+  const kind = HALF_ALLOCATION_KINDS.find(k => k === r['kind']);
+  if (typeof r['id'] !== 'string' || !kind || typeof r['amount'] !== 'number' || !Number.isFinite(r['amount'])) {
+    return null;
+  }
+  return {
+    id: r['id'],
+    kind,
+    label: typeof r['label'] === 'string' ? r['label'] : '',
+    amount: r['amount'],
+    ...(typeof r['accountId'] === 'string' ? { accountId: r['accountId'] } : {}),
+    ...(r['done'] === true ? { done: true } : {}),
+  };
+}
+
+export const halfPlanConverter: FirestoreDataConverter<HalfPlan> = {
+  toFirestore(plan: HalfPlan): DocumentData {
+    return omitKey(plan, 'id');
+  },
+  fromFirestore(snapshot: QueryDocumentSnapshot): HalfPlan {
+    const d = snapshot.data();
+    const rawBudgets = d['budgets'];
+    const budgets: Record<string, number> = {};
+    if (typeof rawBudgets === 'object' && rawBudgets !== null) {
+      for (const [bucketId, amount] of Object.entries(rawBudgets as Record<string, unknown>)) {
+        if (typeof amount === 'number' && Number.isFinite(amount)) budgets[bucketId] = amount;
+      }
+    }
+    const rawAllocations: unknown = d['allocations'];
+    const allocations = Array.isArray(rawAllocations)
+      ? rawAllocations.map(readHalfAllocation).filter((a): a is HalfAllocation => a !== null)
+      : [];
+    return {
+      id: snapshot.id,
+      budgets,
+      allocations,
+      ...(typeof d['updatedAt'] === 'string' ? { updatedAt: d['updatedAt'] } : {}),
+      ...(typeof d['updatedBy'] === 'string' ? { updatedBy: d['updatedBy'] } : {}),
+    };
   },
 };
