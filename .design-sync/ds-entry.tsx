@@ -25,7 +25,6 @@ export { SegmentedControl } from '@/components/ui/SegmentedControl';
 export { ShowMoreRow } from '@/components/ui/ShowMoreRow';
 // SkeletonText/SkeletonCard compose Skeleton — bundled, not carded.
 export { Skeleton, SkeletonText, SkeletonCard } from '@/components/ui/Skeleton';
-export { SubViewHint } from '@/components/ui/SubViewHint';
 export { SwipeActionRow } from '@/components/ui/SwipeActionRow';
 export { Switch } from '@/components/ui/Switch';
 export { TabSubViewMenu } from '@/components/ui/TabSubViewMenu';

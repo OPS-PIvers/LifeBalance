@@ -71,6 +71,8 @@ const HalfSheet: React.FC<HalfSheetProps> = ({ half, plan, isSeed, summary, isCu
     addCalendarItem,
     updateCalendarItem,
     setOccurrenceAmount,
+    editCalendarEntry,
+    deleteCalendarItem,
     payCalendarItem,
     saveHalfPlan,
     setAllocationDone,
@@ -80,8 +82,12 @@ const HalfSheet: React.FC<HalfSheetProps> = ({ half, plan, isSeed, summary, isCu
 
   /** A recurring bill whose new amount is waiting on "which months?". */
   const [pendingAmount, setPendingAmount] = useState<{ item: CalendarItem; amount: number } | null>(null);
-  /** The day a new bill row is being typed into. */
+  /** The day a new bill row is being typed into, and whether it opened from
+   *  the section's Add (shown at the top) or a day's "+ Add on" (shown there). */
   const [addingOn, setAddingOn] = useState<string | null>(null);
+  const [addAtTop, setAddAtTop] = useState(false);
+  /** The row whose name was tapped: editing its name and date. */
+  const [editing, setEditing] = useState<{ item: CalendarItem; title: string; date: string } | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [newDate, setNewDate] = useState(half.start);
@@ -126,7 +132,9 @@ const HalfSheet: React.FC<HalfSheetProps> = ({ half, plan, isSeed, summary, isCu
     }
   };
 
-  const startAdding = (date: string) => {
+  const startAdding = (date: string, atTop = false) => {
+    setEditing(null);
+    setAddAtTop(atTop);
     setAddingOn(date);
     setNewDate(date);
     setNewTitle('');
@@ -146,6 +154,35 @@ const HalfSheet: React.FC<HalfSheetProps> = ({ half, plan, isSeed, summary, isCu
         isPaid: false,
       });
       setAddingOn(null);
+    } catch {
+      // The mutation already told the user.
+    }
+  };
+
+  const startEditing = (item: CalendarItem) => {
+    setAddingOn(null);
+    setEditing(editing?.item.id === item.id ? null : { item, title: item.title, date: item.date });
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    const { item, title, date } = editing;
+    try {
+      await editCalendarEntry(item.id, {
+        ...(title.trim() && title.trim() !== item.title ? { title } : {}),
+        ...(date && date !== item.date ? { date } : {}),
+      });
+      setEditing(null);
+    } catch {
+      // The mutation already told the user.
+    }
+  };
+
+  const deleteEdited = async () => {
+    if (!editing) return;
+    try {
+      await deleteCalendarItem(editing.item.id);
+      setEditing(null);
     } catch {
       // The mutation already told the user.
     }
@@ -203,9 +240,17 @@ const HalfSheet: React.FC<HalfSheetProps> = ({ half, plan, isSeed, summary, isCu
           label={item.isPaid ? `${item.title} paid` : `Mark ${item.title} paid`}
           onChange={() => payItem(item)}
         />
-        <span className={cn('min-w-0 flex-1 truncate text-sm', item.isPaid && 'text-brand-400 line-through dark:text-brand-500')}>
+        <button
+          type="button"
+          onClick={() => startEditing(item)}
+          aria-label={`Edit ${item.title}`}
+          className={cn(
+            'min-w-0 flex-1 truncate text-left text-sm hover:text-accent-700 dark:hover:text-accent-300',
+            item.isPaid && 'text-brand-400 line-through dark:text-brand-500'
+          )}
+        >
           {item.title}
-        </span>
+        </button>
         <MoneyCell
           label={`${item.title} amount`}
           value={item.amount}
@@ -213,6 +258,7 @@ const HalfSheet: React.FC<HalfSheetProps> = ({ half, plan, isSeed, summary, isCu
           onCommit={amount => changeBillAmount(item, amount)}
         />
       </Row>
+      {editing?.item.id === item.id && editRow}
       {pendingAmount?.item.id === item.id && (
         <Row dense className="flex-wrap justify-end gap-2 bg-accent-50 dark:bg-accent-900/30">
           <span className="mr-auto text-xs text-brand-600 dark:text-brand-300">
@@ -232,8 +278,55 @@ const HalfSheet: React.FC<HalfSheetProps> = ({ half, plan, isSeed, summary, isCu
     </React.Fragment>
   );
 
+  const editRow = editing && (
+    <Row dense className="flex-wrap gap-2 bg-brand-50 dark:bg-brand-800/60">
+      <input
+        type="text"
+        aria-label="Name"
+        value={editing.title}
+        autoFocus
+        onChange={e => setEditing({ ...editing, title: e.target.value })}
+        onKeyDown={e => e.key === 'Enter' && void saveEdit()}
+        className="w-full min-w-0 rounded-md border border-brand-200 bg-white px-2 py-1 text-base sm:text-sm dark:border-brand-700 dark:bg-brand-800"
+      />
+      <input
+        type="date"
+        aria-label="Date"
+        value={editing.date}
+        onChange={e => setEditing({ ...editing, date: e.target.value })}
+        className="min-w-0 flex-1 rounded-md border border-brand-200 bg-white px-2 py-1 text-base sm:text-sm dark:border-brand-700 dark:bg-brand-800"
+      />
+      <p className="w-full text-xs text-brand-500 dark:text-brand-400">
+        {editing.item.isPaid
+          ? 'Paid. You can fix its name or date; the amount is what was paid.'
+          : isRecurringId(editing.item.id)
+            ? `Repeats: a new name renames every month; a new date moves just ${format(parseISO(editing.item.date), 'MMMM')}'s. Type in the amount to change it.`
+            : 'Type in the amount to change it.'}
+      </p>
+      <Button size="sm" onClick={() => void saveEdit()}>Save</Button>
+      {!editing.item.isPaid && (
+        <Button size="sm" variant="ghost-danger" onClick={() => void deleteEdited()}>
+          {isRecurringId(editing.item.id) ? `Delete ${format(parseISO(editing.item.date), 'MMMM')}'s` : 'Delete'}
+        </Button>
+      )}
+      <Button size="sm" variant="ghost" onClick={() => setEditing(null)} aria-label="Cancel editing">
+        <X size={16} />
+      </Button>
+    </Row>
+  );
+
   const addRow = (
     <Row dense className="flex-wrap gap-2 bg-brand-50 dark:bg-brand-800/60">
+      <input
+        type="text"
+        aria-label="New bill name"
+        placeholder="Bill or expense"
+        autoFocus
+        value={newTitle}
+        onChange={e => setNewTitle(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && void addBill()}
+        className="w-full min-w-0 rounded-md border border-brand-200 bg-white px-2 py-1 text-base sm:text-sm dark:border-brand-700 dark:bg-brand-800"
+      />
       <input
         type="date"
         aria-label="Due date"
@@ -241,15 +334,6 @@ const HalfSheet: React.FC<HalfSheetProps> = ({ half, plan, isSeed, summary, isCu
         min={half.start}
         max={half.end}
         onChange={e => setNewDate(e.target.value)}
-        className="w-36 rounded-md border border-brand-200 bg-white px-2 py-1 text-base sm:text-sm dark:border-brand-700 dark:bg-brand-800"
-      />
-      <input
-        type="text"
-        aria-label="New bill name"
-        placeholder="Bill or expense"
-        value={newTitle}
-        onChange={e => setNewTitle(e.target.value)}
-        onKeyDown={e => e.key === 'Enter' && void addBill()}
         className="min-w-0 flex-1 rounded-md border border-brand-200 bg-white px-2 py-1 text-base sm:text-sm dark:border-brand-700 dark:bg-brand-800"
       />
       <input
@@ -277,7 +361,8 @@ const HalfSheet: React.FC<HalfSheetProps> = ({ half, plan, isSeed, summary, isCu
             <Row dense className="text-sm text-brand-500">No paycheck lands in this half.</Row>
           )}
           {summary.paychecks.map(p => (
-            <Row dense key={p.id} className="gap-2">
+            <React.Fragment key={p.id}>
+            <Row dense className="gap-2">
               <span className="w-12 shrink-0 text-xs font-mono text-brand-500 dark:text-brand-400">
                 {format(parseISO(p.date), 'EEE d')}
               </span>
@@ -287,12 +372,19 @@ const HalfSheet: React.FC<HalfSheetProps> = ({ half, plan, isSeed, summary, isCu
                 label={p.isPaid ? `${p.title} received` : `Mark ${p.title} received`}
                 onChange={() => payItem(p)}
               />
-              <span className="min-w-0 flex-1 truncate text-sm">
+              <button
+                type="button"
+                onClick={() => startEditing(p)}
+                aria-label={`Edit ${p.title}`}
+                className="min-w-0 flex-1 truncate text-left text-sm hover:text-accent-700 dark:hover:text-accent-300"
+              >
                 {p.title}
                 {earnerName(p) && <span className="text-brand-500 dark:text-brand-400"> · {earnerName(p)}</span>}
-              </span>
+              </button>
               <MoneyCell label={`${p.title} amount`} value={p.amount} disabled={p.isPaid} onCommit={a => changeBillAmount(p, a)} />
             </Row>
+            {editing?.item.id === p.id && editRow}
+            </React.Fragment>
           ))}
         </SurfaceList>
       </Section>
@@ -300,12 +392,13 @@ const HalfSheet: React.FC<HalfSheetProps> = ({ half, plan, isSeed, summary, isCu
       <Section
         title="Bills"
         action={
-          <Button size="sm" variant="ghost" onClick={() => startAdding(half.start)} leftIcon={<Plus size={14} />}>
+          <Button size="sm" variant="ghost" onClick={() => startAdding(half.start, true)} leftIcon={<Plus size={14} />}>
             Add
           </Button>
         }
       >
         <SurfaceList>
+          {addingOn !== null && addAtTop && addRow}
           {days.length === 0 && addingOn === null && (
             <Row dense className="text-sm text-brand-500">No bills due this half.</Row>
           )}
@@ -322,10 +415,10 @@ const HalfSheet: React.FC<HalfSheetProps> = ({ half, plan, isSeed, summary, isCu
                   + Add on {format(parseISO(day.date), 'MMM d')}
                 </button>
               </Row>
-              {addingOn === day.date && addRow}
+              {addingOn === day.date && !addAtTop && addRow}
             </React.Fragment>
           ))}
-          {addingOn !== null && !days.some(d => d.date === addingOn) && addRow}
+          {addingOn !== null && !addAtTop && !days.some(d => d.date === addingOn) && addRow}
         </SurfaceList>
       </Section>
 

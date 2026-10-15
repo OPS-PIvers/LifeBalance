@@ -46,6 +46,7 @@ import { type TrashedItem } from '@/utils/trash';
 import { type TriggerSource } from '@/utils/habitTriggers';
 import { type TodoSubtaskToggleResult, type TodoCompletionOptions, type TodoPromotionFields } from '@/contexts/household/mutations/todoMutations';
 import { type MerchantRuleDraft } from '@/contexts/household/mutations/merchantRuleMutations';
+import { type SheetImport } from '@/contexts/household/mutations/halfPlanMutations';
 
 /** Options accepted by mutations that normally toast per call. `silent: true`
  *  suppresses the per-item success toast so BULK flows (Action Queue
@@ -356,6 +357,8 @@ export interface HouseholdContextType {
   /** Checks an allocation line off (or back on) and moves the money it names
    *  between account balances in the same batch (`allocationTransfer`). */
   setAllocationDone: (plan: HalfPlan, allocationId: string, done: boolean) => Promise<void>;
+  /** Brings in a month pasted from the household's Google Sheet, in one batch. */
+  importSheetMonth: (data: SheetImport) => Promise<void>;
 
   // Bucket Actions
   addBucket: (bucket: BudgetBucket) => Promise<void>;
@@ -380,6 +383,8 @@ export interface HouseholdContextType {
   /** "Just this month": change one recurring occurrence's amount (synthetic
    *  `templateId_instance_yyyy-MM-dd` id) without touching the series. */
   setOccurrenceAmount: (occurrenceId: string, amount: number, opts?: MutationOpts) => Promise<void>;
+  /** Rename a calendar row or move it to another date (see makeEditCalendarEntry). */
+  editCalendarEntry: (id: string, changes: { title?: string; date?: string }) => Promise<void>;
   deleteCalendarItem: (id: string, opts?: MutationOpts) => Promise<void>;
   /** Mark a calendar item paid/received. Optional `actualAmount` records what
    *  was really paid (variable bills) — it drives the balance delta and the
@@ -873,9 +878,9 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'addAccount' | 'updateAccountBalance' | 'setAccountGoal' | 'setAccountCardLast4' | 'setAccountCardDetails' | 'deleteAccount'
   | 'archiveAccount' | 'unarchiveAccount'
   | 'updateAccountOrder' | 'reorderAccounts' | 'defaultAccountId' | 'setDefaultAccountId'
-  | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal' | 'saveHalfPlan' | 'setAllocationDone'
+  | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal' | 'saveHalfPlan' | 'setAllocationDone' | 'importSheetMonth'
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'setBucketLimits' | 'saveCeremonyChanges' | 'reallocateBucket'
-  | 'addCalendarItem' | 'updateCalendarItem' | 'setOccurrenceAmount' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
+  | 'addCalendarItem' | 'updateCalendarItem' | 'setOccurrenceAmount' | 'editCalendarEntry' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
   | 'linkBankTransactionToBill' | 'settleBillWithTransaction' | 'forgetBillDescriptorAlias' | 'acknowledgeBillPriceChange'
   | 'addTransaction' | 'addTransactions' | 'updateTransactionCategory' | 'reverseTransactionApproval' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
   | 'setTransactionSplit' | 'markSplitSettled'

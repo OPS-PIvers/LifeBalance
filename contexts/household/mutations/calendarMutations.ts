@@ -318,6 +318,95 @@ export function makeSetOccurrenceAmount(deps: {
 }
 
 /**
+ * editCalendarEntry — the pay-period sheet's row editor: rename a row or move
+ * it to another date.
+ *  - A recurring OCCURRENCE (synthetic id): a new name renames the series (the
+ *    name is the series'); a new date moves just this occurrence, in ONE batch:
+ *    the occurrence is hidden (its "Just this month" override, if any, becomes
+ *    the tombstone) and a one-off carrying its amount lands on the new date.
+ *  - A stored doc (one-off, or a paid occurrence): updated in place. A paid
+ *    row can't move into the future: that money already moved.
+ */
+export function makeEditCalendarEntry(deps: {
+  db: Firestore;
+  householdId: string | null;
+  user: { uid: string } | null;
+  calendarItems: CalendarItem[];
+}) {
+  const { db, householdId, user, calendarItems } = deps;
+
+  const editCalendarEntry = async (id: string, changes: { title?: string; date?: string }) => {
+    if (!householdId || !user) return;
+    const col = `households/${householdId}/calendarItems`;
+    const title = changes.title?.trim().slice(0, 100);
+    const parsed = isRecurringId(id) ? parseRecurringId(id) : null;
+
+    try {
+      if (!parsed) {
+        const item = calendarItems.find(i => i.id === id);
+        if (!item) return;
+        if (item.isPaid && changes.date && changes.date > getLocalDateString()) {
+          toast.error("A paid item can't move to a future date");
+          return;
+        }
+        const updates: Record<string, unknown> = {};
+        if (title && title !== item.title) updates.title = title;
+        if (changes.date && changes.date !== item.date) updates.date = changes.date;
+        if (Object.keys(updates).length === 0) return;
+        await updateDoc(doc(db, col, id), updates);
+        toast.success('Updated');
+        return;
+      }
+
+      const template = calendarItems.find(i => i.id === parsed.templateId);
+      if (!template) return;
+      const batch = writeBatch(db);
+      const renamed = title && title !== template.title ? title : undefined;
+      if (renamed) batch.update(doc(db, col, template.id), { title: renamed });
+
+      if (changes.date && changes.date !== parsed.date) {
+        const amount = occurrenceAmount(calendarItems, template, parsed.date);
+        const override = findOccurrenceOverride(calendarItems, template.id, parsed.date);
+        if (override) {
+          batch.update(doc(db, col, override.id), { isDeleted: true });
+        } else {
+          batch.set(doc(collection(db, col)), {
+            title: template.title,
+            amount,
+            date: parsed.date,
+            type: template.type,
+            isPaid: false,
+            isRecurring: false,
+            isDeleted: true,
+            parentRecurringId: template.id,
+            createdBy: user.uid,
+          });
+        }
+        batch.set(doc(collection(db, col)), {
+          title: renamed ?? template.title,
+          amount,
+          date: changes.date,
+          type: template.type,
+          isPaid: false,
+          isRecurring: false,
+          createdBy: user.uid,
+        });
+      } else if (!renamed) {
+        return;
+      }
+      await batch.commit();
+      toast.success(changes.date && changes.date !== parsed.date ? `Moved to ${format(parseISO(changes.date), 'MMM d')}` : 'Renamed');
+    } catch (error) {
+      console.error('[editCalendarEntry] Failed:', error);
+      toast.error(describeError(error, 'save this change'));
+      throw error;
+    }
+  };
+
+  return { editCalendarEntry };
+}
+
+/**
  * deleteCalendarItem — original closure captured `householdId`, plus
  * `deleteRecurringInstance` (the `useCallback`-wrapped function, not raw
  * state).

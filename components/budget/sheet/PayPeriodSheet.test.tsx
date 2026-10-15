@@ -34,7 +34,7 @@ const paycheck: CalendarItem = {
   isPaid: false,
   isRecurring: true,
   frequency: 'semi-monthly',
-  semiMonthlyDays: [1, 16],
+  semiMonthlyDays: [15, 31],
   weekendShift: 'before',
   earnerId: 'jen',
 };
@@ -58,6 +58,8 @@ const saveHalfPlan = vi.fn().mockResolvedValue(undefined);
 const setAllocationDone = vi.fn().mockResolvedValue(undefined);
 const setOccurrenceAmount = vi.fn().mockResolvedValue(undefined);
 const payCalendarItem = vi.fn().mockResolvedValue(undefined);
+const editCalendarEntry = vi.fn().mockResolvedValue(undefined);
+const deleteCalendarItem = vi.fn().mockResolvedValue(undefined);
 
 function setup(halfPlans: HalfPlan[] = [], transactions: Transaction[] = []) {
   vi.mocked(useFinance).mockReturnValue({
@@ -75,6 +77,8 @@ function setup(halfPlans: HalfPlan[] = [], transactions: Transaction[] = []) {
     payCalendarItem,
     updateCalendarItem: vi.fn(),
     addCalendarItem: vi.fn(),
+    editCalendarEntry,
+    deleteCalendarItem,
   } as unknown as ReturnType<typeof useFinance>);
   render(<PayPeriodSheet />);
 }
@@ -91,13 +95,18 @@ describe('PayPeriodSheet', () => {
     expect(screen.getByText(/Safe-to-Spend right now/)).toBeInTheDocument();
   });
 
-  it('steps to the next half, which starts the Friday before a weekend payday', () => {
+  it('steps through calendar halves, each with the paycheck that funds it', () => {
     setup();
+    // Paid Wed Sep 30, that paycheck funds Oct 1–15.
+    expect(screen.getByText('Wed 30')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('Next half'));
-    expect(screen.getByRole('heading', { name: 'Oct 16 – 29' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Oct 16 – 31' })).toBeInTheDocument();
+    expect(screen.getByText('Thu 15')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('Next half'));
-    expect(screen.getByRole('heading', { name: 'Oct 30 – Nov 15' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Nov 1 – 15' })).toBeInTheDocument();
     expect(screen.getByText(/November · 1st half/)).toBeInTheDocument();
+    // Sat Oct 31 is paid Fri Oct 30, and still funds November's first half.
+    expect(screen.getByText('Fri 30')).toBeInTheDocument();
   });
 
   it('saves a planned budget typed into its cell', async () => {
@@ -135,6 +144,37 @@ describe('PayPeriodSheet', () => {
     fireEvent.blur(cell);
     fireEvent.click(await screen.findByText('Just October'));
     await waitFor(() => expect(setOccurrenceAmount).toHaveBeenCalledWith('mortgage_instance_2026-10-01', 2200));
+  });
+});
+
+describe('editing rows', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("opens the section's Add at the top of the list, ready to type", () => {
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    const name = screen.getByLabelText('New bill name');
+    expect(name).toHaveFocus();
+    // Above the first bill, not after the last one.
+    expect(name.compareDocumentPosition(screen.getByText('Mortgage')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("taps a row's name to rename it or move this month's to another date", async () => {
+    setup();
+    fireEvent.click(screen.getByLabelText('Edit Mortgage'));
+    expect(screen.getByText(/a new date moves just October's/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-10-03' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(editCalendarEntry).toHaveBeenCalledWith('mortgage_instance_2026-10-01', { date: '2026-10-03' })
+    );
+  });
+
+  it("deletes just this month's occurrence", async () => {
+    setup();
+    fireEvent.click(screen.getByLabelText('Edit Mortgage'));
+    fireEvent.click(screen.getByRole('button', { name: "Delete October's" }));
+    await waitFor(() => expect(deleteCalendarItem).toHaveBeenCalledWith('mortgage_instance_2026-10-01'));
   });
 });
 

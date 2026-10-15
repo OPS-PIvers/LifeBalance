@@ -13,6 +13,7 @@ import {
   semiMonthlyDaysFor,
   withAmountFrom,
   seriesAmountOn,
+  occurrenceAmount,
 } from '@/utils/calendarRecurrence';
 import { BUDGETED_IN_CALENDAR } from '@/utils/categories';
 import { hashKidPin } from '@/utils/kidPin';
@@ -50,6 +51,7 @@ import { evaluateTodoSubtaskGate, TodoSubtasksIncompleteError } from '@/utils/to
 import { setSubtaskDone, subtaskProgress } from '@/utils/subtasks';
 import type { TodoSubtaskToggleResult, TodoCompletionOptions, TodoPromotionFields } from '@/contexts/household/mutations/todoMutations';
 import type { CalendarUpdateOpts, MergeLearnAlias } from '@/contexts/household/types';
+import type { SheetImport } from '@/contexts/household/mutations/halfPlanMutations';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import { UNCATEGORIZED_HABIT_CATEGORY } from '@/utils/habitCategories';
 import { attributionString, type TriggerSource } from '@/utils/habitTriggers';
@@ -153,8 +155,8 @@ const normalizeCategory = (value: string | undefined) => (value ?? '').trim().to
  *     evidence tier — `tx_water_bank` (descriptor) and `tx_electric_bank`
  *     (amount-only). Not seeded by default for the same reason as 'stub' (its
  *     `pending_review` row changes the Money nav link's accessible name).
- *   - 'pay-period-sheet': default seeds + two 1st & 16th paychecks (paid the
- *     Friday before a weekend) and a month of dated bills, so Money → Sheet
+ *   - 'pay-period-sheet': default seeds + two paychecks paid the 15th and the
+ *     last day (the Friday before a weekend) and a month of dated bills, so Money → Sheet
  *     has pay-period halves to show.
  * Absent/unknown values leave the default seeds untouched.
  */
@@ -486,8 +488,8 @@ const SETTLED_ELECTRIC = settledBillPair(
   'electric', 'Xcel Energy (Electric)', 'NSPM UTILITY 8823', SETTLED_ELECTRIC_AMOUNT,
 );
 
-// 'pay-period-sheet' seed: two earners paid on the 1st and 16th (the Friday
-// before when that's a weekend) plus monthly bills on their days.
+// 'pay-period-sheet' seed: two earners paid the 15th and the last day (the
+// Friday before when that's a weekend) plus monthly bills on their days.
 const PAY_PERIOD_SHEET_CALENDAR_ITEMS: CalendarItem[] = [
   ...(['Paul', 'Jen'] as const).map((earner): CalendarItem => ({
     id: `seed-pay-${earner.toLowerCase()}`,
@@ -498,7 +500,7 @@ const PAY_PERIOD_SHEET_CALENDAR_ITEMS: CalendarItem[] = [
     isPaid: false,
     isRecurring: true,
     frequency: 'semi-monthly',
-    semiMonthlyDays: [1, 16],
+    semiMonthlyDays: [15, 31],
     weekendShift: 'before',
   })),
   ...([
@@ -1609,6 +1611,31 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     }
     await saveHalfPlan({ ...plan, allocations: plan.allocations.map(a => (a.id === allocationId ? { ...a, done } : a)) });
   }, [accounts, defaultAccountId, saveHalfPlan]);
+
+  // Mirrors makeImportSheetMonth: new one-off bills, one-month amounts, plans.
+  const importSheetMonth = useCallback(async ({ newBills, amountChanges, plans }: SheetImport) => {
+    setCalendarItems(prev => {
+      let next = [
+        ...prev,
+        ...newBills.map((b): CalendarItem => ({ ...b, id: generateId(), type: 'expense', isPaid: false, isRecurring: false })),
+      ];
+      for (const { item, amount } of amountChanges) {
+        if (item.isPaid) continue;
+        const parsed = parseRecurringId(item.id);
+        if (!parsed) {
+          next = next.map(i => (i.id === item.id ? { ...i, amount } : i));
+          continue;
+        }
+        next = [
+          ...next.filter(i => !(i.isOverride && i.parentRecurringId === parsed.templateId && i.date === parsed.date)),
+          { id: generateId(), title: item.title, amount, date: parsed.date, type: item.type, isPaid: false, isRecurring: false, isOverride: true, parentRecurringId: parsed.templateId },
+        ];
+      }
+      return next;
+    });
+    for (const plan of plans) await saveHalfPlan(plan);
+    toast.success('Mock: Month imported');
+  }, [saveHalfPlan]);
 
   const deleteHousehold = useCallback(async () => {
     toast.success('Mock: Household deleted');
@@ -3385,6 +3412,30 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Changed for this month only');
   }, []);
 
+  // Mirrors makeEditCalendarEntry (rename the series / move one occurrence).
+  const editCalendarEntry = useCallback(async (id: string, changes: { title?: string; date?: string }) => {
+    const parsed = parseRecurringId(id);
+    setCalendarItems(prev => {
+      if (!parsed) {
+        return prev.map(i => (i.id === id ? { ...i, ...(changes.title ? { title: changes.title } : {}), ...(changes.date ? { date: changes.date } : {}) } : i));
+      }
+      const template = prev.find(i => i.id === parsed.templateId);
+      if (!template) return prev;
+      let next = changes.title ? prev.map(i => (i.id === template.id ? { ...i, title: changes.title ?? i.title } : i)) : prev;
+      if (changes.date && changes.date !== parsed.date) {
+        // The occurrence's own amount: a "Just this month" override moves with it.
+        const amount = occurrenceAmount(next, template, parsed.date);
+        next = [
+          ...next,
+          { id: generateId(), title: template.title, amount, date: parsed.date, type: template.type, isPaid: false, isRecurring: false, isDeleted: true, parentRecurringId: template.id },
+          { id: generateId(), title: changes.title ?? template.title, amount, date: changes.date, type: template.type, isPaid: false, isRecurring: false },
+        ];
+      }
+      return next;
+    });
+    toast.success('Mock: Updated');
+  }, []);
+
   const deleteCalendarItem = useCallback(async (id: string) => {
     setCalendarItems(prev => prev.filter(i => i.id !== id));
     toast.success('Mock: Calendar item deleted');
@@ -4558,6 +4609,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     contributeToGoal,
     saveHalfPlan,
     setAllocationDone,
+    importSheetMonth,
     addBucket,
     updateBucket,
     deleteBucket,
@@ -4582,6 +4634,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     addCalendarItem,
     updateCalendarItem,
     setOccurrenceAmount,
+    editCalendarEntry,
     deleteCalendarItem,
     payCalendarItem: noOp,
     deferCalendarItem: noOp,

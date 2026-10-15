@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { parseISO } from 'date-fns';
 import { Account, CalendarItem, HalfAllocation, HalfPlan, Transaction } from '@/types/schema';
 import { expandCalendarItems } from '@/utils/calendarRecurrence';
-import { buildPayHalves, findHalfContaining, nominalPaydayOf } from '@/utils/payPeriodHalves';
+import { fundedHalfId, halfOf, halvesBetween } from '@/utils/payPeriodHalves';
 import {
   allocationTransfer,
   balancingPlan,
@@ -14,8 +14,8 @@ import {
   summarizeHalf,
 } from '@/utils/halfPlan';
 
-// The household's real October 2026 sheet: two paychecks on the 1st and 16th
-// (paid the Friday before a weekend), and their dated bills.
+// The household's real October 2026 sheet: two paychecks paid the 15th and
+// the last day (the Friday before a weekend), and the month's dated bills.
 const paycheck = (id: string, earnerId: string): CalendarItem => ({
   id,
   title: 'Paycheck',
@@ -25,7 +25,7 @@ const paycheck = (id: string, earnerId: string): CalendarItem => ({
   isPaid: false,
   isRecurring: true,
   frequency: 'semi-monthly',
-  semiMonthlyDays: [1, 16],
+  semiMonthlyDays: [15, 31],
   weekendShift: 'before',
   earnerId,
 });
@@ -51,53 +51,43 @@ const bills: CalendarItem[] = BILLS.map(([day, title, amount], i) => ({
 }));
 
 const raw = [paycheck('pay-paul', 'paul'), paycheck('pay-jen', 'jen'), ...bills];
-const expanded = expandCalendarItems(raw, parseISO('2026-09-25'), parseISO('2026-11-30'));
-const halves = buildPayHalves(expanded, raw);
+const expanded = expandCalendarItems(raw, parseISO('2026-09-20'), parseISO('2026-11-30'));
 const BUCKETS = new Set(['gas', 'grocery', 'childcare']);
+const half = (id: string) => halfOf(id);
 
-const half = (id: string) => {
-  const h = halves.find(x => x.id === id);
-  if (!h?.end) throw new Error(`no closed half ${id}`);
-  return { start: h.start, end: h.end };
-};
-
-describe('buildPayHalves', () => {
-  it('opens one half per payday, even with two earners', () => {
-    expect(halves.map(h => [h.id, h.start, h.end])).toEqual([
+describe('halves', () => {
+  it('are the 1st–15th and the 16th–last day of each month', () => {
+    expect(halvesBetween('2026-10', '2026-11').map(h => [h.id, h.start, h.end])).toEqual([
       ['2026-10-01', '2026-10-01', '2026-10-15'],
-      ['2026-10-16', '2026-10-16', '2026-10-29'],
-      // Sun Nov 1 is paid Fri Oct 30, so November's first half starts then.
-      ['2026-11-01', '2026-10-30', '2026-11-15'],
-      ['2026-11-16', '2026-11-16', null],
+      ['2026-10-16', '2026-10-16', '2026-10-31'],
+      ['2026-11-01', '2026-11-01', '2026-11-15'],
+      ['2026-11-16', '2026-11-16', '2026-11-30'],
     ]);
+    expect(halfOf('2026-10-15').id).toBe('2026-10-01');
+    expect(halfOf('2026-02-20').end).toBe('2026-02-28');
   });
 
-  it('keeps a half\'s id when its paycheck has been paid', () => {
-    const paid: CalendarItem = {
-      id: 'paid-nov1',
-      title: 'Paycheck',
-      amount: 2851.5,
-      date: '2026-10-30',
-      type: 'income',
-      isPaid: true,
-      isRecurring: false,
-      parentRecurringId: 'pay-paul',
-    };
-    const templates = new Map(raw.map(i => [i.id, i]));
-    expect(nominalPaydayOf(paid, templates)).toBe('2026-11-01');
-    const withPaid = buildPayHalves(expandCalendarItems([...raw, paid], parseISO('2026-10-20'), parseISO('2026-11-30')), [...raw, paid]);
-    expect(withPaid.find(h => h.id === '2026-11-01')?.start).toBe('2026-10-30');
+  it('a paycheck funds the half it lands closest to the start of', () => {
+    // Paid at the end of a month, it pays for the next month's first half.
+    expect(fundedHalfId('2026-09-27')).toBe('2026-10-01');
+    expect(fundedHalfId('2026-09-30')).toBe('2026-10-01');
+    expect(fundedHalfId('2026-10-01')).toBe('2026-10-01');
+    // Paid around the 15th, it pays for the 16th–end.
+    expect(fundedHalfId('2026-10-13')).toBe('2026-10-16');
+    expect(fundedHalfId('2026-10-15')).toBe('2026-10-16');
+    expect(fundedHalfId('2026-10-16')).toBe('2026-10-16');
+    // Across a year end.
+    expect(fundedHalfId('2026-12-29')).toBe('2027-01-01');
   });
 
-  it('ignores one-off income when splitting halves', () => {
-    const bonus: CalendarItem = { id: 'bonus', title: 'Bonus', amount: 500, date: '2026-10-08', type: 'income', isPaid: false };
-    const withBonus = buildPayHalves(expandCalendarItems([...raw, bonus], parseISO('2026-10-01'), parseISO('2026-10-31')), [...raw, bonus]);
-    expect(withBonus.map(h => h.id)).toEqual(['2026-10-01', '2026-10-16', '2026-11-01']);
-  });
-
-  it('finds the half a date falls in', () => {
-    expect(findHalfContaining(halves, '2026-10-15')?.id).toBe('2026-10-01');
-    expect(findHalfContaining(halves, '2026-10-31')?.id).toBe('2026-11-01');
+  it("counts each paycheck in the half it funds, wherever it lands", () => {
+    const paychecks = (id: string) =>
+      summarizeHalf(half(id), expanded, undefined, BUCKETS).paychecks.map(p => p.date);
+    // Paid the 15th and the last day, the Friday before a weekend.
+    expect(paychecks('2026-10-01')).toEqual(['2026-09-30', '2026-09-30']);
+    expect(paychecks('2026-10-16')).toEqual(['2026-10-15', '2026-10-15']);
+    // Sat Oct 31 is paid Fri Oct 30: still November's first half.
+    expect(paychecks('2026-11-01')).toEqual(['2026-10-30', '2026-10-30']);
   });
 });
 

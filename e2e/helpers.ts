@@ -22,7 +22,7 @@ import { expect, type Page } from '@playwright/test';
  *     unpaid recurring bill with its screenshot-imported charge, plus TWO
  *     already-paid bills each with the nightly sync's own copy of it — one per
  *     settled-bill evidence tier (water = descriptor, electric = amount-only)
- *   - 'pay-period-sheet' — default seeds + 1st & 16th paychecks and monthly
+ *   - 'pay-period-sheet' — default seeds + paychecks on the 15th & last day and monthly
  *     bills, so Money → Sheet has halves to show
  *
  * The union mirrors `readTestSeedVariant` in MockHouseholdContext — the two

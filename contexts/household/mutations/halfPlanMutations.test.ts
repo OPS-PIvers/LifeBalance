@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('firebase/firestore', () => ({
-  doc: vi.fn((_db: unknown, path: string, id: string) => ({
-    __path: `${path}/${id}`,
-    withConverter: function () { return this; },
-  })),
+  doc: vi.fn((first: unknown, path?: string, id?: string) => {
+    const col = first as { __col?: string };
+    const __path = col.__col !== undefined ? `${col.__col}/__new` : `${path}/${id}`;
+    return { __path, withConverter: function () { return this; } };
+  }),
+  collection: vi.fn((_db: unknown, path: string) => ({ __col: path })),
   setDoc: vi.fn(),
   increment: (n: number) => ({ __increment: n }),
   serverTimestamp: () => ({ __serverTimestamp: true }),
@@ -23,8 +25,8 @@ vi.mock('react-hot-toast', () => ({
 
 import { setDoc } from 'firebase/firestore';
 import toast from 'react-hot-toast';
-import { makeHalfPlanMutations, makeSetAllocationDone } from './halfPlanMutations';
-import type { Account, HalfPlan } from '@/types/schema';
+import { makeHalfPlanMutations, makeImportSheetMonth, makeSetAllocationDone } from './halfPlanMutations';
+import type { Account, CalendarItem, HalfPlan } from '@/types/schema';
 
 const db = {} as never;
 
@@ -105,5 +107,43 @@ describe('makeSetAllocationDone', () => {
     await setAllocationDone(plan, 'b1', true);
     expect(batch.commit).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith('Add a savings account first');
+  });
+});
+
+describe('makeImportSheetMonth', () => {
+  const xcel: CalendarItem = {
+    id: 'xcel', title: 'Xcel', amount: 120, date: '2026-01-28', type: 'expense', isPaid: false,
+    isRecurring: true, frequency: 'monthly',
+  };
+  const gift: CalendarItem = { id: 'gift', title: 'Gift', amount: 30, date: '2026-10-02', type: 'expense', isPaid: false };
+
+  beforeEach(() => {
+    batch.set.mockReset();
+    batch.update.mockReset();
+    batch.commit.mockClear();
+  });
+
+  it('writes new bills, one-month amounts and the plans in ONE batch', async () => {
+    const { importSheetMonth } = makeImportSheetMonth({ db, householdId: 'h1', user: { uid: 'paul' }, calendarItems: [xcel, gift] });
+    await importSheetMonth({
+      newBills: [{ title: 'Jen Hair', amount: 200, date: '2026-10-05' }],
+      amountChanges: [
+        { item: { ...xcel, id: 'xcel_instance_2026-10-28', date: '2026-10-28' }, amount: 98.68 },
+        { item: gift, amount: 40 },
+        { item: { ...gift, id: 'paid', isPaid: true }, amount: 1 },
+      ],
+      plans: [{ id: '2026-10-01', budgets: { gas: 120 }, allocations: [] }],
+    });
+    const sets = batch.set.mock.calls.map(([ref, data]) => [ref.__path, data]);
+    expect(sets).toEqual([
+      ['households/h1/calendarItems/__new', expect.objectContaining({ title: 'Jen Hair', amount: 200, date: '2026-10-05', isRecurring: false })],
+      ['households/h1/calendarItems/__new', expect.objectContaining({ isOverride: true, parentRecurringId: 'xcel', date: '2026-10-28', amount: 98.68 })],
+      ['households/h1/halfPlans/2026-10-01', expect.objectContaining({ budgets: { gas: 120 }, updatedBy: 'paul' })],
+    ]);
+    // The one-off is re-priced in place; the paid bill is never touched.
+    expect(batch.update.mock.calls.map(([ref, data]) => [ref.__path, data])).toEqual([
+      ['households/h1/calendarItems/gift', { amount: 40 }],
+    ]);
+    expect(batch.commit).toHaveBeenCalledTimes(1);
   });
 });

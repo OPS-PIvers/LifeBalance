@@ -6,11 +6,11 @@ import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Button } from '@/components/ui/Button';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import { cn } from '@/utils/cn';
-import { buildPayHalves, findHalfContaining, halfTitle } from '@/utils/payPeriodHalves';
+import { fundedHalfId, halfOf, halfTitle } from '@/utils/payPeriodHalves';
 import { seedHalfPlan, summarizeHalf } from '@/utils/halfPlan';
 
 interface AssignHalfCardProps {
-  /** A date inside the half to assign (the new pay period's first day). */
+  /** The paycheck's date; the card shows the half that paycheck funds. */
   date: string;
   /** Called before leaving for the Sheet, e.g. to close the drawer. */
   onOpen: () => void;
@@ -22,22 +22,19 @@ interface AssignHalfCardProps {
  * way into the Sheet to give every dollar a job.
  */
 const AssignHalfCard: React.FC<AssignHalfCardProps> = ({ date, onOpen }) => {
-  const { calendarItems, halfPlans, buckets } = useFinance();
+  const { halfPlans, buckets } = useFinance();
   const navigate = useNavigate();
   const fmt = useFormatCurrency();
-  const [start, end] = useMemo(() => [subDays(parseISO(date), 20), addDays(parseISO(date), 50)], [date]);
+  const half = useMemo(() => halfOf(fundedHalfId(date)), [date]);
+  const [start, end] = useMemo(() => [subDays(parseISO(half.start), 20), addDays(parseISO(half.end), 20)], [half.start, half.end]);
   const expanded = useExpandedCalendarItems(start, end);
 
   const view = useMemo(() => {
-    const half = findHalfContaining(buildPayHalves(expanded, calendarItems), date);
-    if (!half?.end) return null;
-    const closed = { ...half, end: half.end };
     const plan = halfPlans.find(p => p.id === half.id) ?? seedHalfPlan(half.id, halfPlans, () => 'seed');
-    const summary = summarizeHalf(closed, expanded, plan, new Set(buckets.map(b => b.id)));
-    return { title: halfTitle(closed), summary };
-  }, [expanded, calendarItems, date, halfPlans, buckets]);
+    const summary = summarizeHalf(half, expanded, plan, new Set(buckets.map(b => b.id)));
+    return { title: halfTitle(half), summary };
+  }, [expanded, half, halfPlans, buckets]);
 
-  if (!view) return null;
   const left = view.summary.leftToAssign;
 
   return (
