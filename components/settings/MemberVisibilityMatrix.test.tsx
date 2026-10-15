@@ -347,8 +347,8 @@ describe('MemberVisibilityMatrix', () => {
         />
       );
 
-      // Money has 7 leaves, every one of them locked for the one member shown.
-      expect(screen.getAllByText('Off for the household')).toHaveLength(7);
+      // Money has 8 leaves, every one of them locked for the one member shown.
+      expect(screen.getAllByText('Off for the household')).toHaveLength(8);
       expect(screen.getByRole('checkbox', { name: 'Show Overview for Alice' })).toBeDisabled();
     });
 

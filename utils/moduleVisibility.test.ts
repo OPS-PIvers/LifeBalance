@@ -262,7 +262,7 @@ describe('the unified key set', () => {
     expect(everythingHidden.has('settings')).toBe(false);
   });
 
-  it("covers Money's seven leaves and Habits' six", () => {
+  it("covers Money's eight leaves and Habits' six", () => {
     expect(getPageNavigation('money', null).leaves.map(l => l.key)).toEqual(ALL_MONEY_LEAVES);
     expect(getPageNavigation('habits', null).leaves.map(l => l.key)).toEqual([
       'track',
