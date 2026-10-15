@@ -72,17 +72,30 @@ export function useHalfSheet(half: PayHalf, plan: HalfPlan, summary: HalfSummary
     else quietly(updateCalendarItem({ ...item, amount }));
   };
 
-  const applyPending = async (scope: 'one' | 'future') => {
+  /**
+   * Applies the pending amount to the months chosen. `edits` are a new name
+   * or date saved in the same go: they are written AFTER the amount (and a
+   * moved occurrence carries the new amount), so no write overwrites another.
+   */
+  const applyPending = async (scope: 'one' | 'future', edits: { title?: string; date?: string } = {}) => {
     if (!pending) return;
     const { item, amount } = pending;
     setPending(null);
+    const moved = !!edits.date && edits.date !== item.date;
     try {
       if (scope === 'one') {
-        await setOccurrenceAmount(item.id, amount);
+        // A moved occurrence becomes a one-off on its new date at the new amount.
+        if (moved) await editCalendarEntry(item.id, { ...edits, amount });
+        else {
+          await setOccurrenceAmount(item.id, amount);
+          if (edits.title) await editCalendarEntry(item.id, { title: edits.title });
+        }
         return;
       }
       const template = calendarItems.find(i => i.id === parseRecurringId(item.id)?.templateId);
       if (template) await updateCalendarItem({ ...template, amount }, { amountFrom: item.date });
+      if (moved) await editCalendarEntry(item.id, { ...edits, amount });
+      else if (edits.title) await editCalendarEntry(item.id, { title: edits.title });
     } catch {
       // The mutation already told the user.
     }

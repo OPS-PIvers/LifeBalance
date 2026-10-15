@@ -3454,11 +3454,20 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   // Mirrors makeEditCalendarEntry (rename the series / move one occurrence).
-  const editCalendarEntry = useCallback(async (id: string, changes: { title?: string; date?: string }) => {
+  const editCalendarEntry = useCallback(async (id: string, changes: { title?: string; date?: string; amount?: number }) => {
     const parsed = parseRecurringId(id);
     setCalendarItems(prev => {
       if (!parsed) {
-        return prev.map(i => (i.id === id ? { ...i, ...(changes.title ? { title: changes.title } : {}), ...(changes.date ? { date: changes.date } : {}) } : i));
+        return prev.map(i =>
+          i.id === id
+            ? {
+                ...i,
+                ...(changes.title ? { title: changes.title } : {}),
+                ...(changes.date ? { date: changes.date } : {}),
+                ...(changes.amount !== undefined && !i.isPaid ? { amount: changes.amount } : {}),
+              }
+            : i
+        );
       }
       const template = prev.find(i => i.id === parsed.templateId);
       if (!template) return prev;
@@ -3469,7 +3478,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         next = [
           ...next,
           { id: generateId(), title: template.title, amount, date: parsed.date, type: template.type, isPaid: false, isRecurring: false, isDeleted: true, parentRecurringId: template.id },
-          { id: generateId(), title: changes.title ?? template.title, amount, date: changes.date, type: template.type, isPaid: false, isRecurring: false },
+          { id: generateId(), title: changes.title ?? template.title, amount: changes.amount ?? amount, date: changes.date, type: template.type, isPaid: false, isRecurring: false },
         ];
       }
       return next;

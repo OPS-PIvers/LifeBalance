@@ -80,6 +80,9 @@ const Body: React.FC<Required<Pick<SheetRowDrawerProps, 'onClose' | 'api' | 'pla
     asText(item?.amount ?? allocation?.amount ?? (bucketId ? plan.budgets[bucketId] : undefined))
   );
 
+  /** A new name/date saved with a repeating row's new amount, written once the
+   *  months are chosen. */
+  const [held, setHeld] = useState<{ title?: string; date?: string }>({});
   const asking = item && api.pending?.item.id === item.id;
   const month = date ? format(parseISO(date), 'MMMM') : '';
 
@@ -90,10 +93,10 @@ const Body: React.FC<Required<Pick<SheetRowDrawerProps, 'onClose' | 'api' | 'pla
           Change {item.title} to {fmt(api.pending?.amount ?? 0)} for:
         </p>
         <div className="flex flex-col gap-2">
-          <Button variant="secondary" onClick={() => void api.applyPending('one').then(onClose)}>
+          <Button variant="secondary" onClick={() => void api.applyPending('one', held).then(onClose)}>
             Just {api.pendingMonth}
           </Button>
-          <Button onClick={() => void api.applyPending('future').then(onClose)}>This and future months</Button>
+          <Button onClick={() => void api.applyPending('future', held).then(onClose)}>This and future months</Button>
           <Button variant="ghost" onClick={() => api.setPending(null)}>
             Keep {fmt(item.amount)}
           </Button>
@@ -127,16 +130,21 @@ const Body: React.FC<Required<Pick<SheetRowDrawerProps, 'onClose' | 'api' | 'pla
         ...(title.trim() && title.trim() !== item.title ? { title: title.trim() } : {}),
         ...(date && date !== item.date ? { date } : {}),
       };
-      try {
-        if (changes.title || changes.date) await api.editCalendarEntry(item.id, changes);
-      } catch {
+      const value = parseAmount(amount);
+      const amountChanged = !item.isPaid && value !== undefined && value !== item.amount;
+      if (amountChanged && recurring) {
+        // Ask which months first; the name/date ride along with the answer.
+        setHeld(changes);
+        api.changeAmount(item, value);
         return;
       }
-      const value = parseAmount(amount);
-      if (!item.isPaid && value !== undefined && value !== item.amount) {
-        api.changeAmount(item, value);
-        // A repeating row now asks which months; anything else is done.
-        if (recurring) return;
+      try {
+        // One write for everything, so no field overwrites another.
+        if (changes.title || changes.date || amountChanged) {
+          await api.editCalendarEntry(item.id, { ...changes, ...(amountChanged ? { amount: value } : {}) });
+        }
+      } catch {
+        return;
       }
       onClose();
     };

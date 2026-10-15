@@ -20,6 +20,7 @@ vi.mock('@/hooks/useFormatCurrency', () => ({
   useFormatCurrency: () => (n: number) => `$${n.toFixed(2)}`,
 }));
 let wide = false;
+let extraItems: CalendarItem[] = [];
 vi.mock('@/hooks/useMediaQuery', () => ({ useMediaQuery: () => wide }));
 vi.mock('@/utils/dateHelpers', async () => ({
   ...(await vi.importActual<object>('@/utils/dateHelpers')),
@@ -66,7 +67,7 @@ const addCalendarItem = vi.fn().mockResolvedValue(undefined);
 function setup(halfPlans: HalfPlan[] = [], transactions: Transaction[] = [], isWide = false) {
   wide = isWide;
   vi.mocked(useFinance).mockReturnValue({
-    calendarItems: [paycheck, mortgage],
+    calendarItems: [paycheck, mortgage, ...extraItems],
     halfPlans,
     transactions,
     buckets,
@@ -93,7 +94,10 @@ const change = (el: HTMLElement, value: string) => {
 };
 
 describe('PayPeriodSheet on a phone', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    extraItems = [];
+  });
 
   it('pins the paycheck at the top, lists the due days, and pins the remainder', () => {
     setup();
@@ -140,6 +144,35 @@ describe('PayPeriodSheet on a phone', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Mortgage, / }));
     fireEvent.click(await screen.findByRole('button', { name: "Delete October's" }));
     await waitFor(() => expect(deleteCalendarItem).toHaveBeenCalledWith('mortgage_instance_2026-10-01'));
+  });
+
+  it('saves a one-off bill\'s new name, date and amount in one write', async () => {
+    extraItems = [{ id: 'gift', title: 'Gift', amount: 40, date: '2026-10-02', type: 'expense', isPaid: false }];
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: /^Gift, / }));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Stella bday gift' } });
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-10-03' } });
+    fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '42.18' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(editCalendarEntry).toHaveBeenCalledWith('gift', { title: 'Stella bday gift', date: '2026-10-03', amount: 42.18 })
+    );
+    expect(editCalendarEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it('renames a repeating bill after its new amount, so neither write is lost', async () => {
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: /^Mortgage, / }));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'House' } });
+    fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '2200' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(editCalendarEntry).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: 'Just October' }));
+    await waitFor(() =>
+      expect(editCalendarEntry).toHaveBeenCalledWith('mortgage_instance_2026-10-01', { title: 'House' })
+    );
+    expect(setOccurrenceAmount).toHaveBeenCalledWith('mortgage_instance_2026-10-01', 2200);
+    expect(setOccurrenceAmount.mock.invocationCallOrder[0]).toBeLessThan(editCalendarEntry.mock.invocationCallOrder[0] ?? 0);
   });
 
   it('adds a bill to a day', async () => {
