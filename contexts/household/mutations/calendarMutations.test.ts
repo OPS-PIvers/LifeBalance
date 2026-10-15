@@ -61,13 +61,15 @@ vi.mock('@/utils/firestoreSanitizer', () => ({
   sanitizeFirestoreData: (d: Record<string, unknown>) => d,
 }));
 
-import { updateDoc } from 'firebase/firestore';
+import { addDoc, updateDoc } from 'firebase/firestore';
 import {
   makeAcknowledgeBillPriceChange,
   makeForgetBillDescriptorAlias,
   makeLinkBankTransactionToBill,
   makePayCalendarItem,
   makeSettleBillWithTransaction,
+  makeAddCalendarItem,
+  makeUpdateCalendarItem,
 } from './calendarMutations';
 import type { Account, CalendarItem, Transaction } from '@/types/schema';
 
@@ -648,5 +650,65 @@ describe('makeAcknowledgeBillPriceChange', () => {
     const { acknowledgeBillPriceChange } = makeAcknowledgeBillPriceChange({ db, householdId: null });
     await acknowledgeBillPriceChange('tx-1');
     expect(updateDoc).not.toHaveBeenCalled();
+  });
+});
+
+// updateDoc's second argument is typed as a union (field path | data); the
+// mutation always passes a data object, so narrow to it for assertions.
+function writtenUpdates(): Record<string, unknown> {
+  const arg: unknown = vi.mocked(updateDoc).mock.calls[0]?.[1];
+  if (typeof arg !== 'object' || arg === null) throw new Error('updateDoc was not called with data');
+  return Object.fromEntries(Object.entries(arg));
+}
+
+describe('twice-a-month paychecks — schedule fields', () => {
+  const paycheck: CalendarItem = {
+    id: 'pay',
+    title: 'Paycheck',
+    amount: 2851.5,
+    date: '2026-01-01',
+    type: 'income',
+    isPaid: false,
+    isRecurring: true,
+    frequency: 'semi-monthly',
+    semiMonthlyDays: [1, 16],
+    weekendShift: 'before',
+    earnerId: 'jen',
+  };
+
+  beforeEach(() => {
+    vi.mocked(updateDoc).mockReset();
+    vi.mocked(addDoc).mockReset();
+  });
+
+  it('stores the day pair on create (derived from the date when missing) and never the expansion-only nominalDate', async () => {
+    const { addCalendarItem } = makeAddCalendarItem({ db, householdId: HOUSEHOLD_ID, user: { uid: 'paul' } });
+    await addCalendarItem({ ...paycheck, semiMonthlyDays: undefined, date: '2026-10-15', nominalDate: '2026-10-15' });
+    const written: unknown = vi.mocked(addDoc).mock.calls[0]?.[1];
+    expect(written).toMatchObject({ semiMonthlyDays: [15, 30] });
+    expect(written).not.toHaveProperty('nominalDate');
+    expect(written).not.toHaveProperty('id');
+  });
+
+  it('writes the schedule and earner, keeping the day pair when the anchor rolls forward', async () => {
+    const existing = { ...paycheck, weekendShift: undefined };
+    const { updateCalendarItem } = makeUpdateCalendarItem({ db, householdId: HOUSEHOLD_ID, calendarItems: [existing] });
+    await updateCalendarItem(paycheck, { silent: true });
+    const updates = writtenUpdates();
+    expect(updates.semiMonthlyDays).toEqual([1, 16]);
+    expect(updates.weekendShift).toBe('before');
+    expect(updates.earnerId).toBe('jen');
+    // The weekend rule changed, so the anchor rolled to an upcoming nominal 1st or 16th.
+    expect(String(updates.date)).toMatch(/-(01|16)$/);
+    expect(String(updates.date) > '2026-01-01').toBe(true);
+  });
+
+  it('clears the schedule fields when a bill stops repeating, and the earner on an expense', async () => {
+    const { updateCalendarItem } = makeUpdateCalendarItem({ db, householdId: HOUSEHOLD_ID, calendarItems: [paycheck] });
+    await updateCalendarItem({ ...paycheck, type: 'expense', isRecurring: false, frequency: undefined }, { silent: true });
+    const updates = writtenUpdates();
+    expect(updates.semiMonthlyDays).toEqual({ __deleteField: true });
+    expect(updates.weekendShift).toEqual({ __deleteField: true });
+    expect(updates.earnerId).toEqual({ __deleteField: true });
   });
 });

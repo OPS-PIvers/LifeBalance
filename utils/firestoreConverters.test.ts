@@ -38,6 +38,7 @@ import {
   transactionCommentConverter,
   todoConverter,
   savingsGoalConverter,
+  halfPlanConverter,
   wallDisplayConverter,
   wallSettingsConverter,
   wallEventConverter,
@@ -1605,5 +1606,48 @@ describe('wallTravelConverter', () => {
     });
     expect(wallTravelConverter.fromFirestore(fakeSnap('e2', { minutes: null, mode: 'x' }))).toMatchObject({ minutes: null, mode: 'drive', start: '' });
     expect(callToFirestore(wallTravelConverter, { id: 'e1', minutes: 1, mode: 'walk', start: '', checkedAt: '' })).not.toHaveProperty('id');
+  });
+});
+
+describe('halfPlanConverter', () => {
+  const wellFormed = {
+    budgets: { gas: 120, grocery: 850 },
+    allocations: [
+      { id: 'a1', kind: 'card-extra', label: 'AmEx extra payment', amount: 700, accountId: 'amex', done: true },
+      { id: 'a2', kind: 'from-savings', label: 'From savings', amount: 452.89 },
+    ],
+    updatedAt: '2026-10-01T12:00:00.000Z',
+    updatedBy: 'paul',
+  };
+
+  it('(a) well-formed doc: fromFirestore injects the payday id and preserves fields', () => {
+    const plan = halfPlanConverter.fromFirestore(fakeSnap('2026-10-01', wellFormed));
+    expect(plan).toEqual({ id: '2026-10-01', ...wellFormed });
+  });
+
+  it('(a) toFirestore strips id', () => {
+    const out = callToFirestore(halfPlanConverter, { id: '2026-10-01', budgets: {}, allocations: [] });
+    expect('id' in out).toBe(false);
+  });
+
+  it('(b) partial doc: missing maps become empty, malformed rows are dropped', () => {
+    const plan = halfPlanConverter.fromFirestore(
+      fakeSnap('2026-10-16', {
+        budgets: { gas: '110', grocery: 850 },
+        allocations: [
+          { id: 'ok', kind: 'to-savings', label: 'To savings', amount: 900 },
+          { id: 'bad-kind', kind: 'invest', amount: 5 },
+          { kind: 'other', amount: 5 },
+          'junk',
+        ],
+      }),
+    );
+    expect(plan.budgets).toEqual({ grocery: 850 });
+    expect(plan.allocations.map(a => a.id)).toEqual(['ok']);
+    expect(halfPlanConverter.fromFirestore(fakeSnap('2026-11-01', {}))).toEqual({
+      id: '2026-11-01',
+      budgets: {},
+      allocations: [],
+    });
   });
 });

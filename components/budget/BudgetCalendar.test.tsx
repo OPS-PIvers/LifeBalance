@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { format } from 'date-fns';
 import BudgetCalendar from './BudgetCalendar';
@@ -92,6 +92,7 @@ describe('BudgetCalendar', () => {
     // test starts in the default Month view.
     window.localStorage.clear();
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      members: [],
       calendarItems: [],
       addCalendarItem: mockAddCalendarItem,
       updateCalendarItem: mockUpdateCalendarItem,
@@ -123,6 +124,7 @@ describe('BudgetCalendar', () => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
 
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      members: [],
       calendarItems: [],
       addCalendarItem: mockAddCalendarItem,
       updateCalendarItem: mockUpdateCalendarItem,
@@ -153,6 +155,7 @@ describe('BudgetCalendar', () => {
     const mockCompleteToDo = vi.fn().mockResolvedValue(undefined);
 
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      members: [],
       calendarItems: [],
       addCalendarItem: vi.fn(),
       updateCalendarItem: vi.fn(),
@@ -210,6 +213,58 @@ describe('BudgetCalendar', () => {
     });
   });
 
+  it('saves a twice-a-month paycheck with its days, weekend rule and earner', async () => {
+    (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      members: [
+        { uid: 'paul', displayName: 'Paul' },
+        { uid: 'jen', displayName: 'Jen' },
+        { uid: 'kid_1', displayName: 'Stella', isManaged: true },
+      ],
+      calendarItems: [],
+      addCalendarItem: mockAddCalendarItem,
+      updateCalendarItem: mockUpdateCalendarItem,
+      deleteCalendarItem: mockDeleteCalendarItem,
+      todos: [],
+      completeToDo: vi.fn(),
+      accounts: [],
+      transactions: [],
+    });
+    render(<BudgetCalendar />);
+
+    fireEvent.click(screen.getByText('Add Event'));
+    fireEvent.change(screen.getByPlaceholderText('Title (e.g. Rent)'), { target: { value: 'Paycheck' } });
+    fireEvent.change(screen.getByPlaceholderText('Amount'), { target: { value: '2851.50' } });
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2024-02-01' } });
+    fireEvent.click(screen.getByText('Income'));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Recurring?' }));
+    fireEvent.change(screen.getByLabelText('Frequency'), { target: { value: 'semi-monthly' } });
+
+    // Seeded from the date: the 1st pairs with the 16th.
+    expect(screen.getByLabelText('First day')).toHaveValue('1');
+    expect(screen.getByLabelText('Second day')).toHaveValue('16');
+
+    fireEvent.change(screen.getByLabelText('If it lands on a weekend'), { target: { value: 'before' } });
+    const earner = screen.getByLabelText('Whose paycheck?');
+    // Managed kid profiles never earn a paycheck.
+    expect(within(earner).queryByText('Stella')).not.toBeInTheDocument();
+    fireEvent.change(earner, { target: { value: 'jen' } });
+
+    fireEvent.click(screen.getAllByText('Add Event')[1]!);
+
+    await waitFor(() => {
+      expect(mockAddCalendarItem).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'Paycheck',
+        amount: 2851.5,
+        type: 'income',
+        isRecurring: true,
+        frequency: 'semi-monthly',
+        semiMonthlyDays: [1, 16],
+        weekendShift: 'before',
+        earnerId: 'jen',
+      }));
+    });
+  });
+
   it('duplicates a calendar item by pre-filling the add form for review', async () => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const item = {
@@ -224,6 +279,7 @@ describe('BudgetCalendar', () => {
     };
 
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      members: [],
       calendarItems: [item],
       addCalendarItem: mockAddCalendarItem,
       updateCalendarItem: mockUpdateCalendarItem,
@@ -281,6 +337,7 @@ describe('BudgetCalendar', () => {
     };
 
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      members: [],
       calendarItems: [item],
       addCalendarItem: mockAddCalendarItem,
       updateCalendarItem: mockUpdateCalendarItem,
@@ -325,6 +382,7 @@ describe('BudgetCalendar', () => {
     };
 
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      members: [],
       calendarItems: [item],
       addCalendarItem: mockAddCalendarItem,
       updateCalendarItem: mockUpdateCalendarItem,
@@ -401,6 +459,7 @@ describe('BudgetCalendar', () => {
     };
 
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      members: [],
       calendarItems: [item],
       addCalendarItem: mockAddCalendarItem,
       updateCalendarItem: mockUpdateCalendarItem,
@@ -460,6 +519,7 @@ describe('BudgetCalendar', () => {
     };
 
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      members: [],
       calendarItems: [item],
       addCalendarItem: mockAddCalendarItem,
       updateCalendarItem: mockUpdateCalendarItem,
@@ -581,6 +641,7 @@ describe('BudgetCalendar', () => {
 
     const mountWith = (item: ReturnType<typeof billWithAliases>, forgetFn = vi.fn()) => {
       (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        members: [],
         calendarItems: [item],
         addCalendarItem: mockAddCalendarItem,
         updateCalendarItem: mockUpdateCalendarItem,

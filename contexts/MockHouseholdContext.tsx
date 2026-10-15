@@ -6,7 +6,7 @@ import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseho
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { pastClosedWeeks } from '@/utils/recapWeek';
 import { shiftDay } from '@/utils/recapAssembly';
-import { rollRecurringAnchorForward, isRecurringId, parseRecurringId } from '@/utils/calendarRecurrence';
+import { rollRecurringAnchorForward, isRecurringId, parseRecurringId, semiMonthlyDaysFor } from '@/utils/calendarRecurrence';
 import { BUDGETED_IN_CALENDAR } from '@/utils/categories';
 import { hashKidPin } from '@/utils/kidPin';
 import { computeTodoCompletionCredit, buildUncompleteCreditReversal } from '@/utils/todoPoints';
@@ -106,6 +106,7 @@ import {
   NetWorthSnapshot,
   ActivityLogEntry,
   SavingsGoal,
+  HalfPlan,
   TransactionComment,
   MerchantRule,
   MAX_MERCHANT_RULES,
@@ -888,6 +889,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [accounts, setAccounts] = useState<Account[]>(isFresh ? [] : SEED_ACCOUNTS);
   const [buckets, setBuckets] = useState<BudgetBucket[]>(isFresh ? [] : SEED_BUCKETS);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>(isFresh ? [] : SEED_SAVINGS_GOALS);
+  const [halfPlans, setHalfPlans] = useState<HalfPlan[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>(
     isFresh
       ? []
@@ -1534,6 +1536,14 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       };
     }));
     toast.success('Mock: Contribution added');
+  }, []);
+
+  // Mirrors the Firestore listener's order: newest payday first.
+  const saveHalfPlan = useCallback(async (plan: HalfPlan) => {
+    setHalfPlans(prev =>
+      [...prev.filter(p => p.id !== plan.id), { ...plan, updatedAt: new Date().toISOString() }]
+        .sort((a, b) => b.id.localeCompare(a.id))
+    );
   }, []);
 
   const deleteHousehold = useCallback(async () => {
@@ -3267,7 +3277,15 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       if (i.id !== item.id) return i;
       if (item.isRecurring && item.frequency &&
           (!i.isRecurring || i.date !== item.date || i.frequency !== item.frequency)) {
-        return { ...item, date: rollRecurringAnchorForward(item.date, item.frequency, getLocalDateString()) };
+        const semiMonthlyDays = item.frequency === 'semi-monthly' ? semiMonthlyDaysFor(item) : undefined;
+        return {
+          ...item,
+          semiMonthlyDays,
+          date: rollRecurringAnchorForward(item.date, item.frequency, getLocalDateString(), {
+            semiMonthlyDays,
+            weekendShift: item.weekendShift,
+          }),
+        };
       }
       return item;
     }));
@@ -4364,6 +4382,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     accounts,
     buckets,
     savingsGoals,
+    halfPlans,
     netWorthHistory,
     transactions,
     calendarItems,
@@ -4444,6 +4463,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateSavingsGoal,
     deleteSavingsGoal,
     contributeToGoal,
+    saveHalfPlan,
     addBucket,
     updateBucket,
     deleteBucket,

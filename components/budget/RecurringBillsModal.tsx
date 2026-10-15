@@ -2,7 +2,8 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { useMerchantRules } from '@/hooks/useMerchantRules';
-import { CalendarItem } from '@/types/schema';
+import { CalendarFrequency, CalendarItem } from '@/types/schema';
+import { CALENDAR_FREQUENCY_LABELS, isCalendarFrequency } from '@/utils/calendarRecurrence';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Trash2, Edit2, Check, Repeat, TrendingUp, TrendingDown, X, Sparkles, Plus } from 'lucide-react';
@@ -60,7 +61,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
   // Edit Form State
   const [editTitle, setEditTitle] = useState('');
   const [editAmount, setEditAmount] = useState('');
-  const [editFrequency, setEditFrequency] = useState<'weekly' | 'bi-weekly' | 'monthly'>('monthly');
+  const [editFrequency, setEditFrequency] = useState<CalendarFrequency>('monthly');
 
   // Filter for Recurring Templates (exclude instances)
   const recurringItems = useMemo(() => {
@@ -83,6 +84,8 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
         monthlyAmount = item.amount * 4.33; // Average weeks per month
       } else if (item.frequency === 'bi-weekly') {
         monthlyAmount = item.amount * 2.16; // Average bi-weeks per month
+      } else if (item.frequency === 'semi-monthly') {
+        monthlyAmount = item.amount * 2;
       }
 
       if (item.type === 'income') {
@@ -304,13 +307,16 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
                       <div className="sm:col-span-3">
                         <select
                           value={editFrequency}
-                          onChange={e => setEditFrequency(e.target.value as 'weekly' | 'bi-weekly' | 'monthly')}
+                          onChange={e => {
+                            const next = e.target.value;
+                            if (isCalendarFrequency(next)) setEditFrequency(next);
+                          }}
                           aria-label="Frequency"
                           className="w-full h-10 px-3 text-base bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/40"
                         >
-                           <option value="weekly">Weekly</option>
-                           <option value="bi-weekly">Bi-Weekly</option>
-                           <option value="monthly">Monthly</option>
+                           {Object.entries(CALENDAR_FREQUENCY_LABELS).map(([value, label]) => (
+                             <option key={value} value={value}>{label}</option>
+                           ))}
                         </select>
                       </div>
                       <div className="sm:col-span-2 flex justify-end gap-1">

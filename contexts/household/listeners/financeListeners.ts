@@ -5,6 +5,7 @@ import {
   orderBy,
   limit,
   where,
+  documentId,
   type Firestore,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -15,10 +16,11 @@ import {
   calendarItemConverter,
   transactionConverter,
   savingsGoalConverter,
+  halfPlanConverter,
   netWorthSnapshotConverter,
 } from '@/utils/firestoreConverters';
-import { Account, BudgetBucket, BucketPeriodSnapshot, CalendarItem, Transaction, SavingsGoal, NetWorthSnapshot } from '@/types/schema';
-import { BUCKET_HISTORY_LIMIT, NET_WORTH_HISTORY_LIMIT } from '@/utils/listenerWindows';
+import { Account, BudgetBucket, BucketPeriodSnapshot, CalendarItem, Transaction, SavingsGoal, HalfPlan, NetWorthSnapshot } from '@/types/schema';
+import { BUCKET_HISTORY_LIMIT, HALF_PLANS_LIMIT, NET_WORTH_HISTORY_LIMIT } from '@/utils/listenerWindows';
 import { mapTransactionDoc } from '@/contexts/household/selectors';
 import toast from 'react-hot-toast';
 
@@ -43,6 +45,7 @@ export function attachFinanceListeners({
   bucketHistoryLoadedAllRef,
   setCalendarItems,
   setSavingsGoals,
+  setHalfPlans,
   setNetWorthHistory,
 }: {
   db: Firestore;
@@ -54,6 +57,7 @@ export function attachFinanceListeners({
   bucketHistoryLoadedAllRef: { current: boolean };
   setCalendarItems: (items: CalendarItem[]) => void;
   setSavingsGoals: (goals: SavingsGoal[]) => void;
+  setHalfPlans: (plans: HalfPlan[]) => void;
   setNetWorthHistory: (history: NetWorthSnapshot[]) => void;
 }): Unsubscribe[] {
   const unsubscribers: Unsubscribe[] = [];
@@ -127,6 +131,21 @@ export function attachFinanceListeners({
       setSavingsGoals(snapshot.docs.map(doc => doc.data()));
     }, (error) => {
       console.error('[savingsGoals] listener failed:', error);
+    })
+  );
+
+  // Half plans (pay-period sheet) — newest payday first. Doc ids ARE the
+  // yyyy-MM-dd paydays, so ordering by id is chronological.
+  const halfPlansQuery = query(
+    collection(db, `households/${householdId}/halfPlans`).withConverter(halfPlanConverter),
+    orderBy(documentId(), 'desc'),
+    limit(HALF_PLANS_LIMIT)
+  );
+  unsubscribers.push(
+    onSnapshot(halfPlansQuery, (snapshot) => {
+      setHalfPlans(snapshot.docs.map(doc => doc.data()));
+    }, (error) => {
+      console.error('[halfPlans] listener failed:', error);
     })
   );
 

@@ -57,6 +57,7 @@ import { isManualReview } from "./captureReview";
 import { decideAutoApprove, type AutoApproval, type LearnedRow } from "./autoApprove";
 import { readMerchantRules } from "./merchantRuleEffects";
 import { mergeQuantity, resolveNewQuantityField } from "./quantityLogic";
+import { readRecurrenceSchedule } from "../shared/recurrenceSchedule";
 
 // Read/export GET endpoint (getTodos). Kept in its own module and re-exported
 // here so this barrel's deploy surface stays complete while the endpoint body
@@ -2012,9 +2013,11 @@ export const quickAddBillPay = onRequest(
           frequency:
             data.frequency === "weekly" ||
             data.frequency === "bi-weekly" ||
+            data.frequency === "semi-monthly" ||
             data.frequency === "monthly"
               ? data.frequency
               : undefined,
+          ...readRecurrenceSchedule(data),
           parentRecurringId:
             typeof data.parentRecurringId === "string"
               ? data.parentRecurringId

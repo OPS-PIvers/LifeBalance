@@ -11,6 +11,7 @@ import {
   Household,
   BucketPeriodSnapshot,
   SavingsGoal,
+  HalfPlan,
   YearlyGoal,
   FreezeBank,
   Meal,
@@ -161,6 +162,9 @@ export interface HouseholdContextType {
   /** Plan 24 — savings goals / sinking funds. Manual-contribution only; NEVER
    *  feeds `safeToSpend` (see CLAUDE.md hard invariant). */
   savingsGoals: SavingsGoal[];
+  /** Saved plans for pay-period halves (budgets + allocations), newest first,
+   *  keyed by nominal payday. See utils/halfPlan.ts. */
+  halfPlans: HalfPlan[];
   calendarItems: CalendarItem[];
   transactions: Transaction[];
   habits: Habit[];
@@ -339,6 +343,9 @@ export interface HouseholdContextType {
   deleteSavingsGoal: (id: string) => Promise<void>;
   /** Manual "Add to goal" contribution: adds `amount` to `savedAmount` (cents-safe) and stamps `completedAt` on first reaching target. */
   contributeToGoal: (id: string, amount: number) => Promise<void>;
+  /** Writes a half's whole plan (replacing what was stored). Silent on
+   *  success so an editing surface can save often; toasts on failure. */
+  saveHalfPlan: (plan: HalfPlan) => Promise<void>;
 
   // Bucket Actions
   addBucket: (bucket: BudgetBucket) => Promise<void>;
@@ -845,7 +852,7 @@ export interface HouseholdContextType {
 // shape automatically — there is a single source of truth for every field.
 
 export type FinanceContextValue = Pick<HouseholdContextType,
-  | 'safeToSpend' | 'safeToSpendBreakdown' | 'budgetFit' | 'accounts' | 'buckets' | 'savingsGoals' | 'calendarItems' | 'transactions'
+  | 'safeToSpend' | 'safeToSpendBreakdown' | 'budgetFit' | 'accounts' | 'buckets' | 'savingsGoals' | 'halfPlans' | 'calendarItems' | 'transactions'
   | 'currentPeriodId' | 'bucketSpentMap' | 'bucketHistory' | 'netWorthHistory'
   | 'transactionWindowStart' | 'isLoadingOlderTransactions' | 'hasMoreTransactions'
   | 'loadOlderTransactions' | 'loadAllTransactions'
@@ -853,7 +860,7 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'addAccount' | 'updateAccountBalance' | 'setAccountGoal' | 'setAccountCardLast4' | 'setAccountCardDetails' | 'deleteAccount'
   | 'archiveAccount' | 'unarchiveAccount'
   | 'updateAccountOrder' | 'reorderAccounts' | 'defaultAccountId' | 'setDefaultAccountId'
-  | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal'
+  | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal' | 'saveHalfPlan'
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'setBucketLimits' | 'saveCeremonyChanges' | 'reallocateBucket'
   | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
   | 'linkBankTransactionToBill' | 'settleBillWithTransaction' | 'forgetBillDescriptorAlias' | 'acknowledgeBillPriceChange'
