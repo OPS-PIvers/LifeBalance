@@ -114,8 +114,8 @@ const BudgetCalendar: React.FC = () => {
   const [accountId, setAccountId] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
   const [frequency, setFrequency] = useState<CalendarFrequency>('monthly');
-  // Twice-a-month pay days, e.g. 1 and 16. Seeded from the date when the
-  // frequency is first switched to semi-monthly (see handleFrequencyChange).
+  // Twice-a-month pay days, e.g. 1 and 16 (the default when the frequency is
+  // switched to semi-monthly, see handleFrequencyChange).
   const [semiDays, setSemiDays] = useState<[number, number]>([1, 16]);
   const [weekendShift, setWeekendShift] = useState<WeekendShift | ''>('');
   const [earnerId, setEarnerId] = useState('');
@@ -359,12 +359,13 @@ const BudgetCalendar: React.FC = () => {
     setIsAddModalOpen(true);
   };
 
-  // Switching to twice-a-month seeds the pay-day pair from the chosen date
-  // (the 1st → 1st & 16th), so the default already includes that date.
+  // Switching to twice-a-month starts at the 1st & 16th, the common pay
+  // schedule. It is NOT derived from the item's date: a paycheck last dated
+  // the 29th would otherwise quietly become "the 14th & 29th".
   const handleFrequencyChange = (value: string) => {
     if (!isCalendarFrequency(value)) return;
-    if (value === 'semi-monthly' && frequency !== 'semi-monthly' && date) {
-      setSemiDays(semiMonthlyDaysFor({ date }));
+    if (value === 'semi-monthly' && frequency !== 'semi-monthly') {
+      setSemiDays([1, 16]);
     }
     // A weekend rule only applies to date-of-month schedules.
     if (value === 'weekly' || value === 'bi-weekly') setWeekendShift('');

@@ -3411,6 +3411,29 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Changed for this month only');
   }, []);
 
+  // Mirrors makeEditCalendarEntry (rename the series / move one occurrence).
+  const editCalendarEntry = useCallback(async (id: string, changes: { title?: string; date?: string }) => {
+    const parsed = parseRecurringId(id);
+    setCalendarItems(prev => {
+      if (!parsed) {
+        return prev.map(i => (i.id === id ? { ...i, ...(changes.title ? { title: changes.title } : {}), ...(changes.date ? { date: changes.date } : {}) } : i));
+      }
+      const template = prev.find(i => i.id === parsed.templateId);
+      if (!template) return prev;
+      let next = changes.title ? prev.map(i => (i.id === template.id ? { ...i, title: changes.title ?? i.title } : i)) : prev;
+      if (changes.date && changes.date !== parsed.date) {
+        const amount = seriesAmountOn(template, parsed.date);
+        next = [
+          ...next,
+          { id: generateId(), title: template.title, amount, date: parsed.date, type: template.type, isPaid: false, isRecurring: false, isDeleted: true, parentRecurringId: template.id },
+          { id: generateId(), title: changes.title ?? template.title, amount, date: changes.date, type: template.type, isPaid: false, isRecurring: false },
+        ];
+      }
+      return next;
+    });
+    toast.success('Mock: Updated');
+  }, []);
+
   const deleteCalendarItem = useCallback(async (id: string) => {
     setCalendarItems(prev => prev.filter(i => i.id !== id));
     toast.success('Mock: Calendar item deleted');
@@ -4609,6 +4632,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     addCalendarItem,
     updateCalendarItem,
     setOccurrenceAmount,
+    editCalendarEntry,
     deleteCalendarItem,
     payCalendarItem: noOp,
     deferCalendarItem: noOp,

@@ -234,12 +234,13 @@ describe('BudgetCalendar', () => {
     fireEvent.click(screen.getByText('Add Event'));
     fireEvent.change(screen.getByPlaceholderText('Title (e.g. Rent)'), { target: { value: 'Paycheck' } });
     fireEvent.change(screen.getByPlaceholderText('Amount'), { target: { value: '2851.50' } });
-    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2024-02-01' } });
+    // Dated the 29th: the pay days still start at the 1st & 16th, never the
+    // 14th & 29th the date alone would suggest.
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2024-02-29' } });
     fireEvent.click(screen.getByText('Income'));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Recurring?' }));
     fireEvent.change(screen.getByLabelText('Frequency'), { target: { value: 'semi-monthly' } });
 
-    // Seeded from the date: the 1st pairs with the 16th.
     expect(screen.getByLabelText('First day')).toHaveValue('1');
     expect(screen.getByLabelText('Second day')).toHaveValue('16');
 

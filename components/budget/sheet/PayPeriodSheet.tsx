@@ -10,6 +10,7 @@ import SheetPasteDrawer from '@/components/budget/sheet/SheetPasteDrawer';
 import { buildPayHalves, findHalfContaining, halfTitle, type PayHalf } from '@/utils/payPeriodHalves';
 import { seedHalfPlan, summarizeHalf } from '@/utils/halfPlan';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { ordinalDay } from '@/utils/calendarRecurrence';
 import { cn } from '@/utils/cn';
 
 type ClosedHalf = PayHalf & { end: string };
@@ -63,6 +64,9 @@ const PayPeriodSheet: React.FC = () => {
   }
 
   const month = selected.id.slice(0, 7);
+  // Which pay period of its month this is, counted from the paydays, never
+  // guessed from the date (a half starting the 14th isn't "the 1st half").
+  const monthHalves = halves.filter(h => h.id.slice(0, 7) === month);
   const shown = isWide ? halves.filter(h => h.id.slice(0, 7) === month) : [selected];
   const index = halves.indexOf(selected);
 
@@ -93,7 +97,7 @@ const PayPeriodSheet: React.FC = () => {
           </h2>
           {!isWide && (
             <p className="text-xs text-brand-500 dark:text-brand-400">
-              {format(parseISO(selected.id), 'MMMM')} · {parseISO(selected.id).getDate() <= 15 ? '1st half' : '2nd half'}
+              {format(parseISO(selected.id), 'MMMM')} · {ordinalDay(monthHalves.indexOf(selected) + 1)} pay period
             </p>
           )}
         </div>

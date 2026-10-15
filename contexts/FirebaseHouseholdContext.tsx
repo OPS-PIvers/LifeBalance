@@ -133,6 +133,7 @@ import {
   makeAddCalendarItem,
   makeUpdateCalendarItem,
   makeSetOccurrenceAmount,
+  makeEditCalendarEntry,
   makeCalendarDeleteMutations,
   makeDeleteCalendarItem,
   makePayCalendarItem,
@@ -2079,6 +2080,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeSetOccurrenceAmount({ db, householdId, user, calendarItems }).setOccurrenceAmount(occurrenceId, amount, opts);
   }, [householdId, user, calendarItems]);
 
+  const editCalendarEntry = useCallback(async (id: string, changes: { title?: string; date?: string }) => {
+    await makeEditCalendarEntry({ db, householdId, user, calendarItems }).editCalendarEntry(id, changes);
+  }, [householdId, user, calendarItems]);
+
   const deleteRecurringInstance = useCallback(async (syntheticId: string, opts?: MutationOpts) => {
     await makeCalendarDeleteMutations({ db, householdId, user, calendarItems }).deleteRecurringInstance(syntheticId, opts);
   }, [householdId, user, calendarItems]);
@@ -2925,6 +2930,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addCalendarItem,
     updateCalendarItem,
     setOccurrenceAmount,
+    editCalendarEntry,
     deleteCalendarItem,
     payCalendarItem,
     deferCalendarItem,
@@ -2954,7 +2960,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     defaultAccountId, setDefaultAccountId,
     addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal, saveHalfPlan, setAllocationDone, importSheetMonth,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, setBucketLimits, saveCeremonyChanges, reallocateBucket,
-    addCalendarItem, updateCalendarItem, setOccurrenceAmount, deleteCalendarItem, payCalendarItem, deferCalendarItem, linkBankTransactionToBill, settleBillWithTransaction, forgetBillDescriptorAlias, acknowledgeBillPriceChange,
+    addCalendarItem, updateCalendarItem, setOccurrenceAmount, editCalendarEntry, deleteCalendarItem, payCalendarItem, deferCalendarItem, linkBankTransactionToBill, settleBillWithTransaction, forgetBillDescriptorAlias, acknowledgeBillPriceChange,
     addTransaction, addTransactions, updateTransactionCategory, reverseTransactionApproval, updateTransaction, deleteTransaction, splitTransaction,
     setTransactionSplit, markSplitSettled,
     mergeTransactions, keepBothTransactions, getTransactionComments, addTransactionComment, deleteTransactionComment,

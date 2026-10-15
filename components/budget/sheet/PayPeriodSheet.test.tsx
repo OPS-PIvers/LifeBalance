@@ -58,6 +58,8 @@ const saveHalfPlan = vi.fn().mockResolvedValue(undefined);
 const setAllocationDone = vi.fn().mockResolvedValue(undefined);
 const setOccurrenceAmount = vi.fn().mockResolvedValue(undefined);
 const payCalendarItem = vi.fn().mockResolvedValue(undefined);
+const editCalendarEntry = vi.fn().mockResolvedValue(undefined);
+const deleteCalendarItem = vi.fn().mockResolvedValue(undefined);
 
 function setup(halfPlans: HalfPlan[] = [], transactions: Transaction[] = []) {
   vi.mocked(useFinance).mockReturnValue({
@@ -75,6 +77,8 @@ function setup(halfPlans: HalfPlan[] = [], transactions: Transaction[] = []) {
     payCalendarItem,
     updateCalendarItem: vi.fn(),
     addCalendarItem: vi.fn(),
+    editCalendarEntry,
+    deleteCalendarItem,
   } as unknown as ReturnType<typeof useFinance>);
   render(<PayPeriodSheet />);
 }
@@ -97,7 +101,7 @@ describe('PayPeriodSheet', () => {
     expect(screen.getByRole('heading', { name: 'Oct 16 – 29' })).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('Next half'));
     expect(screen.getByRole('heading', { name: 'Oct 30 – Nov 15' })).toBeInTheDocument();
-    expect(screen.getByText(/November · 1st half/)).toBeInTheDocument();
+    expect(screen.getByText(/November · 1st pay period/)).toBeInTheDocument();
   });
 
   it('saves a planned budget typed into its cell', async () => {
@@ -135,6 +139,37 @@ describe('PayPeriodSheet', () => {
     fireEvent.blur(cell);
     fireEvent.click(await screen.findByText('Just October'));
     await waitFor(() => expect(setOccurrenceAmount).toHaveBeenCalledWith('mortgage_instance_2026-10-01', 2200));
+  });
+});
+
+describe('editing rows', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("opens the section's Add at the top of the list, ready to type", () => {
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    const name = screen.getByLabelText('New bill name');
+    expect(name).toHaveFocus();
+    // Above the first bill, not after the last one.
+    expect(name.compareDocumentPosition(screen.getByText('Mortgage')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("taps a row's name to rename it or move this month's to another date", async () => {
+    setup();
+    fireEvent.click(screen.getByLabelText('Edit Mortgage'));
+    expect(screen.getByText(/a new date moves just October's/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-10-03' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(editCalendarEntry).toHaveBeenCalledWith('mortgage_instance_2026-10-01', { date: '2026-10-03' })
+    );
+  });
+
+  it("deletes just this month's occurrence", async () => {
+    setup();
+    fireEvent.click(screen.getByLabelText('Edit Mortgage'));
+    fireEvent.click(screen.getByRole('button', { name: "Delete October's" }));
+    await waitFor(() => expect(deleteCalendarItem).toHaveBeenCalledWith('mortgage_instance_2026-10-01'));
   });
 });
 

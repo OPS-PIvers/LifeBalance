@@ -80,6 +80,8 @@ const MoneyCell: React.FC<MoneyCellProps> = ({ value, onCommit, label, disabled,
         'text-brand-800 dark:text-brand-100 placeholder:text-brand-300 dark:placeholder:text-brand-600',
         'hover:border-brand-200 dark:hover:border-brand-700 focus:border-accent-500 focus:bg-white dark:focus:bg-brand-800 focus:outline-none',
         'disabled:opacity-60 disabled:hover:border-transparent',
+        // A dashed underline says "type here"; paid (disabled) cells don't get one.
+        !disabled && 'border-dashed border-b-brand-300 dark:border-b-brand-600 focus:border-solid',
         className
       )}
     />

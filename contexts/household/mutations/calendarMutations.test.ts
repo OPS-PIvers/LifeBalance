@@ -72,6 +72,7 @@ import {
   makeUpdateCalendarItem,
   makeSetOccurrenceAmount,
   makeCalendarDeleteMutations,
+  makeEditCalendarEntry,
 } from './calendarMutations';
 import type { Account, CalendarItem, Transaction } from '@/types/schema';
 
@@ -780,5 +781,53 @@ describe('one-month amount changes', () => {
     expect(writtenUpdates()).toEqual({ isDeleted: true });
     expect(addDoc).not.toHaveBeenCalled();
     expect(deleteDoc).not.toHaveBeenCalled();
+  });
+});
+
+describe('makeEditCalendarEntry', () => {
+  const xcel: CalendarItem = {
+    id: 'xcel', title: 'Xcel', amount: 120, date: '2026-01-28', type: 'expense', isPaid: false,
+    isRecurring: true, frequency: 'monthly',
+  };
+  const paidPaycheck: CalendarItem = {
+    id: 'paid-pay', title: 'Paycheck', amount: 5703, date: '2026-10-14', type: 'income', isPaid: true,
+    isRecurring: false, parentRecurringId: 'pay',
+  };
+  const user = { uid: 'paul' };
+
+  beforeEach(() => {
+    capturedSets = [];
+    capturedUpdates = [];
+    commitCount = 0;
+    vi.mocked(updateDoc).mockReset();
+  });
+
+  it("moves one occurrence in one batch: hides it and lands a one-off on the new date", async () => {
+    const { editCalendarEntry } = makeEditCalendarEntry({ db, householdId: HOUSEHOLD_ID, user, calendarItems: [xcel] });
+    await editCalendarEntry('xcel_instance_2026-10-28', { date: '2026-10-30' });
+    expect(capturedSets.map(w => w.data)).toEqual([
+      expect.objectContaining({ isDeleted: true, parentRecurringId: 'xcel', date: '2026-10-28' }),
+      expect.objectContaining({ title: 'Xcel', amount: 120, date: '2026-10-30', isRecurring: false, isPaid: false }),
+    ]);
+    expect(commitCount).toBe(1);
+  });
+
+  it('renames the series from any occurrence', async () => {
+    const { editCalendarEntry } = makeEditCalendarEntry({ db, householdId: HOUSEHOLD_ID, user, calendarItems: [xcel] });
+    await editCalendarEntry('xcel_instance_2026-10-28', { title: 'Xcel Energy' });
+    expect(capturedUpdates).toEqual([{ ref: expect.objectContaining({ __path: `households/${HOUSEHOLD_ID}/calendarItems/xcel` }), data: { title: 'Xcel Energy' } }]);
+    expect(capturedSets).toEqual([]);
+  });
+
+  it("re-dates a paid row in place, but never into the future", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 15, 12));
+    const { editCalendarEntry } = makeEditCalendarEntry({ db, householdId: HOUSEHOLD_ID, user, calendarItems: [paidPaycheck] });
+    await editCalendarEntry('paid-pay', { date: '2026-10-01' });
+    expect(writtenUpdates()).toEqual({ date: '2026-10-01' });
+    vi.mocked(updateDoc).mockReset();
+    await editCalendarEntry('paid-pay', { date: '2026-10-16' });
+    expect(updateDoc).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });
