@@ -123,7 +123,12 @@ import {
   makeLoadAllBucketHistory,
 } from '@/contexts/household/mutations/financeMutations';
 import { makeSavingsGoalMutations } from '@/contexts/household/mutations/savingsGoalMutations';
-import { makeHalfPlanMutations, makeSetAllocationDone } from '@/contexts/household/mutations/halfPlanMutations';
+import {
+  makeHalfPlanMutations,
+  makeImportSheetMonth,
+  makeSetAllocationDone,
+  type SheetImport,
+} from '@/contexts/household/mutations/halfPlanMutations';
 import {
   makeAddCalendarItem,
   makeUpdateCalendarItem,
@@ -2002,6 +2007,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeSetAllocationDone({ db, householdId, user, accounts, defaultAccountId }).setAllocationDone(plan, allocationId, done);
   }, [householdId, user, accounts, defaultAccountId]);
 
+  const importSheetMonth = useCallback(async (data: SheetImport) => {
+    await makeImportSheetMonth({ db, householdId, user, calendarItems }).importSheetMonth(data);
+  }, [householdId, user, calendarItems]);
+
   // --- ACTIONS: BUCKETS ---
   // (contexts/household/mutations/financeMutations.ts)
 
@@ -2905,6 +2914,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     contributeToGoal,
     saveHalfPlan,
     setAllocationDone,
+    importSheetMonth,
     addBucket,
     updateBucket,
     deleteBucket,
@@ -2942,7 +2952,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     isLoadingOlderBucketHistory, hasMoreBucketHistory, loadAllBucketHistory,
     addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, setAccountCardDetails, deleteAccount, archiveAccount, unarchiveAccount, updateAccountOrder, reorderAccounts,
     defaultAccountId, setDefaultAccountId,
-    addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal, saveHalfPlan, setAllocationDone,
+    addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal, saveHalfPlan, setAllocationDone, importSheetMonth,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, setBucketLimits, saveCeremonyChanges, reallocateBucket,
     addCalendarItem, updateCalendarItem, setOccurrenceAmount, deleteCalendarItem, payCalendarItem, deferCalendarItem, linkBankTransactionToBill, settleBillWithTransaction, forgetBillDescriptorAlias, acknowledgeBillPriceChange,
     addTransaction, addTransactions, updateTransactionCategory, reverseTransactionApproval, updateTransaction, deleteTransaction, splitTransaction,

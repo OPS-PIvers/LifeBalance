@@ -50,6 +50,7 @@ import { evaluateTodoSubtaskGate, TodoSubtasksIncompleteError } from '@/utils/to
 import { setSubtaskDone, subtaskProgress } from '@/utils/subtasks';
 import type { TodoSubtaskToggleResult, TodoCompletionOptions, TodoPromotionFields } from '@/contexts/household/mutations/todoMutations';
 import type { CalendarUpdateOpts, MergeLearnAlias } from '@/contexts/household/types';
+import type { SheetImport } from '@/contexts/household/mutations/halfPlanMutations';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import { UNCATEGORIZED_HABIT_CATEGORY } from '@/utils/habitCategories';
 import { attributionString, type TriggerSource } from '@/utils/habitTriggers';
@@ -1609,6 +1610,31 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     }
     await saveHalfPlan({ ...plan, allocations: plan.allocations.map(a => (a.id === allocationId ? { ...a, done } : a)) });
   }, [accounts, defaultAccountId, saveHalfPlan]);
+
+  // Mirrors makeImportSheetMonth: new one-off bills, one-month amounts, plans.
+  const importSheetMonth = useCallback(async ({ newBills, amountChanges, plans }: SheetImport) => {
+    setCalendarItems(prev => {
+      let next = [
+        ...prev,
+        ...newBills.map((b): CalendarItem => ({ ...b, id: generateId(), type: 'expense', isPaid: false, isRecurring: false })),
+      ];
+      for (const { item, amount } of amountChanges) {
+        if (item.isPaid) continue;
+        const parsed = parseRecurringId(item.id);
+        if (!parsed) {
+          next = next.map(i => (i.id === item.id ? { ...i, amount } : i));
+          continue;
+        }
+        next = [
+          ...next.filter(i => !(i.isOverride && i.parentRecurringId === parsed.templateId && i.date === parsed.date)),
+          { id: generateId(), title: item.title, amount, date: parsed.date, type: item.type, isPaid: false, isRecurring: false, isOverride: true, parentRecurringId: parsed.templateId },
+        ];
+      }
+      return next;
+    });
+    for (const plan of plans) await saveHalfPlan(plan);
+    toast.success('Mock: Month imported');
+  }, [saveHalfPlan]);
 
   const deleteHousehold = useCallback(async () => {
     toast.success('Mock: Household deleted');
@@ -4558,6 +4584,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     contributeToGoal,
     saveHalfPlan,
     setAllocationDone,
+    importSheetMonth,
     addBucket,
     updateBucket,
     deleteBucket,

@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { addMonths, endOfMonth, format, parseISO, startOfMonth, subMonths } from 'date-fns';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ClipboardPaste } from 'lucide-react';
 import { useExpandedCalendarItems, useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { Button } from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
 import HalfSheet from '@/components/budget/sheet/HalfSheet';
+import SheetPasteDrawer from '@/components/budget/sheet/SheetPasteDrawer';
 import { buildPayHalves, findHalfContaining, halfTitle, type PayHalf } from '@/utils/payPeriodHalves';
 import { seedHalfPlan, summarizeHalf } from '@/utils/halfPlan';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -47,6 +48,7 @@ const PayPeriodSheet: React.FC = () => {
 
   const currentId = findHalfContaining(halves, today)?.id;
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+  const [pasteOpen, setPasteOpen] = useState(false);
   const selected = halves.find(h => h.id === (selectedId ?? currentId)) ?? halves[0];
 
   const bucketIds = useMemo(() => new Set(buckets.map(b => b.id)), [buckets]);
@@ -99,11 +101,21 @@ const PayPeriodSheet: React.FC = () => {
           <ChevronRight size={20} />
         </Button>
       </div>
-      {selected.id !== currentId && currentId && (
-        <div className="text-center">
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {selected.id !== currentId && currentId && (
           <Button variant="link" size="sm" onClick={() => setSelectedId(currentId)}>Back to this pay period</Button>
-        </div>
-      )}
+        )}
+        <Button variant="ghost" size="sm" leftIcon={<ClipboardPaste size={14} />} onClick={() => setPasteOpen(true)}>
+          Paste {format(parseISO(`${month}-01`), 'MMMM')} from your sheet
+        </Button>
+      </div>
+      <SheetPasteDrawer
+        isOpen={pasteOpen}
+        onClose={() => setPasteOpen(false)}
+        month={month}
+        halves={halves.filter(h => h.id.slice(0, 7) === month)}
+        expanded={expanded}
+      />
 
       <div className={cn('grid gap-6', isWide && shown.length > 1 && 'grid-cols-2')}>
         {shown.map(half => {
