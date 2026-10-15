@@ -8,7 +8,7 @@ import MoneyCell from '@/components/budget/sheet/MoneyCell';
 import SheetRowDrawer, { type RowTarget } from '@/components/budget/sheet/SheetRowDrawer';
 import { ALLOCATION_LABELS, useHalfSheet, type HalfSheetApi } from '@/components/budget/sheet/useHalfSheet';
 import { cn } from '@/utils/cn';
-import { sumMoney } from '@/utils/money';
+import { roundMoney, sumMoney } from '@/utils/money';
 import type { HalfSummary } from '@/utils/halfPlan';
 import { billsByDate, halfDates, ordinal } from '@/utils/sheetLayout';
 import { halfTitle, type PayHalf } from '@/utils/payPeriodHalves';
@@ -88,7 +88,7 @@ const NewBillRow: React.FC<{
   const amountRef = useRef<HTMLInputElement>(null);
   const day = format(parseISO(date), 'd');
 
-  const value = Number(amount.replace(/[$,\s]/g, ''));
+  const value = roundMoney(Math.abs(Number(amount.replace(/[$,\s]/g, ''))));
   const ready = title.trim() !== '' && amount.trim() !== '' && Number.isFinite(value) && value > 0;
   const commit = () => {
     if (!ready) return;

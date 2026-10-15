@@ -278,7 +278,8 @@ describe('PayPeriodSheet on a wide screen', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toHaveFocus();
     fireEvent.change(rows[0] as HTMLElement, { target: { value: 'Parkway' } });
-    fireEvent.change(screen.getByLabelText('New bill on the 1st amount'), { target: { value: '80' } });
+    // Rounded to cents like every other amount entry.
+    fireEvent.change(screen.getByLabelText('New bill on the 1st amount'), { target: { value: '80.004' } });
     fireEvent.keyDown(screen.getByLabelText('New bill on the 1st amount'), { key: 'Enter' });
     await waitFor(() =>
       expect(addCalendarItem).toHaveBeenCalledWith(
