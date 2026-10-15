@@ -19,7 +19,8 @@ vi.mock('@/contexts/FirebaseHouseholdContext', async () => {
 vi.mock('@/hooks/useFormatCurrency', () => ({
   useFormatCurrency: () => (n: number) => `$${n.toFixed(2)}`,
 }));
-vi.mock('@/hooks/useMediaQuery', () => ({ useMediaQuery: () => false }));
+let wide = false;
+vi.mock('@/hooks/useMediaQuery', () => ({ useMediaQuery: () => wide }));
 vi.mock('@/utils/dateHelpers', async () => ({
   ...(await vi.importActual<object>('@/utils/dateHelpers')),
   getLocalDateString: () => '2026-10-08',
@@ -60,8 +61,10 @@ const setOccurrenceAmount = vi.fn().mockResolvedValue(undefined);
 const payCalendarItem = vi.fn().mockResolvedValue(undefined);
 const editCalendarEntry = vi.fn().mockResolvedValue(undefined);
 const deleteCalendarItem = vi.fn().mockResolvedValue(undefined);
+const addCalendarItem = vi.fn().mockResolvedValue(undefined);
 
-function setup(halfPlans: HalfPlan[] = [], transactions: Transaction[] = []) {
+function setup(halfPlans: HalfPlan[] = [], transactions: Transaction[] = [], isWide = false) {
+  wide = isWide;
   vi.mocked(useFinance).mockReturnValue({
     calendarItems: [paycheck, mortgage],
     halfPlans,
@@ -76,52 +79,85 @@ function setup(halfPlans: HalfPlan[] = [], transactions: Transaction[] = []) {
     setOccurrenceAmount,
     payCalendarItem,
     updateCalendarItem: vi.fn(),
-    addCalendarItem: vi.fn(),
+    addCalendarItem,
     editCalendarEntry,
     deleteCalendarItem,
   } as unknown as ReturnType<typeof useFinance>);
   render(<PayPeriodSheet />);
 }
 
-describe('PayPeriodSheet', () => {
+const change = (el: HTMLElement, value: string) => {
+  fireEvent.focus(el);
+  fireEvent.change(el, { target: { value } });
+  fireEvent.blur(el);
+};
+
+describe('PayPeriodSheet on a phone', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('shows the current half: paycheck at the top, bills on their days, Left to assign', () => {
+  it('pins the paycheck at the top, lists the due days, and pins the remainder', () => {
     setup();
-    expect(screen.getByRole('heading', { name: 'Oct 1 – 15' })).toBeInTheDocument();
-    expect(screen.getByText(/Jen/)).toBeInTheDocument();
+    expect(screen.getByText('Paycheck · Oct 1 – 15')).toBeInTheDocument();
+    expect(screen.getByTestId('paycheck-total')).toHaveTextContent('$2851.50');
     expect(screen.getByText('Mortgage')).toBeInTheDocument();
-    expect(screen.getByTestId('left-to-assign')).toHaveTextContent('$685.50');
-    expect(screen.getByText(/Safe-to-Spend right now/)).toBeInTheDocument();
+    expect(screen.getByText('+ Add to the 1st')).toBeInTheDocument();
+    // Every day with nothing due collapses into one line.
+    expect(screen.getByText('Oct 2–15 · nothing due')).toBeInTheDocument();
+    expect(screen.getByTestId('left-to-assign')).toHaveTextContent('+$685.50');
+    // Safe-to-Spend is its own figure, never merged into the remainder.
+    expect(screen.getByText(/Safe-to-Spend now/)).toHaveTextContent('$1234.00');
   });
 
-  it('steps through calendar halves, each with the paycheck that funds it', () => {
+  it('switches halves, each with the paycheck that funds it', () => {
     setup();
-    // Paid Wed Sep 30, that paycheck funds Oct 1–15.
-    expect(screen.getByText('Wed 30')).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText('Next half'));
-    expect(screen.getByRole('heading', { name: 'Oct 16 – 31' })).toBeInTheDocument();
-    expect(screen.getByText('Thu 15')).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText('Next half'));
-    expect(screen.getByRole('heading', { name: 'Nov 1 – 15' })).toBeInTheDocument();
-    expect(screen.getByText(/November · 1st half/)).toBeInTheDocument();
-    // Sat Oct 31 is paid Fri Oct 30, and still funds November's first half.
-    expect(screen.getByText('Fri 30')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Oct 1–15' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Oct 16–31' }));
+    expect(screen.getByText('Paycheck · Oct 16 – 31')).toBeInTheDocument();
+    expect(screen.queryByText(/Safe-to-Spend now/)).not.toBeInTheDocument();
+    // Sat Oct 31 is paid Fri Oct 30 and funds November's first half.
+    fireEvent.click(screen.getByRole('button', { name: 'Nov 1–15' }));
+    fireEvent.click(screen.getByRole('button', { name: /Paycheck · Nov 1 – 15/ }));
+    expect(screen.getByRole('button', { name: /Paycheck, \$2851\.50/ })).toBeInTheDocument();
   });
 
-  it('saves a planned budget typed into its cell', async () => {
+  it('asks which months a repeating bill change applies to', async () => {
     setup();
-    const cell = screen.getByLabelText('Groceries planned for this half');
-    fireEvent.change(cell, { target: { value: '850' } });
-    fireEvent.blur(cell);
+    fireEvent.click(screen.getByRole('button', { name: /^Mortgage, \$2166\.00/ }));
+    fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '2200' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Just October' }));
+    await waitFor(() => expect(setOccurrenceAmount).toHaveBeenCalledWith('mortgage_instance_2026-10-01', 2200));
+  });
+
+  it("renames a row, or deletes just this month's", async () => {
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: /^Mortgage, / }));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'House' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() =>
-      expect(saveHalfPlan).toHaveBeenCalledWith(expect.objectContaining({ id: '2026-10-01', budgets: { grocery: 850 } }))
+      expect(editCalendarEntry).toHaveBeenCalledWith('mortgage_instance_2026-10-01', { title: 'House' })
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^Mortgage, / }));
+    fireEvent.click(await screen.findByRole('button', { name: "Delete October's" }));
+    await waitFor(() => expect(deleteCalendarItem).toHaveBeenCalledWith('mortgage_instance_2026-10-01'));
+  });
+
+  it('adds a bill to a day', async () => {
+    setup();
+    fireEvent.click(screen.getByText('+ Add to the 1st'));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Water' } });
+    fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '36.56' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    await waitFor(() =>
+      expect(addCalendarItem).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Water', amount: 36.56, date: '2026-10-01', type: 'expense' })
+      )
     );
   });
 
   it('sends what is left to savings in one tap', async () => {
     setup();
-    fireEvent.click(screen.getByText('Send $685.50 to savings'));
+    fireEvent.click(screen.getByText('Send to savings'));
     await waitFor(() =>
       expect(saveHalfPlan).toHaveBeenCalledWith(
         expect.objectContaining({ allocations: [expect.objectContaining({ kind: 'to-savings', amount: 685.5 })] })
@@ -129,64 +165,21 @@ describe('PayPeriodSheet', () => {
     );
   });
 
-  it('checks a saved allocation off through the transfer mutation', () => {
+  it('checks an allocation off through the transfer mutation', () => {
     const plan: HalfPlan = { id: '2026-10-01', budgets: {}, allocations: [{ id: 's', kind: 'to-savings', label: 'Leftover to savings', amount: 685.5 }] };
     setup([plan]);
     expect(screen.getByTestId('left-to-assign')).toHaveTextContent('$0.00');
-    fireEvent.click(screen.getByLabelText('Mark Leftover to savings done'));
+    fireEvent.click(screen.getByRole('button', { name: /Leftover to savings/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark done' }));
     expect(setAllocationDone).toHaveBeenCalledWith(plan, 's', true);
   });
 
-  it('asks which months a recurring bill change applies to', async () => {
-    setup();
-    const cell = screen.getByLabelText('Mortgage amount');
-    fireEvent.change(cell, { target: { value: '2200' } });
-    fireEvent.blur(cell);
-    fireEvent.click(await screen.findByText('Just October'));
-    await waitFor(() => expect(setOccurrenceAmount).toHaveBeenCalledWith('mortgage_instance_2026-10-01', 2200));
-  });
-});
-
-describe('editing rows', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it("opens the section's Add at the top of the list, ready to type", () => {
-    setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
-    const name = screen.getByLabelText('New bill name');
-    expect(name).toHaveFocus();
-    // Above the first bill, not after the last one.
-    expect(name.compareDocumentPosition(screen.getByText('Mortgage')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it("taps a row's name to rename it or move this month's to another date", async () => {
-    setup();
-    fireEvent.click(screen.getByLabelText('Edit Mortgage'));
-    expect(screen.getByText(/a new date moves just October's/)).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-10-03' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() =>
-      expect(editCalendarEntry).toHaveBeenCalledWith('mortgage_instance_2026-10-01', { date: '2026-10-03' })
-    );
-  });
-
-  it("deletes just this month's occurrence", async () => {
-    setup();
-    fireEvent.click(screen.getByLabelText('Edit Mortgage'));
-    fireEvent.click(screen.getByRole('button', { name: "Delete October's" }));
-    await waitFor(() => expect(deleteCalendarItem).toHaveBeenCalledWith('mortgage_instance_2026-10-01'));
-  });
-});
-
-describe('overspending', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('shows what a budget spent and offers to cover an overrun from savings', async () => {
+  it('flags an overspent budget and covers it from savings', async () => {
     const plan: HalfPlan = { id: '2026-10-01', budgets: { grocery: 400 }, allocations: [] };
     const groceries = { id: 't1', date: '2026-10-05', category: 'Groceries', amount: 450, merchant: 'Lunds', status: 'verified' } as Transaction;
     setup([plan], [groceries]);
-    expect(screen.getByText('$450.00 spent')).toBeInTheDocument();
-    expect(screen.getByText(/Groceries is \$50.00 over/)).toBeInTheDocument();
+    expect(screen.getByText('$450.00 spent, over budget')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Groceries/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Cover from savings' }));
     await waitFor(() =>
       expect(saveHalfPlan).toHaveBeenCalledWith(
@@ -199,19 +192,92 @@ describe('overspending', () => {
   });
 });
 
+describe('PayPeriodSheet on a wide screen', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('shows the month as two halves, a row for every day, and the month net', () => {
+    setup([], [], true);
+    expect(screen.getByRole('heading', { name: 'October 2026' })).toBeInTheDocument();
+    expect(screen.getAllByText('Paycheck')).toHaveLength(2);
+    expect(screen.getByRole('table', { name: '1st half · Oct 1 – 15' })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: '2nd half · Oct 16 – 31' })).toBeInTheDocument();
+    // Empty days still get a row to type into.
+    expect(screen.getByLabelText('New bill on the 2nd')).toBeInTheDocument();
+    expect(screen.getByLabelText('New bill on the 31st')).toBeInTheDocument();
+    const [first, second] = screen.getAllByTestId('left-to-assign');
+    expect(first).toHaveTextContent('+$685.50');
+    expect(second).toHaveTextContent('+$2851.50');
+    expect(screen.getByTestId('month-net')).toHaveTextContent('+$3537.00');
+  });
+
+  it('steps a month at a time', () => {
+    setup([], [], true);
+    fireEvent.click(screen.getByRole('button', { name: 'Next month' }));
+    expect(screen.getByRole('heading', { name: 'November 2026' })).toBeInTheDocument();
+  });
+
+  it('saves a planned budget typed into its cell', async () => {
+    setup([{ id: '2026-10-01', budgets: { grocery: 0 }, allocations: [] }], [], true);
+    // The 2nd half starts as a copy of the 1st; type into the 1st's cell.
+    change(screen.getAllByLabelText('Groceries planned for this half')[0] as HTMLElement, '850');
+    await waitFor(() =>
+      expect(saveHalfPlan).toHaveBeenCalledWith(expect.objectContaining({ id: '2026-10-01', budgets: { grocery: 850 } }))
+    );
+  });
+
+  it('asks which months a repeating bill change applies to', async () => {
+    setup([], [], true);
+    change(screen.getByLabelText('Mortgage amount'), '2200');
+    fireEvent.click(await screen.findByRole('button', { name: 'Just October' }));
+    await waitFor(() => expect(setOccurrenceAmount).toHaveBeenCalledWith('mortgage_instance_2026-10-01', 2200));
+  });
+
+  it('pays a bill when its actual amount is typed in', () => {
+    setup([], [], true);
+    change(screen.getByLabelText('Mortgage actual'), '2150');
+    expect(payCalendarItem).toHaveBeenCalledWith('mortgage_instance_2026-10-01', 'chk', { actualAmount: 2150 });
+  });
+
+  it('adds a row on the same day with Enter, and saves what is typed into it', async () => {
+    setup([], [], true);
+    fireEvent.keyDown(screen.getByLabelText('Mortgage name'), { key: 'Enter' });
+    const rows = screen.getAllByLabelText('New bill on the 1st');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveFocus();
+    fireEvent.change(rows[0] as HTMLElement, { target: { value: 'Parkway' } });
+    fireEvent.change(screen.getByLabelText('New bill on the 1st amount'), { target: { value: '80' } });
+    fireEvent.keyDown(screen.getByLabelText('New bill on the 1st amount'), { key: 'Enter' });
+    await waitFor(() =>
+      expect(addCalendarItem).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Parkway', amount: 80, date: '2026-10-01', type: 'expense' })
+      )
+    );
+  });
+
+  it('adds a bill on an empty day by typing into its row', async () => {
+    setup([], [], true);
+    fireEvent.change(screen.getByLabelText('New bill on the 13th'), { target: { value: 'Spotify' } });
+    fireEvent.change(screen.getByLabelText('New bill on the 13th amount'), { target: { value: '22' } });
+    fireEvent.keyDown(screen.getByLabelText('New bill on the 13th amount'), { key: 'Enter' });
+    await waitFor(() =>
+      expect(addCalendarItem).toHaveBeenCalledWith(expect.objectContaining({ title: 'Spotify', amount: 22, date: '2026-10-13' }))
+    );
+  });
+});
+
 describe('MoneyCell', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('shows grouped cents at rest and puts the old value back on Escape', () => {
-    setup();
+  it('shows dollars at rest and puts the old value back on Escape', () => {
+    setup([], [], true);
     const cell = screen.getByLabelText('Mortgage amount');
-    expect(cell).toHaveValue('2,166.00');
+    expect(cell).toHaveValue('$2,166.00');
     fireEvent.focus(cell);
     expect(cell).toHaveValue('2166');
     fireEvent.change(cell, { target: { value: '9999' } });
     fireEvent.keyDown(cell, { key: 'Escape' });
     fireEvent.blur(cell);
-    expect(cell).toHaveValue('2,166.00');
+    expect(cell).toHaveValue('$2,166.00');
     expect(setOccurrenceAmount).not.toHaveBeenCalled();
     expect(screen.queryByText('Just October')).not.toBeInTheDocument();
   });

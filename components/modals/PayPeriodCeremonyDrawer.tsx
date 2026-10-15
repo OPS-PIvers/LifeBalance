@@ -13,6 +13,8 @@ import { cn } from '@/utils/cn';
 import { roundMoney } from '@/utils/money';
 import { projectedAvailable, resolvePlanDrafts } from '@/utils/bucketPlanPreview';
 import { parseBalanceDraft, suggestBucketLimit, type PayPeriodCeremonyEvent } from '@/utils/payPeriodCeremony';
+import { fundedHalfId } from '@/utils/payPeriodHalves';
+import { seedHalfPlan } from '@/utils/halfPlan';
 
 /**
  * Pay-period reset ceremony — opened (device-locally, for the approving
@@ -67,12 +69,19 @@ const PayPeriodCeremonyDrawer: React.FC<PayPeriodCeremonyDrawerProps> = ({ event
   // (net worth, Safe-to-Spend) — same filter as BudgetAccounts.
   const activeAccounts = useMemo(() => accounts.filter(a => !a.archived), [accounts]);
 
-  // Draft limits keyed by bucket id, prefilled with the carried-over limits.
-  // Lazy init is enough: the parent keys this component on the event's period
-  // so a later roll remounts with fresh drafts.
-  const [drafts, setDrafts] = useState<Record<string, string>>(() =>
-    Object.fromEntries(buckets.map(b => [b.id, String(b.limit)])),
-  );
+  // Draft limits keyed by bucket id, prefilled with the carried-over limits —
+  // or, for a household that plans on the Sheet, with what the half this
+  // paycheck funds planned for each budget: on payday that plan becomes the
+  // limit, written by Save with the balances. Lazy init is enough: the parent
+  // keys this component on the event's period so a later roll remounts with
+  // fresh drafts.
+  const [drafts, setDrafts] = useState<Record<string, string>>(() => {
+    const halfId = fundedHalfId(event.newPeriodId);
+    const planned = plansOnSheet
+      ? (halfPlans.find(p => p.id === halfId) ?? seedHalfPlan(halfId, halfPlans, () => 'seed')).budgets
+      : {};
+    return Object.fromEntries(buckets.map(b => [b.id, String(planned[b.id] ?? b.limit)]));
+  });
   // Balance drafts keyed by account id, prefilled with the current balances
   // (credit debt is stored positive, same convention as the account cards —
   // drafts pass the stored value straight through, no sign flipping).
@@ -284,7 +293,11 @@ const PayPeriodCeremonyDrawer: React.FC<PayPeriodCeremonyDrawerProps> = ({ event
         )}
 
         {plansOnSheet ? (
-          <AssignHalfCard date={event.newPeriodId} onOpen={onClose} />
+          <AssignHalfCard
+            date={event.newPeriodId}
+            // Leaving for the Sheet still saves this half's budgets as limits.
+            onOpen={() => (changeCount > 0 && !hasAnyInvalid ? void handleSave() : onClose())}
+          />
         ) : (
         <BucketPlanEditor
           buckets={buckets}

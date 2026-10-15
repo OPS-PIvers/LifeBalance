@@ -17,7 +17,9 @@ identity that shipped in the 2026 visual refresh. **Tokens are defined in
    display voice. Money is serious; the type treats it that way.
 2. **Mobile-only.** This is a phone PWA. Dialogs are **bottom sheets**, touch
    targets are ≥44px, layouts are single-column. There is no desktop layout to
-   design for.
+   design for — with ONE exception: Money → Sheet, which at ≥1024px shows a
+   month as a typed-into spreadsheet (two halves side by side), because it
+   replaces the household's Google Sheet.
 3. **Hierarchy from type + spacing + two accents — never from blur or shadow.**
    Default surfaces are flat with a hairline border. Elevation is rare.
 4. **Two-pole accent system.** Deep **evergreen** carries money/primary actions;

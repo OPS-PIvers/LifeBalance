@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import PayPeriodCeremonyDrawer from './PayPeriodCeremonyDrawer';
 import { type Account, type BudgetBucket, type BucketPeriodSnapshot, type CalendarItem, type HalfPlan } from '@/types/schema';
@@ -297,5 +297,19 @@ describe('PayPeriodCeremonyDrawer — fit meter', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Give every dollar a job' }));
     expect(onClose).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('/budget', { state: { tab: 'sheet' } });
+  });
+
+  it("makes each budget's planned amount for the half its limit on payday", async () => {
+    // Paid Jul 31, this paycheck funds Aug 1–15.
+    setFinance({ halfPlans: [{ id: '2026-08-01', budgets: { b1: 450 }, allocations: [] }] });
+    const onClose = vi.fn();
+    render(<PayPeriodCeremonyDrawer event={event} isOpen onClose={onClose} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Give every dollar a job' }));
+    expect(saveCeremonyChanges).toHaveBeenCalledWith({
+      bucketLimits: [{ id: 'b1', limit: 450 }],
+      accountBalances: [],
+    });
+    expect(mockNavigate).toHaveBeenCalledWith('/budget', { state: { tab: 'sheet' } });
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 });
