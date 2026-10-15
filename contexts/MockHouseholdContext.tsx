@@ -68,6 +68,7 @@ import { selectHabitsToFire } from '@/utils/transactionHabitFiring';
 import { MAX_COMMENT_LENGTH } from '@/contexts/household/mutations/commentMutations';
 import { buildMerchantRuleFields, type MerchantRuleDraft } from '@/contexts/household/mutations/merchantRuleMutations';
 import { roundMoney } from '@/utils/money';
+import { allocationTransfer } from '@/utils/halfPlan';
 import { splitParticipantKey } from '@/utils/settlement';
 import { trashDocId, type TrashDomain, type TrashedItem } from '@/utils/trash';
 import { computeNetWorth } from '@/utils/netWorth';
@@ -1552,6 +1553,24 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         .sort((a, b) => b.id.localeCompare(a.id))
     );
   }, []);
+
+  // Mirrors makeSetAllocationDone: the check mark and the balances move together.
+  const setAllocationDone = useCallback(async (plan: HalfPlan, allocationId: string, done: boolean) => {
+    const allocation = plan.allocations.find(a => a.id === allocationId);
+    if (!allocation || !!allocation.done === done) return;
+    const transfer = allocationTransfer(allocation, accounts, defaultAccountId, done);
+    if (transfer.kind === 'missing') {
+      toast.error(transfer.reason);
+      return;
+    }
+    if (transfer.kind === 'move') {
+      setAccounts(prev => prev.map(a => {
+        const delta = transfer.deltas[a.id];
+        return delta === undefined ? a : { ...a, balance: roundMoney(a.balance + delta) };
+      }));
+    }
+    await saveHalfPlan({ ...plan, allocations: plan.allocations.map(a => (a.id === allocationId ? { ...a, done } : a)) });
+  }, [accounts, defaultAccountId, saveHalfPlan]);
 
   const deleteHousehold = useCallback(async () => {
     toast.success('Mock: Household deleted');
@@ -4500,6 +4519,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     deleteSavingsGoal,
     contributeToGoal,
     saveHalfPlan,
+    setAllocationDone,
     addBucket,
     updateBucket,
     deleteBucket,

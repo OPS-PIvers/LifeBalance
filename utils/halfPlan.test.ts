@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { parseISO } from 'date-fns';
-import { CalendarItem, HalfPlan } from '@/types/schema';
+import { Account, CalendarItem, HalfAllocation, HalfPlan } from '@/types/schema';
 import { expandCalendarItems } from '@/utils/calendarRecurrence';
 import { buildPayHalves, findHalfContaining, nominalPaydayOf } from '@/utils/payPeriodHalves';
-import { isFullyAssigned, seedHalfPlan, summarizeHalf } from '@/utils/halfPlan';
+import { allocationTransfer, isFullyAssigned, seedHalfPlan, summarizeHalf } from '@/utils/halfPlan';
 
 // The household's real October 2026 sheet: two paychecks on the 1st and 16th
 // (paid the Friday before a weekend), and their dated bills.
@@ -180,5 +180,38 @@ describe('seedHalfPlan', () => {
 
   it('starts empty when nothing earlier exists', () => {
     expect(seedHalfPlan('2026-09-16', [october1], newId)).toEqual({ id: '2026-09-16', budgets: {}, allocations: [] });
+  });
+});
+
+describe('allocationTransfer', () => {
+  const acct = (id: string, type: Account['type'], extra: Partial<Account> = {}): Account =>
+    ({ id, name: id, type, balance: 0, lastUpdated: '', ...extra });
+  const accounts = [acct('chk', 'checking'), acct('sav', 'savings'), acct('amex', 'credit')];
+  const line = (kind: HalfAllocation['kind'], accountId?: string): HalfAllocation =>
+    ({ id: 'a', kind, label: kind, amount: 900, accountId });
+
+  it('moves checking to savings, and back when unchecked', () => {
+    expect(allocationTransfer(line('to-savings'), accounts, undefined, true)).toEqual({ kind: 'move', deltas: { chk: -900, sav: 900 } });
+    expect(allocationTransfer(line('to-savings'), accounts, undefined, false)).toEqual({ kind: 'move', deltas: { chk: 900, sav: -900 } });
+  });
+
+  it('covers a short half from savings', () => {
+    expect(allocationTransfer(line('from-savings'), accounts, undefined, true)).toEqual({ kind: 'move', deltas: { sav: -900, chk: 900 } });
+  });
+
+  it('pays extra on a card: checking and the card debt both drop', () => {
+    expect(allocationTransfer(line('card-extra', 'amex'), accounts, undefined, true)).toEqual({ kind: 'move', deltas: { chk: -900, amex: -900 } });
+    expect(allocationTransfer(line('card-extra'), accounts, undefined, true)).toMatchObject({ kind: 'missing' });
+  });
+
+  it('uses the default checking account and skips archived ones', () => {
+    const more = [acct('old', 'checking', { archived: true, order: 0 }), acct('chk2', 'checking', { order: 1 }), acct('chk', 'checking', { order: 2 }), ...accounts.slice(1)];
+    expect(allocationTransfer(line('to-savings'), more, 'chk', true)).toMatchObject({ deltas: { chk: -900 } });
+    expect(allocationTransfer(line('to-savings'), more, undefined, true)).toMatchObject({ deltas: { chk2: -900 } });
+  });
+
+  it('moves nothing for an "other" line, and says what is missing', () => {
+    expect(allocationTransfer(line('other'), accounts, undefined, true)).toEqual({ kind: 'none' });
+    expect(allocationTransfer(line('to-savings'), [acct('chk', 'checking')], undefined, true)).toEqual({ kind: 'missing', reason: 'Add a savings account first' });
   });
 });

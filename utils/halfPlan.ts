@@ -1,5 +1,5 @@
 import { format, parseISO, subMonths } from 'date-fns';
-import { CalendarItem, HalfAllocation, HalfPlan } from '@/types/schema';
+import { Account, CalendarItem, HalfAllocation, HalfPlan } from '@/types/schema';
 import { sumMoney } from '@/utils/money';
 
 /**
@@ -96,4 +96,52 @@ export function seedHalfPlan(halfId: string, plans: HalfPlan[], newId: () => str
     .filter(a => a.kind !== 'from-savings')
     .map(({ done: _done, ...a }) => ({ ...a, id: newId() }));
   return { id: halfId, budgets: { ...source.budgets }, allocations };
+}
+
+/** What checking off an allocation does to account balances. */
+export type AllocationTransfer =
+  | { kind: 'move'; deltas: Record<string, number> }
+  /** Nothing to move ("other" lines just get checked off). */
+  | { kind: 'none' }
+  /** A side of the transfer has no account to land in. */
+  | { kind: 'missing'; reason: string };
+
+const activeOfType = (accounts: Account[], type: Account['type']) =>
+  accounts.filter(a => a.type === type && !a.archived).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+/**
+ * The balance changes for marking an allocation done (`done: true`) or undone.
+ * Checking is the household's default account when that is a checking
+ * account, else its first checking account; savings is the line's own
+ * account, else the first savings account; a card payment needs its card.
+ *
+ *   to-savings    checking −x, savings +x
+ *   from-savings  savings −x, checking +x
+ *   card-extra    checking −x, card debt −x
+ *
+ * Undoing applies the exact opposite, so a mis-tap can be taken back.
+ */
+export function allocationTransfer(
+  allocation: HalfAllocation,
+  accounts: Account[],
+  defaultAccountId: string | undefined,
+  done: boolean
+): AllocationTransfer {
+  if (allocation.kind === 'other' || allocation.amount === 0) return { kind: 'none' };
+  const preferred = accounts.find(a => a.id === defaultAccountId && a.type === 'checking' && !a.archived);
+  const checking = preferred ?? activeOfType(accounts, 'checking')[0];
+  if (!checking) return { kind: 'missing', reason: 'Add a checking account first' };
+
+  const own = accounts.find(a => a.id === allocation.accountId && !a.archived);
+  const x = done ? allocation.amount : -allocation.amount;
+
+  if (allocation.kind === 'card-extra') {
+    if (own?.type !== 'credit') return { kind: 'missing', reason: 'Pick which card this payment goes to' };
+    return { kind: 'move', deltas: { [checking.id]: -x, [own.id]: -x } };
+  }
+  const savings = own?.type === 'savings' ? own : activeOfType(accounts, 'savings')[0];
+  if (!savings) return { kind: 'missing', reason: 'Add a savings account first' };
+  return allocation.kind === 'to-savings'
+    ? { kind: 'move', deltas: { [checking.id]: -x, [savings.id]: x } }
+    : { kind: 'move', deltas: { [savings.id]: -x, [checking.id]: x } };
 }

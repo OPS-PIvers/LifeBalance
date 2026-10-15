@@ -353,6 +353,9 @@ export interface HouseholdContextType {
   /** Writes a half's whole plan (replacing what was stored). Silent on
    *  success so an editing surface can save often; toasts on failure. */
   saveHalfPlan: (plan: HalfPlan) => Promise<void>;
+  /** Checks an allocation line off (or back on) and moves the money it names
+   *  between account balances in the same batch (`allocationTransfer`). */
+  setAllocationDone: (plan: HalfPlan, allocationId: string, done: boolean) => Promise<void>;
 
   // Bucket Actions
   addBucket: (bucket: BudgetBucket) => Promise<void>;
@@ -870,7 +873,7 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'addAccount' | 'updateAccountBalance' | 'setAccountGoal' | 'setAccountCardLast4' | 'setAccountCardDetails' | 'deleteAccount'
   | 'archiveAccount' | 'unarchiveAccount'
   | 'updateAccountOrder' | 'reorderAccounts' | 'defaultAccountId' | 'setDefaultAccountId'
-  | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal' | 'saveHalfPlan'
+  | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal' | 'saveHalfPlan' | 'setAllocationDone'
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'setBucketLimits' | 'saveCeremonyChanges' | 'reallocateBucket'
   | 'addCalendarItem' | 'updateCalendarItem' | 'setOccurrenceAmount' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
   | 'linkBankTransactionToBill' | 'settleBillWithTransaction' | 'forgetBillDescriptorAlias' | 'acknowledgeBillPriceChange'
