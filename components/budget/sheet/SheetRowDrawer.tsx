@@ -83,6 +83,8 @@ const Body: React.FC<Required<Pick<SheetRowDrawerProps, 'onClose' | 'api' | 'pla
   /** A new name/date saved with a repeating row's new amount, written once the
    *  months are chosen. */
   const [held, setHeld] = useState<{ title?: string; date?: string }>({});
+  /** A new bill being written: a second tap of Add must not add it twice. */
+  const [saving, setSaving] = useState(false);
   const asking = item && api.pending?.item.id === item.id;
   const month = date ? format(parseISO(date), 'MMMM') : '';
 
@@ -109,15 +111,16 @@ const Body: React.FC<Required<Pick<SheetRowDrawerProps, 'onClose' | 'api' | 'pla
     const value = parseAmount(amount);
     const ready = title.trim() !== '' && value !== undefined && value > 0 && date !== '';
     const add = () => {
-      if (!ready || value === undefined) return;
-      void api.addBill(date, title, value).then(onClose, () => undefined);
+      if (!ready || value === undefined || saving) return;
+      setSaving(true);
+      void api.addBill(date, title, value).then(onClose, () => setSaving(false));
     };
     return (
       <form className="space-y-3 pb-2" onSubmit={e => { e.preventDefault(); add(); }}>
         <Input label="Name" value={title} autoFocus onChange={e => setTitle(e.target.value)} />
         <Input label="Amount" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} />
         <Input label="Date" type="date" value={date} min={range.start} max={range.end} onChange={e => setDate(e.target.value)} />
-        <Button type="submit" className="w-full" disabled={!ready}>Add</Button>
+        <Button type="submit" className="w-full" disabled={!ready || saving}>Add</Button>
       </form>
     );
   }

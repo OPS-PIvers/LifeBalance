@@ -90,13 +90,22 @@ const NewBillRow: React.FC<{
 
   const value = roundMoney(Math.abs(Number(amount.replace(/[$,\s]/g, ''))));
   const ready = title.trim() !== '' && amount.trim() !== '' && Number.isFinite(value) && value > 0;
+  // Enter and then leaving the row both commit; only the first one writes.
+  const saving = useRef(false);
   const commit = () => {
-    if (!ready) return;
-    void api.addBill(date, title, value).then(() => {
-      setTitle('');
-      setAmount('');
-      onDone?.();
-    }, () => undefined);
+    if (!ready || saving.current) return;
+    saving.current = true;
+    void api.addBill(date, title, value).then(
+      () => {
+        saving.current = false;
+        setTitle('');
+        setAmount('');
+        onDone?.();
+      },
+      () => {
+        saving.current = false;
+      }
+    );
   };
 
   const input =

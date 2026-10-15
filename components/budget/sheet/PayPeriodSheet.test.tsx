@@ -288,6 +288,19 @@ describe('PayPeriodSheet on a wide screen', () => {
     );
   });
 
+  it('adds a typed bill once, even when Enter is followed by leaving the row', async () => {
+    let finish: () => void = () => undefined;
+    addCalendarItem.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    setup([], [], true);
+    fireEvent.change(screen.getByLabelText('New bill on the 12th'), { target: { value: 'Gift' } });
+    const amount = screen.getByLabelText('New bill on the 12th amount');
+    fireEvent.change(amount, { target: { value: '40' } });
+    fireEvent.keyDown(amount, { key: 'Enter' });
+    fireEvent.focusOut(amount);
+    finish();
+    await waitFor(() => expect(addCalendarItem).toHaveBeenCalledTimes(1));
+  });
+
   it('adds a bill on an empty day by typing into its row', async () => {
     setup([], [], true);
     fireEvent.change(screen.getByLabelText('New bill on the 13th'), { target: { value: 'Spotify' } });
