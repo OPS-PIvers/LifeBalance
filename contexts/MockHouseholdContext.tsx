@@ -13,6 +13,7 @@ import {
   semiMonthlyDaysFor,
   withAmountFrom,
   seriesAmountOn,
+  occurrenceAmount,
 } from '@/utils/calendarRecurrence';
 import { BUDGETED_IN_CALENDAR } from '@/utils/categories';
 import { hashKidPin } from '@/utils/kidPin';
@@ -3422,7 +3423,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       if (!template) return prev;
       let next = changes.title ? prev.map(i => (i.id === template.id ? { ...i, title: changes.title ?? i.title } : i)) : prev;
       if (changes.date && changes.date !== parsed.date) {
-        const amount = seriesAmountOn(template, parsed.date);
+        // The occurrence's own amount: a "Just this month" override moves with it.
+        const amount = occurrenceAmount(next, template, parsed.date);
         next = [
           ...next,
           { id: generateId(), title: template.title, amount, date: parsed.date, type: template.type, isPaid: false, isRecurring: false, isDeleted: true, parentRecurringId: template.id },
