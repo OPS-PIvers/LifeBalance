@@ -11,7 +11,6 @@ import SettleUpView from '@/components/transactions/SettleUpView';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { TabSubViewMenu } from '@/components/ui/TabSubViewMenu';
 import { tabValueAtPoint } from '@/components/ui/tabValueAtPoint';
-import { SubViewHint } from '@/components/ui/SubViewHint';
 import PageHeader from '@/components/ui/PageHeader';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Skeleton, SkeletonText } from '@/components/ui/Skeleton';
@@ -112,7 +111,6 @@ const Budget: React.FC = () => {
   // Guarded lookup: a group can vanish (member hides its last leaf) while its
   // menu is open, so the menu renders only while its group still exists.
   const openMenuGroup = openMenu ? groupOf(openMenu) : undefined;
-  const hasMultiViewGroup = nav.groups.some((g) => g.leaves.length > 1);
   /**
    * COLLAPSE RULE (2F.1): a group with exactly one visible leaf navigates
    * straight there — no caret, no menu. Only a group that still pairs two or
@@ -305,16 +303,6 @@ const Budget: React.FC = () => {
         </div>
 
         <div className="px-4 pt-4">
-          {/* One-time coach hint for the tab-popover nav — first visit only;
-              opening any tab menu, the ×, or navigating away latches it off
-              for good (shared with the Habits page). Lives in the scrolling
-              content column (not the sticky strip) so its dismissal never
-              resizes the pinned strip. Suppressed once every remaining group
-              is single-view: there is no menu left to coach about. */}
-          {hasMultiViewGroup && (
-            <SubViewHint menuOpened={openMenu !== null} className="mb-6" />
-          )}
-
           {/* View container. No in-panel view chooser: the sub-view lives in
               the tab itself (tap the tab → TabSubViewMenu popover), so each
               panel renders its current segment directly. */}

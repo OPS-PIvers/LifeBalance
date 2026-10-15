@@ -15,7 +15,6 @@ import MemberAvatar from '@/components/ui/MemberAvatar';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { TabSubViewMenu } from '@/components/ui/TabSubViewMenu';
 import { tabValueAtPoint } from '@/components/ui/tabValueAtPoint';
-import { SubViewHint } from '@/components/ui/SubViewHint';
 import HabitCreatorWizard from '@/components/modals/HabitCreatorWizard';
 import HabitFormModal from '@/components/modals/HabitFormModal';
 import SmartHabitAdjustModal from '@/components/modals/SmartHabitAdjustModal';
@@ -296,7 +295,6 @@ const Habits: React.FC = () => {
   // Guarded lookup: a group can vanish (member hides its last leaf) while its
   // menu is open, so the menu renders only while its group still exists.
   const openMenuGroup = openMenu ? groupOf(openMenu) : undefined;
-  const hasMultiViewGroup = nav.groups.some((g) => g.leaves.length > 1);
   /**
    * COLLAPSE RULE (2F.1): a group with exactly one visible leaf navigates
    * straight there — no caret, no menu. Only a group that still pairs two or
@@ -684,16 +682,6 @@ const Habits: React.FC = () => {
               )}
             </div>
           </div>
-        )}
-        {/* One-time coach hint for the tab-popover nav — first visit only;
-            opening any tab menu, the ×, or navigating away latches it off for
-            good (shared with the Money page). Sibling of the tab-bar wrapper,
-            not a child: inside the (now sticky) strip its dismissal would
-            resize the pinned strip; out here it scrolls with the content and
-            only its own slot collapses. Suppressed once every remaining group
-            is single-view: there is no menu left to coach about. */}
-        {!nav.soleLeaf && hasMultiViewGroup && (
-          <SubViewHint menuOpened={openMenu !== null} className="mx-4 mt-4" />
         )}
 
         {/* Main Content */}
