@@ -10,6 +10,7 @@ import {
   Transaction,
 } from '@/types/schema';
 import { sumMoney } from '@/utils/money';
+import { fundedHalfId, type PayHalf } from '@/utils/payPeriodHalves';
 
 /**
  * The every-dollar-gets-a-job math for one half (one pay period):
@@ -38,25 +39,28 @@ export interface HalfSummary {
 const inRange = (date: string, start: string, end: string) => date >= start && date <= end;
 
 /**
- * @param range The half's first and last day (inclusive).
- * @param expanded Expanded calendar items covering the range: occurrences plus
- *   paid instance docs. A paid item counts at what was actually paid (its
+ * @param half The half (its first and last day, inclusive). Bills count by
+ *   due date inside it; income counts toward the half it FUNDS
+ *   (`fundedHalfId`), so the paycheck that lands Sep 27 pays for Oct 1–15.
+ * @param expanded Expanded calendar items covering the half, plus about a
+ *   week either side (for the paychecks that fund it): occurrences plus paid
+ *   instance docs. A paid item counts at what was actually paid (its
  *   stored amount); an unpaid one at its planned amount.
  * @param plan The saved plan for the half, if any.
  * @param bucketIds Buckets that still exist; planned amounts for deleted
  *   buckets are ignored rather than silently counted.
  */
 export function summarizeHalf(
-  range: { start: string; end: string },
+  half: PayHalf,
   expanded: CalendarItem[],
   plan: HalfPlan | undefined,
   bucketIds: ReadonlySet<string>
 ): HalfSummary {
-  const inHalf = expanded
-    .filter(i => !i.isDeleted && inRange(i.date, range.start, range.end))
+  const live = expanded
+    .filter(i => !i.isDeleted)
     .sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title));
-  const paychecks = inHalf.filter(i => i.type === 'income');
-  const bills = inHalf.filter(i => i.type === 'expense');
+  const paychecks = live.filter(i => i.type === 'income' && fundedHalfId(i.date) === half.id);
+  const bills = live.filter(i => i.type === 'expense' && inRange(i.date, half.start, half.end));
 
   const paycheckTotal = sumMoney(paychecks.map(i => i.amount));
   const billTotal = sumMoney(bills.map(i => i.amount));

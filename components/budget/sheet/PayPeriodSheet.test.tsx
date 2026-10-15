@@ -34,7 +34,7 @@ const paycheck: CalendarItem = {
   isPaid: false,
   isRecurring: true,
   frequency: 'semi-monthly',
-  semiMonthlyDays: [1, 16],
+  semiMonthlyDays: [15, 31],
   weekendShift: 'before',
   earnerId: 'jen',
 };
@@ -95,13 +95,18 @@ describe('PayPeriodSheet', () => {
     expect(screen.getByText(/Safe-to-Spend right now/)).toBeInTheDocument();
   });
 
-  it('steps to the next half, which starts the Friday before a weekend payday', () => {
+  it('steps through calendar halves, each with the paycheck that funds it', () => {
     setup();
+    // Paid Wed Sep 30, that paycheck funds Oct 1–15.
+    expect(screen.getByText('Wed 30')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('Next half'));
-    expect(screen.getByRole('heading', { name: 'Oct 16 – 29' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Oct 16 – 31' })).toBeInTheDocument();
+    expect(screen.getByText('Thu 15')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('Next half'));
-    expect(screen.getByRole('heading', { name: 'Oct 30 – Nov 15' })).toBeInTheDocument();
-    expect(screen.getByText(/November · 1st pay period/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Nov 1 – 15' })).toBeInTheDocument();
+    expect(screen.getByText(/November · 1st half/)).toBeInTheDocument();
+    // Sat Oct 31 is paid Fri Oct 30, and still funds November's first half.
+    expect(screen.getByText('Fri 30')).toBeInTheDocument();
   });
 
   it('saves a planned budget typed into its cell', async () => {

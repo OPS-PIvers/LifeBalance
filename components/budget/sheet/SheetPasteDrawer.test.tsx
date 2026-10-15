@@ -4,7 +4,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { parseISO } from 'date-fns';
 import type { Account, BudgetBucket, CalendarItem } from '@/types/schema';
 import { expandCalendarItems } from '@/utils/calendarRecurrence';
-import { buildPayHalves } from '@/utils/payPeriodHalves';
+import { halvesBetween } from '@/utils/payPeriodHalves';
 import { OCTOBER_SHEET_PASTE } from '@/utils/sheetPaste.fixture';
 import SheetPasteDrawer from './SheetPasteDrawer';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
@@ -37,9 +37,7 @@ const mortgage: CalendarItem = {
 const comcast: CalendarItem = { ...mortgage, id: 'comcast', title: 'Comcast', amount: 150, date: '2026-01-17' };
 const items = [paycheck, paycheck2, mortgage, comcast];
 const expanded = expandCalendarItems(items, parseISO('2026-09-20'), parseISO('2026-11-20'));
-const halves = buildPayHalves(expanded, items).flatMap(h =>
-  h.end && h.id.startsWith('2026-10') ? [{ ...h, end: h.end }] : []
-);
+const halves = halvesBetween('2026-10', '2026-10');
 const buckets: BudgetBucket[] = [
   { id: 'gas', name: 'Gas', limit: 0, color: 'orange', isVariable: true, isCore: true },
   { id: 'groc', name: 'Groceries', limit: 0, color: 'green', isVariable: true, isCore: true },

@@ -114,9 +114,9 @@ const BudgetCalendar: React.FC = () => {
   const [accountId, setAccountId] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
   const [frequency, setFrequency] = useState<CalendarFrequency>('monthly');
-  // Twice-a-month pay days, e.g. 1 and 16 (the default when the frequency is
-  // switched to semi-monthly, see handleFrequencyChange).
-  const [semiDays, setSemiDays] = useState<[number, number]>([1, 16]);
+  // Twice-a-month pay days: the 15th & the last day by default (see
+  // handleFrequencyChange).
+  const [semiDays, setSemiDays] = useState<[number, number]>([15, 31]);
   const [weekendShift, setWeekendShift] = useState<WeekendShift | ''>('');
   const [earnerId, setEarnerId] = useState('');
   const [isSubscription, setIsSubscription] = useState(false);
@@ -283,7 +283,7 @@ const BudgetCalendar: React.FC = () => {
     setAccountId('');
     setIsRecurring(false);
     setFrequency('monthly');
-    setSemiDays([1, 16]);
+    setSemiDays([15, 31]);
     setWeekendShift('');
     setEarnerId('');
     setIsSubscription(false);
@@ -359,13 +359,14 @@ const BudgetCalendar: React.FC = () => {
     setIsAddModalOpen(true);
   };
 
-  // Switching to twice-a-month starts at the 1st & 16th, the common pay
-  // schedule. It is NOT derived from the item's date: a paycheck last dated
-  // the 29th would otherwise quietly become "the 14th & 29th".
+  // Switching to twice-a-month starts at the 15th & the last day (31 clamps
+  // to a short month's end), the household's pay schedule. It is NOT derived
+  // from the item's date: a paycheck last dated the 29th would otherwise
+  // quietly become "the 14th & 29th".
   const handleFrequencyChange = (value: string) => {
     if (!isCalendarFrequency(value)) return;
     if (value === 'semi-monthly' && frequency !== 'semi-monthly') {
-      setSemiDays([1, 16]);
+      setSemiDays([15, 31]);
     }
     // A weekend rule only applies to date-of-month schedules.
     if (value === 'weekly' || value === 'bi-weekly') setWeekendShift('');

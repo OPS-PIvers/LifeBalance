@@ -17,15 +17,13 @@ import {
   type OtherTarget,
 } from '@/utils/sheetPaste';
 
-type ClosedHalf = PayHalf & { end: string };
-
 interface SheetPasteDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   /** yyyy-MM: the month the pasted sheet is for. */
   month: string;
   /** That month's halves, in order: the 1st-half panel fills [0], the 2nd [1]. */
-  halves: ClosedHalf[];
+  halves: PayHalf[];
   /** Expanded calendar items covering the month (and a few days around it). */
   expanded: CalendarItem[];
 }

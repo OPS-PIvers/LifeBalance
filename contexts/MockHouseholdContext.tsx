@@ -154,8 +154,8 @@ const normalizeCategory = (value: string | undefined) => (value ?? '').trim().to
  *     evidence tier — `tx_water_bank` (descriptor) and `tx_electric_bank`
  *     (amount-only). Not seeded by default for the same reason as 'stub' (its
  *     `pending_review` row changes the Money nav link's accessible name).
- *   - 'pay-period-sheet': default seeds + two 1st & 16th paychecks (paid the
- *     Friday before a weekend) and a month of dated bills, so Money → Sheet
+ *   - 'pay-period-sheet': default seeds + two paychecks paid the 15th and the
+ *     last day (the Friday before a weekend) and a month of dated bills, so Money → Sheet
  *     has pay-period halves to show.
  * Absent/unknown values leave the default seeds untouched.
  */
@@ -487,8 +487,8 @@ const SETTLED_ELECTRIC = settledBillPair(
   'electric', 'Xcel Energy (Electric)', 'NSPM UTILITY 8823', SETTLED_ELECTRIC_AMOUNT,
 );
 
-// 'pay-period-sheet' seed: two earners paid on the 1st and 16th (the Friday
-// before when that's a weekend) plus monthly bills on their days.
+// 'pay-period-sheet' seed: two earners paid the 15th and the last day (the
+// Friday before when that's a weekend) plus monthly bills on their days.
 const PAY_PERIOD_SHEET_CALENDAR_ITEMS: CalendarItem[] = [
   ...(['Paul', 'Jen'] as const).map((earner): CalendarItem => ({
     id: `seed-pay-${earner.toLowerCase()}`,
@@ -499,7 +499,7 @@ const PAY_PERIOD_SHEET_CALENDAR_ITEMS: CalendarItem[] = [
     isPaid: false,
     isRecurring: true,
     frequency: 'semi-monthly',
-    semiMonthlyDays: [1, 16],
+    semiMonthlyDays: [15, 31],
     weekendShift: 'before',
   })),
   ...([
