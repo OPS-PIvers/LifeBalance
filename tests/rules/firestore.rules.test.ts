@@ -2385,6 +2385,22 @@ describe('calendar items (twice-a-month schedule, weekend rule, earner)', () => 
     await assertFails(updateDoc(ref, { semiMonthlyDays: ['1', '16'] }));
   });
 
+  it('allows amount history and a one-month override, bounded', async () => {
+    const ref = doc(dbFor(BOB), 'households', H1, 'calendarItems', PAY);
+    await assertSucceeds(updateDoc(ref, { earlierAmounts: [{ before: '2026-11-01', amount: 2800 }] }));
+    await assertSucceeds(updateDoc(ref, { earlierAmounts: deleteField() }));
+    await assertFails(
+      updateDoc(ref, { earlierAmounts: Array.from({ length: 25 }, (_, i) => ({ before: `2026-01-${i + 1}`, amount: 1 })) }),
+    );
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', 'override-1'), {
+        title: 'Paycheck', amount: 2900, date: '2026-11-01', type: 'income', isPaid: false,
+        isRecurring: false, isOverride: true, parentRecurringId: PAY, createdBy: BOB,
+      }),
+    );
+    await assertFails(updateDoc(ref, { isOverride: 'yes' }));
+  });
+
   it('rejects an unknown weekend rule', async () => {
     await assertFails(
       updateDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', PAY), { weekendShift: 'nearest' }),

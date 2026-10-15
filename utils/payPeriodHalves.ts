@@ -75,3 +75,10 @@ export function buildPayHalves(expanded: CalendarItem[], rawItems: CalendarItem[
 export function findHalfContaining(halves: PayHalf[], date: string): PayHalf | undefined {
   return halves.find(h => h.start <= date && (h.end === null || date <= h.end));
 }
+
+/** A closed half's date span for headings, e.g. "Oct 1 – 15" or "Oct 30 – Nov 15". */
+export function halfTitle(half: { start: string; end: string }): string {
+  const start = parseISO(half.start);
+  const end = parseISO(half.end);
+  return `${format(start, 'MMM d')} – ${format(end, start.getMonth() === end.getMonth() ? 'd' : 'MMM d')}`;
+}

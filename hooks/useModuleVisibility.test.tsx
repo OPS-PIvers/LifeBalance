@@ -66,6 +66,7 @@ describe('useModuleVisibility — member layer', () => {
         'transactions',
         'trends',
         'calendar',
+        'sheet',
         'subscriptions',
         'buckets',
         'accounts',
@@ -141,7 +142,7 @@ describe('usePageNavigation — the collapse rule', () => {
 
   it('collapses the whole page when exactly one view is left', () => {
     setup(undefined, {
-      hiddenKeys: ['overview', 'transactions', 'trends', 'subscriptions', 'buckets', 'accounts'],
+      hiddenKeys: ['overview', 'transactions', 'trends', 'sheet', 'subscriptions', 'buckets', 'accounts'],
     });
     const { result } = renderHook(() => usePageNavigation('money'));
     expect(result.current.soleLeaf?.key).toBe('calendar');

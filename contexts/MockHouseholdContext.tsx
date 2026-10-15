@@ -6,7 +6,14 @@ import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseho
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { pastClosedWeeks } from '@/utils/recapWeek';
 import { shiftDay } from '@/utils/recapAssembly';
-import { rollRecurringAnchorForward, isRecurringId, parseRecurringId, semiMonthlyDaysFor } from '@/utils/calendarRecurrence';
+import {
+  rollRecurringAnchorForward,
+  isRecurringId,
+  parseRecurringId,
+  semiMonthlyDaysFor,
+  withAmountFrom,
+  seriesAmountOn,
+} from '@/utils/calendarRecurrence';
 import { BUDGETED_IN_CALENDAR } from '@/utils/categories';
 import { hashKidPin } from '@/utils/kidPin';
 import { computeTodoCompletionCredit, buildUncompleteCreditReversal } from '@/utils/todoPoints';
@@ -42,7 +49,7 @@ import { computeBackdatedHabitFire, computeHabitTriggerFire, computeHabitTrigger
 import { evaluateTodoSubtaskGate, TodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import { setSubtaskDone, subtaskProgress } from '@/utils/subtasks';
 import type { TodoSubtaskToggleResult, TodoCompletionOptions, TodoPromotionFields } from '@/contexts/household/mutations/todoMutations';
-import type { MergeLearnAlias } from '@/contexts/household/types';
+import type { CalendarUpdateOpts, MergeLearnAlias } from '@/contexts/household/types';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import { UNCATEGORIZED_HABIT_CATEGORY } from '@/utils/habitCategories';
 import { attributionString, type TriggerSource } from '@/utils/habitTriggers';
@@ -61,6 +68,7 @@ import { selectHabitsToFire } from '@/utils/transactionHabitFiring';
 import { MAX_COMMENT_LENGTH } from '@/contexts/household/mutations/commentMutations';
 import { buildMerchantRuleFields, type MerchantRuleDraft } from '@/contexts/household/mutations/merchantRuleMutations';
 import { roundMoney } from '@/utils/money';
+import { allocationTransfer } from '@/utils/halfPlan';
 import { splitParticipantKey } from '@/utils/settlement';
 import { trashDocId, type TrashDomain, type TrashedItem } from '@/utils/trash';
 import { computeNetWorth } from '@/utils/netWorth';
@@ -145,12 +153,15 @@ const normalizeCategory = (value: string | undefined) => (value ?? '').trim().to
  *     evidence tier — `tx_water_bank` (descriptor) and `tx_electric_bank`
  *     (amount-only). Not seeded by default for the same reason as 'stub' (its
  *     `pending_review` row changes the Money nav link's accessible name).
+ *   - 'pay-period-sheet': default seeds + two 1st & 16th paychecks (paid the
+ *     Friday before a weekend) and a month of dated bills, so Money → Sheet
+ *     has pay-period halves to show.
  * Absent/unknown values leave the default seeds untouched.
  */
-const readTestSeedVariant = (): 'fresh' | 'stub' | 'merchant-rules' | 'bill-merge' | null => {
+const readTestSeedVariant = (): 'fresh' | 'stub' | 'merchant-rules' | 'bill-merge' | 'pay-period-sheet' | null => {
   try {
     const v = window.sessionStorage.getItem('LIFEBALANCE_TEST_SEED');
-    return v === 'fresh' || v === 'stub' || v === 'merchant-rules' || v === 'bill-merge' ? v : null;
+    return v === 'fresh' || v === 'stub' || v === 'merchant-rules' || v === 'bill-merge' || v === 'pay-period-sheet' ? v : null;
   } catch {
     return null;
   }
@@ -474,6 +485,37 @@ const SETTLED_WATER = settledBillPair(
 const SETTLED_ELECTRIC = settledBillPair(
   'electric', 'Xcel Energy (Electric)', 'NSPM UTILITY 8823', SETTLED_ELECTRIC_AMOUNT,
 );
+
+// 'pay-period-sheet' seed: two earners paid on the 1st and 16th (the Friday
+// before when that's a weekend) plus monthly bills on their days.
+const PAY_PERIOD_SHEET_CALENDAR_ITEMS: CalendarItem[] = [
+  ...(['Paul', 'Jen'] as const).map((earner): CalendarItem => ({
+    id: `seed-pay-${earner.toLowerCase()}`,
+    title: `${earner} paycheck`,
+    amount: 2851.5,
+    date: '2026-01-01',
+    type: 'income',
+    isPaid: false,
+    isRecurring: true,
+    frequency: 'semi-monthly',
+    semiMonthlyDays: [1, 16],
+    weekendShift: 'before',
+  })),
+  ...([
+    [1, 'Mortgage', 2166], [1, 'Xcel', 133.53], [1, 'AT&T', 143.8], [3, 'Auto-Owners Life', 83],
+    [13, 'Spotify Premium', 22], [16, 'Heloc', 400], [16, 'Fidelity', 100], [16, 'Easton 529', 50],
+    [17, 'Comcast', 158], [18, 'American Express', 735], [23, 'Paul Hockey', 219], [28, 'Xcel', 98.68],
+  ] as const).map(([day, title, amount], i): CalendarItem => ({
+    id: `seed-bill-${i}`,
+    title,
+    amount,
+    date: `2026-01-${String(day).padStart(2, '0')}`,
+    type: 'expense',
+    isPaid: false,
+    isRecurring: true,
+    frequency: 'monthly',
+  })),
+];
 
 const BILL_MERGE_CALENDAR_ITEMS: CalendarItem[] = [
   {
@@ -920,7 +962,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // Empty by default (several specs count Action-Queue rows); the 'bill-merge'
   // variant is the one that seeds bills, so the 2H merge is walkable.
   const [calendarItems, setCalendarItems] = useState<CalendarItem[]>(
-    TEST_SEED_VARIANT === 'bill-merge' ? BILL_MERGE_CALENDAR_ITEMS : []
+    TEST_SEED_VARIANT === 'bill-merge'
+      ? BILL_MERGE_CALENDAR_ITEMS
+      : TEST_SEED_VARIANT === 'pay-period-sheet'
+        ? PAY_PERIOD_SHEET_CALENDAR_ITEMS
+        : []
   );
   const [challenges, setChallenges] = useState<Challenge[]>(isFresh ? [] : SEED_CHALLENGES);
   const [yearlyGoals] = useState<YearlyGoal[]>([]);
@@ -1545,6 +1591,24 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         .sort((a, b) => b.id.localeCompare(a.id))
     );
   }, []);
+
+  // Mirrors makeSetAllocationDone: the check mark and the balances move together.
+  const setAllocationDone = useCallback(async (plan: HalfPlan, allocationId: string, done: boolean) => {
+    const allocation = plan.allocations.find(a => a.id === allocationId);
+    if (!allocation || !!allocation.done === done) return;
+    const transfer = allocationTransfer(allocation, accounts, defaultAccountId, done);
+    if (transfer.kind === 'missing') {
+      toast.error(transfer.reason);
+      return;
+    }
+    if (transfer.kind === 'move') {
+      setAccounts(prev => prev.map(a => {
+        const delta = transfer.deltas[a.id];
+        return delta === undefined ? a : { ...a, balance: roundMoney(a.balance + delta) };
+      }));
+    }
+    await saveHalfPlan({ ...plan, allocations: plan.allocations.map(a => (a.id === allocationId ? { ...a, done } : a)) });
+  }, [accounts, defaultAccountId, saveHalfPlan]);
 
   const deleteHousehold = useCallback(async () => {
     toast.success('Mock: Household deleted');
@@ -3270,11 +3334,14 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Calendar item added');
   }, []);
 
-  const updateCalendarItem = useCallback(async (item: CalendarItem) => {
+  const updateCalendarItem = useCallback(async (edited: CalendarItem, opts?: CalendarUpdateOpts) => {
     // Mirror Firestore behavior: schedule edits on recurring templates are
     // forward-only (see makeUpdateCalendarItem in calendarMutations.ts).
     setCalendarItems(prev => prev.map(i => {
-      if (i.id !== item.id) return i;
+      if (i.id !== edited.id) return i;
+      const item = opts?.amountFrom && edited.isRecurring
+        ? { ...edited, ...withAmountFrom(i, opts.amountFrom, edited.amount) }
+        : edited;
       if (item.isRecurring && item.frequency &&
           (!i.isRecurring || i.date !== item.date || i.frequency !== item.frequency)) {
         const semiMonthlyDays = item.frequency === 'semi-monthly' ? semiMonthlyDaysFor(item) : undefined;
@@ -3290,6 +3357,32 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       return item;
     }));
     toast.success('Mock: Calendar item updated');
+  }, []);
+
+  // Mirrors makeSetOccurrenceAmount: a "Just this month" override doc.
+  const setOccurrenceAmount = useCallback(async (occurrenceId: string, amount: number) => {
+    const parsed = parseRecurringId(occurrenceId);
+    if (!parsed) return;
+    setCalendarItems(prev => {
+      const template = prev.find(i => i.id === parsed.templateId);
+      if (!template) return prev;
+      const others = prev.filter(
+        i => !(i.isOverride && i.parentRecurringId === template.id && i.date === parsed.date && !i.isPaid && !i.isDeleted)
+      );
+      if (amount === seriesAmountOn(template, parsed.date)) return others;
+      return [...others, {
+        id: generateId(),
+        title: template.title,
+        amount,
+        date: parsed.date,
+        type: template.type,
+        isPaid: false,
+        isRecurring: false,
+        isOverride: true,
+        parentRecurringId: template.id,
+      }];
+    });
+    toast.success('Mock: Changed for this month only');
   }, []);
 
   const deleteCalendarItem = useCallback(async (id: string) => {
@@ -4464,6 +4557,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     deleteSavingsGoal,
     contributeToGoal,
     saveHalfPlan,
+    setAllocationDone,
     addBucket,
     updateBucket,
     deleteBucket,
@@ -4487,6 +4581,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     deleteTransactionComment,
     addCalendarItem,
     updateCalendarItem,
+    setOccurrenceAmount,
     deleteCalendarItem,
     payCalendarItem: noOp,
     deferCalendarItem: noOp,

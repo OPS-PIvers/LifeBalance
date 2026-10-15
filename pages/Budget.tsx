@@ -1,6 +1,7 @@
 import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import BudgetCalendar from '@/components/budget/BudgetCalendar';
+import PayPeriodSheet from '@/components/budget/sheet/PayPeriodSheet';
 import SubscriptionsView from '@/components/budget/SubscriptionsView';
 import BudgetBuckets from '@/components/budget/BudgetBuckets';
 import BudgetAccounts from '@/components/budget/BudgetAccounts';
@@ -30,14 +31,14 @@ const BudgetTrends = React.lazy(loadBudgetTrends);
 // 2026-07 critique P2), two of which gather several views chosen from a popover
 // menu anchored under the tab itself (TabSubViewMenu): tapping a multi-view
 // tab opens its menu, picking an item navigates. ONE state value holds the
-// full location: the seven leaf view keys stay valid and select their group's
+// full location: the eight leaf view keys stay valid and select their group's
 // tab WITH the right segment, so every existing
 // `navigate('/budget', { state: { tab: 'trends' } })` deep-link keeps working
 // unchanged (deep-links never open the menu — it opens only from user taps).
 const MONEY_TABS = [
   'overview',
   // Budget group ('budget' = its default segment)
-  'budget', 'calendar', 'accounts', 'buckets', 'subscriptions',
+  'budget', 'calendar', 'sheet', 'accounts', 'buckets', 'subscriptions',
   // Activity group
   'activity', 'transactions', 'trends',
 ] as const;
@@ -211,6 +212,8 @@ const Budget: React.FC = () => {
         );
       case 'calendar':
         return <BudgetCalendar />;
+      case 'sheet':
+        return <PayPeriodSheet />;
       case 'subscriptions':
         return <SubscriptionsView />;
       case 'buckets':

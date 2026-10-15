@@ -42,10 +42,11 @@ const settings = (
 const ALL_KEYS: ModuleKey[] = ['habits', 'money', 'lists', 'todos', 'meals', 'shopping'];
 const PLAN_TABS: PlanTab[] = ['todos', 'meals', 'shopping'];
 
-/** Money's seven leaves in canonical registry order (Overview / Budget / Activity). */
+/** Money's eight leaves in canonical registry order (Overview / Budget / Activity). */
 const ALL_MONEY_LEAVES = [
   'overview',
   'calendar',
+  'sheet',
   'accounts',
   'buckets',
   'subscriptions',
@@ -261,7 +262,7 @@ describe('the unified key set', () => {
     expect(everythingHidden.has('settings')).toBe(false);
   });
 
-  it("covers Money's seven leaves and Habits' six", () => {
+  it("covers Money's eight leaves and Habits' six", () => {
     expect(getPageNavigation('money', null).leaves.map(l => l.key)).toEqual(ALL_MONEY_LEAVES);
     expect(getPageNavigation('habits', null).leaves.map(l => l.key)).toEqual([
       'track',
@@ -498,7 +499,7 @@ describe('resolveActiveLocation', () => {
     // …and entering the group lands on what's left of it.
     expect(resolveActiveLocation(nav, 'budget')).toEqual({
       group: 'budget',
-      leaf: 'accounts',
+      leaf: 'sheet',
     });
   });
 

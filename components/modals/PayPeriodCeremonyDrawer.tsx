@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { FIELD_ERROR } from '@/components/ui/fieldStyles';
 import BucketPlanEditor from '@/components/budget/BucketPlanEditor';
+import AssignHalfCard from '@/components/budget/sheet/AssignHalfCard';
 import { cn } from '@/utils/cn';
 import { roundMoney } from '@/utils/money';
 import { projectedAvailable, resolvePlanDrafts } from '@/utils/bucketPlanPreview';
@@ -36,6 +37,10 @@ import { parseBalanceDraft, suggestBucketLimit, type PayPeriodCeremonyEvent } fr
  *     doesn't fit, because at this exact moment the balances are half-entered
  *     and the projected cash is unsettled by design.
  *
+ * Once the household plans on the Sheet (any saved half plan), step 3 is
+ * "Assign this half" instead (`AssignHalfCard`): this half's Left to assign
+ * and the way into Money → Sheet.
+ *
  * `kind === 'first'` (period tracking just initialized) renders a trimmed
  * welcome variant: no recap, just the budget prompt.
  *
@@ -51,8 +56,11 @@ interface PayPeriodCeremonyDrawerProps {
 const fmtDay = (iso: string) => format(parseISO(iso), 'MMM d');
 
 const PayPeriodCeremonyDrawer: React.FC<PayPeriodCeremonyDrawerProps> = ({ event, isOpen, onClose }) => {
-  const { accounts, buckets, bucketHistory, bucketSpentMap, safeToSpend, saveCeremonyChanges } =
+  const { accounts, buckets, bucketHistory, bucketSpentMap, safeToSpend, saveCeremonyChanges, halfPlans } =
     useFinance();
+  // A household that plans its halves on the Sheet assigns this half there,
+  // instead of re-setting bucket limits here.
+  const plansOnSheet = halfPlans.length > 0;
   const fmt = useFormatCurrency();
 
   // Archived accounts are excluded everywhere active balances matter
@@ -275,6 +283,9 @@ const PayPeriodCeremonyDrawer: React.FC<PayPeriodCeremonyDrawerProps> = ({ event
           </Section>
         )}
 
+        {plansOnSheet ? (
+          <AssignHalfCard date={event.newPeriodId} onOpen={onClose} />
+        ) : (
         <BucketPlanEditor
           buckets={buckets}
           drafts={drafts}
@@ -293,6 +304,7 @@ const PayPeriodCeremonyDrawer: React.FC<PayPeriodCeremonyDrawerProps> = ({ event
           }}
           footnote="Suggestions average your spending over the last few periods. Dismissing this keeps last period's budgets unchanged."
         />
+        )}
       </div>
     </Drawer>
   );

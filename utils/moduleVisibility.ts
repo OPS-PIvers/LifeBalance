@@ -48,6 +48,7 @@ export type MoneyLeafKey =
   | 'transactions'
   | 'trends'
   | 'calendar'
+  | 'sheet'
   | 'subscriptions'
   | 'buckets'
   | 'accounts';
@@ -169,6 +170,7 @@ export const NAV_PAGES: readonly NavPageDef[] = [
         label: 'Budget',
         leaves: [
           { key: 'calendar', label: 'Calendar', module: 'money' },
+          { key: 'sheet', label: 'Sheet', module: 'money' },
           { key: 'accounts', label: 'Accounts', module: 'money' },
           { key: 'buckets', label: 'Buckets', module: 'money' },
           { key: 'subscriptions', label: 'Subscriptions', module: 'money' },

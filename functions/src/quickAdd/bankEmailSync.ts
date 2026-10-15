@@ -117,7 +117,7 @@ import {
   ruleCreateCategory,
   ruleExemptedCharge,
 } from "./merchantRuleEffects";
-import { readRecurrenceSchedule } from "../shared/recurrenceSchedule";
+import { readAmountHistory, readRecurrenceSchedule } from "../shared/recurrenceSchedule";
 
 const db = admin.firestore();
 
@@ -686,6 +686,7 @@ export const bankEmailSync = onRequest(
               ? data.frequency
               : undefined,
           ...readRecurrenceSchedule(data),
+          ...readAmountHistory(data),
           parentRecurringId:
             typeof data.parentRecurringId === "string" ? data.parentRecurringId : undefined,
           isDeleted: data.isDeleted === true,

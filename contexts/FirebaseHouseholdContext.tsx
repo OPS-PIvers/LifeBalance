@@ -123,10 +123,11 @@ import {
   makeLoadAllBucketHistory,
 } from '@/contexts/household/mutations/financeMutations';
 import { makeSavingsGoalMutations } from '@/contexts/household/mutations/savingsGoalMutations';
-import { makeHalfPlanMutations } from '@/contexts/household/mutations/halfPlanMutations';
+import { makeHalfPlanMutations, makeSetAllocationDone } from '@/contexts/household/mutations/halfPlanMutations';
 import {
   makeAddCalendarItem,
   makeUpdateCalendarItem,
+  makeSetOccurrenceAmount,
   makeCalendarDeleteMutations,
   makeDeleteCalendarItem,
   makePayCalendarItem,
@@ -234,6 +235,7 @@ import type {
   ListenerReadiness,
   MergeLearnAlias,
   MutationOpts,
+  CalendarUpdateOpts,
   HouseholdContextType,
   FinanceContextValue,
   GamificationContextValue,
@@ -1996,6 +1998,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeHalfPlanMutations({ db, householdId, user }).saveHalfPlan(plan);
   }, [householdId, user]);
 
+  const setAllocationDone = useCallback(async (plan: HalfPlan, allocationId: string, done: boolean) => {
+    await makeSetAllocationDone({ db, householdId, user, accounts, defaultAccountId }).setAllocationDone(plan, allocationId, done);
+  }, [householdId, user, accounts, defaultAccountId]);
+
   // --- ACTIONS: BUCKETS ---
   // (contexts/household/mutations/financeMutations.ts)
 
@@ -2056,9 +2062,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeAddCalendarItem({ db, householdId, user }).addCalendarItem(item);
   }, [householdId, user]);
 
-  const updateCalendarItem = useCallback(async (item: CalendarItem, opts?: MutationOpts) => {
+  const updateCalendarItem = useCallback(async (item: CalendarItem, opts?: CalendarUpdateOpts) => {
     await makeUpdateCalendarItem({ db, householdId, calendarItems }).updateCalendarItem(item, opts);
   }, [householdId, calendarItems]);
+
+  const setOccurrenceAmount = useCallback(async (occurrenceId: string, amount: number, opts?: MutationOpts) => {
+    await makeSetOccurrenceAmount({ db, householdId, user, calendarItems }).setOccurrenceAmount(occurrenceId, amount, opts);
+  }, [householdId, user, calendarItems]);
 
   const deleteRecurringInstance = useCallback(async (syntheticId: string, opts?: MutationOpts) => {
     await makeCalendarDeleteMutations({ db, householdId, user, calendarItems }).deleteRecurringInstance(syntheticId, opts);
@@ -2894,6 +2904,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     deleteSavingsGoal,
     contributeToGoal,
     saveHalfPlan,
+    setAllocationDone,
     addBucket,
     updateBucket,
     deleteBucket,
@@ -2903,6 +2914,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     reallocateBucket,
     addCalendarItem,
     updateCalendarItem,
+    setOccurrenceAmount,
     deleteCalendarItem,
     payCalendarItem,
     deferCalendarItem,
@@ -2930,9 +2942,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     isLoadingOlderBucketHistory, hasMoreBucketHistory, loadAllBucketHistory,
     addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, setAccountCardDetails, deleteAccount, archiveAccount, unarchiveAccount, updateAccountOrder, reorderAccounts,
     defaultAccountId, setDefaultAccountId,
-    addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal, saveHalfPlan,
+    addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal, saveHalfPlan, setAllocationDone,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, setBucketLimits, saveCeremonyChanges, reallocateBucket,
-    addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem, linkBankTransactionToBill, settleBillWithTransaction, forgetBillDescriptorAlias, acknowledgeBillPriceChange,
+    addCalendarItem, updateCalendarItem, setOccurrenceAmount, deleteCalendarItem, payCalendarItem, deferCalendarItem, linkBankTransactionToBill, settleBillWithTransaction, forgetBillDescriptorAlias, acknowledgeBillPriceChange,
     addTransaction, addTransactions, updateTransactionCategory, reverseTransactionApproval, updateTransaction, deleteTransaction, splitTransaction,
     setTransactionSplit, markSplitSettled,
     mergeTransactions, keepBothTransactions, getTransactionComments, addTransactionComment, deleteTransactionComment,

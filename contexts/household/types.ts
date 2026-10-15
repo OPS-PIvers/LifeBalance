@@ -55,6 +55,13 @@ export interface MutationOpts {
   silent?: boolean;
 }
 
+/** `updateCalendarItem` options. `amountFrom` (yyyy-MM-dd) makes an amount
+ *  change "This and future months": occurrences before that date keep what
+ *  they cost. Without it the amount edit applies to the whole series. */
+export interface CalendarUpdateOpts extends MutationOpts {
+  amountFrom?: string;
+}
+
 /**
  * A bank descriptor to LEARN onto a bill in the SAME batch as the merge that
  * proved it (`mergeTransactions`' optional third argument). Used by the
@@ -346,6 +353,9 @@ export interface HouseholdContextType {
   /** Writes a half's whole plan (replacing what was stored). Silent on
    *  success so an editing surface can save often; toasts on failure. */
   saveHalfPlan: (plan: HalfPlan) => Promise<void>;
+  /** Checks an allocation line off (or back on) and moves the money it names
+   *  between account balances in the same batch (`allocationTransfer`). */
+  setAllocationDone: (plan: HalfPlan, allocationId: string, done: boolean) => Promise<void>;
 
   // Bucket Actions
   addBucket: (bucket: BudgetBucket) => Promise<void>;
@@ -366,7 +376,10 @@ export interface HouseholdContextType {
 
   // Calendar Actions
   addCalendarItem: (item: CalendarItem) => Promise<void>;
-  updateCalendarItem: (item: CalendarItem, opts?: MutationOpts) => Promise<void>;
+  updateCalendarItem: (item: CalendarItem, opts?: CalendarUpdateOpts) => Promise<void>;
+  /** "Just this month": change one recurring occurrence's amount (synthetic
+   *  `templateId_instance_yyyy-MM-dd` id) without touching the series. */
+  setOccurrenceAmount: (occurrenceId: string, amount: number, opts?: MutationOpts) => Promise<void>;
   deleteCalendarItem: (id: string, opts?: MutationOpts) => Promise<void>;
   /** Mark a calendar item paid/received. Optional `actualAmount` records what
    *  was really paid (variable bills) — it drives the balance delta and the
@@ -860,9 +873,9 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'addAccount' | 'updateAccountBalance' | 'setAccountGoal' | 'setAccountCardLast4' | 'setAccountCardDetails' | 'deleteAccount'
   | 'archiveAccount' | 'unarchiveAccount'
   | 'updateAccountOrder' | 'reorderAccounts' | 'defaultAccountId' | 'setDefaultAccountId'
-  | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal' | 'saveHalfPlan'
+  | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal' | 'saveHalfPlan' | 'setAllocationDone'
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'setBucketLimits' | 'saveCeremonyChanges' | 'reallocateBucket'
-  | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
+  | 'addCalendarItem' | 'updateCalendarItem' | 'setOccurrenceAmount' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
   | 'linkBankTransactionToBill' | 'settleBillWithTransaction' | 'forgetBillDescriptorAlias' | 'acknowledgeBillPriceChange'
   | 'addTransaction' | 'addTransactions' | 'updateTransactionCategory' | 'reverseTransactionApproval' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
   | 'setTransactionSplit' | 'markSplitSettled'

@@ -6,7 +6,16 @@ vi.mock('firebase/firestore', () => ({
     withConverter: function () { return this; },
   })),
   setDoc: vi.fn(),
+  increment: (n: number) => ({ __increment: n }),
+  serverTimestamp: () => ({ __serverTimestamp: true }),
+  writeBatch: vi.fn(() => batch),
 }));
+
+const batch = {
+  set: vi.fn(),
+  update: vi.fn(),
+  commit: vi.fn(async () => {}),
+};
 
 vi.mock('react-hot-toast', () => ({
   default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
@@ -14,7 +23,8 @@ vi.mock('react-hot-toast', () => ({
 
 import { setDoc } from 'firebase/firestore';
 import toast from 'react-hot-toast';
-import { makeHalfPlanMutations } from './halfPlanMutations';
+import { makeHalfPlanMutations, makeSetAllocationDone } from './halfPlanMutations';
+import type { Account, HalfPlan } from '@/types/schema';
 
 const db = {} as never;
 
@@ -57,5 +67,43 @@ describe('makeHalfPlanMutations.saveHalfPlan', () => {
     const { saveHalfPlan } = makeHalfPlanMutations({ db, householdId: 'h1', user: { uid: 'paul' } });
     await expect(saveHalfPlan({ id: '2026-10-01', budgets: {}, allocations: [] })).rejects.toThrow('offline');
     expect(toast.error).toHaveBeenCalled();
+  });
+});
+
+describe('makeSetAllocationDone', () => {
+  const accounts: Account[] = [
+    { id: 'chk', name: 'Checking', type: 'checking', balance: 3000, lastUpdated: '' },
+    { id: 'sav', name: 'Savings', type: 'savings', balance: 10000, lastUpdated: '' },
+  ];
+  const plan: HalfPlan = {
+    id: '2026-10-16',
+    budgets: {},
+    allocations: [{ id: 'b1', kind: 'to-savings', label: 'To savings', amount: 900 }],
+  };
+
+  beforeEach(() => {
+    batch.set.mockReset();
+    batch.update.mockReset();
+    batch.commit.mockClear();
+    vi.mocked(toast.error).mockReset();
+  });
+
+  it('checks the line off and moves the money in one batch', async () => {
+    const { setAllocationDone } = makeSetAllocationDone({ db, householdId: 'h1', user: { uid: 'paul' }, accounts, defaultAccountId: undefined });
+    await setAllocationDone(plan, 'b1', true);
+    expect(batch.set.mock.calls[0]?.[1]).toMatchObject({ allocations: [{ id: 'b1', done: true }] });
+    expect(batch.update.mock.calls.map(([ref, data]) => [ref.__path, data.balance])).toEqual([
+      ['households/h1/accounts/chk', { __increment: -900 }],
+      ['households/h1/accounts/sav', { __increment: 900 }],
+    ]);
+    expect(batch.commit).toHaveBeenCalledTimes(1);
+  });
+
+  it('does nothing when the line is already in that state, and writes nothing without a savings account', async () => {
+    const { setAllocationDone } = makeSetAllocationDone({ db, householdId: 'h1', user: { uid: 'paul' }, accounts: accounts.slice(0, 1), defaultAccountId: undefined });
+    await setAllocationDone(plan, 'b1', false);
+    await setAllocationDone(plan, 'b1', true);
+    expect(batch.commit).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('Add a savings account first');
   });
 });
