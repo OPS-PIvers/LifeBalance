@@ -136,3 +136,21 @@ describe('PayPeriodSheet', () => {
     await waitFor(() => expect(setOccurrenceAmount).toHaveBeenCalledWith('mortgage_instance_2026-10-01', 2200));
   });
 });
+
+describe('MoneyCell', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('shows grouped cents at rest and puts the old value back on Escape', () => {
+    setup();
+    const cell = screen.getByLabelText('Mortgage amount');
+    expect(cell).toHaveValue('2,166.00');
+    fireEvent.focus(cell);
+    expect(cell).toHaveValue('2166');
+    fireEvent.change(cell, { target: { value: '9999' } });
+    fireEvent.keyDown(cell, { key: 'Escape' });
+    fireEvent.blur(cell);
+    expect(cell).toHaveValue('2,166.00');
+    expect(setOccurrenceAmount).not.toHaveBeenCalled();
+    expect(screen.queryByText('Just October')).not.toBeInTheDocument();
+  });
+});

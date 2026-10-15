@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { cn } from '@/utils/cn';
 import { roundMoney } from '@/utils/money';
 
@@ -14,7 +14,13 @@ interface MoneyCellProps {
   className?: string;
 }
 
-const show = (value: number | undefined) => (value === undefined ? '' : String(roundMoney(value)));
+/** Resting display: grouped, two decimals (2,851.50). */
+const show = (value: number | undefined) =>
+  value === undefined
+    ? ''
+    : roundMoney(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** While typing: the bare number, nothing to delete around it. */
+const raw = (value: number | undefined) => (value === undefined ? '' : String(roundMoney(value)));
 
 /**
  * A spreadsheet-style amount cell: type straight into it, Enter or leaving
@@ -23,9 +29,16 @@ const show = (value: number | undefined) => (value === undefined ? '' : String(r
  */
 const MoneyCell: React.FC<MoneyCellProps> = ({ value, onCommit, label, disabled, className }) => {
   const [draft, setDraft] = useState<string | null>(null);
+  // Escape blurs the cell, and blur commits — this tells that commit to skip.
+  const cancelled = useRef(false);
   const text = draft ?? show(value);
 
   const commit = () => {
+    if (cancelled.current) {
+      cancelled.current = false;
+      setDraft(null);
+      return;
+    }
     if (draft === null) return;
     setDraft(null);
     const trimmed = draft.replace(/[$,\s]/g, '');
@@ -47,13 +60,18 @@ const MoneyCell: React.FC<MoneyCellProps> = ({ value, onCommit, label, disabled,
       disabled={disabled}
       value={text}
       placeholder="—"
-      onFocus={e => e.currentTarget.select()}
+      onFocus={e => {
+        const input = e.currentTarget;
+        setDraft(raw(value));
+        // Select after React re-renders the raw text into the input.
+        requestAnimationFrame(() => input.select());
+      }}
       onChange={e => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={e => {
         if (e.key === 'Enter') e.currentTarget.blur();
         if (e.key === 'Escape') {
-          setDraft(null);
+          cancelled.current = true;
           e.currentTarget.blur();
         }
       }}

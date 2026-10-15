@@ -153,12 +153,15 @@ const normalizeCategory = (value: string | undefined) => (value ?? '').trim().to
  *     evidence tier — `tx_water_bank` (descriptor) and `tx_electric_bank`
  *     (amount-only). Not seeded by default for the same reason as 'stub' (its
  *     `pending_review` row changes the Money nav link's accessible name).
+ *   - 'pay-period-sheet': default seeds + two 1st & 16th paychecks (paid the
+ *     Friday before a weekend) and a month of dated bills, so Money → Sheet
+ *     has pay-period halves to show.
  * Absent/unknown values leave the default seeds untouched.
  */
-const readTestSeedVariant = (): 'fresh' | 'stub' | 'merchant-rules' | 'bill-merge' | null => {
+const readTestSeedVariant = (): 'fresh' | 'stub' | 'merchant-rules' | 'bill-merge' | 'pay-period-sheet' | null => {
   try {
     const v = window.sessionStorage.getItem('LIFEBALANCE_TEST_SEED');
-    return v === 'fresh' || v === 'stub' || v === 'merchant-rules' || v === 'bill-merge' ? v : null;
+    return v === 'fresh' || v === 'stub' || v === 'merchant-rules' || v === 'bill-merge' || v === 'pay-period-sheet' ? v : null;
   } catch {
     return null;
   }
@@ -482,6 +485,37 @@ const SETTLED_WATER = settledBillPair(
 const SETTLED_ELECTRIC = settledBillPair(
   'electric', 'Xcel Energy (Electric)', 'NSPM UTILITY 8823', SETTLED_ELECTRIC_AMOUNT,
 );
+
+// 'pay-period-sheet' seed: two earners paid on the 1st and 16th (the Friday
+// before when that's a weekend) plus monthly bills on their days.
+const PAY_PERIOD_SHEET_CALENDAR_ITEMS: CalendarItem[] = [
+  ...(['Paul', 'Jen'] as const).map((earner): CalendarItem => ({
+    id: `seed-pay-${earner.toLowerCase()}`,
+    title: `${earner} paycheck`,
+    amount: 2851.5,
+    date: '2026-01-01',
+    type: 'income',
+    isPaid: false,
+    isRecurring: true,
+    frequency: 'semi-monthly',
+    semiMonthlyDays: [1, 16],
+    weekendShift: 'before',
+  })),
+  ...([
+    [1, 'Mortgage', 2166], [1, 'Xcel', 133.53], [1, 'AT&T', 143.8], [3, 'Auto-Owners Life', 83],
+    [13, 'Spotify Premium', 22], [16, 'Heloc', 400], [16, 'Fidelity', 100], [16, 'Easton 529', 50],
+    [17, 'Comcast', 158], [18, 'American Express', 735], [23, 'Paul Hockey', 219], [28, 'Xcel', 98.68],
+  ] as const).map(([day, title, amount], i): CalendarItem => ({
+    id: `seed-bill-${i}`,
+    title,
+    amount,
+    date: `2026-01-${String(day).padStart(2, '0')}`,
+    type: 'expense',
+    isPaid: false,
+    isRecurring: true,
+    frequency: 'monthly',
+  })),
+];
 
 const BILL_MERGE_CALENDAR_ITEMS: CalendarItem[] = [
   {
@@ -928,7 +962,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // Empty by default (several specs count Action-Queue rows); the 'bill-merge'
   // variant is the one that seeds bills, so the 2H merge is walkable.
   const [calendarItems, setCalendarItems] = useState<CalendarItem[]>(
-    TEST_SEED_VARIANT === 'bill-merge' ? BILL_MERGE_CALENDAR_ITEMS : []
+    TEST_SEED_VARIANT === 'bill-merge'
+      ? BILL_MERGE_CALENDAR_ITEMS
+      : TEST_SEED_VARIANT === 'pay-period-sheet'
+        ? PAY_PERIOD_SHEET_CALENDAR_ITEMS
+        : []
   );
   const [challenges, setChallenges] = useState<Challenge[]>(isFresh ? [] : SEED_CHALLENGES);
   const [yearlyGoals] = useState<YearlyGoal[]>([]);

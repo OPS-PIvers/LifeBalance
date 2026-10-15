@@ -179,6 +179,7 @@ const HalfSheet: React.FC<HalfSheetProps> = ({ half, plan, isSeed, summary, isCu
   };
 
   const left = summary.leftToAssign;
+  const minus = (n: number) => (n === 0 ? fmt(0) : `−${fmt(n)}`);
   const days = dueDays(summary);
   const creditCards = accounts.filter(a => a.type === 'credit' && !a.archived);
 
@@ -397,9 +398,9 @@ const HalfSheet: React.FC<HalfSheetProps> = ({ half, plan, isSeed, summary, isCu
 
       <SurfaceList aria-label={`${halfTitle(half)} totals`}>
         <Row dense className="justify-between text-sm"><span>Paychecks</span><span className="font-mono">{fmt(summary.paycheckTotal)}</span></Row>
-        <Row dense className="justify-between text-sm"><span>Bills</span><span className="font-mono">−{fmt(summary.billTotal)}</span></Row>
-        <Row dense className="justify-between text-sm"><span>Spending budgets</span><span className="font-mono">−{fmt(summary.budgetTotal)}</span></Row>
-        <Row dense className="justify-between text-sm"><span>Savings &amp; extra payments</span><span className="font-mono">−{fmt(summary.allocationsOut)}</span></Row>
+        <Row dense className="justify-between text-sm"><span>Bills</span><span className="font-mono">{minus(summary.billTotal)}</span></Row>
+        <Row dense className="justify-between text-sm"><span>Spending budgets</span><span className="font-mono">{minus(summary.budgetTotal)}</span></Row>
+        <Row dense className="justify-between text-sm"><span>Savings &amp; extra payments</span><span className="font-mono">{minus(summary.allocationsOut)}</span></Row>
         {summary.fromSavings > 0 && (
           <Row dense className="justify-between text-sm"><span>From savings</span><span className="font-mono">+{fmt(summary.fromSavings)}</span></Row>
         )}

@@ -22,13 +22,15 @@ import { expect, type Page } from '@playwright/test';
  *     unpaid recurring bill with its screenshot-imported charge, plus TWO
  *     already-paid bills each with the nightly sync's own copy of it — one per
  *     settled-bill evidence tier (water = descriptor, electric = amount-only)
+ *   - 'pay-period-sheet' — default seeds + 1st & 16th paychecks and monthly
+ *     bills, so Money → Sheet has halves to show
  *
  * The union mirrors `readTestSeedVariant` in MockHouseholdContext — the two
  * must stay in step or a spec can pass a variant the provider silently ignores.
  */
 export async function enterTestMode(
   page: Page,
-  seed?: 'fresh' | 'stub' | 'merchant-rules' | 'bill-merge',
+  seed?: 'fresh' | 'stub' | 'merchant-rules' | 'bill-merge' | 'pay-period-sheet',
 ): Promise<void> {
   if (seed) {
     await page.addInitScript((s) => {
