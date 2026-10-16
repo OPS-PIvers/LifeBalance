@@ -226,7 +226,8 @@ function todo(text: string, ctx: LocalAddContext, assignee?: string): WallVoiceC
 const TODO_LIST = '(?:the |my |our )?(?:to ?dos?|to do list|todo list|tasks?|task list|chores?|chore list|reminders?)';
 // "list" comes out of the recognizer as "east", "least", "lest" after "shopping".
 const LIST_WORD = '(?:list|lists|least|lest|east)';
-const SHOP_NAMED = `(?:the |my |our )?(?:shopping|grocery|groceries)(?: ${LIST_WORD})?`;
+// "the shop": the recognizer sometimes clips "shopping list" to its first syllable.
+const SHOP_NAMED = `(?:(?:the |my |our )?(?:shopping|grocery|groceries)(?: ${LIST_WORD})?|the shop)`;
 const SHOP_LIST = `${SHOP_NAMED}|(?:the |my |our )?list`;
 /** "add" as a recognizer writes it; "at", "had", "and", "an" are only trusted when the list is named (below). */
 const ADD_VERB = '(?:add|adds|ad|put)';

@@ -65,6 +65,7 @@ describe('parseLocalAdd: shopping', () => {
     ['and iced coffee to the shopping list', [{ name: 'iced coffee' }]],
     ['at milk to the grocery list', [{ name: 'Milk' }]],
     ['milk eggs to the shopping list', [{ name: 'Milk' }, { name: 'Eggs' }]],
+    ['add paper towels to the shop', [{ name: 'Paper Towels' }]],
     ['ad milk', [{ name: 'Milk' }]],
     ['adds eggs to the list', [{ name: 'Eggs' }]],
     ['add iced coffee to the shopping least', [{ name: 'iced coffee' }]],
