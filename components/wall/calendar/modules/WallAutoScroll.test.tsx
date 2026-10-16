@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import WallAutoScroll from './WallAutoScroll';
 import WallModuleSlot from '@/components/wall/calendar/WallModuleSlot';
+import { WallPausedContext } from '@/components/wall/runtime/wallPaused';
+import { AUTOSCROLL_REST_MS, AUTOSCROLL_RESUME_MS } from '@/utils/wall/wallAutoScroll';
 
 /** jsdom lays nothing out: give the wheel and its list real heights, and fire the observer by hand. */
 function layout(contentHeight: number | (() => number), viewportHeight: number) {
@@ -129,5 +131,101 @@ describe('a module’s pause / play', () => {
     render(<Slot on onScroll={vi.fn()} />);
     measure();
     expect(screen.queryByRole('button', { name: /scroll/i })).toBeNull();
+  });
+});
+
+describe('frames only while the list moves', () => {
+  /** An overflowing list whose frame requests are recorded, not run. */
+  function overflowing(paused = false) {
+    vi.useFakeTimers();
+    const measure = layout(900, 600);
+    const raf = vi.fn((_cb: FrameRequestCallback) => 1);
+    vi.stubGlobal('requestAnimationFrame', raf);
+    const tree = (p: boolean) => (
+      <WallPausedContext.Provider value={p}>
+        <List />
+      </WallPausedContext.Provider>
+    );
+    const view = render(tree(paused));
+    measure();
+    const wheel = view.container.querySelector('.wheel') as HTMLElement;
+    const track = view.container.querySelector('.track') as HTMLElement;
+    return { raf, wheel, track, setPaused: (p: boolean) => view.rerender(tree(p)) };
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('asks for no frame until the rest is over', () => {
+    const { raf } = overflowing();
+    act(() => vi.advanceTimersByTime(AUTOSCROLL_REST_MS - 1));
+    expect(raf).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(1));
+    expect(raf).toHaveBeenCalledTimes(1);
+  });
+
+  it('goes back to resting without frames once a lap is done', () => {
+    const { raf, track } = overflowing();
+    act(() => vi.advanceTimersByTime(AUTOSCROLL_REST_MS));
+    const frame = raf.mock.calls[0]?.[0];
+    expect(frame).toBeDefined();
+    // Frame times from past the end of the rest, whether or not the clock is faked.
+    const t0 = performance.now() + AUTOSCROLL_REST_MS;
+    act(() => frame?.(t0));
+    act(() => frame?.(t0 + 1000));
+    expect(track.style.transform).not.toBe('translate3d(0, 0px, 0)');
+    const during = raf.mock.calls.length;
+    // Long past the end of the glide: the list settles at the top and rests.
+    act(() => frame?.(t0 + 10 * 60_000));
+    expect(track.style.transform).toBe('translate3d(0, 0px, 0)');
+    expect(raf).toHaveBeenCalledTimes(during);
+    act(() => vi.advanceTimersByTime(AUTOSCROLL_REST_MS - 1));
+    expect(raf).toHaveBeenCalledTimes(during);
+    act(() => vi.advanceTimersByTime(1));
+    expect(raf).toHaveBeenCalledTimes(during + 1);
+  });
+
+  it('schedules nothing under the night screen, and keeps the list’s shape', () => {
+    const { raf, wheel } = overflowing(true);
+    expect(wheel).toHaveClass('on');
+    expect(screen.getByText('Top of list')).toBeInTheDocument();
+    expect(vi.getTimerCount()).toBe(0);
+    act(() => vi.advanceTimersByTime(60 * 60_000));
+    expect(raf).not.toHaveBeenCalled();
+  });
+
+  it('turns again after the night screen goes', () => {
+    const { raf, setPaused } = overflowing(true);
+    setPaused(false);
+    act(() => vi.advanceTimersByTime(AUTOSCROLL_REST_MS));
+    expect(raf).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops when the night screen comes up mid-glide', () => {
+    const cancel = vi.fn();
+    const { raf, setPaused, track } = overflowing();
+    vi.stubGlobal('cancelAnimationFrame', cancel);
+    act(() => vi.advanceTimersByTime(AUTOSCROLL_REST_MS));
+    setPaused(true);
+    expect(cancel).toHaveBeenCalled();
+    expect(track.style.transform).toBe('');
+    expect(vi.getTimerCount()).toBe(0);
+    expect(raf).toHaveBeenCalledTimes(1);
+  });
+
+  it('draws no frames while a finger holds it, and a spin paints straight away', () => {
+    const { raf, wheel, track } = overflowing();
+    fireEvent.pointerDown(wheel, { clientX: 10, clientY: 300 });
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(raf).not.toHaveBeenCalled();
+    fireEvent.pointerMove(window, { clientX: 10, clientY: 250 });
+    expect(track.style.transform).toBe('translate3d(0, -50px, 0)');
+    expect(raf).not.toHaveBeenCalled();
+    fireEvent.pointerUp(window);
+    act(() => vi.advanceTimersByTime(AUTOSCROLL_RESUME_MS - 1));
+    expect(raf).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(1));
+    expect(raf).toHaveBeenCalledTimes(1);
   });
 });

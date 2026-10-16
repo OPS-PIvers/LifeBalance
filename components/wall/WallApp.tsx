@@ -45,6 +45,7 @@ import { WallSoundContext, useSoundState, useWallSoundEngine } from './sound/use
 import { memberForName, type VoiceTarget } from '@/utils/wall/wallVoice';
 import { composeAnswer, type WallQuestion } from '@/utils/wall/wallAnswers';
 import { buildVoiceMiss, takeMissSlot } from '@/utils/wall/wallVoiceMiss';
+import { WallPausedContext } from './runtime/wallPaused';
 import './wall.css';
 
 type Overlay = 'none' | 'weather' | 'gear';
@@ -513,7 +514,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
                 Offline for a while. Showing what was saved; changes will sync when the connection is back.
               </div>
             )}
-            {body}
+            <WallPausedContext.Provider value={runtime.nightShowing}>{body}</WallPausedContext.Provider>
             {sheet && (
               <WallAddSheet
                 kind={sheet}
