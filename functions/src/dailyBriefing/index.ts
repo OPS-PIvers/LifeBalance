@@ -13,6 +13,7 @@ import {
 import { type BillCalendarItem } from "../shared/bills";
 import {
   assembleDailyBriefing,
+  toBillCalendarItem,
   type BriefingHabit,
   type BriefingTransaction,
   type DailyBriefingSummary,
@@ -224,19 +225,9 @@ async function loadCalendarItems(
   householdRef: admin.firestore.DocumentReference
 ): Promise<BillCalendarItem[]> {
   const snap = await householdRef.collection("calendarItems").get();
-  return snap.docs.map((d) => {
-    const data = d.data();
-    return {
-      id: d.id,
-      date: data.date,
-      isRecurring: data.isRecurring,
-      frequency: data.frequency,
-      isPaid: data.isPaid,
-      isDeleted: data.isDeleted,
-      parentRecurringId: data.parentRecurringId,
-      amount: data.amount,
-    };
-  });
+  return snap.docs
+    .map((d) => toBillCalendarItem(d.id, d.data()))
+    .filter((i): i is BillCalendarItem => i !== null);
 }
 
 async function loadTransactions(
