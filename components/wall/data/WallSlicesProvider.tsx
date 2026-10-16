@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
+import { parseISO } from 'date-fns';
 import { db } from '@/firebase.config';
+import { useLocalToday } from '@/hooks/useLocalToday';
 import { isBoardPreview } from '@/components/wall/board/boardPreview';
 import { useHouseholdCore, useMealPlan, useShopping, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { wallCalendarFeedConverter, wallEventConverter, wallSettingsConverter, wallTravelConverter } from '@/utils/firestoreConverters';
@@ -34,6 +36,7 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const todoSlice = useTodos();
   const mealSlice = useMealPlan();
   const householdId = core.householdId;
+  const localToday = useLocalToday();
   const [settings, setSettings] = useState<WallSettings>(DEFAULT_WALL_SETTINGS);
   const [wallEvents, setWallEvents] = useState<WallEvent[]>([]);
   const [calendarFeeds, setCalendarFeeds] = useState<WallCalendarFeed[]>([]);
@@ -68,7 +71,8 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         cancelled = true;
       };
     }
-    const window = wallEventWindow(new Date());
+    // Moves with the day, like the display's listeners.
+    const window = wallEventWindow(parseISO(localToday));
     let settingsIn = false;
     let eventsIn = false;
     const settle = () => {
@@ -114,7 +118,7 @@ const WallSlicesProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubFeeds();
       unsubTravel();
     };
-  }, [householdId]);
+  }, [householdId, localToday]);
 
   const actions = useMemo<WallDataActions>(
     () => ({

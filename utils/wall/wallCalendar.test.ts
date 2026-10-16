@@ -14,6 +14,7 @@ import {
   todayFocus,
   todayTimeline,
   untilText,
+  wallTodayTomorrow,
 } from './wallCalendar';
 
 const TZ = 'America/Chicago';
@@ -38,6 +39,24 @@ describe('date helpers', () => {
     expect(addDaysTo('2026-11-01', 1)).toBe('2026-11-02'); // US DST ends Nov 1
     expect(addDaysTo('2026-03-01', -1)).toBe('2026-02-28');
     expect(longDateText('2026-10-07')).toBe('Wednesday, October 7');
+  });
+
+  it('tomorrow is the next calendar day on both DST nights', () => {
+    // Fall back, 2026-11-01 00:30 CDT: now + 24h is 23:30 CST the SAME day.
+    expect(wallTodayTomorrow(new Date('2026-11-01T05:30:00Z'), TZ)).toEqual({
+      today: '2026-11-01',
+      tomorrow: '2026-11-02',
+    });
+    // Spring forward eve, 2027-03-13 23:30 CST: now + 24h is 00:30 CDT on the 15th.
+    expect(wallTodayTomorrow(new Date('2027-03-14T05:30:00Z'), TZ)).toEqual({
+      today: '2027-03-13',
+      tomorrow: '2027-03-14',
+    });
+    // An ordinary evening, and the household zone wins over the device's.
+    expect(wallTodayTomorrow(new Date('2026-10-17T03:30:00Z'), TZ)).toEqual({
+      today: '2026-10-16',
+      tomorrow: '2026-10-17',
+    });
   });
 
   it('formats event times in the household zone with the am/pm rule', () => {

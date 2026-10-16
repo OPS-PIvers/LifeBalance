@@ -4,7 +4,8 @@ import type { WallLayout, WallModuleKey } from '@/types/schema';
 import { dueTodayTodos, tomorrowPreview } from '@/utils/wall/wallSelectors';
 import { nextRotation, withTopModule } from '@/utils/wall/wallModules';
 import { makeWallPeople } from '@/utils/wall/wallPeople';
-import { zonedDateString, zonedParts } from '@/utils/wall/wallTime';
+import { zonedParts } from '@/utils/wall/wallTime';
+import { wallTodayTomorrow } from '@/utils/wall/wallCalendar';
 import { useWallData } from './data/wallData';
 import { APP_VERSION, useWallRuntime } from './runtime/useWallRuntime';
 import { useWallViewport } from './runtime/useWallViewport';
@@ -147,8 +148,7 @@ const WallApp: React.FC<WallAppProps> = ({ onLeave }) => {
   const [declinedBuild, setDeclinedBuild] = useState<string | null>(null);
   const offerUpdate = runtime.updateBuild !== null && runtime.updateBuild !== declinedBuild && !runtime.nightShowing;
 
-  const today = zonedDateString(runtime.now, runtime.timeZone);
-  const tomorrow = zonedDateString(new Date(runtime.now.getTime() + 24 * 60 * 60 * 1000), runtime.timeZone);
+  const { today, tomorrow } = wallTodayTomorrow(runtime.now, runtime.timeZone);
   const badge = useMemo(() => dueTodayTodos(data.todos, today).length, [data.todos, today]);
   const tomorrowAhead = useMemo(() => tomorrowPreview(data.wallEvents, tomorrow), [data.wallEvents, tomorrow]);
   const tomorrowWeather = runtime.weather?.days.find(d => d.date === tomorrow);

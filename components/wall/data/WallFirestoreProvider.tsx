@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Timestamp, addDoc, collection, doc, onSnapshot, query, updateDoc, where, type Unsubscribe } from 'firebase/firestore';
 import { db } from '@/firebase.config';
+import { parseISO } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLocalToday } from '@/hooks/useLocalToday';
 import { attachShoppingListeners } from '@/contexts/household/listeners/shoppingListeners';
 import { attachTodoListeners } from '@/contexts/household/listeners/todoListeners';
 import { attachMealListeners } from '@/contexts/household/listeners/mealListeners';
@@ -67,6 +69,9 @@ interface WallFirestoreProviderProps {
  */
 const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked, children }) => {
   const { householdId, displayId, user } = useAuth();
+  // The wall runs for weeks without a reload, so every dated window moves
+  // with the day: the listeners re-attach once, just after local midnight.
+  const localToday = useLocalToday();
   const [householdName, setHouseholdName] = useState('');
   const [kidModePinHash, setKidModePinHash] = useState<string | undefined>(undefined);
   const [stores, setStores] = useState<Store[]>([]);
@@ -102,7 +107,7 @@ const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked
     };
     const logError = (name: string) => (error: unknown) => console.error(`[wall] ${name} listener failed:`, error);
     const base = `households/${householdId}`;
-    const today = new Date();
+    const today = parseISO(localToday);
     const events = wallEventWindow(today);
     const unsubs: Unsubscribe[] = [];
 
@@ -203,7 +208,7 @@ const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked
       })
     );
     return () => unsubs.forEach(u => u());
-  }, [householdId, displayId]);
+  }, [householdId, displayId, localToday]);
 
   // Same visibility split as FirebaseHouseholdProvider: held-for-review and
   // saved-for-later items never show on the wall. Actions keep the raw lists.

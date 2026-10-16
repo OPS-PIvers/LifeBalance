@@ -22,6 +22,17 @@ export function addDaysTo(date: string, days: number): string {
   return new Date(t).toISOString().slice(0, 10);
 }
 
+/**
+ * The wall's today and tomorrow in the household zone. Tomorrow is the next
+ * CALENDAR day, never `now + 24h`: on the night DST ends that lands on the
+ * same date (the night screen previewed today as tomorrow), and on the eve it
+ * starts it skips a day.
+ */
+export function wallTodayTomorrow(now: Date, timeZone?: string): { today: string; tomorrow: string } {
+  const today = zonedDateString(now, timeZone);
+  return { today, tomorrow: addDaysTo(today, 1) };
+}
+
 export function weekdayOf(date: string): number {
   const [y, m, d] = date.split('-').map(Number);
   return new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1, 12)).getUTCDay();
