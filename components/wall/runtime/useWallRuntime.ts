@@ -8,6 +8,7 @@ import {
   HEARTBEAT_INTERVAL_MS,
   HEARTBEAT_PENDING_OFFLINE_MS,
   NIGHT_WAKE_MS,
+  OFFLINE_STRIP_AFTER_MS,
   offlineLevel,
   type OfflineLevel,
 } from '@/utils/wall/wallStatus';
@@ -75,6 +76,38 @@ function readCachedWeather(): WallWeather | null {
   }
 }
 
+const minuteOf = (t: Date): number => Math.floor(t.getTime() / 60_000);
+
+/**
+ * The wall's clock: a new `now` at the top of every minute, so "3:15" flips on
+ * time. A 15 s safety tick covers a late or throttled timeout, but keeps the
+ * same Date while the minute hasn't changed, so it re-renders nothing. The
+ * setter is for moments that must re-read the time now (waking from sleep, a
+ * deadline passing); those always land.
+ */
+export function useWallClock(): [Date, (now: Date) => void] {
+  const [now, setNowState] = useState(() => new Date());
+  // Compared outside React: handing setState the same Date still costs a
+  // render after each real change, so an unchanged minute skips it entirely.
+  const minuteRef = useRef(minuteOf(now));
+  const setNow = useCallback((t: Date) => {
+    minuteRef.current = minuteOf(t);
+    setNowState(t);
+  }, []);
+  useEffect(() => {
+    let timeout: number | undefined;
+    const schedule = () => {
+      const t = new Date();
+      if (minuteOf(t) !== minuteRef.current) setNow(t);
+      const msToMinute = 60_000 - (t.getSeconds() * 1000 + t.getMilliseconds());
+      timeout = window.setTimeout(schedule, Math.min(msToMinute + 50, 15_000));
+    };
+    schedule();
+    return () => window.clearTimeout(timeout);
+  }, [setNow]);
+  return [now, setNow];
+}
+
 /**
  * Everything time-driven on the wall (docs/plans/wall-display-kiosk.md §4.8).
  * The pure rules live in utils/wall/*; this hook only wires them to timers,
@@ -82,7 +115,7 @@ function readCachedWeather(): WallWeather | null {
  */
 export function useWallRuntime({ settings, householdId, displayId, onIdle }: Options): WallRuntime {
   const timeZone = settings.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useWallClock();
   const [weather, setWeather] = useState<WallWeather | null>(readCachedWeather);
   const [offlineSince, setOfflineSince] = useState<number | null>(() => (navigator.onLine ? null : Date.now()));
   const [heartbeatStuckSince, setHeartbeatStuckSince] = useState<number | null>(null);
@@ -94,20 +127,6 @@ export function useWallRuntime({ settings, householdId, displayId, onIdle }: Opt
   useEffect(() => {
     onIdleRef.current = onIdle;
   }, [onIdle]);
-
-  // Clock: tick at the top of every minute (plus a 15 s safety tick), so
-  // "3:15" flips on time without re-rendering every second.
-  useEffect(() => {
-    let timeout: number | undefined;
-    const schedule = () => {
-      const t = new Date();
-      setNow(t);
-      const msToMinute = 60_000 - (t.getSeconds() * 1000 + t.getMilliseconds());
-      timeout = window.setTimeout(schedule, Math.min(msToMinute + 50, 15_000));
-    };
-    schedule();
-    return () => window.clearTimeout(timeout);
-  }, []);
 
   // Idle return.
   useEffect(() => {
@@ -212,7 +231,20 @@ export function useWallRuntime({ settings, householdId, displayId, onIdle }: Opt
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pageshow', onPageShow);
     };
-  }, []);
+  }, [setNow]);
+
+  // The offline mark and strip turn on at set moments; re-read the time then
+  // rather than at the next minute.
+  useEffect(() => {
+    const since = offlineSince ?? heartbeatStuckSince;
+    if (since === null) return undefined;
+    const due = [since + OFFLINE_STRIP_AFTER_MS];
+    if (offlineSince === null) due.push(since + HEARTBEAT_PENDING_OFFLINE_MS);
+    const next = Math.min(...due.filter(t => t > now.getTime()));
+    if (!Number.isFinite(next)) return undefined;
+    const id = window.setTimeout(() => setNow(new Date()), Math.max(0, next - Date.now()) + 50);
+    return () => window.clearTimeout(id);
+  }, [offlineSince, heartbeatStuckSince, now, setNow]);
 
   const effectiveOfflineSince =
     offlineSince ?? (heartbeatStuckSince !== null && now.getTime() - heartbeatStuckSince > HEARTBEAT_PENDING_OFFLINE_MS ? heartbeatStuckSince : null);
@@ -291,12 +323,12 @@ export function useWallRuntime({ settings, householdId, displayId, onIdle }: Opt
     };
   }, [updateReady, nightShowing, served, online, minuteTick]);
 
-  // Re-check the wake window when it ends (the minute tick may be up to 15 s late).
+  // Re-check the wake window when it ends, not at the next minute.
   useEffect(() => {
     if (wakeUntil <= Date.now()) return undefined;
     const id = window.setTimeout(() => setNow(new Date()), wakeUntil - Date.now() + 50);
     return () => window.clearTimeout(id);
-  }, [wakeUntil]);
+  }, [wakeUntil, setNow]);
 
   return {
     now,

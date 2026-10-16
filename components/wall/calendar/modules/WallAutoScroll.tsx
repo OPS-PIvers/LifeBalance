@@ -8,6 +8,7 @@ import {
   wrapOffset,
 } from '@/utils/wall/wallAutoScroll';
 import { useModuleScroll } from './moduleScroll';
+import { useWallPaused } from '@/components/wall/runtime/wallPaused';
 
 /** How far a finger must travel up or down before a touch counts as spinning the list. */
 const DRAG_PX = 8;
@@ -36,7 +37,10 @@ const WallAutoScroll: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const trackRef = useRef<HTMLDivElement>(null);
   const [overflows, setOverflows] = useState(false);
   const { on, onOverflow } = useModuleScroll();
+  const paused = useWallPaused();
   const active = on && overflows && !reduceMotion;
+  // Under the night screen the list keeps its shape but stops moving.
+  const turning = active && !paused;
 
   useEffect(() => {
     onOverflow(overflows);
@@ -57,54 +61,89 @@ const WallAutoScroll: React.FC<{ children: React.ReactNode }> = ({ children }) =
     const wheel = wheelRef.current;
     const content = contentRef.current;
     const track = trackRef.current;
-    if (!active || !wheel || !content || !track) return undefined;
+    if (!turning || !wheel || !content || !track) return undefined;
 
     let y = 0;
-    let motion: Motion = { phase: 'rest', until: performance.now() + AUTOSCROLL_REST_MS };
+    let motion: Motion = { phase: 'rest', until: 0 };
     let drag: { startY: number; startX: number; from: number; moved: boolean } | null = null;
     let suppressClick = false;
     let raf = 0;
+    let restTimer: number | undefined;
 
+    // The lap is measured when it changes, not on every frame: reading
+    // offsetHeight in a frame forces a layout.
     const lap = () => content.offsetHeight + (seamRef.current?.offsetHeight ?? 0);
-    const paint = (len: number) => {
+    let len = lap();
+    const paint = () => {
       track.style.transform = `translate3d(0, ${-y}px, 0)`;
       wheel.style.setProperty('--fade-top', `${Math.min(FADE_PX, y, len - y).toFixed(1)}px`);
     };
 
+    const halt = () => {
+      cancelAnimationFrame(raf);
+      raf = 0;
+      window.clearTimeout(restTimer);
+      restTimer = undefined;
+    };
+    // A resting or held list draws no frames: a timer wakes it when the rest ends.
+    const rest = (ms: number) => {
+      halt();
+      motion = { phase: 'rest', until: performance.now() + ms };
+      restTimer = window.setTimeout(() => {
+        restTimer = undefined;
+        raf = requestAnimationFrame(frame);
+      }, ms);
+    };
+
     const frame = (now: number) => {
-      const len = lap();
-      if (motion.phase === 'rest' && now >= motion.until) {
+      raf = 0;
+      if (motion.phase === 'held') return;
+      if (motion.phase === 'rest') {
+        if (now < motion.until) {
+          raf = requestAnimationFrame(frame);
+          return;
+        }
         // Glide on to the next lap's start; a hand-spun list finishes the lap it's in.
         const distance = len - y > 0.5 ? len - y : len;
         motion = { phase: 'glide', start: now, from: y, distance };
       }
-      if (motion.phase === 'glide') {
-        const g = glideOffset(motion.distance, now - motion.start);
-        if (g.done) {
-          y = 0;
-          motion = { phase: 'rest', until: now + AUTOSCROLL_REST_MS };
-        } else {
-          y = wrapOffset(motion.from + g.offset, len);
-        }
-      } else {
-        // Items checked off or added change the lap; keep the position inside it.
-        y = wrapOffset(y, len);
+      const g = glideOffset(motion.distance, now - motion.start);
+      if (g.done) {
+        y = 0;
+        paint();
+        rest(AUTOSCROLL_REST_MS);
+        return;
       }
-      paint(len);
+      y = wrapOffset(motion.from + g.offset, len);
+      paint();
       raf = requestAnimationFrame(frame);
     };
-    raf = requestAnimationFrame(frame);
+
+    // Items checked off or added change the lap; keep the position inside it.
+    const ro = new ResizeObserver(() => {
+      len = lap();
+      if (motion.phase === 'glide') return; // the next frame uses the new lap
+      y = wrapOffset(y, len);
+      paint();
+    });
+    ro.observe(content);
+    if (seamRef.current) ro.observe(seamRef.current);
+
+    paint();
+    rest(AUTOSCROLL_REST_MS);
 
     const onMove = (e: PointerEvent) => {
       if (!drag) return;
       const dy = drag.startY - e.clientY;
       if (!drag.moved && Math.abs(dy) > DRAG_PX && Math.abs(dy) > Math.abs(e.clientX - drag.startX)) drag.moved = true;
-      if (drag.moved) y = wrapOffset(drag.from + dy, lap());
+      if (!drag.moved) return;
+      y = wrapOffset(drag.from + dy, len);
+      paint();
     };
     const onUp = () => {
       if (drag?.moved) suppressClick = true;
       drag = null;
-      motion = { phase: 'rest', until: performance.now() + AUTOSCROLL_RESUME_MS };
+      rest(AUTOSCROLL_RESUME_MS);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
@@ -112,6 +151,7 @@ const WallAutoScroll: React.FC<{ children: React.ReactNode }> = ({ children }) =
     const onDown = (e: PointerEvent) => {
       drag = { startY: e.clientY, startX: e.clientX, from: y, moved: false };
       suppressClick = false;
+      halt();
       motion = { phase: 'held' };
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
@@ -128,7 +168,8 @@ const WallAutoScroll: React.FC<{ children: React.ReactNode }> = ({ children }) =
     wheel.addEventListener('click', onClick, true);
 
     return () => {
-      cancelAnimationFrame(raf);
+      halt();
+      ro.disconnect();
       wheel.removeEventListener('pointerdown', onDown);
       wheel.removeEventListener('click', onClick, true);
       window.removeEventListener('pointermove', onMove);
@@ -137,7 +178,7 @@ const WallAutoScroll: React.FC<{ children: React.ReactNode }> = ({ children }) =
       track.style.transform = '';
       wheel.style.removeProperty('--fade-top');
     };
-  }, [active]);
+  }, [turning]);
 
   return (
     <div ref={wheelRef} className={active ? 'wheel on' : 'wheel'}>
