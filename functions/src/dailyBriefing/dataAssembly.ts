@@ -1,4 +1,5 @@
 import { findBillsDueOnDate, type BillCalendarItem } from "../shared/bills";
+import { readAmountHistory, readRecurrenceSchedule } from "../shared/recurrenceSchedule";
 
 /** Minimal view of a habit doc the briefing reads. */
 export interface BriefingHabit {
@@ -49,6 +50,34 @@ export interface DailyBriefingSummary {
    * noise, so an all-clear day stays silent.
    */
   hasContent: boolean;
+}
+
+/**
+ * One calendarItems doc as a bill, or null when it isn't an expense (paychecks
+ * never count as bills due). Carries the schedule and amount history
+ * `findBillsDueOnDate` needs — weekend shift, twice-a-month days, "Just this
+ * month" overrides and "This and future months" history — so the briefing
+ * prices and dates a bill exactly as the bill-reminder job does.
+ */
+export function toBillCalendarItem(
+  id: string,
+  data: Record<string, unknown>
+): BillCalendarItem | null {
+  if (data.type !== "expense") return null;
+  return {
+    id,
+    date: typeof data.date === "string" ? data.date : "",
+    isRecurring: data.isRecurring === true,
+    frequency: typeof data.frequency === "string" ? data.frequency : undefined,
+    isPaid: data.isPaid === true,
+    isDeleted: data.isDeleted === true,
+    parentRecurringId:
+      typeof data.parentRecurringId === "string" ? data.parentRecurringId : undefined,
+    amount:
+      typeof data.amount === "number" && Number.isFinite(data.amount) ? data.amount : undefined,
+    ...readRecurrenceSchedule(data),
+    ...readAmountHistory(data),
+  };
 }
 
 /**
