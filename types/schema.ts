@@ -695,6 +695,11 @@ export interface HalfAllocation {
   accountId?: string;
   /** Checked off once the payment or transfer has actually been made. */
   done?: boolean;
+  /** While `done`: the balance change the check applied to each account
+   *  (accountId → decimal dollars). Unchecking negates exactly these, so a
+   *  later change of card, default account or account order can't send the
+   *  reversal somewhere else. Absent on lines checked before this existed. */
+  moved?: Record<string, number>;
 }
 
 /**

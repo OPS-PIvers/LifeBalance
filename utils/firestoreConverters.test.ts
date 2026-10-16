@@ -1613,7 +1613,7 @@ describe('halfPlanConverter', () => {
   const wellFormed = {
     budgets: { gas: 120, grocery: 850 },
     allocations: [
-      { id: 'a1', kind: 'card-extra', label: 'AmEx extra payment', amount: 700, accountId: 'amex', done: true },
+      { id: 'a1', kind: 'card-extra', label: 'AmEx extra payment', amount: 700, accountId: 'amex', done: true, moved: { chk: -700, amex: -700 } },
       { id: 'a2', kind: 'from-savings', label: 'From savings', amount: 452.89 },
     ],
     updatedAt: '2026-10-01T12:00:00.000Z',
@@ -1635,7 +1635,8 @@ describe('halfPlanConverter', () => {
       fakeSnap('2026-10-16', {
         budgets: { gas: '110', grocery: 850 },
         allocations: [
-          { id: 'ok', kind: 'to-savings', label: 'To savings', amount: 900 },
+          { id: 'ok', kind: 'to-savings', label: 'To savings', amount: 900, done: true, moved: { chk: -900, sav: 'x', nan: Number.NaN } },
+          { id: 'ok2', kind: 'to-savings', label: 'To savings', amount: 5, done: true, moved: ['junk'] },
           { id: 'bad-kind', kind: 'invest', amount: 5 },
           { kind: 'other', amount: 5 },
           'junk',
@@ -1643,7 +1644,9 @@ describe('halfPlanConverter', () => {
       }),
     );
     expect(plan.budgets).toEqual({ grocery: 850 });
-    expect(plan.allocations.map(a => a.id)).toEqual(['ok']);
+    expect(plan.allocations.map(a => a.id)).toEqual(['ok', 'ok2']);
+    expect(plan.allocations[0]?.moved).toEqual({ chk: -900 });
+    expect(plan.allocations[1] && 'moved' in plan.allocations[1]).toBe(false);
     expect(halfPlanConverter.fromFirestore(fakeSnap('2026-11-01', {}))).toEqual({
       id: '2026-11-01',
       budgets: {},

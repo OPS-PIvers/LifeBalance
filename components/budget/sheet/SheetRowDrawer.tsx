@@ -274,6 +274,7 @@ const Body: React.FC<Required<Pick<SheetRowDrawerProps, 'onClose' | 'api' | 'pla
           Card
           <select
             value={allocation.accountId ?? ''}
+            disabled={!!allocation.done}
             onChange={e => api.updateAllocation(allocation.id, { accountId: e.target.value || undefined })}
             className="mt-1 block w-full rounded-lg border border-brand-200 bg-white px-3 py-2 text-base dark:border-brand-700 dark:bg-brand-800"
           >
