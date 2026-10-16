@@ -95,6 +95,29 @@ describe('matchBills', () => {
     expect(jenHair?.existing).toBeUndefined();
     expect(jenHair?.date).toBe('2026-10-05');
   });
+
+  describe('days past the end of the month become its last day', () => {
+    const lateBill = (day: number) => [{ panel: 1 as const, day, title: 'Rent', amount: 900 }];
+
+    it('the 31st in September is Sep 30', () => {
+      expect(matchBills(lateBill(31), '2026-09', [])[0]?.date).toBe('2026-09-30');
+    });
+
+    it('the 30th in February is Feb 28', () => {
+      expect(matchBills(lateBill(30), '2026-02', [])[0]?.date).toBe('2026-02-28');
+    });
+
+    it('the 30th in a leap-year February is Feb 29', () => {
+      expect(matchBills(lateBill(30), '2028-02', [])[0]?.date).toBe('2028-02-29');
+    });
+
+    it('still matches the bill the app has on the last day', () => {
+      const rent: CalendarItem = {
+        id: 'rent', title: 'Rent', amount: 900, date: '2026-09-30', type: 'expense', isPaid: false,
+      };
+      expect(matchBills(lateBill(31), '2026-09', [rent])[0]?.existing?.id).toBe('rent');
+    });
+  });
 });
 
 describe('applyOthers', () => {

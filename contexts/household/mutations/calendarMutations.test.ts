@@ -8,6 +8,7 @@ interface CapturedWrite {
 
 let capturedSets: CapturedWrite[] = [];
 let capturedUpdates: CapturedWrite[] = [];
+let capturedDeletes: { __path: string }[] = [];
 let commitCount = 0;
 
 vi.mock('firebase/firestore', () => {
@@ -45,7 +46,9 @@ vi.mock('firebase/firestore', () => {
       update: (ref: { __path: string }, data: Record<string, unknown>) => {
         capturedUpdates.push({ ref, data });
       },
-      delete: () => {},
+      delete: (ref: { __path: string }) => {
+        capturedDeletes.push(ref);
+      },
       commit: vi.fn(async () => {
         commitCount++;
       }),
@@ -773,6 +776,40 @@ describe('one-month amount changes', () => {
     const updates = writtenUpdates();
     expect(updates.amount).toBe(135);
     expect(updates.earlierAmounts).toEqual([{ before: '2026-11-28', amount: 120 }]);
+  });
+
+  it('"This and future months" on a month with an override also deletes that override, in one batch', async () => {
+    capturedUpdates = [];
+    capturedDeletes = [];
+    const commitsBefore = commitCount;
+    const { updateCalendarItem } = makeUpdateCalendarItem({ db, householdId: HOUSEHOLD_ID, calendarItems: [xcel, override] });
+    await updateCalendarItem({ ...xcel, amount: 135 }, { silent: true, amountFrom: '2026-10-28' });
+    expect(commitCount - commitsBefore).toBe(1);
+    expect(updateDoc).not.toHaveBeenCalled();
+    expect(capturedUpdates).toHaveLength(1);
+    expect(capturedUpdates[0]?.ref.__path).toBe(`households/${HOUSEHOLD_ID}/calendarItems/xcel`);
+    expect(capturedUpdates[0]?.data).toMatchObject({ amount: 135, earlierAmounts: [{ before: '2026-10-28', amount: 120 }] });
+    expect(capturedDeletes.map(r => r.__path)).toEqual([`households/${HOUSEHOLD_ID}/calendarItems/ovr`]);
+  });
+
+  it('keepOverride leaves the override for a move to turn into the tombstone', async () => {
+    capturedDeletes = [];
+    const commitsBefore = commitCount;
+    const { updateCalendarItem } = makeUpdateCalendarItem({ db, householdId: HOUSEHOLD_ID, calendarItems: [xcel, override] });
+    await updateCalendarItem({ ...xcel, amount: 135 }, { silent: true, amountFrom: '2026-10-28', keepOverride: true });
+    expect(commitCount).toBe(commitsBefore);
+    expect(capturedDeletes).toEqual([]);
+    expect(writtenUpdates().amount).toBe(135);
+  });
+
+  it('an override on a different month is left alone', async () => {
+    capturedDeletes = [];
+    const commitsBefore = commitCount;
+    const { updateCalendarItem } = makeUpdateCalendarItem({ db, householdId: HOUSEHOLD_ID, calendarItems: [xcel, override] });
+    await updateCalendarItem({ ...xcel, amount: 135 }, { silent: true, amountFrom: '2026-09-28' });
+    expect(commitCount).toBe(commitsBefore);
+    expect(capturedDeletes).toEqual([]);
+    expect(writtenUpdates().amount).toBe(135);
   });
 
   it('deleting an occurrence with an override turns the override into the tombstone', async () => {

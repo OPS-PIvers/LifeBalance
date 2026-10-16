@@ -232,12 +232,15 @@ export interface OverrunFix {
  * Each raises that budget by the overrun and funds it — from savings (a
  * "From savings" line) or from another budget with at least that much
  * planned and unspent — so the half stays exactly as assigned as it was.
+ * Only live budgets (`bucketIds`, the same set `summarizeHalf` counts) can
+ * give: lowering a deleted budget's leftover plan entry would free nothing.
  */
 export function overrunFixes(
   plan: HalfPlan,
   bucketId: string,
   actuals: ReadonlyMap<string, number>,
-  newId: () => string
+  newId: () => string,
+  bucketIds: ReadonlySet<string>
 ): OverrunFix[] {
   const planned = plan.budgets[bucketId] ?? 0;
   const over = sumMoney([actuals.get(bucketId) ?? 0, -planned]);
@@ -257,7 +260,7 @@ export function overrunFixes(
   };
 
   const fromBuckets = Object.entries(plan.budgets)
-    .filter(([id, amount]) => id !== bucketId && sumMoney([amount, -(actuals.get(id) ?? 0)]) >= over)
+    .filter(([id, amount]) => id !== bucketId && bucketIds.has(id) && sumMoney([amount, -(actuals.get(id) ?? 0)]) >= over)
     .map(([id, amount]): OverrunFix => ({
       kind: 'bucket',
       fromBucketId: id,

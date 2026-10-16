@@ -173,7 +173,12 @@ export function makeUpdateCalendarItem(deps: {
       // earlier occurrences keep what they cost (earlierAmounts). Without it,
       // the amount history stays as stored, and leaving recurrence drops it.
       const existingItem = calendarItems.find(i => i.id === item.id);
+      // An unpaid "Just this month" override on that date would keep winning
+      // over the new series amount, so it goes in the same write — unless the
+      // caller is moving that occurrence and needs it as the tombstone.
+      let staleOverride: CalendarItem | undefined;
       if (opts?.amountFrom && item.isRecurring && existingItem) {
+        if (!opts.keepOverride) staleOverride = findOccurrenceOverride(calendarItems, item.id, opts.amountFrom);
         const next = withAmountFrom(existingItem, opts.amountFrom, item.amount);
         updates.amount = next.amount;
         updates.earlierAmounts = next.earlierAmounts.length > 0 ? next.earlierAmounts : deleteField();
@@ -186,7 +191,15 @@ export function makeUpdateCalendarItem(deps: {
       updates.isSubscription = item.isSubscription ? true : deleteField();
 
       const sanitizedUpdates = sanitizeFirestoreData(updates);
-      await updateDoc(doc(db, `households/${householdId}/calendarItems`, item.id), sanitizedUpdates);
+      const col = `households/${householdId}/calendarItems`;
+      if (staleOverride) {
+        const batch = writeBatch(db);
+        batch.update(doc(db, col, item.id), sanitizedUpdates);
+        batch.delete(doc(db, col, staleOverride.id));
+        await batch.commit();
+      } else {
+        await updateDoc(doc(db, col, item.id), sanitizedUpdates);
+      }
       if (!opts?.silent) toast.success('Event updated');
     } catch (error) {
       console.error('[updateCalendarItem] Failed:', error);

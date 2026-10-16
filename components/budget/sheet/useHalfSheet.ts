@@ -49,6 +49,7 @@ export function useHalfSheet(half: PayHalf, plan: HalfPlan, summary: HalfSummary
   const [pending, setPending] = useState<PendingAmount | null>(null);
 
   const actuals = useMemo(() => halfBucketActuals(buckets, transactions, half), [buckets, transactions, half]);
+  const bucketIds = useMemo(() => new Set(buckets.map(b => b.id)), [buckets]);
   const save = (next: HalfPlan) => quietly(saveHalfPlan(next));
 
   /** What a row was planned at. A paid occurrence of a repeating bill keeps
@@ -93,7 +94,7 @@ export function useHalfSheet(half: PayHalf, plan: HalfPlan, summary: HalfSummary
         return;
       }
       const template = calendarItems.find(i => i.id === parseRecurringId(item.id)?.templateId);
-      if (template) await updateCalendarItem({ ...template, amount }, { amountFrom: item.date });
+      if (template) await updateCalendarItem({ ...template, amount }, { amountFrom: item.date, keepOverride: moved });
       if (moved) await editCalendarEntry(item.id, { ...edits, amount });
       else if (edits.title) await editCalendarEntry(item.id, { title: edits.title });
     } catch {
@@ -139,7 +140,7 @@ export function useHalfSheet(half: PayHalf, plan: HalfPlan, summary: HalfSummary
     if (next) save(next);
   };
 
-  const fixesFor = (bucketId: string) => (isSeed ? [] : overrunFixes(plan, bucketId, actuals, newId));
+  const fixesFor = (bucketId: string) => (isSeed ? [] : overrunFixes(plan, bucketId, actuals, newId, bucketIds));
 
   /** "Just October" / "This and future months" for the pending row. */
   const pendingMonth = pending ? format(parseISO(pending.item.date), 'MMMM') : '';

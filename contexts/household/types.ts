@@ -61,6 +61,11 @@ export interface MutationOpts {
  *  they cost. Without it the amount edit applies to the whole series. */
 export interface CalendarUpdateOpts extends MutationOpts {
   amountFrom?: string;
+  /** With `amountFrom`: keep an existing "Just this month" override on that
+   *  date (the caller is moving that occurrence and needs it as the tombstone).
+   *  Without it, the override is deleted in the same write so the edited
+   *  month takes the new series amount. */
+  keepOverride?: boolean;
 }
 
 /**

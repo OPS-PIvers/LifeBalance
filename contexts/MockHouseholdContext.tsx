@@ -3405,7 +3405,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const updateCalendarItem = useCallback(async (edited: CalendarItem, opts?: CalendarUpdateOpts) => {
     // Mirror Firestore behavior: schedule edits on recurring templates are
     // forward-only (see makeUpdateCalendarItem in calendarMutations.ts).
-    setCalendarItems(prev => prev.map(i => {
+    // "This and future months" also drops that date's unpaid override
+    // unless the caller keeps it as a move's tombstone.
+    const amountFrom = opts?.amountFrom && edited.isRecurring && !opts.keepOverride ? opts.amountFrom : undefined;
+    setCalendarItems(prev => prev.filter(i =>
+      !(amountFrom && i.isOverride && i.parentRecurringId === edited.id && i.date === amountFrom && !i.isPaid && !i.isDeleted),
+    ).map(i => {
       if (i.id !== edited.id) return i;
       const item = opts?.amountFrom && edited.isRecurring
         ? { ...edited, ...withAmountFrom(i, opts.amountFrom, edited.amount) }
