@@ -34,6 +34,7 @@ import {
   updateDoc,
   deleteDoc,
   deleteField,
+  increment,
   serverTimestamp,
   setLogLevel,
   Timestamp,
@@ -1039,6 +1040,41 @@ describe('API keys are admin-only', () => {
     await assertSucceeds(
       getDoc(doc(dbFor(ALICE), 'households', H1, 'apiKeys', 'key-seed')),
     );
+  });
+});
+
+describe('apiUsage counters are server-only', () => {
+  // Written only by Cloud Functions (Admin SDK). An admin who could reset
+  // `wallTts` would lift the wall's daily cloud-voice cap at project cost.
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(asFirestore(ctx.firestore()), 'households', H1, 'apiUsage', 'wallTts'), {
+        date: FIXED_DATE,
+        count: 500,
+      });
+    });
+  });
+
+  it('an admin cannot create, reset or delete a counter', async () => {
+    const db = dbFor(ALICE);
+    await assertFails(setDoc(doc(db, 'households', H1, 'apiUsage', 'wallTts'), { date: FIXED_DATE, count: 0 }));
+    await assertFails(updateDoc(doc(db, 'households', H1, 'apiUsage', 'wallTts'), { count: 0 }));
+    await assertFails(deleteDoc(doc(db, 'households', H1, 'apiUsage', 'wallTts')));
+    await assertFails(setDoc(doc(db, 'households', H1, 'apiUsage', 'quickAdd'), { count: 0 }));
+  });
+
+  it('a plain member cannot write a counter either', async () => {
+    await assertFails(updateDoc(doc(dbFor(BOB), 'households', H1, 'apiUsage', 'wallTts'), { count: 0 }));
+  });
+
+  it('members can still read their own counters', async () => {
+    await assertSucceeds(getDoc(doc(dbFor(ALICE), 'households', H1, 'apiUsage', 'wallTts')));
+    await assertSucceeds(getDoc(doc(dbFor(BOB), 'households', H1, 'apiUsage', 'wallTts')));
+  });
+
+  it('a non-member cannot read them', async () => {
+    await assertFails(getDoc(doc(dbFor(CAROL), 'households', H1, 'apiUsage', 'wallTts')));
+    await assertFails(getDoc(doc(dbFor(DAVE), 'households', H1, 'apiUsage', 'wallTts')));
   });
 });
 
@@ -2695,6 +2731,14 @@ describe('wall display identity', () => {
       await assertSucceeds(updateDoc(doc(db, 'households', H1), { points: { daily: 1, weekly: 1, total: 1 } }));
     });
 
+    it('credits household points by dot-path increments, as fireLinkedHabitInBatch writes them', async () => {
+      await assertSucceeds(
+        updateDoc(doc(displayDb(), 'households', H1), {
+          'points.daily': increment(2), 'points.weekly': increment(2), 'points.total': increment(2),
+        })
+      );
+    });
+
     it('logs activity as itself', async () => {
       await assertSucceeds(
         setDoc(doc(displayDb(), 'households', H1, 'activityLog', 'log2'), { actorUid: DISPLAY_UID, summary: 'Completed Feed the cat' })
@@ -2793,6 +2837,13 @@ describe('wall display identity', () => {
       await assertFails(updateDoc(doc(db, 'households', H1, 'habits', 'hab1'), { title: 'Changed' }));
       await assertFails(setDoc(doc(db, 'households', H1, 'habits', 'hab2'), { title: 'New', category: 'Health' }));
       await assertFails(deleteDoc(doc(db, 'households', H1, 'habits', 'hab1')));
+    });
+
+    it('cannot write household points that are not a points map', async () => {
+      const db = displayDb();
+      await assertFails(updateDoc(doc(db, 'households', H1), { points: 'lots' }));
+      await assertFails(updateDoc(doc(db, 'households', H1), { points: { daily: 'x' } }));
+      await assertFails(updateDoc(doc(db, 'households', H1), { 'points.total': 'x' }));
     });
 
     it('cannot write meals, the meal plan, settings, events or feeds', async () => {
