@@ -71,6 +71,22 @@ service cloud.firestore {
       return num == null || num is number;
     }
 
+    // 🛡️ A points map (member doc, or the household pool a wall display
+    // credits). It is written by dot-path increments (`points.daily` etc.), so
+    // `request.resource.data.points` is the MERGED result. Validate the three
+    // known buckets are numbers when present, and deliberately do NOT
+    // `hasOnly()` the inner keys — a key an admin/server added elsewhere on the
+    // map would otherwise permanently lock every later points write out of
+    // this document.
+    function isValidPointsMap(p) {
+      return p == null || (
+        p is map &&
+        p.get('daily', 0) is number &&
+        p.get('weekly', 0) is number &&
+        p.get('total', 0) is number
+      );
+    }
+
     // A wall display's layout (WallLayout): 0–2 panel modules, the slot under
     // today, and per-module auto scroll on/off. Written by the display itself
     // or by a member from Settings.
@@ -233,7 +249,8 @@ service cloud.firestore {
       // household points pool (todoMutations fireLinkedHabitInBatch). That is
       // the ONLY household-doc field a display may touch.
       allow update: if isDisplayOf(householdId) &&
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['points']);
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['points']) &&
+                       isValidPointsMap(request.resource.data.get('points', null));
 
       // Members subcollection
       match /members/{memberId} {
@@ -307,21 +324,6 @@ service cloud.firestore {
           // memberUids, so it gains no household credential.
           (isMemberOf(householdId) && isValidManagedKidCreate())
         );
-
-        // 🛡️ Per-member habit points (stage 1). The points map is written by
-        // dot-path increments (`points.daily` etc.), so `request.resource.data.points`
-        // is the MERGED result. Validate the three known buckets are numbers
-        // when present, and deliberately do NOT `hasOnly()` the inner keys — a
-        // key an admin/server added elsewhere on the map would otherwise
-        // permanently lock every later points write out of this document.
-        function isValidPointsMap(p) {
-          return p == null || (
-            p is map &&
-            p.get('daily', 0) is number &&
-            p.get('weekly', 0) is number &&
-            p.get('total', 0) is number
-          );
-        }
 
         // Security Fix: Prevent IDOR (Insecure Direct Object Reference)
         // Previous rule allowed ANY member to update ANY other member's non-role fields.
@@ -609,10 +611,11 @@ service cloud.firestore {
 
       // API Usage tracking subcollection (rate limiting)
       match /apiUsage/{endpoint} {
-        // Members can read their own usage
+        // Written only by Cloud Functions (Admin SDK bypasses rules). Clients may
+        // read their own counters. No client write: an admin who could reset
+        // `wallTts` would lift the wall's daily cloud-voice cap at project cost.
         allow read: if isMemberOf(householdId);
-        // Cloud Functions update this via Admin SDK, but allow admin updates for testing
-        allow write: if isAdminOf(householdId);
+        allow write: if false;
       }
 
       // Shopping list subcollection with input validation
