@@ -4,7 +4,7 @@ import { describeError } from '@/utils/errorMessages';
 import { Account, CalendarItem, HalfPlan } from '@/types/schema';
 import { roundMoney } from '@/utils/money';
 import { halfPlanConverter } from '@/utils/firestoreConverters';
-import { allocationTransfer } from '@/utils/halfPlan';
+import { allocationToggle, withAllocationDone } from '@/utils/halfPlan';
 import { findOccurrenceOverride, isRecurringId, parseRecurringId, seriesAmountOn } from '@/utils/calendarRecurrence';
 
 /** The stored form of a plan: amounts cent-rounded and positive, labels
@@ -20,6 +20,9 @@ function toStoredPlan(plan: HalfPlan, uid: string): HalfPlan {
     amount: roundMoney(Math.abs(a.amount)),
     ...(a.accountId ? { accountId: a.accountId } : {}),
     ...(a.done ? { done: true } : {}),
+    ...(a.done && a.moved
+      ? { moved: Object.fromEntries(Object.entries(a.moved).map(([id, d]) => [id, roundMoney(d)])) }
+      : {}),
   }));
   return { id: plan.id, budgets, allocations, updatedAt: new Date().toISOString(), updatedBy: uid };
 }
@@ -60,7 +63,8 @@ export function makeHalfPlanMutations(deps: {
  * the SAME batch: "To savings" moves checking → savings, "From savings" the
  * other way, a card's extra payment lowers checking and the card's debt (see
  * `allocationTransfer`). The check mark and the balances can never disagree.
- * Unchecking reverses the move exactly.
+ * Unchecking reverses exactly what the check recorded in `moved` (see
+ * `allocationToggle`), so a changed card or default account can't redirect it.
  */
 export function makeSetAllocationDone(deps: {
   db: Firestore;
@@ -76,7 +80,7 @@ export function makeSetAllocationDone(deps: {
     const allocation = plan.allocations.find(a => a.id === allocationId);
     if (!allocation || !!allocation.done === done) return;
 
-    const transfer = allocationTransfer(allocation, accounts, defaultAccountId, done);
+    const transfer = allocationToggle(allocation, accounts, defaultAccountId, done);
     if (transfer.kind === 'missing') {
       toast.error(transfer.reason);
       return;
@@ -84,7 +88,7 @@ export function makeSetAllocationDone(deps: {
 
     const next: HalfPlan = {
       ...plan,
-      allocations: plan.allocations.map(a => (a.id === allocationId ? { ...a, done } : a)),
+      allocations: plan.allocations.map(a => (a.id === allocationId ? withAllocationDone(a, done, transfer) : a)),
     };
     const batch = writeBatch(db);
     batch.set(

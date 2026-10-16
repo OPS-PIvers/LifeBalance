@@ -4,7 +4,9 @@ import { Account, CalendarItem, HalfAllocation, HalfPlan, Transaction } from '@/
 import { expandCalendarItems } from '@/utils/calendarRecurrence';
 import { fundedHalfId, halfOf, halvesBetween } from '@/utils/payPeriodHalves';
 import {
+  allocationToggle,
   allocationTransfer,
+  withAllocationDone,
   balancingPlan,
   dueDays,
   halfBucketActuals,
@@ -154,7 +156,7 @@ describe('seedHalfPlan', () => {
     id: '2026-10-01',
     budgets: { gas: 120, grocery: 850 },
     allocations: [
-      { id: 'a1', kind: 'card-extra', label: 'AmEx extra payment', amount: 700, done: true },
+      { id: 'a1', kind: 'card-extra', label: 'AmEx extra payment', amount: 700, done: true, moved: { chk: -700, amex: -700 } },
       { id: 'a2', kind: 'from-savings', label: 'From savings', amount: 452.89, done: true },
     ],
   };
@@ -212,6 +214,57 @@ describe('allocationTransfer', () => {
   it('moves nothing for an "other" line, and says what is missing', () => {
     expect(allocationTransfer(line('other'), accounts, undefined, true)).toEqual({ kind: 'none' });
     expect(allocationTransfer(line('to-savings'), [acct('chk', 'checking')], undefined, true)).toEqual({ kind: 'missing', reason: 'Add a savings account first' });
+  });
+});
+
+describe('allocationToggle — unchecking reverses exactly what the check moved', () => {
+  const acct = (id: string, type: Account['type'], extra: Partial<Account> = {}): Account =>
+    ({ id, name: id, type, balance: 0, lastUpdated: '', ...extra });
+  const accounts = [acct('chk', 'checking'), acct('sav', 'savings'), acct('amex', 'credit'), acct('visa', 'credit')];
+  const done = (kind: HalfAllocation['kind'], moved: Record<string, number>, accountId?: string): HalfAllocation =>
+    ({ id: 'a', kind, label: kind, amount: 900, accountId, done: true, moved });
+
+  it('checking computes the transfer as before', () => {
+    const line: HalfAllocation = { id: 'a', kind: 'to-savings', label: 'x', amount: 900 };
+    expect(allocationToggle(line, accounts, undefined, true)).toEqual({ kind: 'move', deltas: { chk: -900, sav: 900 } });
+  });
+
+  it('undoes the recorded move even after the default account and account order changed', () => {
+    const now = [acct('chk2', 'checking', { order: 0 }), acct('sav2', 'savings', { order: 0 }), ...accounts.map(a => ({ ...a, order: 5 }))];
+    expect(allocationToggle(done('to-savings', { chk: -900, sav: 900 }), now, 'chk2', false))
+      .toEqual({ kind: 'move', deltas: { chk: 900, sav: -900 } });
+  });
+
+  it('undoes a card payment on the card it was made to, after the line\'s card was changed', () => {
+    expect(allocationToggle(done('card-extra', { chk: -900, amex: -900 }, 'visa'), accounts, undefined, false))
+      .toEqual({ kind: 'move', deltas: { chk: 900, amex: 900 } });
+  });
+
+  it('still undoes when the card has since been archived', () => {
+    const archived = accounts.map(a => (a.id === 'amex' ? { ...a, archived: true } : a));
+    expect(allocationToggle(done('card-extra', { chk: -900, amex: -900 }, 'amex'), archived, undefined, false))
+      .toEqual({ kind: 'move', deltas: { chk: 900, amex: 900 } });
+  });
+
+  it('skips an account that no longer exists rather than failing the whole undo', () => {
+    expect(allocationToggle(done('to-savings', { chk: -900, gone: 900 }), accounts, undefined, false))
+      .toEqual({ kind: 'move', deltas: { chk: 900 } });
+    expect(allocationToggle(done('to-savings', { gone: 900 }), accounts, undefined, false)).toEqual({ kind: 'none' });
+  });
+
+  it('recomputes for a line checked before the record existed', () => {
+    const legacy: HalfAllocation = { id: 'a', kind: 'to-savings', label: 'x', amount: 900, done: true };
+    expect(allocationToggle(legacy, accounts, undefined, false)).toEqual({ kind: 'move', deltas: { chk: 900, sav: -900 } });
+  });
+});
+
+describe('withAllocationDone', () => {
+  const line: HalfAllocation = { id: 'a', kind: 'to-savings', label: 'x', amount: 900 };
+  it('records the move on check and clears it on uncheck', () => {
+    const checked = withAllocationDone(line, true, { kind: 'move', deltas: { chk: -900, sav: 900 } });
+    expect(checked).toEqual({ ...line, done: true, moved: { chk: -900, sav: 900 } });
+    expect(withAllocationDone(checked, false, { kind: 'move', deltas: { chk: 900, sav: -900 } })).toEqual(line);
+    expect(withAllocationDone(line, true, { kind: 'none' })).toEqual({ ...line, done: true });
   });
 });
 

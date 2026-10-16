@@ -107,7 +107,7 @@ export function seedHalfPlan(halfId: string, plans: HalfPlan[], newId: () => str
   if (!source) return { id: halfId, budgets: {}, allocations: [] };
   const allocations: HalfAllocation[] = source.allocations
     .filter(a => a.kind !== 'from-savings')
-    .map(({ done: _done, ...a }) => ({ ...a, id: newId() }));
+    .map(({ done: _done, moved: _moved, ...a }) => ({ ...a, id: newId() }));
   return { id: halfId, budgets: { ...source.budgets }, allocations };
 }
 
@@ -157,6 +157,39 @@ export function allocationTransfer(
   return allocation.kind === 'to-savings'
     ? { kind: 'move', deltas: { [checking.id]: -x, [savings.id]: x } }
     : { kind: 'move', deltas: { [savings.id]: -x, [checking.id]: x } };
+}
+
+/**
+ * The transfer for checking a line off (`done: true`) or unchecking it.
+ * Checking computes it with `allocationTransfer`. Unchecking a line that
+ * recorded what its check `moved` negates exactly that record, whatever has
+ * changed since (the card, the default account, account order, an archived
+ * card); an account that has since been deleted is skipped, since there is
+ * nothing left to put the money back into. A line checked before `moved`
+ * existed falls back to recomputing.
+ */
+export function allocationToggle(
+  allocation: HalfAllocation,
+  accounts: Account[],
+  defaultAccountId: string | undefined,
+  done: boolean
+): AllocationTransfer {
+  const moved = Object.entries(allocation.moved ?? {});
+  if (done || moved.length === 0) return allocationTransfer(allocation, accounts, defaultAccountId, done);
+  const reversal = moved.filter(([id]) => accounts.some(a => a.id === id)).map(([id, d]) => [id, -d] as const);
+  return reversal.length > 0 ? { kind: 'move', deltas: Object.fromEntries(reversal) } : { kind: 'none' };
+}
+
+/** The line as stored after `allocationToggle`'s transfer is applied: a check
+ *  records what it moved, an uncheck clears the record. */
+export function withAllocationDone(
+  allocation: HalfAllocation,
+  done: boolean,
+  transfer: AllocationTransfer
+): HalfAllocation {
+  const { moved: _moved, done: _done, ...rest } = allocation;
+  if (!done) return rest;
+  return { ...rest, done: true, ...(transfer.kind === 'move' ? { moved: transfer.deltas } : {}) };
 }
 
 /** One due day on the sheet: a date and the bills that land on it. */

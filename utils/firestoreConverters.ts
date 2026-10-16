@@ -746,7 +746,17 @@ function readHalfAllocation(raw: unknown): HalfAllocation | null {
     amount: r['amount'],
     ...(typeof r['accountId'] === 'string' ? { accountId: r['accountId'] } : {}),
     ...(r['done'] === true ? { done: true } : {}),
+    ...readMoved(r['moved']),
   };
+}
+
+/** `HalfAllocation.moved`: only finite numeric entries survive; absent when none do. */
+function readMoved(raw: unknown): { moved?: Record<string, number> } {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
+  const entries = Object.entries(raw).filter(
+    (e): e is [string, number] => typeof e[1] === 'number' && Number.isFinite(e[1])
+  );
+  return entries.length > 0 ? { moved: Object.fromEntries(entries) } : {};
 }
 
 export const halfPlanConverter: FirestoreDataConverter<HalfPlan> = {

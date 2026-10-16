@@ -93,10 +93,27 @@ describe('makeSetAllocationDone', () => {
   it('checks the line off and moves the money in one batch', async () => {
     const { setAllocationDone } = makeSetAllocationDone({ db, householdId: 'h1', user: { uid: 'paul' }, accounts, defaultAccountId: undefined });
     await setAllocationDone(plan, 'b1', true);
-    expect(batch.set.mock.calls[0]?.[1]).toMatchObject({ allocations: [{ id: 'b1', done: true }] });
+    expect(batch.set.mock.calls[0]?.[1]).toMatchObject({ allocations: [{ id: 'b1', done: true, moved: { chk: -900, sav: 900 } }] });
     expect(batch.update.mock.calls.map(([ref, data]) => [ref.__path, data.balance])).toEqual([
       ['households/h1/accounts/chk', { __increment: -900 }],
       ['households/h1/accounts/sav', { __increment: 900 }],
+    ]);
+    expect(batch.commit).toHaveBeenCalledTimes(1);
+  });
+
+  it('unchecking reverses exactly the recorded move, even with a different default account, and clears the record', async () => {
+    const withOtherChecking: Account[] = [{ id: 'chk2', name: 'New checking', type: 'checking', balance: 0, lastUpdated: '', order: -1 }, ...accounts];
+    const checked: HalfPlan = {
+      ...plan,
+      allocations: [{ id: 'b1', kind: 'to-savings', label: 'To savings', amount: 900, done: true, moved: { chk: -900, sav: 900 } }],
+    };
+    const { setAllocationDone } = makeSetAllocationDone({ db, householdId: 'h1', user: { uid: 'paul' }, accounts: withOtherChecking, defaultAccountId: 'chk2' });
+    await setAllocationDone(checked, 'b1', false);
+    const stored = batch.set.mock.calls[0]?.[1] as HalfPlan;
+    expect(stored.allocations[0]).toEqual({ id: 'b1', kind: 'to-savings', label: 'To savings', amount: 900 });
+    expect(batch.update.mock.calls.map(([ref, data]) => [ref.__path, data.balance])).toEqual([
+      ['households/h1/accounts/chk', { __increment: 900 }],
+      ['households/h1/accounts/sav', { __increment: -900 }],
     ]);
     expect(batch.commit).toHaveBeenCalledTimes(1);
   });

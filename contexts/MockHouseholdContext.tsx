@@ -70,7 +70,7 @@ import { selectHabitsToFire } from '@/utils/transactionHabitFiring';
 import { MAX_COMMENT_LENGTH } from '@/contexts/household/mutations/commentMutations';
 import { buildMerchantRuleFields, type MerchantRuleDraft } from '@/contexts/household/mutations/merchantRuleMutations';
 import { roundMoney } from '@/utils/money';
-import { allocationTransfer } from '@/utils/halfPlan';
+import { allocationToggle, withAllocationDone } from '@/utils/halfPlan';
 import { splitParticipantKey } from '@/utils/settlement';
 import { trashDocId, type TrashDomain, type TrashedItem } from '@/utils/trash';
 import { computeNetWorth } from '@/utils/netWorth';
@@ -1639,7 +1639,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const setAllocationDone = useCallback(async (plan: HalfPlan, allocationId: string, done: boolean) => {
     const allocation = plan.allocations.find(a => a.id === allocationId);
     if (!allocation || !!allocation.done === done) return;
-    const transfer = allocationTransfer(allocation, accounts, defaultAccountId, done);
+    const transfer = allocationToggle(allocation, accounts, defaultAccountId, done);
     if (transfer.kind === 'missing') {
       toast.error(transfer.reason);
       return;
@@ -1650,7 +1650,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         return delta === undefined ? a : { ...a, balance: roundMoney(a.balance + delta) };
       }));
     }
-    await saveHalfPlan({ ...plan, allocations: plan.allocations.map(a => (a.id === allocationId ? { ...a, done } : a)) });
+    await saveHalfPlan({ ...plan, allocations: plan.allocations.map(a => (a.id === allocationId ? withAllocationDone(a, done, transfer) : a)) });
   }, [accounts, defaultAccountId, saveHalfPlan]);
 
   // Mirrors makeImportSheetMonth: new one-off bills, one-month amounts, plans.
