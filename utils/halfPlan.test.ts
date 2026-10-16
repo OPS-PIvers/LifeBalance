@@ -271,7 +271,7 @@ describe('half actuals and overrun fixes', () => {
   });
 
   it('offers savings, or a budget with room, and either keeps the half as assigned', () => {
-    const fixes = overrunFixes(plan, 'gas', actuals, () => 'n');
+    const fixes = overrunFixes(plan, 'gas', actuals, () => 'n', BUCKETS);
     expect(fixes.map(f => [f.kind, f.fromBucketId])).toEqual([['savings', undefined], ['bucket', 'grocery']]);
     expect(fixes[0]?.plan.budgets.gas).toBe(150.5);
     expect(fixes[0]?.plan.allocations).toEqual([{ id: 'n', kind: 'from-savings', label: 'From savings', amount: 30.5 }]);
@@ -282,7 +282,18 @@ describe('half actuals and overrun fixes', () => {
     }
   });
 
+  it('never offers to take from a budget that no longer exists', () => {
+    const withGhost: HalfPlan = { ...plan, budgets: { gas: 120, grocery: 800, ghost: 900 } };
+    const fixes = overrunFixes(withGhost, 'gas', actuals, () => 'n', BUCKETS);
+    expect(fixes.map(f => f.fromBucketId)).not.toContain('ghost');
+    expect(fixes.map(f => [f.kind, f.fromBucketId])).toEqual([['savings', undefined], ['bucket', 'grocery']]);
+    const before = summarizeHalf(half('2026-10-01'), expanded, withGhost, BUCKETS).leftToAssign;
+    for (const fix of fixes) {
+      expect(summarizeHalf(half('2026-10-01'), expanded, fix.plan, BUCKETS).leftToAssign).toBe(before);
+    }
+  });
+
   it('offers nothing for a budget that has not run over', () => {
-    expect(overrunFixes(plan, 'grocery', actuals, () => 'n')).toEqual([]);
+    expect(overrunFixes(plan, 'grocery', actuals, () => 'n', BUCKETS)).toEqual([]);
   });
 });

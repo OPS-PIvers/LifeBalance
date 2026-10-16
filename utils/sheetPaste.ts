@@ -1,4 +1,5 @@
 import { Account, BudgetBucket, CalendarItem, HalfAllocationKind, HalfPlan } from '@/types/schema';
+import { getDaysInMonth, parseISO } from 'date-fns';
 import { roundMoney } from '@/utils/money';
 
 /**
@@ -162,8 +163,11 @@ const dayDiff = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(b)
  */
 export function matchBills(bills: PastedBill[], month: string, expanded: CalendarItem[]): BillMatch[] {
   const used = new Set<string>();
+  // A row on the 31st in a 30-day month (or the 29th–31st in February) is
+  // the month's last day, never an impossible date like 2026-09-31.
+  const lastDay = getDaysInMonth(parseISO(`${month}-01`));
   return bills.map(bill => {
-    const date = `${month}-${String(bill.day).padStart(2, '0')}`;
+    const date = `${month}-${String(Math.min(bill.day, lastDay)).padStart(2, '0')}`;
     const existing = expanded
       .filter(i => i.type === 'expense' && !i.isDeleted && !used.has(i.id) && nameKey(i.title) === nameKey(bill.title))
       .filter(i => dayDiff(i.date, date) <= 3)
