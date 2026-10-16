@@ -57,7 +57,8 @@ export const getTimezoneOptionsIncluding = (value?: string | null): string[] => 
 };
 
 /**
- * A zone's current UTC offset, formatted like `GMT-5` / `GMT+5:30` — DST-aware
+ * A zone's current UTC offset, formatted like `GMT-5` / `GMT+5:30` (a zero
+ * offset is always `GMT+0`, whatever the runtime's ICU writes) — DST-aware
  * (delegates to the runtime's own Intl offset calculation rather than
  * hand-rolled arithmetic, so it's correct on both sides of a DST transition).
  * Returns '' for a zone the runtime can't resolve (e.g. a stale/deprecated
@@ -79,7 +80,10 @@ export const formatTimezoneOffset = (zone: string, date: Date = new Date()): str
     })
       .formatToParts(date)
       .find((p) => p.type === 'timeZoneName');
-    return part?.value ?? '';
+    const value = part?.value ?? '';
+    // Newer ICU (77+, e.g. Node 22.22) writes a zero offset as plain "GMT";
+    // keep every label in the same `GMT±N` shape.
+    return value === 'GMT' ? 'GMT+0' : value;
   } catch {
     return '';
   }

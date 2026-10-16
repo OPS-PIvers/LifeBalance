@@ -77,6 +77,23 @@ describe('formatTimezoneOffset', () => {
     expect(formatTimezoneOffset('UTC', new Date('2026-01-15T00:00:00Z'))).toBe('GMT+0');
   });
 
+  it('normalizes a bare "GMT" (ICU 77+) to GMT+0, whatever ICU the runtime ships', () => {
+    // Stubbed so this pins the normalization on every Node, not only on the
+    // ICU that happens to write the bare form. Arrow function, called without
+    // `new`, matching NotificationSettings.test.tsx's stubDetectedTimezone.
+    vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(
+      (() =>
+        ({
+          formatToParts: () => [{ type: 'timeZoneName', value: 'GMT' }],
+        }) as unknown as Intl.DateTimeFormat) as unknown as typeof Intl.DateTimeFormat
+    );
+    try {
+      expect(formatTimezoneOffset('UTC')).toBe('GMT+0');
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
   it('returns an empty string for a zone the runtime cannot resolve, rather than throwing', () => {
     expect(() => formatTimezoneOffset('Moon/Base_Alpha')).not.toThrow();
     expect(formatTimezoneOffset('Moon/Base_Alpha')).toBe('');
