@@ -27,6 +27,14 @@ import {
   addDays,
   subDays,
 } from "date-fns";
+import {
+  overrideAmounts,
+  scheduledOccurrences,
+  seriesAmountOn,
+  usesScheduledPath,
+  type EarlierAmount,
+  type WeekendShift,
+} from "../shared/recurrenceSchedule";
 
 const MONDAY = 1;
 const MAX_ITERATIONS = 1000;
@@ -41,9 +49,13 @@ export interface BillCalendarItem {
   type: "income" | "expense";
   isPaid: boolean;
   isRecurring?: boolean;
-  frequency?: "weekly" | "bi-weekly" | "monthly";
+  frequency?: "weekly" | "bi-weekly" | "semi-monthly" | "monthly";
+  semiMonthlyDays?: number[];
+  weekendShift?: WeekendShift;
   parentRecurringId?: string;
   isDeleted?: boolean;
+  earlierAmounts?: EarlierAmount[];
+  isOverride?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -131,6 +143,12 @@ function generateRecurringInstances(
     return inRange ? [item] : [];
   }
 
+  if (usesScheduledPath(item.frequency, item)) {
+    return scheduledOccurrences(item.date, item.frequency, item, rangeStart, rangeEnd).map(
+      ({ date }) => ({ ...item, id: generateRecurringId(item.id, date), date, amount: seriesAmountOn(item, date) })
+    );
+  }
+
   const instances: BillCalendarItem[] = [];
   const originalDate = startOfDay(parseISO(item.date));
   const start = startOfDay(rangeStart);
@@ -150,6 +168,7 @@ function generateRecurringInstances(
         ...item,
         id: generateRecurringId(item.id, dateStr),
         date: dateStr,
+        amount: seriesAmountOn(item, dateStr),
       });
     }
     const nextDate = getOccurrenceDate(
@@ -191,6 +210,7 @@ export function expandCalendarItems(
 
   const paidDatesMap = new Map<string, Set<string>>();
   const deletedDatesMap = new Map<string, Set<string>>();
+  const overrides = overrideAmounts(items);
 
   for (const paid of paidInstances) {
     if (paid.parentRecurringId) {
@@ -213,11 +233,11 @@ export function expandCalendarItems(
     const instances = generateRecurringInstances(template, rangeStart, rangeEnd);
     const paidDates = paidDatesMap.get(template.id) || new Set();
     const deletedDates = deletedDatesMap.get(template.id) || new Set();
-    const activeInstances = instances.filter(
-      (instance) =>
-        !paidDates.has(instance.date) && !deletedDates.has(instance.date)
-    );
-    allInstances.push(...activeInstances);
+    for (const instance of instances) {
+      if (paidDates.has(instance.date) || deletedDates.has(instance.date)) continue;
+      const override = overrides.get(`${template.id}|${instance.date}`);
+      allInstances.push(override === undefined ? instance : { ...instance, amount: override });
+    }
   }
 
   const startStr = format(rangeStart, "yyyy-MM-dd");

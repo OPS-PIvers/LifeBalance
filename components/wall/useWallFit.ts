@@ -126,3 +126,62 @@ export function useWholeWords(ref: RefObject<HTMLElement | null>, text: string):
     };
   }, [ref, text]);
 }
+
+/** How many rows a wrapping line of children takes, by their distinct tops. */
+function rowCount(items: readonly HTMLElement[]): number {
+  return new Set(items.filter(c => !c.hidden).map(c => Math.round(c.getBoundingClientRect().top))).size;
+}
+
+/**
+ * Keeps a wrapping row of children (a flex-wrap line) to at most `lines`
+ * rows: hides children from the end and shows the last child, the "more"
+ * marker, as "+N more" in their place. The marker is rendered empty and
+ * hidden; this writes its text. Unmeasured (every top 0, as in tests) →
+ * everything shows.
+ */
+export function useLineClamp(ref: RefObject<HTMLElement | null>, lines: number): void {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    let frame = 0;
+    let mutate: MutationObserver | null = null;
+    const clamp = () => {
+      frame = 0;
+      const all = Array.from(el.children).filter((c): c is HTMLElement => c instanceof HTMLElement);
+      const more = all.at(-1);
+      const items = all.slice(0, -1);
+      if (!more || items.length === 0) return;
+      for (const c of items) c.hidden = false;
+      more.hidden = true;
+      if (rowCount(items) <= lines) {
+        mutate?.takeRecords();
+        return;
+      }
+      more.hidden = false;
+      // The first item always shows, so the marker never stands alone.
+      for (let shown = items.length - 1; shown >= 1; shown--) {
+        const item = items[shown];
+        if (item) item.hidden = true;
+        more.textContent = `+${items.length - shown} more`;
+        if (rowCount(all) <= lines) break;
+      }
+      // Its own text writes are mutations; dropped, so they don't run this again.
+      mutate?.takeRecords();
+    };
+    const later = () => {
+      if (!frame) frame = window.requestAnimationFrame(clamp);
+    };
+    clamp();
+    const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(later);
+    resize?.observe(el);
+    // A new event; `hidden` is an attribute, so hiding doesn't re-trigger this.
+    mutate = typeof MutationObserver === 'undefined' ? null : new MutationObserver(later);
+    mutate?.observe(el, { childList: true, subtree: true, characterData: true });
+    if ('fonts' in document) void document.fonts.ready.then(later);
+    return () => {
+      resize?.disconnect();
+      mutate?.disconnect();
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [ref, lines]);
+}

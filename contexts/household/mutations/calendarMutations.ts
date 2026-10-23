@@ -18,11 +18,20 @@ import toast from 'react-hot-toast';
 import { describeError } from '@/utils/errorMessages';
 import { format, parseISO, addDays, startOfToday, isAfter, isValid } from 'date-fns';
 import { Account, CalendarItem, Household, INCOME_CATEGORY } from '@/types/schema';
-import type { MutationOpts } from '@/contexts/household/types';
+import type { CalendarUpdateOpts, MutationOpts } from '@/contexts/household/types';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { BUDGETED_IN_CALENDAR } from '@/utils/categories';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
-import { parseRecurringId, isRecurringId, rollRecurringAnchorForward } from '@/utils/calendarRecurrence';
+import {
+  parseRecurringId,
+  isRecurringId,
+  rollRecurringAnchorForward,
+  semiMonthlyDaysFor,
+  occurrenceAmount,
+  findOccurrenceOverride,
+  withAmountFrom,
+  seriesAmountOn,
+} from '@/utils/calendarRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { appendActivityLog, composeSummary } from '@/utils/activityLog';
 import { emitPayPeriodCeremony, type PayPeriodCeremonyEvent } from '@/utils/payPeriodCeremony';
@@ -62,8 +71,15 @@ export function makeAddCalendarItem(deps: {
 
     try {
       // Exclude 'id' field - it's not stored in Firestore (document ID is separate)
-      const { id: _id, ...itemWithoutId } = item;
-      const sanitizedItem = sanitizeFirestoreData(itemWithoutId);
+      // and the expansion-only `nominalDate`. A semi-monthly series stores its
+      // day pair explicitly so a later anchor roll can't change it.
+      const { id: _id, nominalDate: _nominal, ...itemWithoutId } = item;
+      const sanitizedItem = sanitizeFirestoreData({
+        ...itemWithoutId,
+        ...(item.isRecurring && item.frequency === 'semi-monthly'
+          ? { semiMonthlyDays: semiMonthlyDaysFor(item) }
+          : {}),
+      });
 
       await addDoc(collection(db, `households/${householdId}/calendarItems`), {
         ...sanitizedItem,
@@ -91,7 +107,7 @@ export function makeUpdateCalendarItem(deps: {
 }) {
   const { db, householdId, calendarItems } = deps;
 
-  const updateCalendarItem = async (item: CalendarItem, opts?: MutationOpts) => {
+  const updateCalendarItem = async (item: CalendarItem, opts?: CalendarUpdateOpts) => {
     if (!householdId) return;
 
     try {
@@ -114,9 +130,15 @@ export function makeUpdateCalendarItem(deps: {
           !!existing &&
           (!existing.isRecurring ||
             existing.date !== item.date ||
-            existing.frequency !== item.frequency);
+            existing.frequency !== item.frequency ||
+            existing.weekendShift !== item.weekendShift ||
+            (item.frequency === 'semi-monthly' &&
+              semiMonthlyDaysFor(existing).join() !== semiMonthlyDaysFor(item).join()));
         if (scheduleChanged) {
-          effectiveDate = rollRecurringAnchorForward(item.date, item.frequency, getLocalDateString());
+          effectiveDate = rollRecurringAnchorForward(item.date, item.frequency, getLocalDateString(), {
+            semiMonthlyDays: item.frequency === 'semi-monthly' ? semiMonthlyDaysFor(item) : undefined,
+            weekendShift: item.weekendShift,
+          });
         }
       }
 
@@ -137,12 +159,47 @@ export function makeUpdateCalendarItem(deps: {
         updates.frequency = deleteField();
       }
 
+      // Schedule detail: a semi-monthly series always stores its day pair
+      // (derived from the ORIGINAL anchor, before any roll moved it); the
+      // weekend rule rides any recurring series. Both clear when not in use.
+      updates.semiMonthlyDays =
+        item.isRecurring && item.frequency === 'semi-monthly' ? semiMonthlyDaysFor(item) : deleteField();
+      updates.weekendShift = item.isRecurring && item.weekendShift ? item.weekendShift : deleteField();
+
+      // Whose paycheck: income only.
+      updates.earnerId = item.type === 'income' && item.earnerId ? item.earnerId : deleteField();
+
+      // "This and future months": the new amount applies from `amountFrom`;
+      // earlier occurrences keep what they cost (earlierAmounts). Without it,
+      // the amount history stays as stored, and leaving recurrence drops it.
+      const existingItem = calendarItems.find(i => i.id === item.id);
+      // An unpaid "Just this month" override on that date would keep winning
+      // over the new series amount, so it goes in the same write — unless the
+      // caller is moving that occurrence and needs it as the tombstone.
+      let staleOverride: CalendarItem | undefined;
+      if (opts?.amountFrom && item.isRecurring && existingItem) {
+        if (!opts.keepOverride) staleOverride = findOccurrenceOverride(calendarItems, item.id, opts.amountFrom);
+        const next = withAmountFrom(existingItem, opts.amountFrom, item.amount);
+        updates.amount = next.amount;
+        updates.earlierAmounts = next.earlierAmounts.length > 0 ? next.earlierAmounts : deleteField();
+      } else if (!item.isRecurring) {
+        updates.earlierAmounts = deleteField();
+      }
+
       // Subscription flag: store true or remove the field entirely (keeps
       // legacy docs clean and lets the rules treat it as optional).
       updates.isSubscription = item.isSubscription ? true : deleteField();
 
       const sanitizedUpdates = sanitizeFirestoreData(updates);
-      await updateDoc(doc(db, `households/${householdId}/calendarItems`, item.id), sanitizedUpdates);
+      const col = `households/${householdId}/calendarItems`;
+      if (staleOverride) {
+        const batch = writeBatch(db);
+        batch.update(doc(db, col, item.id), sanitizedUpdates);
+        batch.delete(doc(db, col, staleOverride.id));
+        await batch.commit();
+      } else {
+        await updateDoc(doc(db, col, item.id), sanitizedUpdates);
+      }
       if (!opts?.silent) toast.success('Event updated');
     } catch (error) {
       console.error('[updateCalendarItem] Failed:', error);
@@ -179,10 +236,17 @@ export function makeCalendarDeleteMutations(deps: {
       const template = calendarItems.find(i => i.id === parentRecurringId);
       if (!template) return;
 
-      // Check if this specific date has already been deleted or paid
+      // Check if this specific date has already been deleted or paid. A
+      // "Just this month" override isn't either: it becomes the tombstone.
       const existingInstance = calendarItems.find(
-        i => i.parentRecurringId === parentRecurringId && i.date === specificDate
+        i => i.parentRecurringId === parentRecurringId && i.date === specificDate && !i.isOverride
       );
+      const override = findOccurrenceOverride(calendarItems, parentRecurringId, specificDate);
+      if (!existingInstance && override) {
+        await updateDoc(doc(db, `households/${householdId}/calendarItems`, override.id), { isDeleted: true });
+        if (!opts?.silent) toast.success('Instance deleted');
+        return;
+      }
       if (existingInstance) {
         // If it's already a paid/deleted instance, just delete that record
         await deleteDoc(doc(db, `households/${householdId}/calendarItems`, existingInstance.id));
@@ -193,7 +257,7 @@ export function makeCalendarDeleteMutations(deps: {
       // Create a deleted instance marker
       await addDoc(collection(db, `households/${householdId}/calendarItems`), {
         title: template.title,
-        amount: template.amount,
+        amount: seriesAmountOn(template, specificDate),
         date: specificDate,
         type: template.type,
         isPaid: false,
@@ -212,6 +276,154 @@ export function makeCalendarDeleteMutations(deps: {
   };
 
   return { deleteRecurringInstance };
+}
+
+/**
+ * setOccurrenceAmount — "Just this month": changes ONE occurrence's amount
+ * through an override instance doc, leaving the series alone. Setting it
+ * back to the series amount removes the override.
+ */
+export function makeSetOccurrenceAmount(deps: {
+  db: Firestore;
+  householdId: string | null;
+  user: { uid: string } | null;
+  calendarItems: CalendarItem[];
+}) {
+  const { db, householdId, user, calendarItems } = deps;
+
+  const setOccurrenceAmount = async (occurrenceId: string, amount: number, opts?: MutationOpts) => {
+    if (!householdId || !user) return;
+    const parsed = parseRecurringId(occurrenceId);
+    if (!parsed) return;
+    const template = calendarItems.find(i => i.id === parsed.templateId);
+    if (!template) return;
+    const rounded = roundMoney(Math.abs(amount));
+    const existing = findOccurrenceOverride(calendarItems, template.id, parsed.date);
+    const col = `households/${householdId}/calendarItems`;
+
+    try {
+      if (rounded === seriesAmountOn(template, parsed.date)) {
+        if (existing) await deleteDoc(doc(db, col, existing.id));
+      } else if (existing) {
+        await updateDoc(doc(db, col, existing.id), { amount: rounded });
+      } else {
+        await addDoc(collection(db, col), {
+          title: template.title,
+          amount: rounded,
+          date: parsed.date,
+          type: template.type,
+          isPaid: false,
+          isRecurring: false,
+          isOverride: true,
+          parentRecurringId: template.id,
+          createdBy: user.uid,
+        });
+      }
+      if (!opts?.silent) toast.success(`Changed for ${format(parseISO(parsed.date), 'MMM d')} only`);
+    } catch (error) {
+      console.error('[setOccurrenceAmount] Failed:', error);
+      toast.error(describeError(error, 'change this amount'));
+      throw error;
+    }
+  };
+
+  return { setOccurrenceAmount };
+}
+
+/**
+ * editCalendarEntry — the pay-period sheet's row editor: rename a row or move
+ * it to another date.
+ *  - A recurring OCCURRENCE (synthetic id): a new name renames the series (the
+ *    name is the series'); a new date moves just this occurrence, in ONE batch:
+ *    the occurrence is hidden (its "Just this month" override, if any, becomes
+ *    the tombstone) and a one-off carrying its amount lands on the new date.
+ *  - A stored doc (one-off, or a paid occurrence): updated in place. A paid
+ *    row can't move into the future: that money already moved.
+ *
+ * `amount` sets a one-off's amount (unpaid only) or the amount of a moved
+ * occurrence's one-off, in the same write as the rename/move, so an edit
+ * that changes several fields can't be overwritten by a second write. A
+ * repeating series' amount still goes through `setOccurrenceAmount` /
+ * `updateCalendarItem`.
+ */
+export function makeEditCalendarEntry(deps: {
+  db: Firestore;
+  householdId: string | null;
+  user: { uid: string } | null;
+  calendarItems: CalendarItem[];
+}) {
+  const { db, householdId, user, calendarItems } = deps;
+
+  const editCalendarEntry = async (id: string, changes: { title?: string; date?: string; amount?: number }) => {
+    if (!householdId || !user) return;
+    const col = `households/${householdId}/calendarItems`;
+    const title = changes.title?.trim().slice(0, 100);
+    const parsed = isRecurringId(id) ? parseRecurringId(id) : null;
+
+    try {
+      if (!parsed) {
+        const item = calendarItems.find(i => i.id === id);
+        if (!item) return;
+        if (item.isPaid && changes.date && changes.date > getLocalDateString()) {
+          toast.error("A paid item can't move to a future date");
+          return;
+        }
+        const updates: Record<string, unknown> = {};
+        if (title && title !== item.title) updates.title = title;
+        if (changes.date && changes.date !== item.date) updates.date = changes.date;
+        if (changes.amount !== undefined && !item.isPaid && changes.amount !== item.amount) updates.amount = changes.amount;
+        if (Object.keys(updates).length === 0) return;
+        await updateDoc(doc(db, col, id), updates);
+        toast.success('Updated');
+        return;
+      }
+
+      const template = calendarItems.find(i => i.id === parsed.templateId);
+      if (!template) return;
+      const batch = writeBatch(db);
+      const renamed = title && title !== template.title ? title : undefined;
+      if (renamed) batch.update(doc(db, col, template.id), { title: renamed });
+
+      if (changes.date && changes.date !== parsed.date) {
+        const amount = occurrenceAmount(calendarItems, template, parsed.date);
+        const override = findOccurrenceOverride(calendarItems, template.id, parsed.date);
+        if (override) {
+          batch.update(doc(db, col, override.id), { isDeleted: true });
+        } else {
+          batch.set(doc(collection(db, col)), {
+            title: template.title,
+            amount,
+            date: parsed.date,
+            type: template.type,
+            isPaid: false,
+            isRecurring: false,
+            isDeleted: true,
+            parentRecurringId: template.id,
+            createdBy: user.uid,
+          });
+        }
+        batch.set(doc(collection(db, col)), {
+          title: renamed ?? template.title,
+          amount: changes.amount ?? amount,
+          date: changes.date,
+          type: template.type,
+          isPaid: false,
+          isRecurring: false,
+          createdBy: user.uid,
+        });
+      } else if (!renamed) {
+        return;
+      }
+      await batch.commit();
+      toast.success(changes.date && changes.date !== parsed.date ? `Moved to ${format(parseISO(changes.date), 'MMM d')}` : 'Renamed');
+    } catch (error) {
+      console.error('[editCalendarEntry] Failed:', error);
+      toast.error(describeError(error, 'save this change'));
+      throw error;
+    }
+  };
+
+  return { editCalendarEntry };
 }
 
 /**
@@ -309,6 +521,7 @@ export function makePayCalendarItem(deps: {
         item = {
           ...template,
           date: specificDate,
+          amount: occurrenceAmount(calendarItems, template, specificDate),
         };
       } else {
         // Non-recurring item
@@ -599,7 +812,7 @@ export function makeLinkBankTransactionToBill(deps: {
         toast.error('That bill is already marked paid');
         return false;
       }
-      item = { ...template, date: specificDate };
+      item = { ...template, date: specificDate, amount: occurrenceAmount(calendarItems, template, specificDate) };
     } else {
       item = calendarItems.find((i) => i.id === calendarItemId);
       if (!item || item.type !== 'expense') return false;
@@ -786,7 +999,7 @@ export function makeSettleBillWithTransaction(deps: {
         toast.error('That bill is already marked paid');
         return false;
       }
-      item = { ...template, date: specificDate };
+      item = { ...template, date: specificDate, amount: occurrenceAmount(calendarItems, template, specificDate) };
     } else {
       item = calendarItems.find((i) => i.id === calendarItemId);
       if (!item || item.type !== 'expense') return false;
@@ -1076,6 +1289,7 @@ export function makeDeferCalendarItem(deps: {
       if (!template) return;
 
       const newDate = calculateDeferredDate(specificDate);
+      const amount = occurrenceAmount(calendarItems, template, specificDate);
 
       // Commit the deferred item and the tombstone in a single batch so a
       // partial write can never duplicate the instance (deferred copy created
@@ -1086,7 +1300,7 @@ export function makeDeferCalendarItem(deps: {
       // 1. Create deferred item
       deferBatch.set(doc(collection(db, `households/${householdId}/calendarItems`)), {
         title: template.title,
-        amount: template.amount,
+        amount,
         date: newDate,
         type: template.type,
         isPaid: false,
@@ -1098,7 +1312,7 @@ export function makeDeferCalendarItem(deps: {
       // We create a "tombstone" with isDeleted: true to hide this specific instance from expansion
       deferBatch.set(doc(collection(db, `households/${householdId}/calendarItems`)), {
         title: template.title,
-        amount: template.amount,
+        amount,
         date: specificDate,
         type: template.type,
         isPaid: false,

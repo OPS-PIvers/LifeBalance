@@ -1,12 +1,20 @@
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { useFinance, useTodos, useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
+import { useFinance, useTodos, useExpandedCalendarItems, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
-import { format, isSameMonth, isSameDay, isToday, addMonths, subMonths, startOfWeek, addDays } from 'date-fns';
+import { format, isSameMonth, isSameDay, isToday, addMonths, subMonths, startOfWeek, addDays, parseISO } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Copy, CheckSquare, Download, MoreVertical, MoreHorizontal, Repeat, CalendarPlus, CalendarDays } from 'lucide-react';
-import { CalendarItem } from '@/types/schema';
+import { CalendarFrequency, CalendarItem, WeekendShift } from '@/types/schema';
 import { useCalendarGrid } from '@/hooks/useCalendarGrid';
-import { parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
+import {
+  parseRecurringId,
+  isRecurringId,
+  isCalendarFrequency,
+  isWeekendShift,
+  semiMonthlyDaysFor,
+  ordinalDay,
+  CALENDAR_FREQUENCY_LABELS,
+} from '@/utils/calendarRecurrence';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
@@ -35,9 +43,14 @@ type CalendarViewMode = 'day' | 'month';
 const STRIP_WEEKS_BACK = 8;
 const STRIP_WEEKS_FORWARD = 12;
 
+const DAYS_OF_MONTH = Array.from({ length: 31 }, (_, i) => i + 1);
+
 const BudgetCalendar: React.FC = () => {
-  const { calendarItems, addCalendarItem, updateCalendarItem, deleteCalendarItem, forgetBillDescriptorAlias, accounts } = useFinance();
+  const { calendarItems, addCalendarItem, updateCalendarItem, setOccurrenceAmount, deleteCalendarItem, forgetBillDescriptorAlias, accounts } = useFinance();
   const { todos, completeToDo } = useTodos();
+  const { members } = useHouseholdCore();
+  // Paychecks belong to an adult; managed kid profiles never earn one.
+  const earners = useMemo(() => members.filter(m => !m.isManaged), [members]);
   const fmt = useFormatCurrency();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -84,6 +97,12 @@ const BudgetCalendar: React.FC = () => {
    * date; `null` hides the settle affordance entirely.
    */
   const [settleTarget, setSettleTarget] = useState<{ id: string; date: string; title: string } | null>(null);
+  /** The recurring occurrence the drawer was opened from (synthetic id, its
+   *  date and what it costs), so an amount edit can ask "Just this month" or
+   *  "This and future months". Null for one-offs and new items. */
+  const [occurrence, setOccurrence] = useState<{ id: string; date: string; amount: number } | null>(null);
+  /** True while the drawer is asking which months an amount edit applies to. */
+  const [askAmountScope, setAskAmountScope] = useState(false);
   const [activeActionItem, setActiveActionItem] = useState<CalendarItem | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -94,7 +113,12 @@ const BudgetCalendar: React.FC = () => {
   const [date, setDate] = useState('');
   const [accountId, setAccountId] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
-  const [frequency, setFrequency] = useState<'monthly' | 'bi-weekly' | 'weekly'>('monthly');
+  const [frequency, setFrequency] = useState<CalendarFrequency>('monthly');
+  // Twice-a-month pay days: the 15th & the last day by default (see
+  // handleFrequencyChange).
+  const [semiDays, setSemiDays] = useState<[number, number]>([15, 31]);
+  const [weekendShift, setWeekendShift] = useState<WeekendShift | ''>('');
+  const [earnerId, setEarnerId] = useState('');
   const [isSubscription, setIsSubscription] = useState(false);
 
   // TODO.md 2H(a): "this bill IS that charge", from the calendar side. Closes
@@ -259,9 +283,14 @@ const BudgetCalendar: React.FC = () => {
     setAccountId('');
     setIsRecurring(false);
     setFrequency('monthly');
+    setSemiDays([15, 31]);
+    setWeekendShift('');
+    setEarnerId('');
     setIsSubscription(false);
     setEditingItem(null);
     setSettleTarget(null);
+    setOccurrence(null);
+    setAskAmountScope(false);
     setIsAddModalOpen(true);
   };
 
@@ -289,6 +318,8 @@ const BudgetCalendar: React.FC = () => {
       !item.isPaid &&
       (isRecurringId(item.id) || !item.isRecurring);
     setSettleTarget(settleable ? { id: item.id, date: item.date, title: item.title } : null);
+    setOccurrence(isInstance(item) && !item.isPaid ? { id: item.id, date: item.date, amount: item.amount } : null);
+    setAskAmountScope(false);
 
     // If this is a recurring instance, edit the original item instead
     if (isInstance(item)) {
@@ -298,12 +329,17 @@ const BudgetCalendar: React.FC = () => {
         return;
       }
       setTitle(originalItem.title);
-      setAmount(originalItem.amount.toString());
+      // This month's amount, which a "Just this month" change may differ from
+      // the series' (handleSave asks which months a change applies to).
+      setAmount(item.amount.toString());
       setType(originalItem.type);
       setDate(originalItem.date);
       setAccountId(originalItem.accountId || '');
       setIsRecurring(!!originalItem.isRecurring);
       setFrequency(originalItem.frequency || 'monthly');
+      setSemiDays(semiMonthlyDaysFor(originalItem));
+      setWeekendShift(originalItem.weekendShift ?? '');
+      setEarnerId(originalItem.earnerId ?? '');
       setIsSubscription(!!originalItem.isSubscription);
       setEditingItem(originalItem);
     } else {
@@ -314,34 +350,78 @@ const BudgetCalendar: React.FC = () => {
       setAccountId(item.accountId || '');
       setIsRecurring(!!item.isRecurring);
       setFrequency(item.frequency || 'monthly');
+      setSemiDays(semiMonthlyDaysFor(item));
+      setWeekendShift(item.weekendShift ?? '');
+      setEarnerId(item.earnerId ?? '');
       setIsSubscription(!!item.isSubscription);
       setEditingItem(item);
     }
     setIsAddModalOpen(true);
   };
 
-  const handleSave = async () => {
+  // Switching to twice-a-month starts at the 15th & the last day (31 clamps
+  // to a short month's end), the household's pay schedule. It is NOT derived
+  // from the item's date: a paycheck last dated the 29th would otherwise
+  // quietly become "the 14th & 29th".
+  const handleFrequencyChange = (value: string) => {
+    if (!isCalendarFrequency(value)) return;
+    if (value === 'semi-monthly' && frequency !== 'semi-monthly') {
+      setSemiDays([15, 31]);
+    }
+    // A weekend rule only applies to date-of-month schedules.
+    if (value === 'weekly' || value === 'bi-weekly') setWeekendShift('');
+    setFrequency(value);
+  };
+
+  const handleSemiDayChange = (slot: 0 | 1, day: number) => {
+    setSemiDays(prev => {
+      const next: [number, number] = slot === 0 ? [day, prev[1]] : [prev[0], day];
+      return next[0] <= next[1] ? next : [next[1], next[0]];
+    });
+  };
+
+  const handleSave = async (amountScope?: 'one' | 'future') => {
     if (!title || !amount || !date) return;
+    const enteredAmount = parseFloat(amount);
+    const amountChanged = occurrence !== null && enteredAmount !== occurrence.amount;
+    if (amountChanged && isRecurring && editingItem?.isRecurring && !amountScope) {
+      setAskAmountScope(true);
+      return;
+    }
+    if (isRecurring && frequency === 'semi-monthly' && semiDays[0] === semiDays[1]) {
+      toast.error('Pick two different days for a twice-a-month schedule');
+      return;
+    }
 
     const newItem: CalendarItem = {
       id: editingItem ? editingItem.id : crypto.randomUUID(),
       title,
-      amount: parseFloat(amount),
+      // From an occurrence, the series amount moves only when asked to.
+      amount: occurrence && editingItem && isRecurring && amountScope !== 'future' ? editingItem.amount : enteredAmount,
       date: date,
       type,
       isPaid: editingItem ? editingItem.isPaid : false,
       isRecurring,
       frequency: isRecurring ? frequency : undefined,
+      semiMonthlyDays: isRecurring && frequency === 'semi-monthly' ? semiDays : undefined,
+      weekendShift: isRecurring && weekendShift ? weekendShift : undefined,
+      earnerId: type === 'income' && earnerId ? earnerId : undefined,
       isSubscription: type === 'expense' && isSubscription ? true : undefined,
       accountId: accountId || undefined
     };
 
     try {
-      if (editingItem) {
+      if (editingItem && occurrence && amountScope === 'one') {
+        await updateCalendarItem(newItem, { silent: true });
+        await setOccurrenceAmount(occurrence.id, enteredAmount);
+      } else if (editingItem && occurrence && amountScope === 'future') {
+        await updateCalendarItem(newItem, { amountFrom: occurrence.date });
+      } else if (editingItem) {
         await updateCalendarItem(newItem);
       } else {
         await addCalendarItem(newItem);
       }
+      setAskAmountScope(false);
       setIsAddModalOpen(false);
     } catch (error) {
       console.error("Failed to save calendar item:", error);
@@ -385,8 +465,10 @@ const BudgetCalendar: React.FC = () => {
     if (!title || !amount || !date) return;
 
     setEditingItem(null);
+    setOccurrence(null);
     setIsRecurring(false);
     setFrequency('monthly');
+    setWeekendShift('');
     toast.success('Review the duplicate, then tap Add Event');
   };
 
@@ -837,7 +919,24 @@ const BudgetCalendar: React.FC = () => {
         // nothing is pending.
         onClose={() => { setIsAddModalOpen(false); cancelSettle(); }}
         title={editingItem ? 'Edit Event' : 'Add Calendar Item'}
-        footer={
+        footer={askAmountScope && occurrence ? (
+          <div className="border-t border-brand-200 dark:border-brand-700 p-4 space-y-2">
+            <p className="text-sm text-brand-600 dark:text-brand-300">
+              Change the amount for which months?
+            </p>
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => handleSave('one')} className="flex-1 py-3 h-auto">
+                Just {format(parseISO(occurrence.date), 'MMMM')}
+              </Button>
+              <Button variant="primary" onClick={() => handleSave('future')} className="flex-1 py-3 h-auto">
+                This and future months
+              </Button>
+            </div>
+            <Button variant="ghost" onClick={() => setAskAmountScope(false)} className="w-full">
+              Back
+            </Button>
+          </div>
+        ) : (
           <div className="flex gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
             {editingItem && (
               <Button
@@ -851,13 +950,13 @@ const BudgetCalendar: React.FC = () => {
             )}
             <Button
               variant="primary"
-              onClick={handleSave}
+              onClick={() => handleSave()}
               className="flex-1 py-3 h-auto"
             >
               {editingItem ? 'Save Changes' : 'Add Event'}
             </Button>
           </div>
-        }
+        )}
       >
           <div className="space-y-4">
              {/* Type Toggle */}
@@ -923,11 +1022,53 @@ const BudgetCalendar: React.FC = () => {
                <Select
                  label="Frequency"
                  value={frequency}
-                 onChange={(e) => setFrequency(e.target.value as 'monthly' | 'bi-weekly' | 'weekly')}
+                 onChange={(e) => handleFrequencyChange(e.target.value)}
                >
-                 <option value="monthly">Monthly</option>
-                 <option value="bi-weekly">Bi-Weekly</option>
-                 <option value="weekly">Weekly</option>
+                 {Object.entries(CALENDAR_FREQUENCY_LABELS).map(([value, label]) => (
+                   <option key={value} value={value}>{label}</option>
+                 ))}
+               </Select>
+             )}
+
+             {isRecurring && frequency === 'semi-monthly' && (
+               <div className="grid grid-cols-2 gap-3">
+                 {([0, 1] as const).map(slot => (
+                   <Select
+                     key={slot}
+                     label={slot === 0 ? 'First day' : 'Second day'}
+                     value={String(semiDays[slot])}
+                     onChange={(e) => handleSemiDayChange(slot, Number(e.target.value))}
+                   >
+                     {DAYS_OF_MONTH.map(d => (
+                       <option key={d} value={d}>{d === 31 ? 'Last day' : ordinalDay(d)}</option>
+                     ))}
+                   </Select>
+                 ))}
+               </div>
+             )}
+
+             {isRecurring && (frequency === 'semi-monthly' || frequency === 'monthly') && (
+               <Select
+                 label="If it lands on a weekend"
+                 value={weekendShift}
+                 onChange={(e) => setWeekendShift(isWeekendShift(e.target.value) ? e.target.value : '')}
+               >
+                 <option value="">Keep the date</option>
+                 <option value="before">Move to the Friday before</option>
+                 <option value="after">Move to the Monday after</option>
+               </Select>
+             )}
+
+             {type === 'income' && earners.length > 1 && (
+               <Select
+                 label="Whose paycheck?"
+                 value={earnerId}
+                 onChange={(e) => setEarnerId(e.target.value)}
+               >
+                 <option value="">Not set</option>
+                 {earners.map(m => (
+                   <option key={m.uid} value={m.uid}>{m.displayName}</option>
+                 ))}
                </Select>
              )}
 

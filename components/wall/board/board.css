@@ -29,6 +29,14 @@
  */
 .wall .bd .bdm { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: end; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
 .wall .bd .bdm.nowx { grid-template-columns: auto minmax(0, 1fr); }
+/*
+ * Today's all-day events and bills: a full-width line under the band, so a
+ * long list never widens the clock's column into dinner and the weather.
+ * Two rows at most; the rest fold into "+N more" (opens the day).
+ */
+.wall .bd .bdm > .untimed { grid-column: 1 / -1; margin-top: 10px; font-size: calc(var(--b) * 20px); gap: 4px 20px; }
+.wall .bd .bdm.ut .mc { margin-bottom: 0; padding-bottom: 0; }
+.wall .bd .bdm > .untimed .more { font: inherit; font-weight: 600; color: var(--fg2); }
 .wall .bd .bdt { display: grid; gap: 12px; justify-items: start; padding-right: 40px; }
 .wall .bd .bdt .clock { font-size: 120px; }
 .wall .bd .bdt .dd { font-size: calc(var(--b) * 30px); }

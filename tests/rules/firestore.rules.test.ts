@@ -34,6 +34,7 @@ import {
   updateDoc,
   deleteDoc,
   deleteField,
+  increment,
   serverTimestamp,
   setLogLevel,
   Timestamp,
@@ -1042,6 +1043,41 @@ describe('API keys are admin-only', () => {
   });
 });
 
+describe('apiUsage counters are server-only', () => {
+  // Written only by Cloud Functions (Admin SDK). An admin who could reset
+  // `wallTts` would lift the wall's daily cloud-voice cap at project cost.
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(asFirestore(ctx.firestore()), 'households', H1, 'apiUsage', 'wallTts'), {
+        date: FIXED_DATE,
+        count: 500,
+      });
+    });
+  });
+
+  it('an admin cannot create, reset or delete a counter', async () => {
+    const db = dbFor(ALICE);
+    await assertFails(setDoc(doc(db, 'households', H1, 'apiUsage', 'wallTts'), { date: FIXED_DATE, count: 0 }));
+    await assertFails(updateDoc(doc(db, 'households', H1, 'apiUsage', 'wallTts'), { count: 0 }));
+    await assertFails(deleteDoc(doc(db, 'households', H1, 'apiUsage', 'wallTts')));
+    await assertFails(setDoc(doc(db, 'households', H1, 'apiUsage', 'quickAdd'), { count: 0 }));
+  });
+
+  it('a plain member cannot write a counter either', async () => {
+    await assertFails(updateDoc(doc(dbFor(BOB), 'households', H1, 'apiUsage', 'wallTts'), { count: 0 }));
+  });
+
+  it('members can still read their own counters', async () => {
+    await assertSucceeds(getDoc(doc(dbFor(ALICE), 'households', H1, 'apiUsage', 'wallTts')));
+    await assertSucceeds(getDoc(doc(dbFor(BOB), 'households', H1, 'apiUsage', 'wallTts')));
+  });
+
+  it('a non-member cannot read them', async () => {
+    await assertFails(getDoc(doc(dbFor(CAROL), 'households', H1, 'apiUsage', 'wallTts')));
+    await assertFails(getDoc(doc(dbFor(DAVE), 'households', H1, 'apiUsage', 'wallTts')));
+  });
+});
+
 describe('invite codes', () => {
   it('an authenticated user can fetch a single invite code by id', async () => {
     await assertSucceeds(getDoc(doc(dbFor(DAVE), 'inviteCodes', INVITE_CODE)));
@@ -1602,6 +1638,47 @@ describe('recaps (weekly recap docs — written only by Cloud Functions)', () =>
     await assertFails(
       getDoc(doc(dbFor(CAROL), 'households', H1, 'recaps', '2026-W25')),
     );
+  });
+});
+
+describe('half plans (pay-period sheet)', () => {
+  const plan = {
+    budgets: { gas: 120, grocery: 850 },
+    allocations: [{ id: 'a1', kind: 'card-extra', label: 'AmEx extra payment', amount: 700 }],
+    updatedAt: '2026-10-01T12:00:00.000Z',
+    updatedBy: BOB,
+  };
+  const ref = (uid: string, id = '2026-10-01', hid = H1) => doc(dbFor(uid), 'households', hid, 'halfPlans', id);
+
+  it('a member can save and read their household\'s plan', async () => {
+    await assertSucceeds(setDoc(ref(BOB), plan));
+    await assertSucceeds(getDoc(ref(BOB)));
+  });
+
+  it('a member of another household can neither read nor write it', async () => {
+    await assertFails(setDoc(ref(CAROL), { ...plan, updatedBy: CAROL }));
+    await assertFails(getDoc(ref(CAROL)));
+  });
+
+  it('the id must be a yyyy-MM-dd payday', async () => {
+    await assertFails(setDoc(ref(BOB, 'october'), plan));
+  });
+
+  it('rejects unknown fields and a forged author', async () => {
+    await assertFails(setDoc(ref(BOB), { ...plan, notes: 'x' }));
+    await assertFails(setDoc(ref(BOB), { ...plan, updatedBy: 'someone-else' }));
+  });
+
+  it('bounds the budgets map and the allocations list', async () => {
+    const budgets = Object.fromEntries(Array.from({ length: 51 }, (_, i) => [`b${i}`, 1]));
+    await assertFails(setDoc(ref(BOB), { ...plan, budgets }));
+    const allocations = Array.from({ length: 31 }, (_, i) => ({ id: `a${i}`, kind: 'other', label: 'x', amount: 1 }));
+    await assertFails(setDoc(ref(BOB), { ...plan, allocations }));
+  });
+
+  it('a member can delete a plan', async () => {
+    await assertSucceeds(setDoc(ref(BOB), plan));
+    await assertSucceeds(deleteDoc(ref(BOB)));
   });
 });
 
@@ -2299,6 +2376,80 @@ describe('calendar items (bill↔transaction alias learning)', () => {
   });
 });
 
+describe('calendar items (twice-a-month schedule, weekend rule, earner)', () => {
+  const PAY = 'pay-seed';
+  const paycheck = {
+    title: 'Paycheck',
+    amount: 5703,
+    date: '2026-01-01',
+    type: 'income',
+    isPaid: false,
+    isRecurring: true,
+    frequency: 'semi-monthly',
+  };
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(asFirestore(ctx.firestore()), 'households', H1, 'calendarItems', PAY), paycheck);
+    });
+  });
+
+  it('a member can create a 1st & 16th paycheck paid the Friday before', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', 'pay-new'), {
+        ...paycheck,
+        semiMonthlyDays: [1, 16],
+        weekendShift: 'before',
+        earnerId: BOB,
+      }),
+    );
+  });
+
+  it('a member can set and clear the schedule fields on an existing item', async () => {
+    const ref = doc(dbFor(BOB), 'households', H1, 'calendarItems', PAY);
+    await assertSucceeds(updateDoc(ref, { semiMonthlyDays: [15, 31], weekendShift: 'after', earnerId: BOB }));
+    await assertSucceeds(
+      updateDoc(ref, { semiMonthlyDays: deleteField(), weekendShift: deleteField(), earnerId: deleteField() }),
+    );
+  });
+
+  it('rejects a day pair that is not two days of the month', async () => {
+    const ref = doc(dbFor(BOB), 'households', H1, 'calendarItems', PAY);
+    await assertFails(updateDoc(ref, { semiMonthlyDays: [1, 16, 28] }));
+    await assertFails(updateDoc(ref, { semiMonthlyDays: [0, 16] }));
+    await assertFails(updateDoc(ref, { semiMonthlyDays: [1, 32] }));
+    await assertFails(updateDoc(ref, { semiMonthlyDays: ['1', '16'] }));
+  });
+
+  it('allows amount history and a one-month override, bounded', async () => {
+    const ref = doc(dbFor(BOB), 'households', H1, 'calendarItems', PAY);
+    await assertSucceeds(updateDoc(ref, { earlierAmounts: [{ before: '2026-11-01', amount: 2800 }] }));
+    await assertSucceeds(updateDoc(ref, { earlierAmounts: deleteField() }));
+    await assertFails(
+      updateDoc(ref, { earlierAmounts: Array.from({ length: 25 }, (_, i) => ({ before: `2026-01-${i + 1}`, amount: 1 })) }),
+    );
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', 'override-1'), {
+        title: 'Paycheck', amount: 2900, date: '2026-11-01', type: 'income', isPaid: false,
+        isRecurring: false, isOverride: true, parentRecurringId: PAY, createdBy: BOB,
+      }),
+    );
+    await assertFails(updateDoc(ref, { isOverride: 'yes' }));
+  });
+
+  it('rejects an unknown weekend rule', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', PAY), { weekendShift: 'nearest' }),
+    );
+  });
+
+  it('rejects an oversized earnerId', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', PAY), { earnerId: 'x'.repeat(129) }),
+    );
+  });
+});
+
 // ---------------------------------------------------------------------------
 // challenges — first coverage for this collection. Three live permission-denied
 // bugs prompted it, ALL of them client-side (the rules were already correct):
@@ -2580,6 +2731,14 @@ describe('wall display identity', () => {
       await assertSucceeds(updateDoc(doc(db, 'households', H1), { points: { daily: 1, weekly: 1, total: 1 } }));
     });
 
+    it('credits household points by dot-path increments, as fireLinkedHabitInBatch writes them', async () => {
+      await assertSucceeds(
+        updateDoc(doc(displayDb(), 'households', H1), {
+          'points.daily': increment(2), 'points.weekly': increment(2), 'points.total': increment(2),
+        })
+      );
+    });
+
     it('logs activity as itself', async () => {
       await assertSucceeds(
         setDoc(doc(displayDb(), 'households', H1, 'activityLog', 'log2'), { actorUid: DISPLAY_UID, summary: 'Completed Feed the cat' })
@@ -2678,6 +2837,13 @@ describe('wall display identity', () => {
       await assertFails(updateDoc(doc(db, 'households', H1, 'habits', 'hab1'), { title: 'Changed' }));
       await assertFails(setDoc(doc(db, 'households', H1, 'habits', 'hab2'), { title: 'New', category: 'Health' }));
       await assertFails(deleteDoc(doc(db, 'households', H1, 'habits', 'hab1')));
+    });
+
+    it('cannot write household points that are not a points map', async () => {
+      const db = displayDb();
+      await assertFails(updateDoc(doc(db, 'households', H1), { points: 'lots' }));
+      await assertFails(updateDoc(doc(db, 'households', H1), { points: { daily: 'x' } }));
+      await assertFails(updateDoc(doc(db, 'households', H1), { 'points.total': 'x' }));
     });
 
     it('cannot write meals, the meal plan, settings, events or feeds', async () => {

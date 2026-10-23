@@ -1,4 +1,12 @@
 import { addMonths, differenceInCalendarDays, format, parseISO } from "date-fns";
+import {
+  occurrenceAmountOn,
+  overrideAmounts,
+  scheduledOccurrences,
+  usesScheduledPath,
+  type EarlierAmount,
+  type WeekendShift,
+} from "./recurrenceSchedule";
 
 /**
  * Shape of the calendarItems docs the bill-facing jobs care about. Recurring
@@ -18,10 +26,16 @@ export interface BillCalendarItem {
   date: string;
   isRecurring?: boolean;
   frequency?: string;
+  semiMonthlyDays?: number[];
+  weekendShift?: WeekendShift;
   isPaid?: boolean;
   isDeleted?: boolean;
   parentRecurringId?: string;
   amount?: number;
+  /** "This and future months" history; see utils/calendarRecurrence.ts. */
+  earlierAmounts?: EarlierAmount[];
+  /** A "Just this month" amount override instance doc. */
+  isOverride?: boolean;
 }
 
 /**
@@ -63,7 +77,8 @@ function recurrenceFallsOn(
  * "which bills are due on exactly this date?". Expands recurring templates to
  * the target date and suppresses occurrences already covered by a paid or
  * per-occurrence-deleted instance doc; non-recurring bills match on their
- * stored date when still unpaid.
+ * stored date when still unpaid. A recurring bill comes back carrying that
+ * occurrence's amount (its "Just this month" override or amount history).
  */
 export function findBillsDueOnDate(
   items: BillCalendarItem[],
@@ -79,15 +94,24 @@ export function findBillsDueOnDate(
     }
   }
 
+  const overrides = overrideAmounts(items);
   return items.filter((item) => {
-    // Instance docs only exist to mark an occurrence paid/deleted — never due.
+    // Instance docs only mark an occurrence paid/deleted/re-priced — never due.
     if (item.parentRecurringId || item.isDeleted) return false;
     if (item.isRecurring && item.frequency) {
+      const falls = usesScheduledPath(item.frequency, item)
+        ? scheduledOccurrences(item.date, item.frequency, item, parseISO(targetDateStr), parseISO(targetDateStr)).length > 0
+        : recurrenceFallsOn(item.date, item.frequency, targetDateStr);
       return (
-        recurrenceFallsOn(item.date, item.frequency, targetDateStr) &&
+        falls &&
         !coveredDates.get(item.id)?.has(targetDateStr)
       );
     }
     return !item.isPaid && item.date === targetDateStr;
-  });
+  }).map((item) =>
+    // A recurring bill is due at what THIS occurrence costs.
+    item.isRecurring && item.frequency
+      ? { ...item, amount: occurrenceAmountOn(item, targetDateStr, overrides) }
+      : item
+  );
 }

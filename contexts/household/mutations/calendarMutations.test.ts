@@ -8,6 +8,7 @@ interface CapturedWrite {
 
 let capturedSets: CapturedWrite[] = [];
 let capturedUpdates: CapturedWrite[] = [];
+let capturedDeletes: { __path: string }[] = [];
 let commitCount = 0;
 
 vi.mock('firebase/firestore', () => {
@@ -45,7 +46,9 @@ vi.mock('firebase/firestore', () => {
       update: (ref: { __path: string }, data: Record<string, unknown>) => {
         capturedUpdates.push({ ref, data });
       },
-      delete: () => {},
+      delete: (ref: { __path: string }) => {
+        capturedDeletes.push(ref);
+      },
       commit: vi.fn(async () => {
         commitCount++;
       }),
@@ -61,13 +64,18 @@ vi.mock('@/utils/firestoreSanitizer', () => ({
   sanitizeFirestoreData: (d: Record<string, unknown>) => d,
 }));
 
-import { updateDoc } from 'firebase/firestore';
+import { addDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import {
   makeAcknowledgeBillPriceChange,
   makeForgetBillDescriptorAlias,
   makeLinkBankTransactionToBill,
   makePayCalendarItem,
   makeSettleBillWithTransaction,
+  makeAddCalendarItem,
+  makeUpdateCalendarItem,
+  makeSetOccurrenceAmount,
+  makeCalendarDeleteMutations,
+  makeEditCalendarEntry,
 } from './calendarMutations';
 import type { Account, CalendarItem, Transaction } from '@/types/schema';
 
@@ -648,5 +656,233 @@ describe('makeAcknowledgeBillPriceChange', () => {
     const { acknowledgeBillPriceChange } = makeAcknowledgeBillPriceChange({ db, householdId: null });
     await acknowledgeBillPriceChange('tx-1');
     expect(updateDoc).not.toHaveBeenCalled();
+  });
+});
+
+// updateDoc's second argument is typed as a union (field path | data); the
+// mutation always passes a data object, so narrow to it for assertions.
+function writtenUpdates(): Record<string, unknown> {
+  const arg: unknown = vi.mocked(updateDoc).mock.calls[0]?.[1];
+  if (typeof arg !== 'object' || arg === null) throw new Error('updateDoc was not called with data');
+  return Object.fromEntries(Object.entries(arg));
+}
+
+describe('twice-a-month paychecks — schedule fields', () => {
+  const paycheck: CalendarItem = {
+    id: 'pay',
+    title: 'Paycheck',
+    amount: 2851.5,
+    date: '2026-01-01',
+    type: 'income',
+    isPaid: false,
+    isRecurring: true,
+    frequency: 'semi-monthly',
+    semiMonthlyDays: [1, 16],
+    weekendShift: 'before',
+    earnerId: 'jen',
+  };
+
+  beforeEach(() => {
+    vi.mocked(updateDoc).mockReset();
+    vi.mocked(addDoc).mockReset();
+  });
+
+  it('stores the day pair on create (derived from the date when missing) and never the expansion-only nominalDate', async () => {
+    const { addCalendarItem } = makeAddCalendarItem({ db, householdId: HOUSEHOLD_ID, user: { uid: 'paul' } });
+    await addCalendarItem({ ...paycheck, semiMonthlyDays: undefined, date: '2026-10-15', nominalDate: '2026-10-15' });
+    const written: unknown = vi.mocked(addDoc).mock.calls[0]?.[1];
+    expect(written).toMatchObject({ semiMonthlyDays: [15, 30] });
+    expect(written).not.toHaveProperty('nominalDate');
+    expect(written).not.toHaveProperty('id');
+  });
+
+  it('writes the schedule and earner, keeping the day pair when the anchor rolls forward', async () => {
+    const existing = { ...paycheck, weekendShift: undefined };
+    const { updateCalendarItem } = makeUpdateCalendarItem({ db, householdId: HOUSEHOLD_ID, calendarItems: [existing] });
+    await updateCalendarItem(paycheck, { silent: true });
+    const updates = writtenUpdates();
+    expect(updates.semiMonthlyDays).toEqual([1, 16]);
+    expect(updates.weekendShift).toBe('before');
+    expect(updates.earnerId).toBe('jen');
+    // The weekend rule changed, so the anchor rolled to an upcoming nominal 1st or 16th.
+    expect(String(updates.date)).toMatch(/-(01|16)$/);
+    expect(String(updates.date) > '2026-01-01').toBe(true);
+  });
+
+  it('clears the schedule fields when a bill stops repeating, and the earner on an expense', async () => {
+    const { updateCalendarItem } = makeUpdateCalendarItem({ db, householdId: HOUSEHOLD_ID, calendarItems: [paycheck] });
+    await updateCalendarItem({ ...paycheck, type: 'expense', isRecurring: false, frequency: undefined }, { silent: true });
+    const updates = writtenUpdates();
+    expect(updates.semiMonthlyDays).toEqual({ __deleteField: true });
+    expect(updates.weekendShift).toEqual({ __deleteField: true });
+    expect(updates.earnerId).toEqual({ __deleteField: true });
+  });
+});
+
+describe('one-month amount changes', () => {
+  const xcel: CalendarItem = {
+    id: 'xcel',
+    title: 'Xcel',
+    amount: 120,
+    date: '2026-01-28',
+    type: 'expense',
+    isPaid: false,
+    isRecurring: true,
+    frequency: 'monthly',
+  };
+  const override: CalendarItem = {
+    id: 'ovr',
+    title: 'Xcel',
+    amount: 98.68,
+    date: '2026-10-28',
+    type: 'expense',
+    isPaid: false,
+    isRecurring: false,
+    isOverride: true,
+    parentRecurringId: 'xcel',
+  };
+  const user = { uid: 'paul' };
+
+  beforeEach(() => {
+    vi.mocked(updateDoc).mockReset();
+    vi.mocked(addDoc).mockReset();
+    vi.mocked(deleteDoc).mockReset();
+  });
+
+  it('"Just this month" writes an override for that one date', async () => {
+    const { setOccurrenceAmount } = makeSetOccurrenceAmount({ db, householdId: HOUSEHOLD_ID, user, calendarItems: [xcel] });
+    await setOccurrenceAmount('xcel_instance_2026-10-28', 98.684, { silent: true });
+    expect(vi.mocked(addDoc).mock.calls[0]?.[1]).toMatchObject({
+      amount: 98.68,
+      date: '2026-10-28',
+      isOverride: true,
+      isPaid: false,
+      parentRecurringId: 'xcel',
+    });
+  });
+
+  it('changes an existing override, and removes it when set back to the series amount', async () => {
+    const { setOccurrenceAmount } = makeSetOccurrenceAmount({ db, householdId: HOUSEHOLD_ID, user, calendarItems: [xcel, override] });
+    await setOccurrenceAmount('xcel_instance_2026-10-28', 110, { silent: true });
+    expect(writtenUpdates()).toEqual({ amount: 110 });
+    await setOccurrenceAmount('xcel_instance_2026-10-28', 120, { silent: true });
+    expect(vi.mocked(deleteDoc)).toHaveBeenCalledTimes(1);
+    expect(addDoc).not.toHaveBeenCalled();
+  });
+
+  it('"This and future months" keeps what earlier months cost', async () => {
+    const { updateCalendarItem } = makeUpdateCalendarItem({ db, householdId: HOUSEHOLD_ID, calendarItems: [xcel] });
+    await updateCalendarItem({ ...xcel, amount: 135 }, { silent: true, amountFrom: '2026-11-28' });
+    const updates = writtenUpdates();
+    expect(updates.amount).toBe(135);
+    expect(updates.earlierAmounts).toEqual([{ before: '2026-11-28', amount: 120 }]);
+  });
+
+  it('"This and future months" on a month with an override also deletes that override, in one batch', async () => {
+    capturedUpdates = [];
+    capturedDeletes = [];
+    const commitsBefore = commitCount;
+    const { updateCalendarItem } = makeUpdateCalendarItem({ db, householdId: HOUSEHOLD_ID, calendarItems: [xcel, override] });
+    await updateCalendarItem({ ...xcel, amount: 135 }, { silent: true, amountFrom: '2026-10-28' });
+    expect(commitCount - commitsBefore).toBe(1);
+    expect(updateDoc).not.toHaveBeenCalled();
+    expect(capturedUpdates).toHaveLength(1);
+    expect(capturedUpdates[0]?.ref.__path).toBe(`households/${HOUSEHOLD_ID}/calendarItems/xcel`);
+    expect(capturedUpdates[0]?.data).toMatchObject({ amount: 135, earlierAmounts: [{ before: '2026-10-28', amount: 120 }] });
+    expect(capturedDeletes.map(r => r.__path)).toEqual([`households/${HOUSEHOLD_ID}/calendarItems/ovr`]);
+  });
+
+  it('keepOverride leaves the override for a move to turn into the tombstone', async () => {
+    capturedDeletes = [];
+    const commitsBefore = commitCount;
+    const { updateCalendarItem } = makeUpdateCalendarItem({ db, householdId: HOUSEHOLD_ID, calendarItems: [xcel, override] });
+    await updateCalendarItem({ ...xcel, amount: 135 }, { silent: true, amountFrom: '2026-10-28', keepOverride: true });
+    expect(commitCount).toBe(commitsBefore);
+    expect(capturedDeletes).toEqual([]);
+    expect(writtenUpdates().amount).toBe(135);
+  });
+
+  it('an override on a different month is left alone', async () => {
+    capturedDeletes = [];
+    const commitsBefore = commitCount;
+    const { updateCalendarItem } = makeUpdateCalendarItem({ db, householdId: HOUSEHOLD_ID, calendarItems: [xcel, override] });
+    await updateCalendarItem({ ...xcel, amount: 135 }, { silent: true, amountFrom: '2026-09-28' });
+    expect(commitCount).toBe(commitsBefore);
+    expect(capturedDeletes).toEqual([]);
+    expect(writtenUpdates().amount).toBe(135);
+  });
+
+  it('deleting an occurrence with an override turns the override into the tombstone', async () => {
+    const { deleteRecurringInstance } = makeCalendarDeleteMutations({ db, householdId: HOUSEHOLD_ID, user, calendarItems: [xcel, override] });
+    await deleteRecurringInstance('xcel_instance_2026-10-28', { silent: true });
+    expect(writtenUpdates()).toEqual({ isDeleted: true });
+    expect(addDoc).not.toHaveBeenCalled();
+    expect(deleteDoc).not.toHaveBeenCalled();
+  });
+});
+
+describe('makeEditCalendarEntry', () => {
+  const xcel: CalendarItem = {
+    id: 'xcel', title: 'Xcel', amount: 120, date: '2026-01-28', type: 'expense', isPaid: false,
+    isRecurring: true, frequency: 'monthly',
+  };
+  const paidPaycheck: CalendarItem = {
+    id: 'paid-pay', title: 'Paycheck', amount: 5703, date: '2026-10-14', type: 'income', isPaid: true,
+    isRecurring: false, parentRecurringId: 'pay',
+  };
+  const user = { uid: 'paul' };
+
+  beforeEach(() => {
+    capturedSets = [];
+    capturedUpdates = [];
+    commitCount = 0;
+    vi.mocked(updateDoc).mockReset();
+  });
+
+  it("moves one occurrence in one batch: hides it and lands a one-off on the new date", async () => {
+    const { editCalendarEntry } = makeEditCalendarEntry({ db, householdId: HOUSEHOLD_ID, user, calendarItems: [xcel] });
+    await editCalendarEntry('xcel_instance_2026-10-28', { date: '2026-10-30' });
+    expect(capturedSets.map(w => w.data)).toEqual([
+      expect.objectContaining({ isDeleted: true, parentRecurringId: 'xcel', date: '2026-10-28' }),
+      expect.objectContaining({ title: 'Xcel', amount: 120, date: '2026-10-30', isRecurring: false, isPaid: false }),
+    ]);
+    expect(commitCount).toBe(1);
+  });
+
+  it('renames the series from any occurrence', async () => {
+    const { editCalendarEntry } = makeEditCalendarEntry({ db, householdId: HOUSEHOLD_ID, user, calendarItems: [xcel] });
+    await editCalendarEntry('xcel_instance_2026-10-28', { title: 'Xcel Energy' });
+    expect(capturedUpdates).toEqual([{ ref: expect.objectContaining({ __path: `households/${HOUSEHOLD_ID}/calendarItems/xcel` }), data: { title: 'Xcel Energy' } }]);
+    expect(capturedSets).toEqual([]);
+  });
+
+  it('writes a one-off bill\'s new name, date and amount in one update', async () => {
+    const water: CalendarItem = { id: 'water', title: 'Water', amount: 36.56, date: '2026-10-01', type: 'expense', isPaid: false };
+    const { editCalendarEntry } = makeEditCalendarEntry({ db, householdId: HOUSEHOLD_ID, user, calendarItems: [water] });
+    await editCalendarEntry('water', { title: 'City water', date: '2026-10-03', amount: 40 });
+    expect(writtenUpdates()).toEqual({ title: 'City water', date: '2026-10-03', amount: 40 });
+    expect(updateDoc).toHaveBeenCalledTimes(1);
+  });
+
+  it('moves an occurrence at a new amount without touching the series', async () => {
+    const { editCalendarEntry } = makeEditCalendarEntry({ db, householdId: HOUSEHOLD_ID, user, calendarItems: [xcel] });
+    await editCalendarEntry('xcel_instance_2026-10-28', { date: '2026-10-30', amount: 131.2 });
+    expect(capturedSets.map(w => w.data)).toEqual([
+      expect.objectContaining({ isDeleted: true, amount: 120, date: '2026-10-28' }),
+      expect.objectContaining({ amount: 131.2, date: '2026-10-30', isRecurring: false }),
+    ]);
+    expect(capturedUpdates).toEqual([]);
+  });
+
+  it("re-dates a paid row in place, but never into the future", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 15, 12));
+    const { editCalendarEntry } = makeEditCalendarEntry({ db, householdId: HOUSEHOLD_ID, user, calendarItems: [paidPaycheck] });
+    await editCalendarEntry('paid-pay', { date: '2026-10-01' });
+    expect(writtenUpdates()).toEqual({ date: '2026-10-01' });
+    vi.mocked(updateDoc).mockReset();
+    await editCalendarEntry('paid-pay', { date: '2026-10-16' });
+    expect(updateDoc).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });

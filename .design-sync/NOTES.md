@@ -105,9 +105,6 @@ tree), so adding barrel exports never creates cards.
 - **`Menu`/`Popover` previews** use `position="top-0 left-0"` inside a fixed-size
   relative box — those anchor to the container's TOP, so a tall box is correct
   there (the opposite of TabSubViewMenu).
-- **`SubViewHint` latches itself into localStorage** the moment it dismisses, so
-  its preview clears `lifebalance-subview-hint-seen` at module scope. Without
-  that the card renders empty on any repeat page load in the same profile.
 - **`SwipeActionRow` can only be previewed at rest.** The action rails exist
   only mid-drag or while stuck open — both gesture-driven, neither reachable in
   a static render. One export, documented in the preview's header comment. Not a

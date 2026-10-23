@@ -11,6 +11,7 @@ import {
   Household,
   BucketPeriodSnapshot,
   SavingsGoal,
+  HalfPlan,
   YearlyGoal,
   FreezeBank,
   Meal,
@@ -45,6 +46,7 @@ import { type TrashedItem } from '@/utils/trash';
 import { type TriggerSource } from '@/utils/habitTriggers';
 import { type TodoSubtaskToggleResult, type TodoCompletionOptions, type TodoPromotionFields } from '@/contexts/household/mutations/todoMutations';
 import { type MerchantRuleDraft } from '@/contexts/household/mutations/merchantRuleMutations';
+import { type SheetImport } from '@/contexts/household/mutations/halfPlanMutations';
 
 /** Options accepted by mutations that normally toast per call. `silent: true`
  *  suppresses the per-item success toast so BULK flows (Action Queue
@@ -52,6 +54,18 @@ import { type MerchantRuleDraft } from '@/contexts/household/mutations/merchantR
  *  Error toasts are never suppressed. */
 export interface MutationOpts {
   silent?: boolean;
+}
+
+/** `updateCalendarItem` options. `amountFrom` (yyyy-MM-dd) makes an amount
+ *  change "This and future months": occurrences before that date keep what
+ *  they cost. Without it the amount edit applies to the whole series. */
+export interface CalendarUpdateOpts extends MutationOpts {
+  amountFrom?: string;
+  /** With `amountFrom`: keep an existing "Just this month" override on that
+   *  date (the caller is moving that occurrence and needs it as the tombstone).
+   *  Without it, the override is deleted in the same write so the edited
+   *  month takes the new series amount. */
+  keepOverride?: boolean;
 }
 
 /**
@@ -161,6 +175,9 @@ export interface HouseholdContextType {
   /** Plan 24 — savings goals / sinking funds. Manual-contribution only; NEVER
    *  feeds `safeToSpend` (see CLAUDE.md hard invariant). */
   savingsGoals: SavingsGoal[];
+  /** Saved plans for pay-period halves (budgets + allocations), newest first,
+   *  keyed by nominal payday. See utils/halfPlan.ts. */
+  halfPlans: HalfPlan[];
   calendarItems: CalendarItem[];
   transactions: Transaction[];
   habits: Habit[];
@@ -339,6 +356,14 @@ export interface HouseholdContextType {
   deleteSavingsGoal: (id: string) => Promise<void>;
   /** Manual "Add to goal" contribution: adds `amount` to `savedAmount` (cents-safe) and stamps `completedAt` on first reaching target. */
   contributeToGoal: (id: string, amount: number) => Promise<void>;
+  /** Writes a half's whole plan (replacing what was stored). Silent on
+   *  success so an editing surface can save often; toasts on failure. */
+  saveHalfPlan: (plan: HalfPlan) => Promise<void>;
+  /** Checks an allocation line off (or back on) and moves the money it names
+   *  between account balances in the same batch (`allocationTransfer`). */
+  setAllocationDone: (plan: HalfPlan, allocationId: string, done: boolean) => Promise<void>;
+  /** Brings in a month pasted from the household's Google Sheet, in one batch. */
+  importSheetMonth: (data: SheetImport) => Promise<void>;
 
   // Bucket Actions
   addBucket: (bucket: BudgetBucket) => Promise<void>;
@@ -359,7 +384,12 @@ export interface HouseholdContextType {
 
   // Calendar Actions
   addCalendarItem: (item: CalendarItem) => Promise<void>;
-  updateCalendarItem: (item: CalendarItem, opts?: MutationOpts) => Promise<void>;
+  updateCalendarItem: (item: CalendarItem, opts?: CalendarUpdateOpts) => Promise<void>;
+  /** "Just this month": change one recurring occurrence's amount (synthetic
+   *  `templateId_instance_yyyy-MM-dd` id) without touching the series. */
+  setOccurrenceAmount: (occurrenceId: string, amount: number, opts?: MutationOpts) => Promise<void>;
+  /** Rename a calendar row or move it to another date (see makeEditCalendarEntry). */
+  editCalendarEntry: (id: string, changes: { title?: string; date?: string; amount?: number }) => Promise<void>;
   deleteCalendarItem: (id: string, opts?: MutationOpts) => Promise<void>;
   /** Mark a calendar item paid/received. Optional `actualAmount` records what
    *  was really paid (variable bills) — it drives the balance delta and the
@@ -845,7 +875,7 @@ export interface HouseholdContextType {
 // shape automatically — there is a single source of truth for every field.
 
 export type FinanceContextValue = Pick<HouseholdContextType,
-  | 'safeToSpend' | 'safeToSpendBreakdown' | 'budgetFit' | 'accounts' | 'buckets' | 'savingsGoals' | 'calendarItems' | 'transactions'
+  | 'safeToSpend' | 'safeToSpendBreakdown' | 'budgetFit' | 'accounts' | 'buckets' | 'savingsGoals' | 'halfPlans' | 'calendarItems' | 'transactions'
   | 'currentPeriodId' | 'bucketSpentMap' | 'bucketHistory' | 'netWorthHistory'
   | 'transactionWindowStart' | 'isLoadingOlderTransactions' | 'hasMoreTransactions'
   | 'loadOlderTransactions' | 'loadAllTransactions'
@@ -853,9 +883,9 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'addAccount' | 'updateAccountBalance' | 'setAccountGoal' | 'setAccountCardLast4' | 'setAccountCardDetails' | 'deleteAccount'
   | 'archiveAccount' | 'unarchiveAccount'
   | 'updateAccountOrder' | 'reorderAccounts' | 'defaultAccountId' | 'setDefaultAccountId'
-  | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal'
+  | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal' | 'saveHalfPlan' | 'setAllocationDone' | 'importSheetMonth'
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'setBucketLimits' | 'saveCeremonyChanges' | 'reallocateBucket'
-  | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
+  | 'addCalendarItem' | 'updateCalendarItem' | 'setOccurrenceAmount' | 'editCalendarEntry' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
   | 'linkBankTransactionToBill' | 'settleBillWithTransaction' | 'forgetBillDescriptorAlias' | 'acknowledgeBillPriceChange'
   | 'addTransaction' | 'addTransactions' | 'updateTransactionCategory' | 'reverseTransactionApproval' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
   | 'setTransactionSplit' | 'markSplitSettled'

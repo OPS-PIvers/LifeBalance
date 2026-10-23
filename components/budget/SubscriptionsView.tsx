@@ -7,12 +7,7 @@ import { SurfaceList, Row, Section } from '@/components/ui/Section';
 import { Badge } from '@/components/ui/Badge';
 import { Switch } from '@/components/ui/Switch';
 import EmptyState from '@/components/ui/EmptyState';
-
-const FREQUENCY_LABEL: Record<'weekly' | 'bi-weekly' | 'monthly', string> = {
-  weekly: 'Weekly',
-  'bi-weekly': 'Bi-weekly',
-  monthly: 'Monthly',
-};
+import { CALENDAR_FREQUENCY_LABELS } from '@/utils/calendarRecurrence';
 
 /**
  * Rollup of recurring EXPENSE calendar items, split by the user-set
@@ -52,7 +47,7 @@ const SubscriptionsView: React.FC = () => {
           </p>
           <div className="mt-0.5 flex items-center gap-2">
             <Badge variant="neutral" size="sm">
-              {FREQUENCY_LABEL[item.frequency]}
+              {CALENDAR_FREQUENCY_LABELS[item.frequency]}
             </Badge>
             <span className="text-xs text-brand-450 dark:text-brand-400">
               {fmt(item.amount)} per {item.frequency === 'monthly' ? 'month' : 'cycle'}

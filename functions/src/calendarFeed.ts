@@ -30,6 +30,15 @@ import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import * as logger from "firebase-functions/logger";
 import { formatCurrency, DEFAULT_CURRENCY } from "./utils/formatCurrency";
+import { addMonths, subMonths } from "date-fns";
+import {
+  occurrenceAmountOn,
+  overrideAmounts,
+  scheduledOccurrences,
+  usesScheduledPath,
+  type EarlierAmount,
+  type WeekendShift,
+} from "./shared/recurrenceSchedule";
 
 /** Minimal subset of the Express/Firebase response object used below. */
 interface HttpResponse {
@@ -61,10 +70,19 @@ export interface FeedCalendarItem {
   type: "income" | "expense";
   isPaid: boolean;
   isRecurring?: boolean;
-  frequency?: "weekly" | "bi-weekly" | "monthly";
+  frequency?: "weekly" | "bi-weekly" | "semi-monthly" | "monthly";
+  semiMonthlyDays?: number[];
+  weekendShift?: WeekendShift;
   isDeleted?: boolean;
   parentRecurringId?: string;
+  earlierAmounts?: EarlierAmount[];
+  isOverride?: boolean;
 }
+
+/** How far around `now` a semi-monthly or weekend-shifted series is listed
+ *  date by date (an RRULE can't say "the Friday before"). */
+const LISTED_OCCURRENCE_MONTHS_BACK = 1;
+const LISTED_OCCURRENCE_MONTHS_AHEAD = 12;
 
 const RRULE_BY_FREQUENCY: Record<string, string> = {
   weekly: "FREQ=WEEKLY",
@@ -155,6 +173,10 @@ export function buildIcs(
     }
   }
 
+  // Listed occurrences show what each one costs; an RRULE series can only
+  // show the current amount.
+  const overrides = overrideAmounts(items);
+
   const dtstamp = toIcsDateTimeUtc(now);
   const lines: string[] = [
     "BEGIN:VCALENDAR",
@@ -171,6 +193,35 @@ export function buildIcs(
     // also never due.
     if (item.parentRecurringId || item.isDeleted) continue;
 
+    const summary = `${item.title} (${formatCurrency(item.amount, { currency })})`;
+
+    // Semi-monthly and weekend-shifted series: one VEVENT per occurrence in a
+    // rolling window, minus paid/deleted dates, instead of an RRULE.
+    if (item.isRecurring && item.frequency && usesScheduledPath(item.frequency, item)) {
+      const covered = new Set(coveredDates.get(item.id) ?? []);
+      const occurrences = scheduledOccurrences(
+        item.date,
+        item.frequency,
+        item,
+        subMonths(now, LISTED_OCCURRENCE_MONTHS_BACK),
+        addMonths(now, LISTED_OCCURRENCE_MONTHS_AHEAD)
+      );
+      for (const { date } of occurrences) {
+        if (covered.has(date)) continue;
+        const occurrenceSummary =
+          `${item.title} (${formatCurrency(occurrenceAmountOn(item, date, overrides), { currency })})`;
+        lines.push(
+          "BEGIN:VEVENT",
+          foldIcsLine(`UID:${item.id}-${date}@lifebalance.app`),
+          foldIcsLine(`DTSTAMP:${dtstamp}`),
+          foldIcsLine(`DTSTART;VALUE=DATE:${toIcsDate(date)}`),
+          foldIcsLine(`SUMMARY:${escapeIcsText(occurrenceSummary)}`),
+          "END:VEVENT"
+        );
+      }
+      continue;
+    }
+
     const isRecurring = item.isRecurring && RRULE_BY_FREQUENCY[item.frequency ?? ""];
     // Non-recurring bills that are already paid are no longer "due" — exclude
     // them from the feed (matches findBillsDueOnDate's `!item.isPaid` gate).
@@ -179,7 +230,6 @@ export function buildIcs(
     // above), so the template itself is always emitted.
     if (!isRecurring && item.isPaid) continue;
 
-    const summary = `${item.title} (${formatCurrency(item.amount, { currency })})`;
     lines.push(
       "BEGIN:VEVENT",
       foldIcsLine(`UID:${item.id}@lifebalance.app`),

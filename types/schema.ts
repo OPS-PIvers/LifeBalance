@@ -667,6 +667,66 @@ export interface TransactionComment {
   createdAt: string; // ISO timestamp
 }
 
+/** Recurrence cadences a calendar item (bill or paycheck) can repeat on.
+ *  `semi-monthly` = twice a month on fixed days (e.g. the 1st and 16th). */
+export type CalendarFrequency = 'weekly' | 'bi-weekly' | 'semi-monthly' | 'monthly';
+
+/** Which way a weekend occurrence moves: to the Friday before or Monday after. */
+export type WeekendShift = 'before' | 'after';
+
+/**
+ * What an allocation line does with its money. Every kind but `from-savings`
+ * takes money out of the half; `from-savings` brings it back in to cover a
+ * short half.
+ *  - `card-extra`: an extra credit-card payment above the dated minimum
+ *  - `to-savings` / `from-savings`: a transfer between checking and savings
+ *  - `other`: any other planned use of the money
+ */
+export type HalfAllocationKind = 'card-extra' | 'to-savings' | 'from-savings' | 'other';
+
+export interface HalfAllocation {
+  /** Stable within its plan (a short random id), so rows keep identity. */
+  id: string;
+  kind: HalfAllocationKind;
+  label: string;
+  /** Positive decimal dollars; the kind decides the direction. */
+  amount: number;
+  /** The card or savings account the money moves to or from, when known. */
+  accountId?: string;
+  /** Checked off once the payment or transfer has actually been made. */
+  done?: boolean;
+  /** While `done`: the balance change the check applied to each account
+   *  (accountId → decimal dollars). Unchecking negates exactly these, so a
+   *  later change of card, default account or account order can't send the
+   *  reversal somewhere else. Absent on lines checked before this existed. */
+  moved?: Record<string, number>;
+}
+
+/**
+ * The household's plan for one half: one pay period, paycheck to paycheck.
+ * Stored at `households/{id}/halfPlans/{id}`, where the id is the half's
+ * NOMINAL payday (yyyy-MM-dd) — the date the paycheck is scheduled for even
+ * when a weekend moves it earlier, so the Nov 1 half keeps the id
+ * `2026-11-01` though it is paid Fri Oct 30. Dated bills are NOT stored here;
+ * they come from calendar items. See utils/halfPlan.ts for the math.
+ */
+export interface HalfPlan {
+  id: string;
+  /** Planned spending per budget bucket for this half, keyed by bucket id,
+   *  in decimal dollars. A bucket absent from the map is planned at $0. */
+  budgets: Record<string, number>;
+  allocations: HalfAllocation[];
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+/** One step of a recurring series' amount history (see `CalendarItem.earlierAmounts`). */
+export interface EarlierAmount {
+  /** yyyy-MM-dd, exclusive: occurrences before this date used `amount`. */
+  before: string;
+  amount: number;
+}
+
 export interface CalendarItem {
   id: string;
   title: string;
@@ -675,7 +735,36 @@ export interface CalendarItem {
   type: 'income' | 'expense';
   isPaid: boolean;
   isRecurring?: boolean;
-  frequency?: 'weekly' | 'bi-weekly' | 'monthly';
+  frequency?: CalendarFrequency;
+  /** `semi-monthly` only: the two days of the month the series falls on,
+   *  ascending, each 1–31 (a day past a short month's end clamps to its last
+   *  day). When a semi-monthly template lacks it, the pair is derived from the
+   *  anchor (`semiMonthlyDaysFor` in utils/calendarRecurrence.ts). */
+  semiMonthlyDays?: number[];
+  /** When an occurrence lands on a Saturday or Sunday, move it to the Friday
+   *  before (`'before'`) or the Monday after (`'after'`). Absent = no shift.
+   *  The shifted date IS the occurrence's `date` (and its synthetic id), so
+   *  paid/deleted instance docs match it exactly as they do today. */
+  weekendShift?: WeekendShift;
+  /** Income only: uid of the household member this paycheck belongs to.
+   *  Absent = unassigned (every paycheck written before earners existed). */
+  earnerId?: string;
+  /** Set on EXPANDED occurrences only, never persisted: the scheduled date
+   *  before `weekendShift` moved it (a Nov 1 paycheck paid Fri Oct 30 carries
+   *  `date: '2026-10-30'`, `nominalDate: '2026-11-01'`). Absent when the
+   *  occurrence wasn't moved. */
+  nominalDate?: string;
+  /** Recurring templates only: what the series cost BEFORE an amount change
+   *  made with "This and future months". An occurrence dated before an
+   *  entry's `before` (and on/after the previous entry's) uses that entry's
+   *  amount; anything later uses `amount`. Ascending by `before`. See
+   *  `seriesAmountOn` / `withAmountFrom` in utils/calendarRecurrence.ts. */
+  earlierAmounts?: EarlierAmount[];
+  /** On an instance doc (with `parentRecurringId`, unpaid, not deleted): this
+   *  occurrence's amount was changed "Just this month". Its `amount` replaces
+   *  the series amount for that one date; paying or deleting the occurrence
+   *  still works through the usual instance docs. */
+  isOverride?: boolean;
   parentRecurringId?: string; // If this is a paid instance of a recurring event, points to parent
   isDeleted?: boolean; // If this is a deleted instance of a recurring event, prevents it from appearing
   accountId?: string;
