@@ -15,7 +15,7 @@ import toast from 'react-hot-toast';
 import { describeError } from '@/utils/errorMessages';
 import { Sparkles } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
-import { CaptureReviewMode, CaptureType, CeremonyTone, DietaryProfile, FreezeMode, Habit, HabitSubmission, Insight, ModuleKey, Transaction } from '@/types/schema';
+import { CaptureReviewMode, CaptureType, CeremonyTone, DietaryProfile, FreezeMode, Habit, HabitSubmission, Insight, ModuleKey, MoneyTrackingMode, Transaction } from '@/types/schema';
 import { hashKidPin } from '@/utils/kidPin';
 import { track } from '@/services/analytics';
 import { selectRecentReflections } from '@/utils/habitReflections';
@@ -68,6 +68,13 @@ export function makeHouseholdSettingsMutations(deps: {
   const setCaptureReviewMode = async (type: CaptureType, mode: CaptureReviewMode) => {
     if (!householdId) return;
     await updateDoc(doc(db, 'households', householdId), { [`captureReview.${type}`]: mode });
+  };
+
+  // "Bank sync only" (utils/moneyTracking.ts) — a single top-level scalar.
+  // Writes no transaction: switching back restores the old queue exactly.
+  const setMoneyTracking = async (mode: MoneyTrackingMode) => {
+    if (!householdId) return;
+    await updateDoc(doc(db, 'households', householdId), { moneyTracking: mode });
   };
 
   // Per-member habit points (stage 6) — the two household admin settings. Each
@@ -136,7 +143,7 @@ export function makeHouseholdSettingsMutations(deps: {
     await updateDoc(doc(db, 'households', householdId), dottedPatch);
   };
 
-  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setCaptureReviewMode, setKidModePin, setDietaryProfile, setMealCookedHabitId, setFreezeMode, setCeremonyTone, setDefaultAccountId };
+  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setCaptureReviewMode, setMoneyTracking, setKidModePin, setDietaryProfile, setMealCookedHabitId, setFreezeMode, setCeremonyTone, setDefaultAccountId };
 }
 
 /**

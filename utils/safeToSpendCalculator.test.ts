@@ -1243,3 +1243,43 @@ describe('breakdown itemization — the lists behind the totals', () => {
     expect(b.pendingSpend).toBe(50);
   });
 });
+
+describe('bank-sync-only mode (utils/moneyTracking.ts)', () => {
+  const accounts: Account[] = [
+    { id: 'chk', name: 'Checking', type: 'checking', balance: 3000, lastUpdated: '', balanceAsOf: '2026-06-09' },
+    { id: 'chk2', name: 'Joint', type: 'checking', balance: 500, lastUpdated: '', balanceAsOf: '2026-06-10' },
+  ];
+  const items: CalendarItem[] = [
+    { id: 'b1', title: 'Rent', amount: 900.2, date: '2026-06-05', type: 'expense', isPaid: false },
+    { id: 'p1', title: 'Paycheck', amount: 2000, date: '2026-06-15', type: 'income', isPaid: false },
+  ];
+  const pending: Transaction = {
+    id: 'tx', amount: 75.5, merchant: 'Shop', category: 'Groceries', date: '2026-06-10',
+    status: 'pending_review', isRecurring: false, source: 'manual', autoCategorized: false,
+    payPeriodId: '2026-06-01',
+  };
+
+  it('subtracts only unpaid bills — the synced balance already holds every withdrawal', () => {
+    const b = calculateSafeToSpendBreakdown(accounts, items, '2026-06-01', [pending], { bankSyncOnly: true });
+    expect(b.pendingSpend).toBe(0);
+    expect(b.pendingTransactions).toEqual([]);
+    expect(b.unpaidBills).toBe(900.2);
+    expect(b.safeToSpend).toBe(2599.8);
+    expect(b.bankSyncOnly).toBe(true);
+    expect(b.balanceAsOf).toBe('2026-06-10');
+  });
+
+  it('also drops pending spend when no pay period is tracked', () => {
+    const b = calculateSafeToSpendBreakdown(accounts, items, '', [pending], { bankSyncOnly: true });
+    expect(b.safeToSpend).toBe(3500);
+    expect(b.bankSyncOnly).toBe(true);
+  });
+
+  it('leaves the default formula untouched', () => {
+    const b = calculateSafeToSpendBreakdown(accounts, items, '2026-06-01', [pending]);
+    expect(b.pendingSpend).toBe(75.5);
+    expect(b.safeToSpend).toBe(2524.3);
+    expect(b.bankSyncOnly).toBeUndefined();
+    expect(b.balanceAsOf).toBeUndefined();
+  });
+});

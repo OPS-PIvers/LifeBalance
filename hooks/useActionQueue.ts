@@ -85,7 +85,10 @@ export const isReviewSnoozed = (
 export { needsReview };
 
 export const useActionQueue = () => {
-  const { transactions } = useFinance();
+  const { transactions, safeToSpendBreakdown } = useFinance();
+  // "Bank sync only" (utils/moneyTracking.ts): the nightly balance is the truth,
+  // so transactions never queue for review. Bills still do.
+  const transactionReviewOff = safeToSpendBreakdown?.bankSyncOnly === true;
   const { todos } = useTodos();
   const { currentUser } = useHouseholdCore();
   const { isModuleEnabled, isPlanTabVisible } = useModuleVisibility();
@@ -129,10 +132,10 @@ export const useActionQueue = () => {
   // swipe/bulk "Defer" is snoozed (hidden) while its reviewSnoozedUntil is
   // still in the future; both sides are local yyyy-MM-dd, so lexical compare
   // is chronological. It still counts toward pendingSpend / Safe-to-Spend.
-  const pendingTx: TransactionQueueItem[] = useMemo(() => showMoney ? transactions.filter(t =>
+  const pendingTx: TransactionQueueItem[] = useMemo(() => showMoney && !transactionReviewOff ? transactions.filter(t =>
     needsReview(t) &&
     !isReviewSnoozed(t, localToday)
-  ).map(t => ({ ...t, queueType: 'transaction' as const })) : [], [showMoney, transactions, localToday]);
+  ).map(t => ({ ...t, queueType: 'transaction' as const })) : [], [showMoney, transactionReviewOff, transactions, localToday]);
 
   // 2b. Bill ← transaction recognition (owner paper cut PC#3).
   //

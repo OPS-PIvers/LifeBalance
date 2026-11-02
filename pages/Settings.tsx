@@ -78,7 +78,8 @@ import { requestNotificationPermission, setupForegroundNotificationListener } fr
 import { generateJsonBackup, generateCsvExport, buildExportPayload } from '@/utils/exportUtils';
 import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { getCaptureReviewMode } from '@/utils/captureReview';
-import { HouseholdMember, NotificationPreferences, Transaction, Meal, CaptureType, CaptureReviewMode, CeremonyTone, FreezeMode } from '@/types/schema';
+import { isBankSyncOnly, resolveMoneyTracking } from '@/utils/moneyTracking';
+import { HouseholdMember, NotificationPreferences, Transaction, Meal, CaptureType, CaptureReviewMode, CeremonyTone, FreezeMode, MoneyTrackingMode } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { doc, updateDoc } from 'firebase/firestore';
 import { computeAnyNotificationsEnabled } from '@/utils/notificationFlags';
@@ -137,6 +138,12 @@ const FONT_SCALE_OPTIONS: SegmentedControlOption<FontScale>[] = [
 const CAPTURE_REVIEW_MODE_OPTIONS: SegmentedControlOption<CaptureReviewMode>[] = [
   { value: 'auto', label: 'Automatic' },
   { value: 'review', label: 'Manual review' },
+];
+
+// How Safe-to-Spend is kept current — see utils/moneyTracking.ts.
+const MONEY_TRACKING_OPTIONS: SegmentedControlOption<MoneyTrackingMode>[] = [
+  { value: 'transactions', label: 'Review each one' },
+  { value: 'bank_sync', label: 'Bank sync only' },
 ];
 
 const CAPTURE_REVIEW_ROWS: { type: CaptureType; label: string }[] = [
@@ -200,6 +207,7 @@ const Settings: React.FC = () => {
     setModuleVisibility,
     updateModuleVisibility,
     setCaptureReviewMode,
+    setMoneyTracking,
     setKidModePin,
     setFreezeMode,
     setCeremonyTone,
@@ -372,6 +380,15 @@ const Settings: React.FC = () => {
     } catch (error) {
       console.error('[Settings] Failed to update capture review mode:', error);
       toast.error('Failed to update review settings');
+    }
+  };
+
+  const handleMoneyTrackingChange = async (mode: MoneyTrackingMode) => {
+    try {
+      await setMoneyTracking(mode);
+    } catch (error) {
+      console.error('[Settings] Failed to update money tracking:', error);
+      toast.error('Failed to update Safe-to-Spend setting');
     }
   };
 
@@ -1116,6 +1133,26 @@ const Settings: React.FC = () => {
 
   const moneyBody = (
     <>
+      {/* "Bank sync only" — utils/moneyTracking.ts. Writes one household field
+          and no transactions, so switching back restores the old queue. */}
+      <Section title="Transactions">
+        <SurfaceList>
+          <Row className="flex-col items-stretch gap-2">
+            <SegmentedControl
+              name="How transactions are tracked"
+              options={MONEY_TRACKING_OPTIONS}
+              value={resolveMoneyTracking(householdSettings)}
+              onChange={handleMoneyTrackingChange}
+            />
+            <p className="text-xs text-brand-500 dark:text-brand-400">
+              {isBankSyncOnly(householdSettings)
+                ? 'Safe-to-Spend uses the bank balance from the nightly sync, minus unpaid bills. Transactions never wait for approval or a category. Spending since the sync shows up the next morning.'
+                : 'Each captured transaction waits for you to approve it, and counts against Safe-to-Spend until you do.'}
+            </p>
+          </Row>
+        </SurfaceList>
+      </Section>
+
       <Section title="Currency">
         <SurfaceList>
           <Row className="flex-col items-stretch gap-1.5">
@@ -1570,7 +1607,7 @@ const Settings: React.FC = () => {
                   id={sectionRowId('money')}
                   icon={<Landmark className="w-5 h-5" />}
                   title="Money"
-                  subtitle="Currency and calendar feed"
+                  subtitle="Transactions, currency, calendar feed"
                   onClick={() => openSection('money')}
                 />
                 <DisclosureRow

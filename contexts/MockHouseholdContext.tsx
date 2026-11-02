@@ -22,6 +22,7 @@ import { buildNextRecurringTodo, isTodoFrequency } from '@/utils/todoRecurrence'
 import { buildToDosFromTemplate } from '@/utils/taskTemplates';
 import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
+import { isBankSyncOnly } from '@/utils/moneyTracking';
 import { computeBudgetFit } from '@/utils/budgetFit';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { processToggleHabit, processStaleDownToggle, isHabitStale, calculateResetPoints, streakForHabit, habitPeriodStart } from '@/utils/habitLogic';
@@ -107,6 +108,7 @@ import {
   ModuleVisibilityMap,
   CaptureType,
   CaptureReviewMode,
+  MoneyTrackingMode,
   CeremonyTone,
   DietaryProfile,
   FreezeMode,
@@ -1486,6 +1488,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // utils/captureReview.ts). Overriding a type mutates this in-memory map so
   // the settings UI is walkable in Test Mode.
   const [captureReview, setCaptureReviewState] = useState<Partial<Record<CaptureType, CaptureReviewMode>>>({});
+  // "Bank sync only" (utils/moneyTracking.ts) — undefined = a legacy household
+  // that reviews each transaction. In-memory so the setting is walkable.
+  const [moneyTracking, setMoneyTrackingState] = useState<MoneyTrackingMode | undefined>(undefined);
   // F-MEALS-03 — standing household dietary profile, undefined until set (mirrors
   // a legacy household with no restrictions recorded).
   const [dietaryProfile, setDietaryProfileState] = useState<DietaryProfile | undefined>(undefined);
@@ -1699,6 +1704,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const setCaptureReviewMode = useCallback(async (type: CaptureType, mode: CaptureReviewMode) => {
     setCaptureReviewState(prev => ({ ...prev, [type]: mode }));
     toast.success(`Mock: ${type} captures set to ${mode}`);
+  }, []);
+
+  const setMoneyTracking = useCallback(async (mode: MoneyTrackingMode) => {
+    setMoneyTrackingState(mode);
   }, []);
 
   const setDietaryProfile = useCallback(async (profile: DietaryProfile) => {
@@ -4386,8 +4395,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // useFinance() slice in parity with production — a consumer reading
   // `safeToSpendBreakdown` no longer gets `undefined` in Test Mode.
   const safeToSpendBreakdown: SafeToSpendBreakdown = useMemo(
-    () => calculateSafeToSpendBreakdown(accounts, calendarItems, currentPeriodId, transactions),
-    [accounts, calendarItems, currentPeriodId, transactions]
+    () => calculateSafeToSpendBreakdown(accounts, calendarItems, currentPeriodId, transactions, {
+      bankSyncOnly: isBankSyncOnly({ moneyTracking }),
+    }),
+    [accounts, calendarItems, currentPeriodId, transactions, moneyTracking]
   );
   const safeToSpend = safeToSpendBreakdown.safeToSpend;
   // Post-flip (stage 1.5): household daily/weekly = Σ the ADULT members' own
@@ -4495,6 +4506,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     moduleVisibility,
     merchantRules,
     captureReview,
+    ...(moneyTracking ? { moneyTracking } : {}),
     dietaryProfile,
     mealCookedHabitId,
     // F-DASH-06: seed a nonzero today's usage so the InsightWidget AI-usage
@@ -4957,6 +4969,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     setModuleVisibility,
     updateModuleVisibility,
     setCaptureReviewMode,
+    setMoneyTracking,
     setKidModePin,
     setDietaryProfile,
     setMealCookedHabitId,
