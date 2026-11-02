@@ -16,6 +16,7 @@ import { getBucketSpendTransactions } from '@/utils/bucketSpentCalculator';
 import { calculateDailyPace, calculateBucketDailyPace, getDaysLeft } from '@/utils/spendPace';
 import { splitCurrencyParts } from '@/utils/currencyParts';
 import { roundMoney } from '@/utils/money';
+import { balanceLineCopy } from '@/utils/moneyTracking';
 
 // Lazy so this drawer's own chunk doesn't drag a second Drawer (and its
 // BucketPlanEditor subtree) along with it — same discipline TopToolbar applies
@@ -141,6 +142,10 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
   // "due soon", so the list calls them out.
   const billItems = breakdown.unpaidBillItems ?? [];
   const pendingItems = breakdown.pendingTransactions ?? [];
+  // What the balance is reduced by, in words — pending transactions aren't a
+  // term in bank-sync-only mode, so the copy must not blame them.
+  const deductions = breakdown.bankSyncOnly ? 'Bills' : 'Bills and pending transactions';
+  const deductionsLower = breakdown.bankSyncOnly ? 'bills' : 'bills and pending transactions';
 
   // Editorial caption under the hero figure. When a next paycheck is known we
   // reuse the exact pace string that previously sat below the waterfall (copy
@@ -195,12 +200,12 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
     if (breakdown.safeToSpend < 0) {
       const over = fmt(Math.abs(breakdown.safeToSpend));
       return claimed >= 0.005
-        ? `Bills and pending transactions already exceed your balance by ${over}, and your buckets expect to spend ${fmt(claimed)} on top of that. Trimming a bucket limit or moving a bill to the next period closes the ${gap} gap.`
-        : `Bills and pending transactions already exceed your balance by ${over}. No bucket limit is claiming this money — moving a bill to the next period is what closes the gap.`;
+        ? `${deductions} already exceed your balance by ${over}, and your buckets expect to spend ${fmt(claimed)} on top of that. Trimming a bucket limit or moving a bill to the next period closes the ${gap} gap.`
+        : `${deductions} already exceed your balance by ${over}. No bucket limit is claiming this money — moving a bill to the next period is what closes the gap.`;
     }
     return `Your buckets still expect to spend ${fmt(claimed)} before payday, but only ${fmt(
       breakdown.safeToSpend
-    )} is left after bills and pending transactions. Trim a bucket limit, or move a bill to the next period, to close the ${gap} gap.`;
+    )} is left after ${deductionsLower}. Trim a bucket limit, or move a bill to the next period, to close the ${gap} gap.`;
   };
 
   return (
@@ -268,7 +273,7 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
                 </p>
                 <p className="mt-0.5 text-xs leading-relaxed text-brand-600 dark:text-brand-300">
                   {breakdown.safeToSpend < 0
-                    ? `Bills and pending transactions have already outrun your balance by ${fmt(
+                    ? `${deductions} have already outrun your balance by ${fmt(
                         Math.abs(breakdown.safeToSpend)
                       )}.`
                     : `Your buckets still expect to spend ${fmt(
@@ -305,8 +310,8 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
         <Section title="How it's calculated">
           <SurfaceList>
             <LedgerRow
-              label="Checking balance"
-              sub="Available cash"
+              label={balanceLineCopy(breakdown).label}
+              sub={balanceLineCopy(breakdown).sub}
               value={fmt(breakdown.checkingBalance)}
             />
 
@@ -349,29 +354,32 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
               />
             </LedgerRow>
 
-            <LedgerRow
-              panelKey="pending"
-              openPanel={activePanel}
-              onToggle={togglePanel}
-              itemCount={pendingItems.length}
-              label="Pending transactions"
-              sub="Spent but not yet cleared"
-              value={breakdown.pendingSpend >= 0.005 ? `− ${fmt(breakdown.pendingSpend)}` : fmt(0)}
-              negative={breakdown.pendingSpend >= 0.005}
-            >
-              {pendingItems.map(tx => (
-                <DetailLine
-                  key={tx.id}
-                  title={displayNameFor(tx)}
-                  meta={`${shortDate(tx.date)}${tx.category ? ` · ${tx.category}` : ''}`}
-                  value={fmt(tx.amount)}
+            {/* Not a term at all in bank-sync-only mode (utils/moneyTracking.ts). */}
+            {!breakdown.bankSyncOnly && (
+              <LedgerRow
+                panelKey="pending"
+                openPanel={activePanel}
+                onToggle={togglePanel}
+                itemCount={pendingItems.length}
+                label="Pending transactions"
+                sub="Spent but not yet cleared"
+                value={breakdown.pendingSpend >= 0.005 ? `− ${fmt(breakdown.pendingSpend)}` : fmt(0)}
+                negative={breakdown.pendingSpend >= 0.005}
+              >
+                {pendingItems.map(tx => (
+                  <DetailLine
+                    key={tx.id}
+                    title={displayNameFor(tx)}
+                    meta={`${shortDate(tx.date)}${tx.category ? ` · ${tx.category}` : ''}`}
+                    value={fmt(tx.amount)}
+                  />
+                ))}
+                <PanelFooter
+                  label={`${pendingItems.length} awaiting review`}
+                  value={fmt(breakdown.pendingSpend)}
                 />
-              ))}
-              <PanelFooter
-                label={`${pendingItems.length} awaiting review`}
-                value={fmt(breakdown.pendingSpend)}
-              />
-            </LedgerRow>
+              </LedgerRow>
+            )}
 
             <Row className="justify-between bg-brand-50 dark:bg-brand-700/30">
               <span className="font-display text-sm font-semibold tracking-tight text-brand-800 dark:text-brand-100">
@@ -561,7 +569,7 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
               {/* Same split as the panel's explanation: with a negative pool the
                   budgets aren't what exceeded the cash, so don't say they were. */}
               {breakdown.safeToSpend < 0
-                ? 'Bills and pending spend have outrun your balance.'
+                ? (breakdown.bankSyncOnly ? 'Bills have outrun your balance.' : 'Bills and pending spend have outrun your balance.')
                 : 'Your budgets exceed available cash — trim a bucket.'}
             </p>
           )}

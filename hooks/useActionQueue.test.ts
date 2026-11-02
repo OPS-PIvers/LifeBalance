@@ -10,13 +10,17 @@ const mockData = vi.hoisted(() => ({
   transactions: [] as Transaction[],
   todos: [] as ToDo[],
   calendarItems: [] as CalendarItem[],
+  bankSyncOnly: false,
   // Matches the makeTodo() default assignedTo of 'uid-1' so existing
   // fixtures keep passing under the assignee filter.
   currentUserUid: 'uid-1' as string | null,
 }));
 
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
-  useFinance: () => ({ transactions: mockData.transactions }),
+  useFinance: () => ({
+    transactions: mockData.transactions,
+    safeToSpendBreakdown: mockData.bankSyncOnly ? { bankSyncOnly: true } : {},
+  }),
   useTodos: () => ({ todos: mockData.todos }),
   useExpandedCalendarItems: () => mockData.calendarItems,
   useHouseholdCore: () => ({
@@ -78,6 +82,7 @@ describe('useActionQueue midnight rollover', () => {
     mockData.todos = [];
     mockData.calendarItems = [];
     mockData.currentUserUid = 'uid-1';
+    mockData.bankSyncOnly = false;
   });
 
   afterEach(() => {
@@ -175,5 +180,19 @@ describe('useActionQueue midnight rollover', () => {
 
     const { result } = renderHook(() => useActionQueue());
     expect(result.current.actionQueue.map(i => i.id)).toEqual(['bank-sync']);
+  });
+
+  // "Bank sync only" (utils/moneyTracking.ts): no transaction queues for review,
+  // whatever its status — but a due bill still does.
+  it('queues no transactions in bank-sync-only mode, but still queues due bills', () => {
+    mockData.bankSyncOnly = true;
+    mockData.transactions = [
+      makeTransaction({ id: 'pending', status: 'pending_review' }),
+      makeTransaction({ id: 'bank-sync', status: 'verified', needsCategory: true }),
+    ];
+    mockData.calendarItems = [makeCalendarItem({ id: 'due-today', date: '2026-06-16' })];
+
+    const { result } = renderHook(() => useActionQueue());
+    expect(result.current.actionQueue.map(i => i.id)).toEqual(['due-today']);
   });
 });

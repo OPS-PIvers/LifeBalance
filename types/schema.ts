@@ -29,6 +29,13 @@ export type CaptureType = 'expense' | 'shopping' | 'todo';
 // utils/captureReview.ts — the single source of truth for the default per type.
 export type CaptureReviewMode = 'auto' | 'review';
 
+// How the household keeps Safe-to-Spend honest (see utils/moneyTracking.ts):
+// 'transactions' = review each captured transaction (pending ones subtract
+// until approved — the legacy behavior, and the absent default);
+// 'bank_sync' = trust the nightly bank-email balance alone — pending
+// transactions neither subtract nor ask to be reviewed.
+export type MoneyTrackingMode = 'transactions' | 'bank_sync';
+
 export const INCOME_CATEGORY = 'Income';
 
 // Sentinel category for transactions tagged to a CREDIT account. Credit spend
@@ -1507,6 +1514,11 @@ export interface Household {
   // through utils/captureReview.ts — the single source of truth (server twin:
   // functions/src/quickAdd/captureReview.ts, kept in sync deliberately).
   captureReview?: Partial<Record<CaptureType, CaptureReviewMode>>;
+
+  // How Safe-to-Spend is kept current. Absent ⇒ 'transactions' (today's
+  // behavior). Read ONLY through utils/moneyTracking.ts (`isBankSyncOnly`);
+  // the daily briefing reads the same field server-side.
+  moneyTracking?: MoneyTrackingMode;
 
   // F-MEALS-03: standing household dietary restrictions/allergies. Absent means
   // no constraints are recorded — AI meal calls (suggestMeal, generateWeeklyPlan)

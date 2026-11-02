@@ -28,6 +28,9 @@ interface BriefingHouseholdDoc {
   subscription?: {
     status?: "active" | "trialing" | "past_due" | "canceled" | "incomplete";
   };
+  /** "Bank sync only" (client: utils/moneyTracking.ts) — transactions are never
+   *  queued for review, so the briefing must not count them as "to review". */
+  moneyTracking?: "transactions" | "bank_sync";
 }
 
 /** Member doc view with the per-member push dedupe marker. */
@@ -168,6 +171,7 @@ async function processHousehold(
   ]);
 
   const useAi = aiEnabled && isPremiumHousehold(household, billingEnabled);
+  const briefingTransactions = household.moneyTracking === "bank_sync" ? [] : transactions;
 
   // Memoize the narrative per local day: members sharing a timezone share the
   // same summary, so this bounds AI to at most one call per distinct local day
@@ -177,7 +181,7 @@ async function processHousehold(
   for (const { memberDoc, member, today } of dueMembers) {
     const summary = assembleDailyBriefing({
       calendarItems,
-      transactions,
+      transactions: briefingTransactions,
       habits,
       today,
     });

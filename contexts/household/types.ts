@@ -28,6 +28,7 @@ import {
   ModuleKey,
   CaptureType,
   CaptureReviewMode,
+  MoneyTrackingMode,
   WeeklyRecap,
   MonthlyMoneyRecap,
   NetWorthSnapshot,
@@ -695,6 +696,9 @@ export interface HouseholdContextType {
   /** Set a household's capture-review routing for one quick-add input type (merge-writes captureReview.<type>). See utils/captureReview.ts. */
   setCaptureReviewMode: (type: CaptureType, mode: CaptureReviewMode) => Promise<void>;
 
+  /** "Bank sync only" vs reviewing each transaction. See utils/moneyTracking.ts. */
+  setMoneyTracking: (mode: MoneyTrackingMode) => Promise<void>;
+
   /** Set (raw PIN, salted+hashed before write) or clear (null) the Kid Mode exit PIN. */
   setKidModePin: (pin: string | null) => Promise<void>;
 
@@ -945,7 +949,7 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'pendingItemsCount' | 'apiKeys'
   | 'householdId' | 'householdSettings' | 'household'
   | 'refreshInsight' | 'rateInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
-  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'updateModuleVisibility' | 'setCaptureReviewMode' | 'setKidModePin' | 'setDietaryProfile' | 'setMealCookedHabitId'
+  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'updateModuleVisibility' | 'setCaptureReviewMode' | 'setMoneyTracking' | 'setKidModePin' | 'setDietaryProfile' | 'setMealCookedHabitId'
   | 'setFreezeMode' | 'setCeremonyTone'
   | 'addMerchantRule' | 'updateMerchantRule' | 'deleteMerchantRule'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'

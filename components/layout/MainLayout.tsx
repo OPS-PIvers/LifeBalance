@@ -41,7 +41,9 @@ interface MainLayoutProps {
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { pathname } = useLocation();
   const { members, activeMemberId, isLoading, householdId, householdSettings } = useHouseholdCore();
-  const { transactions, buckets } = useFinance();
+  const { transactions, buckets, safeToSpendBreakdown } = useFinance();
+  // "Bank sync only" (utils/moneyTracking.ts): no transaction is held for review.
+  const transactionReviewOff = safeToSpendBreakdown?.bankSyncOnly === true;
   const { shoppingAwaitingReview } = useShopping();
   const { todosAwaitingReview } = useTodos();
   const { isPlanTabVisible } = useModuleVisibility();
@@ -70,10 +72,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const reviewToday = getLocalDateString();
   const pendingReviewTransactions = useMemo(
     () =>
-      transactions
-        .filter((t) => needsReview(t) && !isReviewSnoozed(t, reviewToday))
-        .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
-    [transactions, reviewToday],
+      transactionReviewOff
+        ? []
+        : transactions
+            .filter((t) => needsReview(t) && !isReviewSnoozed(t, reviewToday))
+            .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
+    [transactions, reviewToday, transactionReviewOff],
   );
   // Combined, ordered review queue: transactions (gated on expense review mode)
   // first, then held to-dos, then held shopping captures. The transaction gate

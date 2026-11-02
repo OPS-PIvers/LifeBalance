@@ -6,6 +6,7 @@ import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import { cn } from '@/utils/cn';
 import { calculateDailyPace } from '@/utils/spendPace';
 import { MoneyModelPrimer } from '@/components/budget/MoneyModelPrimer';
+import { balanceLineCopy } from '@/utils/moneyTracking';
 
 /**
  * Read-only Safe-to-Spend breakdown surfaced at the BOTTOM of the Money →
@@ -41,11 +42,11 @@ export const SafeToSpendDetail: React.FC = () => {
             id="sts-detail-breakdown"
             className="animate-in fade-in slide-in-from-top-2 duration-(--duration-base)"
           >
-            {/* Checking balance */}
+            {/* Checking balance (the synced bank balance in bank-sync-only mode) */}
             <DetailRow
               icon={<Wallet size={16} />}
-              label="Checking balance"
-              sub="Available cash"
+              label={balanceLineCopy(breakdown).label}
+              sub={balanceLineCopy(breakdown).sub}
               value={fmt(breakdown.checkingBalance)}
             />
 
@@ -58,14 +59,16 @@ export const SafeToSpendDetail: React.FC = () => {
               negative
             />
 
-            {/* Pending transactions */}
-            <DetailRow
-              icon={<Clock size={16} />}
-              label="Pending transactions"
-              sub="Spent but not yet cleared"
-              value={breakdown.pendingSpend >= 0.005 ? `- ${fmt(breakdown.pendingSpend)}` : fmt(0)}
-              negative={breakdown.pendingSpend >= 0.005}
-            />
+            {/* Pending transactions — not a term at all in bank-sync-only mode */}
+            {!breakdown.bankSyncOnly && (
+              <DetailRow
+                icon={<Clock size={16} />}
+                label="Pending transactions"
+                sub="Spent but not yet cleared"
+                value={breakdown.pendingSpend >= 0.005 ? `- ${fmt(breakdown.pendingSpend)}` : fmt(0)}
+                negative={breakdown.pendingSpend >= 0.005}
+              />
+            )}
 
             <div className="px-4 pt-3 pb-3.5 hairline-divider">
               {dailyPace !== null && (
@@ -74,8 +77,9 @@ export const SafeToSpendDetail: React.FC = () => {
                 </p>
               )}
               <p className="text-xxs text-brand-400 dark:text-brand-450 leading-relaxed">
-                Your available cash after bills due before your next paycheck and pending
-                (un-cleared) transactions. Bucket limits are not subtracted from this number.
+                {breakdown.bankSyncOnly
+                  ? 'This morning\'s bank balance after bills due before your next paycheck. Spending since the sync shows up tomorrow. Bucket limits are not subtracted from this number.'
+                  : 'Your available cash after bills due before your next paycheck and pending (un-cleared) transactions. Bucket limits are not subtracted from this number.'}
               </p>
               <button
                 type="button"

@@ -58,6 +58,7 @@ import {
   ModuleKey,
   CaptureType,
   CaptureReviewMode,
+  MoneyTrackingMode,
   WeeklyRecap,
   MonthlyMoneyRecap,
   ActivityLogEntry,
@@ -70,6 +71,7 @@ import {
   NotificationLogEntry
 } from '@/types/schema';
 import { calculateSafeToSpendBreakdownFromExpanded, calculateSafeToSpendExpansionStart } from '@/utils/safeToSpendCalculator';
+import { isBankSyncOnly } from '@/utils/moneyTracking';
 import { computeBudgetFit } from '@/utils/budgetFit';
 import { isHabitStale, getHabitResetUpdate } from '@/utils/habitLogic';
 import {
@@ -783,9 +785,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     return expandCalendarItems(calendarItems, calculateSafeToSpendExpansionStart(paycheckA), searchWindowEnd);
   }, [calendarItems, currentPeriodId]);
 
+  // "Bank sync only" (utils/moneyTracking.ts): the nightly bank balance is the
+  // whole truth, so pending rows don't subtract. A boolean dep, so the memo
+  // doesn't re-run on unrelated household-doc writes.
+  const bankSyncOnly = isBankSyncOnly(householdSettings);
   const safeToSpendBreakdown = useMemo(
-    () => calculateSafeToSpendBreakdownFromExpanded(accounts, expandedCalendarItemsForSafeToSpend, currentPeriodId, transactions),
-    [accounts, expandedCalendarItemsForSafeToSpend, currentPeriodId, transactions]
+    () => calculateSafeToSpendBreakdownFromExpanded(accounts, expandedCalendarItemsForSafeToSpend, currentPeriodId, transactions, { bankSyncOnly }),
+    [accounts, expandedCalendarItemsForSafeToSpend, currentPeriodId, transactions, bankSyncOnly]
   );
   // Whether the buckets' remaining limits claim more of the Safe-to-Spend pool
   // than is actually free — surfaced as the toolbar's amber over-allocation
@@ -2446,6 +2452,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeHouseholdSettingsMutations({ db, householdId }).setCaptureReviewMode(type, mode);
   }, [householdId]);
 
+  // "Bank sync only" vs reviewing each transaction (utils/moneyTracking.ts).
+  const setMoneyTracking = useCallback(async (mode: MoneyTrackingMode) => {
+    await makeHouseholdSettingsMutations({ db, householdId }).setMoneyTracking(mode);
+  }, [householdId]);
+
   // Plan 080b: set/clear the Kid Mode exit PIN. A raw PIN is salted+hashed here
   // (never stored plaintext); passing null removes the PIN so exiting needs none.
   const setKidModePin = useCallback(async (pin: string | null): Promise<void> => {
@@ -3127,6 +3138,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setModuleVisibility,
     updateModuleVisibility,
     setCaptureReviewMode,
+    setMoneyTracking,
     setKidModePin,
     setDietaryProfile,
     setMealCookedHabitId,
@@ -3156,7 +3168,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     isLoading, listenersReady, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
     householdId, householdSettings, refreshInsight, rateInsight, addMember, updateMember, removeMember, deleteHousehold,
-    completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setCaptureReviewMode, setKidModePin, setDietaryProfile, setMealCookedHabitId,
+    completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setCaptureReviewMode, setMoneyTracking, setKidModePin, setDietaryProfile, setMealCookedHabitId,
     setFreezeMode, setCeremonyTone,
     addMerchantRule, updateMerchantRule, deleteMerchantRule,
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,

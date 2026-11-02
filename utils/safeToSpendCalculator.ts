@@ -183,6 +183,24 @@ export interface SafeToSpendBreakdown {
    * Same one-filter guarantee as `unpaidBillItems` (see {@link selectPendingSpend}).
    */
   pendingTransactions: Transaction[];
+  /**
+   * Set when the household runs "Bank sync only" (utils/moneyTracking.ts): the
+   * nightly bank balance already reflects every withdrawal, so pending rows are
+   * NOT subtracted — `pendingSpend` is 0 and `pendingTransactions` is empty.
+   * Display surfaces use it to drop the pending line and relabel the balance.
+   */
+  bankSyncOnly?: true;
+  /**
+   * Latest `Account.balanceAsOf` across the counted checking accounts — the
+   * day the bank sync last wrote a balance. Only set in bank-sync-only mode.
+   */
+  balanceAsOf?: string;
+}
+
+/** Options for the breakdown. */
+export interface SafeToSpendOptions {
+  /** "Bank sync only": skip the pending-spend term (see {@link SafeToSpendBreakdown.bankSyncOnly}). */
+  bankSyncOnly?: boolean;
 }
 
 /**
@@ -259,21 +277,35 @@ export const calculateSafeToSpendBreakdownFromExpanded = (
   accounts: Account[],
   allExpandedItems: CalendarItem[],
   currentPeriodId: string = '',
-  transactions: Transaction[] = []
+  transactions: Transaction[] = [],
+  options: SafeToSpendOptions = {}
 ): SafeToSpendBreakdown => {
   // 1. Available Checking Balance (Assets)
   // STRICT: Only Checking. No Savings, No Credit. Archived accounts (F-MONEY-08)
   // are excluded too — a stale archived-checking balance must not keep
   // counting toward Safe-to-Spend.
-  const checkingBalance = sumMoney(
-    accounts.filter(a => a.type === 'checking' && !a.archived).map(a => a.balance)
-  );
+  const checkingAccounts = accounts.filter(a => a.type === 'checking' && !a.archived);
+  const checkingBalance = sumMoney(checkingAccounts.map(a => a.balance));
 
   // 2. Pending spend: current-period pending_review spend (income excluded,
   //    non-checking-tagged excluded). Itemized once; the total is summed from
-  //    the same list so the two can't diverge.
-  const pendingTransactions = selectPendingSpend(transactions, currentPeriodId, accounts);
+  //    the same list so the two can't diverge. In bank-sync-only mode the
+  //    synced balance already includes them, so nothing pending is counted.
+  const bankSyncOnly = options.bankSyncOnly === true;
+  const pendingTransactions = bankSyncOnly
+    ? []
+    : selectPendingSpend(transactions, currentPeriodId, accounts);
   const pendingSpend = sumMoney(pendingTransactions.map(tx => tx.amount));
+  // yyyy-MM-dd strings compare chronologically.
+  const balanceAsOf = bankSyncOnly
+    ? checkingAccounts.reduce<string | undefined>(
+        (latest, a) => (a.balanceAsOf && (!latest || a.balanceAsOf > latest) ? a.balanceAsOf : latest),
+        undefined
+      )
+    : undefined;
+  const modeFields: Pick<SafeToSpendBreakdown, 'bankSyncOnly' | 'balanceAsOf'> = bankSyncOnly
+    ? { bankSyncOnly: true, ...(balanceAsOf ? { balanceAsOf } : {}) }
+    : {};
 
   // 3. Without paycheck tracking, the full checking balance (minus pending) is available.
   if (!currentPeriodId) {
@@ -285,6 +317,7 @@ export const calculateSafeToSpendBreakdownFromExpanded = (
       nextPaycheckDate: null,
       unpaidBillItems: [],
       pendingTransactions,
+      ...modeFields,
     };
   }
 
@@ -319,6 +352,7 @@ export const calculateSafeToSpendBreakdownFromExpanded = (
     nextPaycheckDate: paycheckBDate,
     unpaidBillItems,
     pendingTransactions,
+    ...modeFields,
   };
 };
 
@@ -331,10 +365,11 @@ export const calculateSafeToSpendBreakdown = (
   accounts: Account[],
   calendarItems: CalendarItem[],
   currentPeriodId: string = '',
-  transactions: Transaction[] = []
+  transactions: Transaction[] = [],
+  options: SafeToSpendOptions = {}
 ): SafeToSpendBreakdown => {
   if (!currentPeriodId) {
-    return calculateSafeToSpendBreakdownFromExpanded(accounts, [], currentPeriodId, transactions);
+    return calculateSafeToSpendBreakdownFromExpanded(accounts, [], currentPeriodId, transactions, options);
   }
   const paycheckA = parseISO(currentPeriodId);
   const searchWindowEnd = addMonths(paycheckA, 2);
@@ -343,7 +378,7 @@ export const calculateSafeToSpendBreakdown = (
     calculateSafeToSpendExpansionStart(paycheckA),
     searchWindowEnd
   );
-  return calculateSafeToSpendBreakdownFromExpanded(accounts, allExpandedItems, currentPeriodId, transactions);
+  return calculateSafeToSpendBreakdownFromExpanded(accounts, allExpandedItems, currentPeriodId, transactions, options);
 };
 
 /**

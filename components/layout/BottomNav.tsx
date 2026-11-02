@@ -42,11 +42,16 @@ const BottomNav: React.FC = () => {
   // deriving it during render instead would let the badge keep yesterday's day
   // past midnight while the section had already rolled, so a just-un-snoozed
   // row would appear in the list while the badge still counted it as snoozed.
-  const { transactions } = useFinance();
+  // "Bank sync only" turns transaction review off entirely (utils/moneyTracking.ts),
+  // read off the finance slice's breakdown so this stays a finance-only subscriber.
+  const { transactions, safeToSpendBreakdown } = useFinance();
+  const transactionReviewOff = safeToSpendBreakdown?.bankSyncOnly === true;
   const localToday = useLocalToday();
   const pendingReviewCount = useMemo(
-    () => transactions.filter((t) => needsReview(t) && !isReviewSnoozed(t, localToday)).length,
-    [transactions, localToday]
+    () => transactionReviewOff
+      ? 0
+      : transactions.filter((t) => needsReview(t) && !isReviewSnoozed(t, localToday)).length,
+    [transactions, localToday, transactionReviewOff]
   );
 
   // Plan 090 — which top-level pages are enabled for this household.
