@@ -327,7 +327,8 @@ export interface Account {
    *  present, else the latest withdrawal date in that email, else the sync's
    *  `today`). Set only by the server-side nightly `bankEmailSync` Cloud
    *  Function's only-if-newer overwrite guard (Firestore rules reject client
-   *  writes) — informational, not read by any client formula. */
+   *  writes) — informational: no formula uses it, but the bank-sync-only Safe-to-Spend breakdown
+   *  shows it as the balance's "as of" date (utils/safeToSpendCalculator.ts). */
   balanceAsOf?: string;
   /** The email's AVAILABLE balance figure from the LAST bank-email sync that
    *  actually overwrote `balance` — i.e. a snapshot of what was just written,
