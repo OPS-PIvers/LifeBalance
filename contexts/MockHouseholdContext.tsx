@@ -4,6 +4,7 @@ import { toastIcon } from '@/components/ui/toastIcon';
 import { format, addDays, subDays, startOfWeek } from 'date-fns';
 import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseholdContext';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { useTodoAutoReschedule } from '@/hooks/useTodoAutoReschedule';
 import { pastClosedWeeks } from '@/utils/recapWeek';
 import { shiftDay } from '@/utils/recapAssembly';
 import {
@@ -1109,6 +1110,24 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         { id: 'st_vac_3', text: 'Reserve hotel', isDone: false },
       ],
       category: 'Home',
+    },
+    // A weekly chore list missed last Monday, so Test Mode shows the roll
+    // forward (`useTodoAutoReschedule` below): on load it moves to NEXT Monday
+    // with its steps unchecked instead of sitting Overdue.
+    {
+      id: 'todo_weekly_chores',
+      text: 'Monday chores',
+      completeByDate: format(startOfWeek(subDays(new Date(), 1), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+      assignedTo: 'test-user-id',
+      isCompleted: false,
+      recurrence: { frequency: 'weekly' },
+      createdBy: 'test-user-id',
+      createdAt: new Date().toISOString(),
+      category: 'Home',
+      subtasks: [
+        { id: 'st_mon_1', text: 'Vacuum', isDone: true },
+        { id: 'st_mon_2', text: 'Take out recycling', isDone: false },
+      ],
     },
     {
       id: 'todo_later_1',
@@ -4547,6 +4566,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     () => todos.filter((t) => t.needsReview !== true && t.savedForLater !== true),
     [todos]
   );
+  // Mirrors the real provider: a missed repeating chore rolls to its next date.
+  // A silent in-memory patch (not `updateToDo`, which toasts) since it isn't a
+  // user action.
+  const rollToDo = useCallback(async (id: string, updates: Partial<ToDo>) => {
+    setTodos(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+  }, []);
+  useTodoAutoReschedule({ householdId: 'test-household-id', todos: visibleTodos, updateToDo: rollToDo });
   const todosAwaitingReview = useMemo(
     () => todos.filter((t) => t.needsReview === true),
     [todos]

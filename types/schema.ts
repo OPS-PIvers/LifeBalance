@@ -1765,9 +1765,11 @@ export interface ToDo {
   // its due date passes unfinished, it rolls forward to the next occurrence of
   // its cadence (and any checked subtasks reset, so a fresh period starts
   // clean) instead of piling up in the overdue bucket. Only meaningful
-  // together with `recurrence.frequency`; absent/false = today's behaviour
-  // (the instance goes overdue). See utils/todoRecurrence.ts
-  // (`computeExpiredTodoRoll`) and hooks/useTodoAutoReschedule.ts.
+  // together with `recurrence.frequency`. ON BY DEFAULT: absent/true = rolls
+  // forward; only an explicit `false` keeps a missed occurrence overdue
+  // (`isAutoRescheduleOn`). See utils/todoRecurrence.ts
+  // (`computeExpiredTodoRoll`) and hooks/useTodoAutoReschedule.ts, which both
+  // the app and the wall display mount.
   resetWhenExpired?: boolean;
 
   // Habit Automations (PRD #1065): the habit this to-do is linked to. Completing

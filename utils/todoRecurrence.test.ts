@@ -3,6 +3,7 @@ import {
   computeNextTodoDueDate,
   buildNextRecurringTodo,
   computeExpiredTodoRoll,
+  isAutoRescheduleOn,
   isTodoFrequency,
 } from '@/utils/todoRecurrence';
 import type { Subtask, ToDo } from '@/types/schema';
@@ -223,10 +224,13 @@ describe('computeExpiredTodoRoll', () => {
     expect(computeExpiredTodoRoll(weeklyChore, '2026-07-20')).toBeNull();
   });
 
-  it('returns null when the flag is off or absent', () => {
+  it('returns null only when the flag is explicitly off', () => {
     expect(computeExpiredTodoRoll({ ...weeklyChore, resetWhenExpired: false }, '2026-07-24')).toBeNull();
+  });
+
+  it('rolls a repeating chore that never set the flag (on by default)', () => {
     const { resetWhenExpired: _omitted, ...withoutFlag } = weeklyChore;
-    expect(computeExpiredTodoRoll(withoutFlag, '2026-07-24')).toBeNull();
+    expect(computeExpiredTodoRoll(withoutFlag, '2026-07-24')).toEqual({ completeByDate: '2026-07-28' });
   });
 
   it('returns null for a non-recurring to-do', () => {
@@ -275,5 +279,18 @@ describe('computeExpiredTodoRoll', () => {
   it('omits the subtasks key when there are no subtasks at all', () => {
     const roll = computeExpiredTodoRoll(weeklyChore, '2026-07-24');
     expect('subtasks' in roll!).toBe(false);
+  });
+});
+
+describe('isAutoRescheduleOn', () => {
+  it('is on for a repeating to-do unless explicitly turned off', () => {
+    expect(isAutoRescheduleOn({ recurrence: { frequency: 'weekly' } })).toBe(true);
+    expect(isAutoRescheduleOn({ recurrence: { frequency: 'monthly' }, resetWhenExpired: true })).toBe(true);
+    expect(isAutoRescheduleOn({ recurrence: { frequency: 'weekly' }, resetWhenExpired: false })).toBe(false);
+  });
+
+  it('is off for a one-off to-do, whatever the flag says', () => {
+    expect(isAutoRescheduleOn({})).toBe(false);
+    expect(isAutoRescheduleOn({ resetWhenExpired: true })).toBe(false);
   });
 });

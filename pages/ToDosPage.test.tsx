@@ -1189,10 +1189,31 @@ describe('ToDosPage', () => {
 
       fireEvent.change(screen.getByLabelText('Repeat'), { target: { value: 'weekly' } });
       expect(toggle()).not.toBeNull();
-      expect(toggle()).toHaveAttribute('aria-pressed', 'false');
+      // On by default: a missed repeat moves to its next date.
+      expect(toggle()).toHaveAttribute('aria-pressed', 'true');
     });
 
-    it('round-trips into the payload of a NEW repeating task', async () => {
+    it('a NEW repeating task left on writes no flag (absent = on)', async () => {
+      setup();
+      openFullAddForm();
+
+      fireEvent.change(screen.getByLabelText('Task'), { target: { value: 'Kitchen reset' } });
+      fireEvent.change(screen.getByLabelText('Due date'), { target: { value: today } });
+      fireEvent.change(screen.getByLabelText('Assign to'), { target: { value: 'user1' } });
+      fireEvent.click(moreOptions());
+      fireEvent.change(screen.getByLabelText('Repeat'), { target: { value: 'weekly' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+
+      await waitFor(() => {
+        expect(mockAddToDo).toHaveBeenCalledWith(expect.objectContaining({
+          text: 'Kitchen reset',
+          recurrence: { frequency: 'weekly' },
+        }));
+      });
+      expect(mockAddToDo.mock.calls[0]![0]).not.toHaveProperty('resetWhenExpired');
+    });
+
+    it('a NEW repeating task turned off writes an explicit false', async () => {
       setup();
       openFullAddForm();
 
@@ -1202,7 +1223,7 @@ describe('ToDosPage', () => {
       fireEvent.click(moreOptions());
       fireEvent.change(screen.getByLabelText('Repeat'), { target: { value: 'weekly' } });
       fireEvent.click(toggle()!);
-      expect(toggle()).toHaveAttribute('aria-pressed', 'true');
+      expect(toggle()).toHaveAttribute('aria-pressed', 'false');
 
       fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
 
@@ -1210,7 +1231,7 @@ describe('ToDosPage', () => {
         expect(mockAddToDo).toHaveBeenCalledWith(expect.objectContaining({
           text: 'Kitchen reset',
           recurrence: { frequency: 'weekly' },
-          resetWhenExpired: true,
+          resetWhenExpired: false,
         }));
       });
     });
@@ -1278,6 +1299,19 @@ describe('ToDosPage', () => {
           expect.objectContaining({ recurrence: undefined, resetWhenExpired: false })
         );
       });
+    });
+
+    it('shows an older repeating task (no flag stored) as on, and a plain edit writes nothing', async () => {
+      setup([
+        { ...mockTodos[1]!, id: 'chore', text: 'Chore Task', recurrence: { frequency: 'weekly' } },
+        ...mockTodos.slice(2),
+      ]);
+      fireEvent.click(screen.getByRole('button', { name: 'Edit task: Chore Task' }));
+      expect(toggle()).toHaveAttribute('aria-pressed', 'true');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+      await waitFor(() => expect(mockUpdateToDo).toHaveBeenCalled());
+      expect(mockUpdateToDo.mock.calls[0]![1]).not.toHaveProperty('resetWhenExpired');
     });
 
     it('leaves the field untouched on a plain edit', async () => {
