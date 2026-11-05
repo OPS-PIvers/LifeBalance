@@ -7,7 +7,7 @@ import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday,
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
 import { toggleSubtask, appendSubtask, removeSubtask, subtasksFromTexts, subtaskLinesFromPaste, isPermissionDeniedError, subtaskProgress, MAX_SUBTASKS, updateSubtaskText, setSubtaskAssignee } from '@/utils/subtasks';
-import { TODO_FREQUENCIES, TODO_FREQUENCY_LABELS, type TodoFrequency } from '@/utils/todoRecurrence';
+import { TODO_FREQUENCIES, TODO_FREQUENCY_LABELS, isAutoRescheduleOn, type TodoFrequency } from '@/utils/todoRecurrence';
 import { REMINDER_OFFSET_OPTIONS, compareDueTimes } from '@/utils/todoTime';
 import { WHOLE_HOUSEHOLD_ASSIGNEE, resolveAssignedTo } from '@/utils/todoAssignee';
 import { ToDo, HouseholdMember, Subtask } from '@/types/schema';
@@ -524,7 +524,8 @@ const ToDosPage: React.FC = () => {
   // "Auto-reschedule": only meaningful for a repeating task — when the due date
   // passes unfinished the chore rolls to its next occurrence (steps reset)
   // instead of going overdue. See utils/todoRecurrence.computeExpiredTodoRoll.
-  const [resetWhenExpired, setResetWhenExpired] = useState(false);
+  // On by default: a missed repeat moves to its next date (isAutoRescheduleOn).
+  const [resetWhenExpired, setResetWhenExpired] = useState(true);
   // Shared notes surfaced in the editor drawer — visible to all household members
   // (to-dos are already shared). Capped to match the firestore.rules validator.
   const [notes, setNotes] = useState('');
@@ -831,7 +832,7 @@ const ToDosPage: React.FC = () => {
     setDueTime('');
     setReminderMinutesBefore(null);
     setRecurrence('none');
-    setResetWhenExpired(false);
+    setResetWhenExpired(true);
     setNotes('');
     setLinkedHabitId('');
     // Pre-select the category used on the last ADD (never on an edit), so a
@@ -975,7 +976,9 @@ const ToDosPage: React.FC = () => {
     setDueTime(todo.dueTime ?? '');
     setReminderMinutesBefore(todo.reminderMinutesBefore ?? null);
     setRecurrence(todo.recurrence?.frequency ?? 'none');
-    setResetWhenExpired(todo.resetWhenExpired === true);
+    // A repeating to-do shows its effective setting; a one-off one starts ON so
+    // picking a cadence while editing gets the same default as a new task.
+    setResetWhenExpired(todo.recurrence ? todo.resetWhenExpired !== false : true);
     setNotes(todo.notes ?? '');
     setLinkedHabitId(todo.linkedHabitId ?? '');
     // Editing NEVER inherits the last-used default — the stored value (or the
@@ -1595,7 +1598,9 @@ const ToDosPage: React.FC = () => {
         }
         // Same "only when it changed" shape, so a plain (never-repeating) edit
         // stays byte-identical to today's write.
-        if (resetWhenExpiredValue !== (editingTodo?.resetWhenExpired === true)) {
+        // Compared against the EFFECTIVE stored setting (absent = on for a
+        // repeating to-do), so a plain edit never writes the flag.
+        if (resetWhenExpiredValue !== (editingTodo ? isAutoRescheduleOn(editingTodo) : false)) {
           updates.resetWhenExpired = resetWhenExpiredValue;
         }
         // Habit Automations (PRD #1065): only touch linkedHabitId when it
@@ -1625,7 +1630,8 @@ const ToDosPage: React.FC = () => {
           ...(dueTimeValue !== undefined ? { dueTime: dueTimeValue } : {}),
           ...(reminderValue !== undefined ? { reminderMinutesBefore: reminderValue } : {}),
           ...(recurrenceValue ? { recurrence: recurrenceValue } : {}),
-          ...(resetWhenExpiredValue ? { resetWhenExpired: true } : {}),
+          // Absent = on, so only turning it OFF needs writing.
+          ...(recurrenceValue && !resetWhenExpiredValue ? { resetWhenExpired: false } : {}),
           ...(linkedHabitValue ? { linkedHabitId: linkedHabitValue } : {}),
           ...(categoryValue ? { category: categoryValue } : {})
         });
@@ -2995,7 +3001,7 @@ const ToDosPage: React.FC = () => {
               <p className="mt-1.5 text-xs text-brand-400 dark:text-brand-450">
                 {resetWhenExpired
                   ? 'A fresh copy is created each time you complete it — and if the due date passes first, this one moves to the next date.'
-                  : 'A fresh copy is created each time you complete it. Turn on Auto-reschedule above to also move it forward when the due date passes.'}
+                  : 'A fresh copy is created each time you complete it. If the due date passes first, it stays overdue — turn on Auto-reschedule above to move it forward instead.'}
               </p>
             )}
           </div>

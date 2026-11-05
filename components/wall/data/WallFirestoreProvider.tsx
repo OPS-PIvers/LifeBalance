@@ -4,6 +4,7 @@ import { db } from '@/firebase.config';
 import { parseISO } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocalToday } from '@/hooks/useLocalToday';
+import { useTodoAutoReschedule } from '@/hooks/useTodoAutoReschedule';
 import { attachShoppingListeners } from '@/contexts/household/listeners/shoppingListeners';
 import { attachTodoListeners } from '@/contexts/household/listeners/todoListeners';
 import { attachMealListeners } from '@/contexts/household/listeners/mealListeners';
@@ -216,6 +217,17 @@ const WallFirestoreProvider: React.FC<WallFirestoreProviderProps> = ({ onRevoked
     () => mergeById(activeTodos, completedTodos).filter(t => t.needsReview !== true && t.savedForLater !== true),
     [activeTodos, completedTodos]
   );
+  // A missed repeating chore rolls to its next date (ToDo.resetWhenExpired, on
+  // by default). The phone app runs this too, but the wall is the one screen
+  // that is always on, so it does the roll itself rather than showing "Monday
+  // chores" as Overdue until someone happens to open the app. Two devices
+  // rolling the same chore write the same date, so they can't disagree.
+  const updateToDo = useCallback(
+    (id: string, updates: Partial<ToDo>) => makeTodoCrudMutations({ db, householdId }).updateToDo(id, updates),
+    [householdId]
+  );
+  useTodoAutoReschedule({ householdId, todos, updateToDo });
+
   const visibleShopping = useMemo(
     () => shoppingList.filter(item => item.needsReview !== true && item.savedForLater !== true),
     [shoppingList]

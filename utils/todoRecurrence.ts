@@ -120,6 +120,17 @@ function resetSubtasks(subtasks: Subtask[]): Subtask[] {
 }
 
 /**
+ * Whether a to-do rolls forward when its due date passes unfinished. True for
+ * every REPEATING to-do unless `resetWhenExpired` is explicitly `false`: a
+ * missed "Monday chores" should become next Monday's, not sit overdue on the
+ * wall. A one-off to-do never rolls (it has no next date). The to-do form and
+ * `computeExpiredTodoRoll` both read it, so the toggle shows what will happen.
+ */
+export function isAutoRescheduleOn(todo: Pick<ToDo, 'recurrence' | 'resetWhenExpired'>): boolean {
+  return isTodoFrequency(todo.recurrence?.frequency) && todo.resetWhenExpired !== false;
+}
+
+/**
  * "Auto-reschedule" (`ToDo.resetWhenExpired`): a repeating chore whose due date
  * has passed unfinished is not really *overdue* — it should roll forward to the
  * next occurrence of its cadence, with the checklist reset so a fresh period
@@ -141,7 +152,9 @@ export function computeExpiredTodoRoll(
   todo: ToDo,
   today: string,
 ): { completeByDate: string; subtasks?: Subtask[] } | null {
-  if (todo.resetWhenExpired !== true) return null;
+  // ON by default for every repeating to-do: only an explicit `false` (the
+  // "Auto-reschedule" toggle turned off) keeps a missed occurrence overdue.
+  if (!isAutoRescheduleOn(todo)) return null;
   const frequency = todo.recurrence?.frequency;
   if (!isTodoFrequency(frequency)) return null;
   if (todo.isCompleted) return null;
