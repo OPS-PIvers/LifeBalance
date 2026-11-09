@@ -62,6 +62,12 @@ describe('planAlerts', () => {
     expect(at({ leaveAt: '2026-10-05T17:00:00-05:00' })).toEqual([30]);
   });
 
+  it('times the one alert off an arrive-by time when there is no trip', () => {
+    // "Arrive by 4:15" with no address or route, on a calendar with alerts on.
+    const plans = planAlerts([ev({ location: undefined, earlyMin: 15 })], [feed()], [], 10, 5);
+    expect(plans.map(p => [p.kind, (startMs - p.at) / MIN, p.arriveBy === null ? null : (startMs - p.arriveBy) / MIN])).toEqual([['soon', 25, 15]]);
+  });
+
   it('falls back to one alert at the lead time without a usable travel time', () => {
     expect(planAlerts([ev()], [feed()], [], 15, 0).map(p => [p.kind, (startMs - p.at) / MIN])).toEqual([['soon', 15]]);
     expect(planAlerts([ev()], [feed()], [trip(null)], 10, 0).map(p => p.kind)).toEqual(['soon']);
@@ -112,6 +118,15 @@ describe('alertWords', () => {
     const [h, l] = planAlerts([ev({ location: undefined, leaveAt: '2026-10-05T16:00:00-05:00' })], [feed()], [], 10, 10);
     expect(alertWords(h!, h!.at, TZ, 'Leo')).toMatchObject({ detail: '4:30 PM · Leo', leaveBy: 'Leave by 4 PM', speech: 'Leo, piano lesson at 4:30 PM. Leave in 10 minutes.' });
     expect(alertWords(l!, l!.at, TZ, null).speech).toBe('Time to leave for piano lesson.');
+  });
+
+  it('says when to be there when the event only states an arrival time', () => {
+    const [soon] = planAlerts([ev({ location: undefined, earlyMin: 15 })], [feed()], [], 10, 0);
+    expect(alertWords(soon!, soon!.at, TZ, 'Leo')).toMatchObject({
+      kicker: 'Be there in 10 min',
+      leaveBy: 'Be there by 4:15 PM',
+      speech: 'Leo, piano lesson at 4:30 PM. Be there by 4:15 PM, in 10 minutes.',
+    });
   });
 
   it('counts down to the start without travel', () => {

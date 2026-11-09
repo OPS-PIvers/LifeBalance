@@ -168,8 +168,8 @@ async function syncFeed(
   const secretSnap = await secretRef.get();
   const secret = secretSnap.data() ?? {};
   const ownerKey = typeof feed.ownerKey === "string" ? feed.ownerKey : "family";
-  // A shared calendar's events go to whoever they name; see ownerMatch.ts.
-  const names = ownerKey === "family" && feed.kind !== "holidays" ? await householdNames(ctx) : [];
+  // An event goes to whoever it names, on any calendar but the holidays; see ownerMatch.ts.
+  const names = feed.kind !== "holidays" ? await householdNames(ctx) : [];
   const key = names.length > 0 ? `${syncKey(ctx.window, ctx.timeZone, ownerKey)}|${namesKey(names)}` : syncKey(ctx.window, ctx.timeZone, ownerKey);
   const sameKey = secret.syncKey === key && parseEventIndex(secret.eventIndex) !== null;
   const nowTs = admin.firestore.Timestamp.fromDate(ctx.now);

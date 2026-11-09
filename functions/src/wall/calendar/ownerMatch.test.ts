@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventOwners, memberNames, namesKey } from "./ownerMatch";
+import { eventOwners, memberNames, namesKey, ownerFields } from "./ownerMatch";
 
 const names = memberNames([
   { uid: "paul", displayName: "Paul Ivers" },
@@ -60,5 +60,20 @@ describe("namesKey", () => {
   it("changes when a member is renamed", () => {
     const renamed = memberNames([{ uid: "mia", displayName: "Amelia" }]);
     expect(namesKey(renamed)).not.toBe(namesKey(memberNames([{ uid: "mia", displayName: "Mia" }])));
+  });
+});
+
+describe("ownerFields", () => {
+  it("files a Family event under the people it names, or Everyone", () => {
+    expect(ownerFields("family", [])).toEqual({ ownerKey: "family" });
+    expect(ownerFields("family", ["leo"])).toEqual({ ownerKey: "leo" });
+    expect(ownerFields("family", ["leo", "mia"])).toEqual({ ownerKey: "family", ownerKeys: ["leo", "mia"] });
+  });
+
+  it("keeps a person's own event theirs, and adds anyone else it names", () => {
+    expect(ownerFields("mom", [])).toEqual({ ownerKey: "mom" });
+    expect(ownerFields("mom", ["mom"])).toEqual({ ownerKey: "mom" });
+    expect(ownerFields("mom", ["leo"])).toEqual({ ownerKey: "mom", ownerKeys: ["mom", "leo"] });
+    expect(ownerFields("mom", ["mom", "leo"])).toEqual({ ownerKey: "mom", ownerKeys: ["mom", "leo"] });
   });
 });

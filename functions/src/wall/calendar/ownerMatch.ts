@@ -1,10 +1,15 @@
 /**
- * Who a shared ("family") calendar event is for, read from its words.
+ * Who a calendar event is for, read from its words.
  *
- * A household often keeps one shared calendar and writes the person into the
- * event: "Leo – soccer", "Mia's dentist", or a note in the description. When
- * a family feed's event names household members by first name, the wall files
- * it under those people instead of Everyone.
+ * A household writes the person into the event: "Leo – soccer", "Mia's
+ * dentist", or a note in the description. When an event names household
+ * members by first name, the wall files it under those people:
+ *
+ * - On a Family calendar, instead of Everyone.
+ * - On one person's calendar, alongside that person: a parent's calendar is
+ *   where most kids' events actually live ("Leo dentist" on Mom's calendar),
+ *   and it is still on Mom's day too. Read only on Family calendars before,
+ *   which is why a name almost never moved anything.
  *
  * Rules:
  * - A name matches as a whole word ("Leo" in "Leo's game", never in "Leon").
@@ -56,4 +61,16 @@ function namedIn(text: string, names: readonly MemberName[], anyCase: boolean): 
 export function eventOwners(title: string, description: string, names: readonly MemberName[]): string[] {
   const inTitle = namedIn(title, names, true);
   return inTitle.length > 0 ? inTitle : namedIn(description, names, false);
+}
+
+/**
+ * The row's owner fields for a feed owned by `feedOwner` ("family" or a uid)
+ * when the event names `named`: one owner as `ownerKey`, several as
+ * `ownerKeys` too (the wall shows it in each lane).
+ */
+export function ownerFields(feedOwner: string, named: readonly string[]): { ownerKey: string; ownerKeys?: string[] } {
+  const keys = named.length === 0 ? [] : feedOwner === "family" || named.includes(feedOwner) ? [...named] : [feedOwner, ...named];
+  if (keys.length === 0) return { ownerKey: feedOwner };
+  if (keys.length === 1) return { ownerKey: keys[0] ?? feedOwner };
+  return { ownerKey: feedOwner, ownerKeys: keys };
 }

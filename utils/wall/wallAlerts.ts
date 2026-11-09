@@ -9,7 +9,7 @@ import { leavePlan, routeFor } from './wallLeave';
  * (./wallLeave.ts: the event's own, or start − trip − how early to arrive): a
  * heads-up 10 min before leave-by, then "Time to leave" at leave-by. Without
  * one (no location, no home address, no route): one alert `leadMin` before
- * the start.
+ * the start, or before the arrival time the event states ("arrive by 4:45").
  */
 
 export type AlertKind = 'heads-up' | 'leave' | 'soon';
@@ -24,6 +24,8 @@ export interface WallAlert {
   start: number;
   /** When to leave (ms), or null for a plain starting-soon alert. */
   leaveBy: number | null;
+  /** When to be there (ms), for a starting-soon alert on an event that says ("arrive by 4:45"). */
+  arriveBy: number | null;
   travelMin: number | null;
   mode: WallTravelMode;
 }
@@ -53,13 +55,15 @@ export function planAlerts(
     const start = Date.parse(event.start);
     if (Number.isNaN(start)) continue;
     const plan = leavePlan(event, routeFor(event, minutes), earlyMin);
-    const base = { event, start, leaveBy: plan?.at ?? null, travelMin: plan?.travelMin ?? null, mode: minutes.get(event.id)?.mode ?? mode };
+    const leaving = plan?.kind === 'leave' ? plan : null;
+    const arriveBy = plan?.kind === 'arrive' ? plan.at : null;
+    const base = { event, start, leaveBy: leaving?.at ?? null, arriveBy, travelMin: leaving?.travelMin ?? null, mode: minutes.get(event.id)?.mode ?? mode };
     const key = (kind: AlertKind) => `${event.id}|${event.start}|${kind}`;
-    if (plan) {
-      out.push({ ...base, key: key('heads-up'), kind: 'heads-up', at: plan.at - ALERT_HEADS_UP_MIN * MIN });
-      out.push({ ...base, key: key('leave'), kind: 'leave', at: plan.at });
+    if (leaving) {
+      out.push({ ...base, key: key('heads-up'), kind: 'heads-up', at: leaving.at - ALERT_HEADS_UP_MIN * MIN });
+      out.push({ ...base, key: key('leave'), kind: 'leave', at: leaving.at });
     } else {
-      out.push({ ...base, key: key('soon'), kind: 'soon', at: start - leadMin * MIN });
+      out.push({ ...base, key: key('soon'), kind: 'soon', at: (arriveBy ?? start) - leadMin * MIN });
     }
   }
   return out.sort((a, b) => a.at - b.at);
@@ -122,6 +126,17 @@ export function alertWords(alert: WallAlert, now: number, timeZone: string, pers
       detail,
       leaveBy: `Leave by ${spokenTime(new Date(leaveByMs).toISOString(), timeZone)}`,
       speech: say(`${lower} at ${at}. Leave in ${spokenDuration(left)}.${tripLine}`),
+    };
+  }
+  if (alert.arriveBy !== null) {
+    const left = Math.max(1, Math.round((alert.arriveBy - now) / MIN));
+    const by = spokenTime(new Date(alert.arriveBy).toISOString(), timeZone);
+    return {
+      kicker: `Be there in ${left} min`,
+      title,
+      detail,
+      leaveBy: `Be there by ${by}`,
+      speech: say(`${lower} at ${at}. Be there by ${by}, in ${spokenDuration(left)}.`),
     };
   }
   const left = Math.max(1, Math.round((alert.start - now) / MIN));
