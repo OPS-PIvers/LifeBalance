@@ -123,9 +123,9 @@ describe('alertWords', () => {
   it('says when to be there when the event only states an arrival time', () => {
     const [soon] = planAlerts([ev({ location: undefined, earlyMin: 15 })], [feed()], [], 10, 0);
     expect(alertWords(soon!, soon!.at, TZ, 'Leo')).toMatchObject({
-      kicker: 'Be there in 10 min',
-      leaveBy: 'Be there by 4:15 PM',
-      speech: 'Leo, piano lesson at 4:30 PM. Be there by 4:15 PM, in 10 minutes.',
+      kicker: 'Arrive in 10 min',
+      leaveBy: 'Arrive by 4:15 PM',
+      speech: 'Leo, piano lesson at 4:30 PM. Arrive by 4:15 PM, in 10 minutes.',
     });
   });
 

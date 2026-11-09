@@ -31,9 +31,10 @@ export interface WallEventRow {
   feedId?: string;
   ownerKey: string;
   /**
-   * Set when an event belongs to two or more members (ownerMatch.ts
-   * `ownerFields`): the wall shows it in each of their lanes. `ownerKey` stays
-   * the feed's owner for those (one named member becomes the `ownerKey`).
+   * Rows written before November 2026 set this when a family event named
+   * two or more members (the wall shows it in each lane). The sync now files
+   * every event under one owner (ownerMatch.ts `ownerFields`) and never
+   * writes it; the client still reads it.
    */
   ownerKeys?: string[];
   title: string;

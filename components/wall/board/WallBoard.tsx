@@ -185,7 +185,7 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
             {lead.event.end ? `–${eventTimeText(lead.event.end, timeZone)}` : ''}
             {lead.event.location ? ` · ${lead.event.location}` : ''}
             {driveAhead && plan?.travelMin != null ? ` · ${plan.travelMin} min drive` : ''}
-            {leaving && arriving && plan ? ` · be there by ${eventTimeText(new Date(plan.at).toISOString(), timeZone)}` : ''}
+            {leaving && arriving && plan ? ` · Arrive by ${eventTimeText(new Date(plan.at).toISOString(), timeZone)}` : ''}
           </span>
           <span className="cd" aria-hidden={leaving ? undefined : true}>
             {(() => {
@@ -195,7 +195,7 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
                   <b>{c.n}</b>
                   <small>
                     {leaving && !arriving && <Car className="wi" size="1em" aria-hidden="true" />}
-                    {leaving ? `${c.unit} to ${arriving ? 'be there' : 'leave'}` : focus.leadIsNow ? `${c.unit} left` : c.unit}
+                    {leaving && !arriving ? `${c.unit} to leave` : focus.leadIsNow ? `${c.unit} left` : c.unit}
                   </small>
                 </>
               );

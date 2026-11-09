@@ -245,13 +245,13 @@ describe("expandIcs", () => {
     expect(rows.map((r) => [r.title, r.ownerKey, r.ownerKeys])).toEqual([
       ["Leo soccer", "leo", undefined],
       ["Dentist", "mia", undefined],
-      ["Pick up Leo and Mia", "family", ["leo", "mia"]],
+      ["Pick up Leo and Mia", "leo", undefined],
       ["Farmers market", "family", undefined],
       ["Busy", "family", undefined],
     ]);
   });
 
-  it("reads a Google-shaped event on one person's calendar: the kid it names joins the owner, arrive-by is kept", () => {
+  it("reads a Google-shaped event on one person's calendar: it moves to the kid it names, arrive-by is kept", () => {
     // What Google's secret iCal address actually serves: an HTML description
     // with escaped commas, a typographic apostrophe, times in UTC.
     const text = cal(
@@ -281,7 +281,7 @@ describe("expandIcs", () => {
     const owners = (title: string, description: string) => eventOwners(title, description, names);
     const rows = expandIcs(text, opts({ ownerKey: "paul", owners })).rows;
     expect(rows.map((r) => [r.title, r.ownerKey, r.ownerKeys, r.earlyMin])).toEqual([
-      ["Leo’s soccer", "paul", ["paul", "leo"], 15],
+      ["Leo’s soccer", "leo", undefined, 15],
       ["Haircut", "paul", undefined, undefined],
       ["Coffee with Paul", "paul", undefined, undefined],
     ]);

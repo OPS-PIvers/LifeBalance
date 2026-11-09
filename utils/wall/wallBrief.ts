@@ -139,8 +139,8 @@ export function composeBrief({ day, date, events, travel, earlyMin, weather, now
     const who = person(e.ownerKey);
     const plan = leavePlan(e, routeFor(e, minutes), earlyMin);
     const by = plan ? spokenTime(new Date(plan.at).toISOString(), timeZone) : null;
-    // "leave by 4:20" with a trip; "be there by 4:45" when the event only says when to arrive.
-    const verb = plan?.kind === 'arrive' ? 'be there by' : 'leave by';
+    // "leave by 4:20" with a trip; "arrive by 4:45" when the event only says when to arrive.
+    const verb = plan?.kind === 'arrive' ? 'arrive by' : 'leave by';
     lines.push({
       kind: 'event',
       text: `${at} · ${e.title}${who ? ` · ${who}` : ''}${by ? ` · ${verb} ${by}` : ''}`,

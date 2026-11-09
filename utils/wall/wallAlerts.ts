@@ -132,11 +132,11 @@ export function alertWords(alert: WallAlert, now: number, timeZone: string, pers
     const left = Math.max(1, Math.round((alert.arriveBy - now) / MIN));
     const by = spokenTime(new Date(alert.arriveBy).toISOString(), timeZone);
     return {
-      kicker: `Be there in ${left} min`,
+      kicker: `Arrive in ${left} min`,
       title,
       detail,
-      leaveBy: `Be there by ${by}`,
-      speech: say(`${lower} at ${at}. Be there by ${by}, in ${spokenDuration(left)}.`),
+      leaveBy: `Arrive by ${by}`,
+      speech: say(`${lower} at ${at}. Arrive by ${by}, in ${spokenDuration(left)}.`),
     };
   }
   const left = Math.max(1, Math.round((alert.start - now) / MIN));

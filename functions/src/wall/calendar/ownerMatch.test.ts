@@ -33,7 +33,7 @@ describe("eventOwners", () => {
     ["Soccer (LEO)", "", ["leo"]],
     ["Leo's game", "", ["leo"]],
     ["Mia’s dentist", "", ["mia"]],
-    ["Pick up Leo + Mia", "", ["mia", "leo"]],
+    ["Pick up Leo + Mia", "", ["leo", "mia"]],
     ["Leon's birthday party", "", []],
     ["Paulina sleepover", "", []],
     ["Farmers market", "", []],
@@ -64,16 +64,44 @@ describe("namesKey", () => {
 });
 
 describe("ownerFields", () => {
-  it("files a Family event under the people it names, or Everyone", () => {
+  it("files an event under the first person it names, on any calendar, else the calendar's owner", () => {
     expect(ownerFields("family", [])).toEqual({ ownerKey: "family" });
     expect(ownerFields("family", ["leo"])).toEqual({ ownerKey: "leo" });
-    expect(ownerFields("family", ["leo", "mia"])).toEqual({ ownerKey: "family", ownerKeys: ["leo", "mia"] });
+    expect(ownerFields("family", ["leo", "mia"])).toEqual({ ownerKey: "leo" });
+    expect(ownerFields("mom", [])).toEqual({ ownerKey: "mom" });
+    expect(ownerFields("mom", ["leo"])).toEqual({ ownerKey: "leo" });
+  });
+});
+
+describe("short forms", () => {
+  const family = memberNames([
+    { uid: "jen", displayName: "Jennifer Ivers" },
+    { uid: "paul", displayName: "Paul Ivers" },
+    { uid: "theo", displayName: "Theodore" },
+  ]);
+  it.each([
+    ["Jen lunch with Gail", ["jen"]],
+    ["jen - dentist", ["jen"]],
+    ["Lunch with Jenny", []],
+    ["Theo's game", ["theo"]],
+    ["The game", []],
+    ["Paul drive Jen to the airport", ["paul", "jen"]],
+    ["Paulina sleepover", []],
+  ])("%j → %j", (title, expected) => {
+    expect(eventOwners(title, "", family)).toEqual(expected);
   });
 
-  it("keeps a person's own event theirs, and adds anyone else it names", () => {
-    expect(ownerFields("mom", [])).toEqual({ ownerKey: "mom" });
-    expect(ownerFields("mom", ["mom"])).toEqual({ ownerKey: "mom" });
-    expect(ownerFields("mom", ["leo"])).toEqual({ ownerKey: "mom", ownerKeys: ["mom", "leo"] });
-    expect(ownerFields("mom", ["mom", "leo"])).toEqual({ ownerKey: "mom", ownerKeys: ["mom", "leo"] });
+  it("skips a short form two members' names start with", () => {
+    const twoJs = memberNames([
+      { uid: "a", displayName: "Jennifer" },
+      { uid: "b", displayName: "Jenna" },
+    ]);
+    expect(eventOwners("Jen lunch", "", twoJs)).toEqual([]);
+    expect(eventOwners("Jenna lunch", "", twoJs)).toEqual(["b"]);
+  });
+
+  it("needs a capitalised short form in the description", () => {
+    expect(eventOwners("Lunch", "Jen is meeting Gail", family)).toEqual(["jen"]);
+    expect(eventOwners("Lunch", "the jen account", family)).toEqual([]);
   });
 });

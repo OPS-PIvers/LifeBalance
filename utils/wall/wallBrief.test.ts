@@ -73,7 +73,7 @@ describe('composeBrief', () => {
   it('says when to be there for an arrive-by event with no trip', () => {
     const arrive = [ev('d', 'Soccer', '2026-10-05T17:00:00-05:00', { earlyMin: 15 })];
     const brief = composeBrief({ day: 'today', date: TODAY, events: arrive, travel: [], earlyMin: 10, weather: null, now: NOW, timeZone: TZ, person });
-    expect(brief.lines[1]).toMatchObject({ text: '5 PM · Soccer · be there by 4:45 PM', speech: 'At 5 PM, soccer. Be there by 4:45 PM.' });
+    expect(brief.lines[1]).toMatchObject({ text: '5 PM · Soccer · arrive by 4:45 PM', speech: 'At 5 PM, soccer. Arrive by 4:45 PM.' });
   });
 
   it('reads tomorrow with its forecast', () => {
