@@ -70,6 +70,12 @@ describe('composeBrief', () => {
     expect(brief.lines.map(l => l.speech).slice(1)).toEqual(['At 4:30 PM, piano lesson. Leave by 3:55 PM.', 'At 5 PM, away game. Leave by 4:15 PM.']);
   });
 
+  it('says when to be there for an arrive-by event with no trip', () => {
+    const arrive = [ev('d', 'Soccer', '2026-10-05T17:00:00-05:00', { earlyMin: 15 })];
+    const brief = composeBrief({ day: 'today', date: TODAY, events: arrive, travel: [], earlyMin: 10, weather: null, now: NOW, timeZone: TZ, person });
+    expect(brief.lines[1]).toMatchObject({ text: '5 PM · Soccer · arrive by 4:45 PM', speech: 'At 5 PM, soccer. Arrive by 4:45 PM.' });
+  });
+
   it('reads tomorrow with its forecast', () => {
     const brief = composeBrief({ day: 'tomorrow', date: TOMORROW, events, travel, earlyMin: 10, weather, now: NOW, timeZone: TZ, person });
     expect(brief.lines.map(l => l.speech)).toEqual([

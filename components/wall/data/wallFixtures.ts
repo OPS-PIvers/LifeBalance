@@ -57,8 +57,8 @@ export function wallTestFixtures(
       { id: 'fb5', source: 'feed', ownerKey: 'kid_leo', title: 'Soccer game', allDay: false, date: day(3), start: at(3, '10:00'), end: at(3, '11:00') },
       { id: 'fb6', source: 'feed', ownerKey: 'test-partner-id', title: 'Parent–teacher conferences', allDay: false, date: day(5), start: at(5, '17:00'), end: at(5, '17:30') },
       { id: 'fb7', source: 'feed', ownerKey: 'family', title: 'Pumpkin patch', allDay: false, date: day(4), start: at(4, '13:00'), end: at(4, '15:00') },
-      // On the shared calendar, naming two people: the sync files it in both of their lanes.
-      { id: 'fb8', source: 'feed', ownerKey: 'family', ownerKeys: ['test-partner-id', 'kid_leo'], title: 'Library with Jordan & Leo', allDay: false, date: day(0), start: at(0, '10:30'), end: at(0, '11:30') }
+      // On the shared calendar, naming two people: the sync files it under the first one named.
+      { id: 'fb8', source: 'feed', ownerKey: 'test-partner-id', title: 'Library with Jordan & Leo', allDay: false, date: day(0), start: at(0, '10:30'), end: at(0, '11:30') }
     );
   }
   const feeds: WallCalendarFeed[] = [

@@ -20,6 +20,7 @@ import { createHash } from "crypto";
 import { addDays, format, parseISO } from "date-fns";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { isoDurationMinutes, parseLeaveHints, type LeaveHints } from "./leaveHints";
+import { ownerFields } from "./ownerMatch";
 
 export type WallEventSource = "feed" | "bill" | "holiday";
 
@@ -30,9 +31,10 @@ export interface WallEventRow {
   feedId?: string;
   ownerKey: string;
   /**
-   * Set when a family event names two or more members: the wall shows it in
-   * each of their lanes. `ownerKey` stays "family" for those (one named member
-   * becomes the `ownerKey` instead).
+   * Rows written before November 2026 set this when a family event named
+   * two or more members (the wall shows it in each lane). The sync now files
+   * every event under one owner (ownerMatch.ts `ownerFields`) and never
+   * writes it; the client still reads it.
    */
   ownerKeys?: string[];
   title: string;
@@ -50,7 +52,7 @@ export interface WallEventRow {
 export interface ExpandOptions {
   feedId: string;
   ownerKey: string;
-  /** Who an event is for, read from its title and description (ownerMatch.ts). Family feeds only. */
+  /** Who an event names, read from its title and description (ownerMatch.ts). */
   owners?: (title: string, description: string) => string[];
   source: "feed" | "holiday";
   /** Household IANA zone; timed events land on this zone's dates. */
@@ -217,8 +219,7 @@ function rowsFor(occ: Occurrence, uid: string, opts: ExpandOptions, ctx: ZoneCon
   const base = {
     source: opts.source,
     feedId: opts.feedId,
-    ownerKey: named.length === 1 ? named[0] ?? opts.ownerKey : opts.ownerKey,
-    ...(named.length > 1 ? { ownerKeys: named } : {}),
+    ...ownerFields(opts.ownerKey, named),
     title,
     ...(location ? { location } : {}),
   };

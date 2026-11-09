@@ -44,12 +44,20 @@ export function resolveTimeZone(...candidates: unknown[]): string {
 }
 
 /**
+ * Bump when what a feed's rows are computed FROM changes (a new field read
+ * from the event, a new owner rule). Without it, a feed whose body hasn't
+ * changed since the deploy (Google's own DTSTAMPs move, many servers' don't)
+ * keeps its old rows forever and the new reading never shows up.
+ */
+export const ROWS_VERSION = "r2";
+
+/**
  * Identifies what a feed's rows were computed against. When it changes (the
  * window rolled into a new month, the zone or owner changed), a 304 from the
  * feed server isn't enough: the rows must be recomputed.
  */
 export function syncKey(window: WallWindow, timeZone: string, ownerKey: string): string {
-  return `${window.start}|${window.end}|${timeZone}|${ownerKey}`;
+  return `${ROWS_VERSION}|${window.start}|${window.end}|${timeZone}|${ownerKey}`;
 }
 
 export interface BillItem extends BillCalendarItem {

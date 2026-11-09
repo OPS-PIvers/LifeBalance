@@ -73,8 +73,10 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
   const leaveMs = plan ? plan.at - now.getTime() : NaN;
   // With a drive ahead, when to leave is the number that matters, so it takes the countdown's place.
   // At leave time the leave alert says so, and the number goes back to counting down to the event.
+  // An event that only says when to be there ("arrive by 4:45") counts down to that instead.
   const driveAhead = !focus.leadIsNow && Number.isFinite(leaveMs);
   const leaving = driveAhead && leaveMs > 0;
+  const arriving = plan?.kind === 'arrive';
 
   const due = useMemo(() => dueTodayChecklist(todos, today, timeZone), [todos, today, timeZone]);
   const lanes = useMemo(() => boardLanes(timeline.rows, due, people.members.map(m => m.uid)), [timeline.rows, due, people.members]);
@@ -183,6 +185,7 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
             {lead.event.end ? `–${eventTimeText(lead.event.end, timeZone)}` : ''}
             {lead.event.location ? ` · ${lead.event.location}` : ''}
             {driveAhead && plan?.travelMin != null ? ` · ${plan.travelMin} min drive` : ''}
+            {leaving && arriving && plan ? ` · Arrive by ${eventTimeText(new Date(plan.at).toISOString(), timeZone)}` : ''}
           </span>
           <span className="cd" aria-hidden={leaving ? undefined : true}>
             {(() => {
@@ -191,8 +194,8 @@ const WallBoard: React.FC<WallBoardProps> = ({ today, now, timeZone, people, wea
                 <>
                   <b>{c.n}</b>
                   <small>
-                    {leaving && <Car className="wi" size="1em" aria-hidden="true" />}
-                    {leaving ? `${c.unit} to leave` : focus.leadIsNow ? `${c.unit} left` : c.unit}
+                    {leaving && !arriving && <Car className="wi" size="1em" aria-hidden="true" />}
+                    {leaving && !arriving ? `${c.unit} to leave` : focus.leadIsNow ? `${c.unit} left` : c.unit}
                   </small>
                 </>
               );

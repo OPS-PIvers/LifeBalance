@@ -138,11 +138,13 @@ export function composeBrief({ day, date, events, travel, earlyMin, weather, now
     const at = spokenTime(e.start ?? '', timeZone);
     const who = person(e.ownerKey);
     const plan = leavePlan(e, routeFor(e, minutes), earlyMin);
-    const leaveBy = plan ? spokenTime(new Date(plan.at).toISOString(), timeZone) : null;
+    const by = plan ? spokenTime(new Date(plan.at).toISOString(), timeZone) : null;
+    // "leave by 4:20" with a trip; "arrive by 4:45" when the event only says when to arrive.
+    const verb = plan?.kind === 'arrive' ? 'arrive by' : 'leave by';
     lines.push({
       kind: 'event',
-      text: `${at} · ${e.title}${who ? ` · ${who}` : ''}${leaveBy ? ` · leave by ${leaveBy}` : ''}`,
-      speech: `At ${at}, ${who ? `${who} has ${lowerFirst(e.title)}` : lowerFirst(e.title)}.${leaveBy ? ` Leave by ${leaveBy}.` : ''}`,
+      text: `${at} · ${e.title}${who ? ` · ${who}` : ''}${by ? ` · ${verb} ${by}` : ''}`,
+      speech: `At ${at}, ${who ? `${who} has ${lowerFirst(e.title)}` : lowerFirst(e.title)}.${by ? ` ${verb.charAt(0).toUpperCase()}${verb.slice(1)} ${by}.` : ''}`,
       ownerKey: e.ownerKey,
     });
   }

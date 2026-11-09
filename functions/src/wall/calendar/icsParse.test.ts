@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { IcsParseError, expandIcs, normalizeTzid, type ExpandOptions } from "./icsParse";
+import { eventOwners, memberNames } from "./ownerMatch";
 
 const CHICAGO_VTIMEZONE = `BEGIN:VTIMEZONE
 TZID:America/Chicago
@@ -244,9 +245,45 @@ describe("expandIcs", () => {
     expect(rows.map((r) => [r.title, r.ownerKey, r.ownerKeys])).toEqual([
       ["Leo soccer", "leo", undefined],
       ["Dentist", "mia", undefined],
-      ["Pick up Leo and Mia", "family", ["leo", "mia"]],
+      ["Pick up Leo and Mia", "leo", undefined],
       ["Farmers market", "family", undefined],
       ["Busy", "family", undefined],
+    ]);
+  });
+
+  it("reads a Google-shaped event on one person's calendar: it moves to the kid it names, arrive-by is kept", () => {
+    // What Google's secret iCal address actually serves: an HTML description
+    // with escaped commas, a typographic apostrophe, times in UTC.
+    const text = cal(
+      "BEGIN:VEVENT",
+      "UID:g1@google.com",
+      "DTSTART:20261110T230000Z",
+      "DTEND:20261111T000000Z",
+      "SUMMARY:Leo’s soccer",
+      "DESCRIPTION:<b>Arrive by 4:45</b><br>Bring cleats\\, water",
+      "LOCATION:Field 2\\, 123 Main St",
+      "END:VEVENT",
+      "BEGIN:VEVENT",
+      "UID:g2@google.com",
+      "DTSTART:20261111T230000Z",
+      "SUMMARY:Haircut",
+      "END:VEVENT",
+      "BEGIN:VEVENT",
+      "UID:g3@google.com",
+      "DTSTART:20261112T230000Z",
+      "SUMMARY:Coffee with Paul",
+      "END:VEVENT"
+    );
+    const names = memberNames([
+      { uid: "paul", displayName: "Paul Ivers" },
+      { uid: "leo", displayName: "Leo" },
+    ]);
+    const owners = (title: string, description: string) => eventOwners(title, description, names);
+    const rows = expandIcs(text, opts({ ownerKey: "paul", owners })).rows;
+    expect(rows.map((r) => [r.title, r.ownerKey, r.ownerKeys, r.earlyMin])).toEqual([
+      ["Leo’s soccer", "leo", undefined, 15],
+      ["Haircut", "paul", undefined, undefined],
+      ["Coffee with Paul", "paul", undefined, undefined],
     ]);
   });
 

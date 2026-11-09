@@ -8,13 +8,21 @@ import type { WallEvent, WallTravel } from '@/types/schema';
  * 2. Otherwise start − trip − how early to arrive. The trip is the event's
  *    own (Apple's Travel Time, "20 min drive") or else the measured route;
  *    how early is the event's own ("arrive 15 min early") or else the wall's
- *    setting. Without either trip there is no leave time.
+ *    setting.
+ * 3. Without any trip there is no leave time, but an event that says when to
+ *    be there ("arrive by 4:45", "be there 15 min early") still has a time
+ *    that matters more than its start: the plan is then that arrival time,
+ *    with `kind: 'arrive'`. A calendar without travel alerts, or an event
+ *    with no address, is most of a family calendar, so this is the common
+ *    case for "arrive by", not the edge.
  *
  * The route alone would get you there exactly as it starts, which is never
  * when anyone means to arrive.
  */
 export interface LeavePlan {
-  /** When to leave (ms). */
+  /** 'leave': `at` is when to leave. 'arrive': no trip is known; `at` is when to be there. */
+  kind: 'leave' | 'arrive';
+  /** When to leave, or (kind 'arrive') when to be there (ms). */
   at: number;
   /** The trip in minutes, when one is known (for "20 min drive"). */
   travelMin: number | null;
@@ -34,7 +42,10 @@ export function leavePlan(event: WallEvent, routeMin: number | null, defaultEarl
   if (Number.isNaN(start)) return null;
   const travelMin = event.travelMin ?? routeMin;
   const stated = event.leaveAt ? Date.parse(event.leaveAt) : NaN;
-  if (Number.isFinite(stated) && stated < start) return { at: stated, travelMin };
-  if (travelMin === null) return null;
-  return { at: start - (travelMin + (event.earlyMin ?? defaultEarlyMin)) * MIN, travelMin };
+  if (Number.isFinite(stated) && stated < start) return { kind: 'leave', at: stated, travelMin };
+  if (travelMin === null) {
+    // Only the event's own word: the wall's arrive-early setting is a margin on a trip.
+    return event.earlyMin != null && event.earlyMin > 0 ? { kind: 'arrive', at: start - event.earlyMin * MIN, travelMin: null } : null;
+  }
+  return { kind: 'leave', at: start - (travelMin + (event.earlyMin ?? defaultEarlyMin)) * MIN, travelMin };
 }
